@@ -32,7 +32,11 @@ export default async function handler(req) {
 
       // Verificar se empresa já existe
       const existingCompany = await prisma.company.findFirst({
-        where: { OR: [{ email: company.email }, { document: company.cnpj }] }
+        where: { 
+          OR: [
+            { document: company.cnpj }
+          ]
+        }
       });
 
       if (existingCompany) {
@@ -58,8 +62,6 @@ export default async function handler(req) {
       const newCompany = await prisma.company.create({
         data: {
           name: company.name,
-          email: company.email,
-          phone: company.phone,
           document: company.cnpj,
           status: 'ACTIVE'
         }
@@ -165,13 +167,11 @@ export default async function handler(req) {
         select: {
           id: true,
           name: true,
-          email: true,
-          phone: true,
           document: true,
           status: true,
           createdAt: true,
           _count: {
-            select: { users: true }
+            select: { contacts: true }
           }
         }
       });
