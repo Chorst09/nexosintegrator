@@ -1,0 +1,177 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+
+// Importar apenas as rotas CommonJS (novas)
+const authRoutes = require('./api/auth');
+const contractsRoutes = require('./api/contracts');
+const postSalesRoutes = require('./api/postSales');
+const workflowsRoutes = require('./api/workflows');
+const proposalsRoutes = require('./api/proposals');
+const productsRoutes = require('./api/products');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middlewares
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Rota raiz
+app.get('/', (req, res) => {
+  res.json({ message: 'NexosCRM API', version: '1.0.0' });
+});
+
+app.post('/', (req, res) => {
+  res.json({ message: 'NexosCRM API', version: '1.0.0' });
+});
+
+// Servir arquivos estáticos (uploads)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Rotas da API (novas - CommonJS)
+app.use('/api/auth', authRoutes);
+app.use('/api/contracts', contractsRoutes);
+app.use('/api/post-sales', postSalesRoutes);
+app.use('/api/workflows', workflowsRoutes);
+app.use('/api/proposals', proposalsRoutes);
+app.use('/api/proposal-templates', require('./api/proposal-templates'));
+app.use('/api/products', productsRoutes);
+app.use('/api/settings', require('./api/settings'));
+
+// Handler para APIs antigas (ES modules) - conversão dinâmica
+const handleLegacyAPI = (apiPath) => {
+  return async (req, res) => {
+    try {
+      const fullPath = path.resolve(__dirname, apiPath);
+      const { default: handler } = await import(`file://${fullPath}`);
+      
+      // Criar objeto request compatível
+      const request = {
+        method: req.method,
+        url: req.url,
+        query: req.query,
+        json: async () => req.body || {}
+      };
+
+      const response = await handler(request);
+      
+      if (response instanceof Response) {
+        const data = await response.json();
+        res.status(response.status || 200).json(data);
+      } else {
+        res.json(response);
+      }
+    } catch (error) {
+      console.error(`Erro na API ${apiPath}:`, error);
+      res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+  };
+};
+
+// Rotas das APIs antigas (ES modules)
+app.use('/api/clients', handleLegacyAPI('./api/clients.js'));
+app.use('/api/companies', handleLegacyAPI('./api/companies.js'));
+app.use('/api/opportunities', handleLegacyAPI('./api/opportunities.js'));
+app.use('/api/activities', handleLegacyAPI('./api/activities.js'));
+// app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
+// app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
+app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));
+app.use('/api/users', handleLegacyAPI('./api/users.js'));
+app.use('/api/dashboard', handleLegacyAPI('./api/dashboard.js'));
+app.use('/api/leadScoring', handleLegacyAPI('./api/leadScoring.js'));
+app.use('/api/leadDistribution', handleLegacyAPI('./api/leadDistribution.js'));
+
+// Novas APIs - Integrações
+app.use('/api/integrations', handleLegacyAPI('./api/integrations.js'));
+app.use('/api/whatsapp', handleLegacyAPI('./api/whatsapp.js'));
+app.use('/api/email-marketing', handleLegacyAPI('./api/email-marketing.js'));
+app.use('/api/voip', handleLegacyAPI('./api/voip.js'));
+
+// Novas APIs - Funcionalidades Avançadas
+app.use('/api/price-tables', handleLegacyAPI('./api/price-tables.js'));
+app.use('/api/competitors', handleLegacyAPI('./api/competitors.js'));
+app.use('/api/regions', handleLegacyAPI('./api/regions.js'));
+app.use('/api/cross-sell', handleLegacyAPI('./api/cross-sell.js'));
+app.use('/api/upsell', handleLegacyAPI('./api/upsell.js'));
+app.use('/api/approvals', handleLegacyAPI('./api/approvals.js'));
+
+// Novas APIs - Comissionamento Avançado
+app.use('/api/sales-targets', handleLegacyAPI('./api/sales-targets.js'));
+app.use('/api/team-commissions', handleLegacyAPI('./api/team-commissions.js'));
+
+// Novas APIs - Workflows Avançados
+app.use('/api/advanced-workflows', handleLegacyAPI('./api/advanced-workflows.js'));
+
+// Middleware de tratamento de erros
+app.use((error, req, res, next) => {
+  console.error('Error:', error);
+  
+  if (error.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'JSON inválido' });
+  }
+  
+  if (error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'Arquivo muito grande' });
+  }
+  
+  res.status(500).json({ error: 'Erro interno do servidor' });
+});
+
+// Rota 404
+app.use('*', (req, res) => {
+  console.log(`❌ 404 - ${req.method} ${req.path}`);
+  res.status(404).json({ error: 'Rota não encontrada' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 API Server running on http://localhost:${PORT}`);
+  console.log(`📊 Available endpoints:`);
+  console.log(`   🔐 /api/auth - Autenticação (NEW)`);
+  console.log(`   📄 /api/contracts - Contratos (NEW)`);
+  console.log(`   🎯 /api/post-sales - Pós-Venda (NEW)`);
+  console.log(`   ⚡ /api/workflows - Automações (NEW)`);
+  console.log(`   👥 /api/clients - Clientes`);
+  console.log(`   🏢 /api/companies - Empresas`);
+  console.log(`   💰 /api/opportunities - Oportunidades`);
+  console.log(`   📅 /api/activities - Atividades`);
+  console.log(`   📦 /api/products - Produtos`);
+  console.log(`   📋 /api/proposals - Propostas`);
+  console.log(`   💵 /api/commissions - Comissões`);
+  console.log(`   👤 /api/users - Usuários`);
+  console.log(`   📊 /api/dashboard - Dashboard`);
+  console.log(`   🎯 /api/leadScoring - Lead Scoring`);
+  console.log(`   🔄 /api/leadDistribution - Distribuição de Leads`);
+  console.log(`   🔗 /api/integrations - Integrações (NEW)`);
+  console.log(`   📱 /api/whatsapp - WhatsApp Business (NEW)`);
+  console.log(`   📧 /api/email-marketing - E-mail Marketing (NEW)`);
+  console.log(`   📞 /api/voip - Telefonia VoIP (NEW)`);
+  console.log(`   💰 /api/price-tables - Tabelas de Preço (NEW)`);
+  console.log(`   🏆 /api/competitors - Concorrentes (NEW)`);
+  console.log(`   🌍 /api/regions - Regiões/Carteiras (NEW)`);
+  console.log(`   🔄 /api/cross-sell - Cross-sell (NEW)`);
+  console.log(`   ⬆️ /api/upsell - Upsell (NEW)`);
+  console.log(`   ✅ /api/approvals - Aprovações (NEW)`);
+  console.log(`   🎯 /api/sales-targets - Metas de Vendas (NEW)`);
+  console.log(`   👥 /api/team-commissions - Comissões por Equipe (NEW)`);
+  console.log(`   🔄 /api/advanced-workflows - Workflows Avançados (NEW)`);
+});
+
+module.exports = app;

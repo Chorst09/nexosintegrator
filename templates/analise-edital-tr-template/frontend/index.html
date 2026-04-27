@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Template Analise Edital/TR</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Template Analise Edital/TR</h1>
+      <p class="sub">
+        Frontend de referencia para testar os endpoints do template.
+      </p>
+
+      <section class="card">
+        <h2>Configuracao API</h2>
+        <div class="grid">
+          <label>
+            API Base URL
+            <input id="apiBaseUrl" type="text" value="http://localhost:3333" />
+          </label>
+          <label>
+            Company ID
+            <input id="companyId" type="text" value="empresa-demo" />
+          </label>
+          <label>
+            User ID
+            <input id="userId" type="text" value="user-demo" />
+          </label>
+          <label>
+            User Role
+            <select id="userRole">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+              <option value="master">master</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Executar Analise</h2>
+        <div class="grid">
+          <label>
+            Modo
+            <select id="analysisMode">
+              <option value="edital">edital</option>
+              <option value="tr">tr</option>
+            </select>
+          </label>
+          <label>
+            PDF (Edital ou TR)
+            <input id="mainPdf" type="file" accept="application/pdf" />
+          </label>
+        </div>
+
+        <div id="trFields" class="grid hidden">
+          <label>
+            Modelo analisado
+            <input id="modelName" type="text" placeholder="Switch XZY-48" />
+          </label>
+          <label>
+            Fabricante
+            <input id="modelManufacturer" type="text" placeholder="Fabricante opcional" />
+          </label>
+          <label class="full">
+            Especificacoes do modelo
+            <textarea id="modelSpecs" rows="4" placeholder="Cole as especificacoes tecnicas"></textarea>
+          </label>
+          <label>
+            Datasheet PDF (opcional)
+            <input id="datasheetPdf" type="file" accept="application/pdf" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="runAnalysisBtn">Analisar</button>
+          <button id="saveAnalysisBtn" class="secondary">Salvar resultado</button>
+          <button id="loadSavedBtn" class="secondary">Carregar salvos</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Resultado da Analise</h2>
+        <pre id="analysisOutput">Nenhum resultado ainda.</pre>
+      </section>
+
+      <section class="card">
+        <h2>Resumos Salvos</h2>
+        <pre id="savedOutput">Nenhum resumo carregado.</pre>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

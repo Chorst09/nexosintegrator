@@ -1,0 +1,1368 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Brain,
+  Building2,
+  Calculator,
+  CheckCircle2,
+  ClipboardList,
+  DollarSign,
+  FileText,
+  Gavel,
+  Layers,
+  Maximize2,
+  Package,
+  Phone,
+  RefreshCcw,
+  Target,
+  TrendingUp,
+  UserCircle2,
+  Users,
+  Zap
+} from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  LineElement,
+  BarElement,
+  PointElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { buildApiUrl, getAuthHeaders } from '../config/api';
+import { getUserAccess, normalizeRole } from '../utils/permissions';
+import PresentationControls from '../components/PresentationControls';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  LineElement,
+  BarElement,
+  PointElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0
+});
+
+const numberFormatter = new Intl.NumberFormat('pt-BR');
+
+const formatCurrency = (value) => currencyFormatter.format(Number(value || 0));
+const formatNumber = (value) => numberFormatter.format(Number(value || 0));
+const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
+
+const toArray = (value) => (Array.isArray(value) ? value : []);
+const toNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+};
+
+const parseUserFromStorage = () => {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const monthLabel = (date) => `${monthLabels[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
+
+const createMonthBuckets = (count = 6) => {
+  const now = new Date();
+  const buckets = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({ key: monthKey(date), label: monthLabel(date) });
+  }
+  return buckets;
+};
+
+const buildLeadStatsFromCompanies = (companies = []) => {
+  const stats = { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 };
+  toArray(companies).forEach((company) => {
+    const score = toNumber(company?.leadScore);
+    if (score >= 80) stats.hotLeads += 1;
+    else if (score >= 60) stats.warmLeads += 1;
+    else if (score >= 40) stats.coldLeads += 1;
+    else stats.lowPriority += 1;
+  });
+  stats.total = stats.hotLeads + stats.warmLeads + stats.coldLeads + stats.lowPriority;
+  return stats;
+};
+
+function KpiCard({ icon: Icon, label, value, sub, tone = 'blue', onClick }) {
+  const tones = {
+    blue: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400',
+    green: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400',
+    amber: 'from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400',
+    purple: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-400',
+    cyan: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-400',
+    rose: 'from-rose-500/20 to-rose-600/10 border-rose-500/30 text-rose-400'
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      className={[
+        'relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all',
+        tones[tone],
+        onClick ? 'cursor-pointer hover:scale-[1.02]' : ''
+      ].join(' ')}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--crm-muted)]">{label}</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--crm-ink)]">{value}</p>
+          {sub && <p className="mt-1 text-xs text-[var(--crm-muted)]">{sub}</p>}
+        </div>
+        <div className={`rounded-xl bg-gradient-to-br p-2.5 ${tones[tone]}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModuleCard({ title, subtitle, icon: Icon, color, kpis, route, navigate, badge }) {
+  const gradients = {
+    blue: 'from-blue-600 to-cyan-500',
+    indigo: 'from-indigo-600 to-blue-600',
+    sky: 'from-sky-500 to-blue-500'
+  };
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)]">
+      <div className={`bg-gradient-to-r ${gradients[color]} p-5`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-white/20 p-2.5">
+              <Icon className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white">{title}</h3>
+              <p className="text-xs text-white/70">{subtitle}</p>
+            </div>
+          </div>
+          {badge && (
+            <span className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold text-white">{badge}</span>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-[var(--crm-border)]">
+        {kpis.map((item) => (
+          <div key={item.label} className="p-4 text-center">
+            <p className="text-lg font-bold text-[var(--crm-ink)]">{item.value}</p>
+            <p className="text-xs text-[var(--crm-muted)]">{item.label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-[var(--crm-border)] px-5 py-3">
+        <button
+          onClick={() => navigate(route)}
+          className="flex w-full items-center justify-center gap-2 text-sm font-medium text-[var(--crm-accent)] hover:underline"
+        >
+          Acessar módulo <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, action, children }) {
+  return (
+    <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-[var(--crm-ink)]">{title}</h3>
+          {subtitle && <p className="text-xs text-[var(--crm-muted)]">{subtitle}</p>}
+        </div>
+        {action || null}
+      </div>
+      <div className="h-[280px]">{children}</div>
+    </div>
+  );
+}
+
+function ActivityItem({ icon: Icon, color, title, sub, time }) {
+  const colors = {
+    blue: 'bg-blue-500/20 text-blue-400',
+    green: 'bg-emerald-500/20 text-emerald-400',
+    amber: 'bg-amber-500/20 text-amber-400',
+    purple: 'bg-purple-500/20 text-purple-400'
+  };
+  return (
+    <div className="flex items-start gap-3 border-b border-[var(--crm-border)] py-3 last:border-0">
+      <div className={`mt-0.5 rounded-lg p-1.5 ${colors[color]}`}>
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-[var(--crm-ink)]">{title}</p>
+        <p className="text-xs text-[var(--crm-muted)]">{sub}</p>
+      </div>
+      <span className="whitespace-nowrap text-xs text-[var(--crm-muted)]">{time}</span>
+    </div>
+  );
+}
+
+const chartOptionsBase = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: {
+        color: '#94a3b8',
+        usePointStyle: true,
+        boxWidth: 8,
+        boxHeight: 8
+      }
+    },
+    tooltip: {
+      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      titleColor: '#f8fafc',
+      bodyColor: '#e2e8f0',
+      borderColor: 'rgba(148, 163, 184, 0.3)',
+      borderWidth: 1
+    }
+  },
+  scales: {
+    x: {
+      grid: { color: 'rgba(148, 163, 184, 0.1)' },
+      ticks: { color: '#94a3b8' }
+    },
+    y: {
+      grid: { color: 'rgba(148, 163, 184, 0.1)' },
+      ticks: { color: '#94a3b8' }
+    }
+  }
+};
+
+export default function DashboardGeral() {
+  const navigate = useNavigate();
+  const presentationRef = useRef(null);
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [presentationProgress, setPresentationProgress] = useState({ current: 1, total: 1 });
+  const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState('180');
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [data, setData] = useState({});
+  const [moduleHealth, setModuleHealth] = useState([]);
+
+  const user = parseUserFromStorage();
+  const access = getUserAccess(user);
+  const role = normalizeRole(user?.role);
+  const adminLike = ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR'].includes(role);
+
+  const loadData = async () => {
+    setLoading(true);
+    const headers = getAuthHeaders();
+
+    const parseRows = (payload) => {
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.rows)) return payload.rows;
+      if (Array.isArray(payload?.items)) return payload.items;
+      if (Array.isArray(payload?.data)) return payload.data;
+      if (Array.isArray(payload?.results)) return payload.results;
+      return [];
+    };
+    const parsePreSales = (payload) => {
+      const rows = Array.isArray(payload?.solicitacoes) ? payload.solicitacoes : [];
+      return { rows, total: toNumber(payload?.total || rows.length) };
+    };
+
+    const modules = [
+      { key: 'opportunitiesB2B', label: 'Oportunidades B2B', endpoint: '/opportunities?clientType=B2B', enabled: access.accessB2B, normalize: parseRows, emptyValue: [] },
+      { key: 'opportunitiesB2G', label: 'Oportunidades B2G', endpoint: '/opportunities?clientType=B2G', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
+      { key: 'companiesB2B', label: 'Empresas B2B', endpoint: '/companies?clientType=B2B', enabled: access.accessB2B, normalize: parseRows, emptyValue: [] },
+      { key: 'companiesB2G', label: 'Empresas B2G', endpoint: '/companies?clientType=B2G', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
+      { key: 'b2g', label: 'Editais B2G', endpoint: '/b2g', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
+      { key: 'preSales', label: 'Pré-vendas', endpoint: '/pre-vendas?limit=200', enabled: access.accessPreSales || adminLike, normalize: parsePreSales, emptyValue: { rows: [], total: 0 }, count: (payload) => payload.total },
+      { key: 'activities', label: 'Atividades', endpoint: '/activities', enabled: access.accessB2B || access.accessB2G || access.accessPreSales, normalize: parseRows, emptyValue: [] },
+      { key: 'products', label: 'Produtos', endpoint: '/products', enabled: access.accessB2B || adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'sellers', label: 'Equipe comercial', endpoint: '/users?role=SELLER', enabled: adminLike || access.accessB2B || access.accessB2G, normalize: parseRows, emptyValue: [] },
+      { key: 'proposals', label: 'Propostas', endpoint: '/proposals', enabled: access.accessB2B || adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'contracts', label: 'Contratos', endpoint: '/contracts', enabled: access.accessB2B || adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'commissions', label: 'Comissões', endpoint: '/commissions?limit=200', enabled: access.accessB2B || adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'salesTargets', label: 'Metas comerciais', endpoint: '/sales-targets', enabled: access.accessB2B || access.accessB2G || adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'leadStatsB2B', label: 'Lead scoring B2B', endpoint: '/leadScoring?action=stats&clientType=B2B', enabled: access.accessB2B, normalize: (payload) => (payload && typeof payload === 'object' ? payload : {}), emptyValue: {} },
+      { key: 'leadStatsB2G', label: 'Lead scoring B2G', endpoint: '/leadScoring?action=stats&clientType=B2G', enabled: access.accessB2G, normalize: (payload) => (payload && typeof payload === 'object' ? payload : {}), emptyValue: {} },
+      { key: 'workflows', label: 'Workflows', endpoint: '/workflows', enabled: adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'automationRules', label: 'Regras de automação', endpoint: '/workflows/automation-rules', enabled: adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'automationNotifications', label: 'Notificações automação', endpoint: '/workflows/notifications', enabled: adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'integrations', label: 'Integrações', endpoint: '/integrations', enabled: adminLike, normalize: parseRows, emptyValue: [] },
+      { key: 'regions', label: 'Regiões', endpoint: '/regions', enabled: adminLike, normalize: parseRows, emptyValue: [] }
+    ];
+
+    const health = await Promise.all(
+      modules.map(async (module) => {
+        if (!module.enabled) {
+          return { ...module, status: 'skipped', count: 0, data: module.emptyValue, error: null };
+        }
+
+        try {
+          const response = await fetch(buildApiUrl(module.endpoint), { headers });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const raw = await response.json().catch(() => null);
+          const normalized = module.normalize(raw);
+          const count = typeof module.count === 'function'
+            ? module.count(normalized, raw)
+            : Array.isArray(normalized) ? normalized.length : toNumber(normalized?.total || 0);
+
+          return { ...module, status: 'ok', count, data: normalized, error: null };
+        } catch (err) {
+          return {
+            ...module,
+            status: 'error',
+            count: 0,
+            data: module.emptyValue,
+            error: err?.message || 'Falha na requisição'
+          };
+        }
+      })
+    );
+
+    const nextData = health.reduce((acc, item) => {
+      acc[item.key] = item.data;
+      return acc;
+    }, {});
+
+    setData(nextData);
+    setModuleHealth(health);
+    setUpdatedAt(new Date());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const computed = useMemo(() => {
+    const rangeDays = toNumber(timeRange) || 180;
+    const rangeStart = new Date();
+    rangeStart.setHours(0, 0, 0, 0);
+    rangeStart.setDate(rangeStart.getDate() - rangeDays);
+
+    const inRange = (value) => {
+      const date = toDate(value);
+      if (!date) return false;
+      return date >= rangeStart;
+    };
+
+    const opportunitiesB2B = toArray(data.opportunitiesB2B);
+    const opportunitiesB2G = toArray(data.opportunitiesB2G);
+    const companiesB2B = toArray(data.companiesB2B);
+    const companiesB2G = toArray(data.companiesB2G);
+    const b2gNotices = toArray(data.b2g);
+    const preSales = toArray(data.preSales?.rows);
+    const activities = toArray(data.activities);
+    const products = toArray(data.products);
+    const sellers = toArray(data.sellers);
+    const proposals = toArray(data.proposals);
+    const contracts = toArray(data.contracts);
+    const commissions = toArray(data.commissions);
+    const salesTargets = toArray(data.salesTargets);
+    const workflows = toArray(data.workflows);
+    const automationRules = toArray(data.automationRules);
+    const automationNotifications = toArray(data.automationNotifications);
+    const integrations = toArray(data.integrations);
+    const regions = toArray(data.regions);
+
+    const opportunitiesB2BRange = opportunitiesB2B.filter((item) => inRange(item.createdAt || item.updatedAt));
+    const opportunitiesB2GRange = opportunitiesB2G.filter((item) => inRange(item.createdAt || item.updatedAt));
+    const b2gNoticesRange = b2gNotices.filter((item) => inRange(item.createdAt || item.updatedAt));
+    const preSalesRange = preSales.filter((item) => inRange(item.createdAt || item.updatedAt));
+    const activitiesRange = activities.filter((item) => inRange(item.createdAt || item.updatedAt || item.dueDate));
+    const proposalsRange = proposals.filter((item) => inRange(item.createdAt || item.updatedAt || item.sentAt));
+    const contractsRange = contracts.filter((item) => inRange(item.createdAt || item.updatedAt || item.startDate));
+
+    const openStages = new Set(['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION']);
+    const openB2B = opportunitiesB2BRange.filter((item) => openStages.has(String(item.stage || '').toUpperCase()));
+    const wonB2B = opportunitiesB2BRange.filter((item) => String(item.stage || '').toUpperCase() === 'WON');
+    const lostB2B = opportunitiesB2BRange.filter((item) => String(item.stage || '').toUpperCase() === 'LOST');
+
+    const openB2GOpps = opportunitiesB2GRange.filter((item) => openStages.has(String(item.stage || '').toUpperCase()));
+    const wonB2GOpps = opportunitiesB2GRange.filter((item) => String(item.stage || '').toUpperCase() === 'WON');
+
+    const activeNoticeStatuses = new Set([
+      'MONITORANDO',
+      'ANALISE_EM_ANDAMENTO',
+      'ANALISE_CONCLUIDA',
+      'PROPOSTA_EM_PREPARACAO',
+      'ENVIADA',
+      'SUSPENSA'
+    ]);
+    const wonNoticeStatuses = new Set(['GANHO']);
+
+    const activeB2GNotices = b2gNoticesRange.filter((item) => activeNoticeStatuses.has(String(item.status || '').toUpperCase()));
+    const wonB2GNotices = b2gNoticesRange.filter((item) => wonNoticeStatuses.has(String(item.status || '').toUpperCase()));
+    const inAnalysisB2G = b2gNoticesRange.filter((item) => String(item.status || '').toUpperCase() === 'ANALISE_EM_ANDAMENTO');
+
+    const pendingPreSalesStatuses = new Set(['NOVA', 'EM_PRECIFICACAO', 'AGUARDANDO_APROVACAO']);
+    const donePreSalesStatuses = new Set(['FINALIZADA']);
+    const pendingPreSales = preSalesRange.filter((item) => pendingPreSalesStatuses.has(String(item.status || '').toUpperCase()));
+    const donePreSales = preSalesRange.filter((item) => donePreSalesStatuses.has(String(item.status || '').toUpperCase()));
+
+    const pendingActivities = activitiesRange.filter((item) => {
+      const status = String(item.status || '').toUpperCase();
+      return status === 'PENDING' || status === 'OPEN' || status === 'IN_PROGRESS';
+    });
+
+    const overdueActivities = activitiesRange.filter((item) => {
+      const dueDate = toDate(item.dueDate);
+      if (!dueDate) return false;
+      const status = String(item.status || '').toUpperCase();
+      if (status === 'COMPLETED' || status === 'DONE' || status === 'CANCELLED') return false;
+      return dueDate < new Date();
+    });
+
+    const activeProducts = products.filter((item) => item?.active !== false);
+
+    const b2bPipelineValue = openB2B.reduce((sum, item) => sum + toNumber(item.value), 0);
+    const b2bWonValue = wonB2B.reduce((sum, item) => sum + toNumber(item.value), 0);
+    const b2gNoticePipelineValue = activeB2GNotices.reduce((sum, item) => sum + toNumber(item.estimatedValue), 0);
+    const b2gNoticeWonValue = wonB2GNotices.reduce((sum, item) => sum + toNumber(item.estimatedValue), 0);
+    const b2gOpportunityPipelineValue = openB2GOpps.reduce((sum, item) => sum + toNumber(item.value), 0);
+    const b2gOpportunityWonValue = wonB2GOpps.reduce((sum, item) => sum + toNumber(item.value), 0);
+
+    const totalPipeline = b2bPipelineValue + b2gNoticePipelineValue + b2gOpportunityPipelineValue;
+    const totalWonValue = b2bWonValue + b2gNoticeWonValue + b2gOpportunityWonValue;
+
+    const b2bConversion = opportunitiesB2BRange.length > 0
+      ? (wonB2B.length / opportunitiesB2BRange.length) * 100
+      : 0;
+    const b2gConversion = b2gNoticesRange.length > 0
+      ? (wonB2GNotices.length / b2gNoticesRange.length) * 100
+      : 0;
+    const preSalesApproval = preSalesRange.length > 0
+      ? (donePreSales.length / preSalesRange.length) * 100
+      : 0;
+
+    const leadStatsB2B =
+      data?.leadStatsB2B && Object.keys(data.leadStatsB2B).length > 0
+        ? data.leadStatsB2B
+        : buildLeadStatsFromCompanies(companiesB2B);
+    const leadStatsB2G =
+      data?.leadStatsB2G && Object.keys(data.leadStatsB2G).length > 0
+        ? data.leadStatsB2G
+        : buildLeadStatsFromCompanies(companiesB2G);
+
+    const hotLeads = toNumber(leadStatsB2B.hotLeads) + toNumber(leadStatsB2G.hotLeads);
+    const warmLeads = toNumber(leadStatsB2B.warmLeads) + toNumber(leadStatsB2G.warmLeads);
+
+    const teamMap = {};
+    [...opportunitiesB2BRange, ...opportunitiesB2GRange].forEach((item) => {
+      const ownerName = item?.owner?.name || 'Sem responsável';
+      if (!teamMap[ownerName]) {
+        teamMap[ownerName] = { name: ownerName, total: 0, won: 0, pipeline: 0 };
+      }
+      teamMap[ownerName].total += 1;
+      if (String(item.stage || '').toUpperCase() === 'WON') {
+        teamMap[ownerName].won += 1;
+      }
+      if (openStages.has(String(item.stage || '').toUpperCase())) {
+        teamMap[ownerName].pipeline += toNumber(item.value);
+      }
+    });
+
+    let teamPerformance = Object.values(teamMap)
+      .sort((a, b) => b.pipeline - a.pipeline || b.total - a.total)
+      .slice(0, 6);
+
+    if (teamPerformance.length === 0 && sellers.length > 0) {
+      teamPerformance = sellers.slice(0, 6).map((seller) => ({
+        name: seller.name,
+        total: toNumber(seller?._count?.opportunities),
+        won: 0,
+        pipeline: 0
+      }));
+    }
+
+    const buckets = createMonthBuckets(6);
+    const monthIndex = new Map(buckets.map((item, idx) => [item.key, idx]));
+
+    const monthlyPotential = new Array(buckets.length).fill(0);
+    const monthlyWon = new Array(buckets.length).fill(0);
+    const monthlyActivities = new Array(buckets.length).fill(0);
+
+    [...opportunitiesB2BRange, ...opportunitiesB2GRange].forEach((item) => {
+      const createdDate = toDate(item.createdAt || item.updatedAt);
+      if (!createdDate) return;
+      const idx = monthIndex.get(monthKey(createdDate));
+      if (idx === undefined) return;
+      monthlyPotential[idx] += toNumber(item.value);
+      if (String(item.stage || '').toUpperCase() === 'WON') {
+        monthlyWon[idx] += toNumber(item.value);
+      }
+    });
+
+    b2gNoticesRange.forEach((item) => {
+      const referenceDate = toDate(item.updatedAt || item.createdAt);
+      if (!referenceDate) return;
+      const idx = monthIndex.get(monthKey(referenceDate));
+      if (idx === undefined) return;
+      if (activeNoticeStatuses.has(String(item.status || '').toUpperCase())) {
+        monthlyPotential[idx] += toNumber(item.estimatedValue);
+      }
+      if (wonNoticeStatuses.has(String(item.status || '').toUpperCase())) {
+        monthlyWon[idx] += toNumber(item.estimatedValue);
+      }
+    });
+
+    activitiesRange.forEach((item) => {
+      const createdDate = toDate(item.createdAt || item.updatedAt || item.dueDate);
+      if (!createdDate) return;
+      const idx = monthIndex.get(monthKey(createdDate));
+      if (idx === undefined) return;
+      monthlyActivities[idx] += 1;
+    });
+
+    const stageOrder = ['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'];
+    const stageLabels = {
+      LEAD: 'Lead',
+      QUALIFICATION: 'Qualificação',
+      DIAGNOSIS: 'Diagnóstico',
+      PROPOSAL: 'Proposta',
+      NEGOTIATION: 'Negociação',
+      WON: 'Ganhas',
+      LOST: 'Perdidas'
+    };
+
+    const countByStage = (rows) => {
+      const result = Object.fromEntries(stageOrder.map((stage) => [stage, 0]));
+      rows.forEach((row) => {
+        const stage = String(row.stage || '').toUpperCase();
+        if (stage in result) result[stage] += 1;
+      });
+      return stageOrder.map((stage) => result[stage]);
+    };
+
+    const b2bStageCounts = countByStage(opportunitiesB2BRange);
+    const b2gOppStageCounts = countByStage(opportunitiesB2GRange);
+
+    return {
+      opportunitiesB2BRange,
+      opportunitiesB2GRange,
+      companiesB2B,
+      companiesB2G,
+      b2gNoticesRange,
+      preSalesRange,
+      activitiesRange,
+      proposalsRange,
+      contractsRange,
+      commissions,
+      salesTargets,
+      workflows,
+      automationRules,
+      automationNotifications,
+      integrations,
+      regions,
+      pendingActivities,
+      overdueActivities,
+      activeProducts,
+      activeB2GNotices,
+      inAnalysisB2G,
+      pendingPreSales,
+      donePreSales,
+      totalPipeline,
+      totalWonValue,
+      b2bPipelineValue,
+      b2bWonValue,
+      b2bConversion,
+      b2gConversion,
+      preSalesApproval,
+      hotLeads,
+      warmLeads,
+      leadStatsB2B,
+      leadStatsB2G,
+      teamPerformance,
+      buckets,
+      monthlyPotential,
+      monthlyWon,
+      monthlyActivities,
+      stageOrder,
+      stageLabels,
+      b2bStageCounts,
+      b2gOppStageCounts
+    };
+  }, [data, timeRange]);
+
+  const modulesEnabled = moduleHealth.filter((item) => item.status !== 'skipped').length;
+  const modulesLoaded = moduleHealth.filter((item) => item.status === 'ok').length;
+  const modulesWithError = moduleHealth.filter((item) => item.status === 'error').length;
+
+  const chartData = useMemo(() => {
+    const {
+      buckets,
+      monthlyPotential,
+      monthlyWon,
+      monthlyActivities,
+      stageOrder,
+      stageLabels,
+      b2bStageCounts,
+      b2gOppStageCounts,
+      leadStatsB2B,
+      leadStatsB2G,
+      teamPerformance,
+      pendingActivities,
+      overdueActivities,
+      pendingPreSales,
+      inAnalysisB2G,
+      activeB2GNotices,
+      opportunitiesB2BRange,
+      opportunitiesB2GRange,
+      b2bPipelineValue,
+      totalPipeline
+    } = computed;
+
+    const moduleVolumeRows = moduleHealth
+      .filter((item) => item.status === 'ok')
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const monthlyTrend = {
+      labels: buckets.map((item) => item.label),
+      datasets: [
+        {
+          label: 'Potencial de receita',
+          data: monthlyPotential,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.18)',
+          tension: 0.35,
+          fill: true,
+          borderWidth: 2
+        },
+        {
+          label: 'Receita ganha',
+          data: monthlyWon,
+          borderColor: '#34d399',
+          backgroundColor: 'rgba(52, 211, 153, 0.16)',
+          tension: 0.35,
+          fill: true,
+          borderWidth: 2
+        }
+      ]
+    };
+
+    const stageDistribution = {
+      labels: stageOrder.map((stage) => stageLabels[stage]),
+      datasets: [
+        {
+          label: 'B2B',
+          data: b2bStageCounts,
+          backgroundColor: 'rgba(56, 189, 248, 0.75)',
+          borderRadius: 8
+        },
+        {
+          label: 'B2G',
+          data: b2gOppStageCounts,
+          backgroundColor: 'rgba(129, 140, 248, 0.75)',
+          borderRadius: 8
+        }
+      ]
+    };
+
+    const leadTemperature = {
+      labels: ['Hot', 'Warm', 'Cold', 'Baixa'],
+      datasets: [
+        {
+          label: 'B2B',
+          data: [
+            toNumber(leadStatsB2B.hotLeads),
+            toNumber(leadStatsB2B.warmLeads),
+            toNumber(leadStatsB2B.coldLeads),
+            toNumber(leadStatsB2B.lowPriority)
+          ],
+          backgroundColor: 'rgba(34, 197, 94, 0.72)',
+          borderRadius: 8
+        },
+        {
+          label: 'B2G',
+          data: [
+            toNumber(leadStatsB2G.hotLeads),
+            toNumber(leadStatsB2G.warmLeads),
+            toNumber(leadStatsB2G.coldLeads),
+            toNumber(leadStatsB2G.lowPriority)
+          ],
+          backgroundColor: 'rgba(99, 102, 241, 0.72)',
+          borderRadius: 8
+        }
+      ]
+    };
+
+    const operationalLoadValues = [
+      pendingActivities.length,
+      overdueActivities.length,
+      pendingPreSales.length,
+      inAnalysisB2G.length,
+      monthlyActivities.reduce((sum, value) => sum + value, 0)
+    ];
+    const hasOperationalData = operationalLoadValues.some((value) => value > 0);
+    const operationalLoad = {
+      labels: ['Pendentes', 'Atrasadas', 'Pré-vendas', 'B2G análise', 'Atividades mês'],
+      datasets: [
+        {
+          data: hasOperationalData ? operationalLoadValues : [1, 0, 0, 0, 0],
+          backgroundColor: ['#38bdf8', '#f43f5e', '#f59e0b', '#818cf8', '#34d399'],
+          borderWidth: 0
+        }
+      ]
+    };
+
+    const hasTeamData = teamPerformance.some((item) => item.total > 0 || item.pipeline > 0);
+    const teamLoad = {
+      labels: teamPerformance.map((item) => item.name),
+      datasets: [
+        {
+          label: 'Oportunidades',
+          data: teamPerformance.map((item) => item.total),
+          backgroundColor: 'rgba(56, 189, 248, 0.7)',
+          borderRadius: 8
+        },
+        {
+          label: 'Ganhas',
+          data: teamPerformance.map((item) => item.won),
+          backgroundColor: 'rgba(52, 211, 153, 0.7)',
+          borderRadius: 8
+        }
+      ]
+    };
+
+    const pipelineComposition = {
+      labels: ['Pipeline B2B', 'Pipeline B2G (editais)', 'Pipeline B2G (oportunidades)'],
+      datasets: [
+        {
+          data: [
+            b2bPipelineValue,
+            activeB2GNotices.reduce((sum, item) => sum + toNumber(item.estimatedValue), 0),
+            opportunitiesB2GRange
+              .filter((item) => ['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION'].includes(String(item.stage || '').toUpperCase()))
+              .reduce((sum, item) => sum + toNumber(item.value), 0)
+          ],
+          backgroundColor: ['#38bdf8', '#818cf8', '#22d3ee'],
+          borderWidth: 0
+        }
+      ]
+    };
+
+    if (pipelineComposition.datasets[0].data.every((value) => value <= 0)) {
+      pipelineComposition.datasets[0].data = [1, 0, 0];
+    }
+
+    const moduleVolume = {
+      labels: moduleVolumeRows.map((item) => item.label),
+      datasets: [
+        {
+          label: 'Registros',
+          data: moduleVolumeRows.map((item) => item.count),
+          backgroundColor: 'rgba(56, 189, 248, 0.7)',
+          borderRadius: 8
+        }
+      ]
+    };
+
+    return {
+      monthlyTrend,
+      stageDistribution,
+      leadTemperature,
+      operationalLoad,
+      teamLoad,
+      hasTeamData,
+      moduleVolume,
+      hasModuleVolumeData: moduleVolumeRows.some((item) => item.count > 0),
+      pipelineComposition,
+      hasOperationalData,
+      hasPipelineData: totalPipeline > 0
+    };
+  }, [computed, moduleHealth]);
+
+  const handlePresentation = async () => {
+    try {
+      if (document.fullscreenElement === presentationRef.current) {
+        await document.exitFullscreen();
+      } else {
+        presentationRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+        await presentationRef.current?.requestFullscreen();
+      }
+    } catch {
+      // no-op
+    }
+  };
+
+  useEffect(() => {
+    const sync = () => setPresentationMode(document.fullscreenElement === presentationRef.current);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
+  const getPresentationSteps = () =>
+    Array.from(presentationRef.current?.children || []).filter(
+      (element) =>
+        element instanceof HTMLElement &&
+        element.dataset.presentationControls !== 'true' &&
+        element.offsetHeight > 40
+    );
+
+  const resolveCurrentStepIndex = (steps, container) => {
+    const anchor = container.scrollTop + container.clientHeight * 0.24;
+    const idx = steps.findIndex((step) => step.offsetTop <= anchor && step.offsetTop + step.offsetHeight > anchor);
+    return idx !== -1 ? idx : 0;
+  };
+
+  const scrollPresentationStep = (direction) => {
+    const container = presentationRef.current;
+    if (!container) return;
+    const steps = getPresentationSteps();
+    if (!steps.length) {
+      container.scrollBy({ top: direction * container.clientHeight * 0.85, behavior: 'smooth' });
+      return;
+    }
+    const current = resolveCurrentStepIndex(steps, container);
+    const next = Math.min(Math.max(current + direction, 0), steps.length - 1);
+    container.scrollTo({ top: Math.max(steps[next].offsetTop - 12, 0), behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (!presentationMode) return undefined;
+    const container = presentationRef.current;
+    if (!container) return undefined;
+
+    const sync = () => {
+      const steps = getPresentationSteps();
+      if (!steps.length) return;
+      const current = resolveCurrentStepIndex(steps, container);
+      setPresentationProgress({ current: current + 1, total: steps.length });
+    };
+
+    container.addEventListener('scroll', sync, { passive: true });
+    requestAnimationFrame(sync);
+    return () => container.removeEventListener('scroll', sync);
+  }, [presentationMode]);
+
+  const initialLoading = loading && !updatedAt;
+  if (initialLoading) {
+    return (
+      <div className="grid h-full place-items-center p-6">
+        <div className="crm-panel flex items-center gap-3 px-6 py-4">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[rgb(var(--crm-accent-rgb)_/_0.85)] border-t-transparent" />
+          <span className="text-sm font-semibold text-[var(--crm-muted)]">Carregando dados consolidados...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    opportunitiesB2BRange,
+    opportunitiesB2GRange,
+    companiesB2B,
+    companiesB2G,
+    b2gNoticesRange,
+    preSalesRange,
+    activitiesRange,
+    proposalsRange,
+    contractsRange,
+    commissions,
+    salesTargets,
+    workflows,
+    automationRules,
+    automationNotifications,
+    integrations,
+    regions,
+    pendingActivities,
+    overdueActivities,
+    activeProducts,
+    activeB2GNotices,
+    inAnalysisB2G,
+    pendingPreSales,
+    donePreSales,
+    totalPipeline,
+    totalWonValue,
+    b2bPipelineValue,
+    b2bWonValue,
+    b2bConversion,
+    b2gConversion,
+    preSalesApproval,
+    hotLeads,
+    warmLeads,
+    teamPerformance
+  } = computed;
+
+  const alertCount = overdueActivities.length + pendingPreSales.length + inAnalysisB2G.length;
+
+  const moduleCardItems = [
+    access.accessB2B && {
+      id: 'b2b',
+      title: 'B2B Privado',
+      subtitle: 'Funil comercial corporativo',
+      icon: Building2,
+      color: 'blue',
+      route: '/dashboard',
+      badge: `${opportunitiesB2BRange.length} oport.`,
+      kpis: [
+        { label: 'Pipeline', value: formatCurrency(b2bPipelineValue) },
+        { label: 'Ganhos', value: formatCurrency(b2bWonValue) },
+        { label: 'Conversão', value: formatPercent(b2bConversion) }
+      ]
+    },
+    access.accessB2G && {
+      id: 'b2g',
+      title: 'B2G Governo',
+      subtitle: 'Editais, análise e execução',
+      icon: Gavel,
+      color: 'indigo',
+      route: '/b2g-dashboard',
+      badge: `${activeB2GNotices.length} ativos`,
+      kpis: [
+        { label: 'Editais', value: formatNumber(b2gNoticesRange.length) },
+        { label: 'Em análise', value: formatNumber(inAnalysisB2G.length) },
+        { label: 'Taxa', value: formatPercent(b2gConversion) }
+      ]
+    },
+    (access.accessPreSales || adminLike) && {
+      id: 'presales',
+      title: 'Pré-Vendas',
+      subtitle: 'Precificação e suporte técnico',
+      icon: Calculator,
+      color: 'sky',
+      route: '/pre-vendas',
+      badge: `${pendingPreSales.length} pendentes`,
+      kpis: [
+        { label: 'Solicitações', value: formatNumber(preSalesRange.length) },
+        { label: 'Finalizadas', value: formatNumber(donePreSales.length) },
+        { label: 'Aprovação', value: formatPercent(preSalesApproval) }
+      ]
+    }
+  ].filter(Boolean);
+
+  return (
+    <div
+      ref={presentationRef}
+      onScroll={() => {
+        if (!presentationMode) return;
+        const steps = getPresentationSteps();
+        const current = resolveCurrentStepIndex(steps, presentationRef.current);
+        setPresentationProgress({ current: current + 1, total: steps.length });
+      }}
+      className={`h-full space-y-6 overflow-y-auto p-6 ${presentationMode ? 'bg-[var(--crm-bg)] px-8 py-6' : ''}`}
+    >
+      {presentationMode && (
+        <PresentationControls
+          onPrev={() => scrollPresentationStep(-1)}
+          onNext={() => scrollPresentationStep(1)}
+          onExit={handlePresentation}
+          current={presentationProgress.current}
+          total={presentationProgress.total}
+        />
+      )}
+
+      <div data-section="header" className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--crm-ink)]">Dashboard Geral</h1>
+            <p className="text-sm text-[var(--crm-muted)]">
+              Consolidação B2B, B2G, Pré-Vendas, Atividades, Produtos, Equipe e Integrações
+            </p>
+            <p className="mt-1 text-xs text-[var(--crm-muted)]">
+              Última atualização: {updatedAt ? updatedAt.toLocaleString('pt-BR') : '-'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { value: '30', label: '30d' },
+              { value: '90', label: '90d' },
+              { value: '180', label: '180d' }
+            ].map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setTimeRange(option.value)}
+                className={[
+                  'rounded-xl border px-3 py-2 text-xs font-semibold transition-colors',
+                  timeRange === option.value
+                    ? 'border-[rgb(var(--crm-accent-rgb)_/_0.5)] bg-[rgb(var(--crm-accent-rgb)_/_0.2)] text-[var(--crm-ink)]'
+                    : 'border-[var(--crm-border)] bg-[var(--crm-bg)] text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+                ].join(' ')}
+              >
+                Janela {option.label}
+              </button>
+            ))}
+
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2 text-sm text-[var(--crm-muted)] transition-colors hover:text-[var(--crm-ink)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            </button>
+            <button
+              onClick={handlePresentation}
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2 text-sm text-[var(--crm-muted)] transition-colors hover:text-[var(--crm-ink)]"
+            >
+              <Maximize2 className="h-4 w-4" /> Apresentação
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div data-section="kpis" className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8">
+        <KpiCard icon={DollarSign} label="Pipeline Consolidado" value={formatCurrency(totalPipeline)} sub="B2B + B2G" tone="blue" />
+        <KpiCard icon={TrendingUp} label="Receita Ganha" value={formatCurrency(totalWonValue)} sub="Período selecionado" tone="green" />
+        <KpiCard icon={Target} label="Oportunidades" value={formatNumber(opportunitiesB2BRange.length + opportunitiesB2GRange.length)} sub="B2B + B2G" tone="cyan" onClick={() => navigate('/oportunidades')} />
+        <KpiCard icon={Building2} label="Empresas" value={formatNumber(companiesB2B.length + companiesB2G.length)} sub="Carteira total" tone="purple" onClick={() => navigate('/empresas')} />
+        <KpiCard icon={Package} label="Produtos Ativos" value={formatNumber(activeProducts.length)} sub={`${formatNumber(regions.length)} regiões`} tone="amber" onClick={() => navigate('/produtos')} />
+        <KpiCard icon={Activity} label="Atividades Pendentes" value={formatNumber(pendingActivities.length)} sub={`${formatNumber(overdueActivities.length)} atrasadas`} tone={overdueActivities.length > 0 ? 'rose' : 'cyan'} onClick={() => navigate('/atividades')} />
+        <KpiCard icon={Brain} label="Leads Quentes" value={formatNumber(hotLeads)} sub={`${formatNumber(warmLeads)} warm`} tone="green" onClick={() => navigate('/leads')} />
+        <KpiCard icon={Users} label="Equipe Comercial" value={formatNumber(teamPerformance.length)} sub={`${formatNumber(integrations.length)} integrações`} tone="blue" onClick={() => navigate('/vendedores')} />
+      </div>
+
+      <div data-section="extras" className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Propostas</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(proposalsRange.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Contratos</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(contractsRange.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Comissões</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(commissions.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Metas</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(salesTargets.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Workflows</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(workflows.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Regras Auto</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(automationRules.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Notificações</p>
+          <p className="mt-1 text-lg font-bold text-[var(--crm-ink)]">{formatNumber(automationNotifications.length)}</p>
+        </div>
+        <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-3">
+          <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Módulos OK</p>
+          <p className="mt-1 text-lg font-bold text-emerald-300">{formatNumber(modulesLoaded)}</p>
+        </div>
+      </div>
+
+      <div data-section="modulos" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        {moduleCardItems.map((module) => (
+          <ModuleCard
+            key={module.id}
+            title={module.title}
+            subtitle={module.subtitle}
+            icon={module.icon}
+            color={module.color}
+            kpis={module.kpis}
+            route={module.route}
+            navigate={navigate}
+            badge={module.badge}
+          />
+        ))}
+      </div>
+
+      <div data-section="charts-row-1" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <ChartCard
+          title="Tendência Mensal de Receita"
+          subtitle="Potencial x realizado nos últimos 6 meses"
+          action={<span className="rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">{formatCurrency(totalWonValue)}</span>}
+        >
+          <Line
+            data={chartData.monthlyTrend}
+            options={{
+              ...chartOptionsBase,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
+              }
+            }}
+          />
+        </ChartCard>
+
+        <ChartCard title="Distribuição por Estágio" subtitle="Volume de oportunidades por etapa do funil">
+          <Bar
+            data={chartData.stageDistribution}
+            options={{
+              ...chartOptionsBase,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
+              }
+            }}
+          />
+        </ChartCard>
+      </div>
+
+      <div data-section="charts-row-2" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <ChartCard title="Temperatura dos Leads" subtitle="Classificação por score (B2B e B2G)">
+          <Bar
+            data={chartData.leadTemperature}
+            options={{
+              ...chartOptionsBase,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
+              }
+            }}
+          />
+        </ChartCard>
+
+        <ChartCard title="Carga Operacional" subtitle="Fila de demandas em execução">
+          <Doughnut
+            data={chartData.operationalLoad}
+            options={{
+              ...chartOptionsBase,
+              scales: undefined,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'bottom' }
+              }
+            }}
+          />
+        </ChartCard>
+
+        <ChartCard title="Composição do Pipeline" subtitle="Participação entre B2B e B2G">
+          <Doughnut
+            data={chartData.pipelineComposition}
+            options={{
+              ...chartOptionsBase,
+              scales: undefined,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'bottom' }
+              }
+            }}
+          />
+        </ChartCard>
+      </div>
+
+      <div data-section="charts-row-3" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <ChartCard title="Performance da Equipe" subtitle="Top responsáveis por volume de oportunidades">
+          {chartData.hasTeamData ? (
+            <Bar
+              data={chartData.teamLoad}
+              options={{
+                ...chartOptionsBase,
+                indexAxis: 'y',
+                plugins: {
+                  ...chartOptionsBase.plugins,
+                  legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
+                }
+              }}
+            />
+          ) : (
+            <div className="grid h-full place-items-center rounded-xl border border-dashed border-[var(--crm-border)]">
+              <p className="text-sm text-[var(--crm-muted)]">Sem dados de equipe no período selecionado.</p>
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard title="Volume por Módulo" subtitle="Top módulos por quantidade de registros carregados">
+          {chartData.hasModuleVolumeData ? (
+            <Bar
+              data={chartData.moduleVolume}
+              options={{
+                ...chartOptionsBase,
+                plugins: {
+                  ...chartOptionsBase.plugins,
+                  legend: { ...chartOptionsBase.plugins.legend, display: false }
+                }
+              }}
+            />
+          ) : (
+            <div className="grid h-full place-items-center rounded-xl border border-dashed border-[var(--crm-border)]">
+              <p className="text-sm text-[var(--crm-muted)]">Sem volume suficiente para comparação.</p>
+            </div>
+          )}
+        </ChartCard>
+
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-[var(--crm-ink)]">Cobertura de Módulos</h3>
+            <span className="rounded-full bg-[rgb(var(--crm-accent-rgb)_/_0.2)] px-2.5 py-1 text-xs font-semibold text-[var(--crm-ink)]">
+              {modulesLoaded}/{modulesEnabled} carregados
+            </span>
+          </div>
+
+          <div className="mb-4 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-2">
+              <p className="text-lg font-bold text-emerald-300">{modulesLoaded}</p>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">OK</p>
+            </div>
+            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-2">
+              <p className="text-lg font-bold text-rose-300">{modulesWithError}</p>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Falhas</p>
+            </div>
+            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-2">
+              <p className="text-lg font-bold text-blue-300">{moduleHealth.filter((item) => item.status === 'skipped').length}</p>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Ignorados</p>
+            </div>
+          </div>
+
+          <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+            {moduleHealth.map((item) => (
+              <div
+                key={item.key}
+                className="flex items-start justify-between gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-[var(--crm-ink)]">{item.label}</p>
+                  {item.status === 'error' ? (
+                    <p className="truncate text-xs text-rose-300">{item.error}</p>
+                  ) : (
+                    <p className="text-xs text-[var(--crm-muted)]">{formatNumber(item.count)} registros</p>
+                  )}
+                </div>
+                <span
+                  className={[
+                    'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                    item.status === 'ok'
+                      ? 'bg-emerald-500/20 text-emerald-300'
+                      : item.status === 'error'
+                        ? 'bg-rose-500/20 text-rose-300'
+                        : 'bg-slate-500/20 text-slate-300'
+                  ].join(' ')}
+                >
+                  {item.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div data-section="bottom" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-[var(--crm-ink)]">Atividades Recentes</h3>
+            <button onClick={() => navigate('/atividades')} className="text-xs text-[var(--crm-accent)] hover:underline">
+              Ver todas
+            </button>
+          </div>
+          {activitiesRange.slice(0, 8).length === 0 ? (
+            <p className="py-8 text-center text-sm text-[var(--crm-muted)]">Nenhuma atividade encontrada no período.</p>
+          ) : (
+            activitiesRange.slice(0, 8).map((item) => (
+              <ActivityItem
+                key={item.id}
+                icon={item.type === 'CALL' ? Phone : item.type === 'MEETING' ? Users : FileText}
+                color={String(item.status || '').toUpperCase() === 'COMPLETED' ? 'green' : String(item.status || '').toUpperCase() === 'IN_PROGRESS' ? 'blue' : 'amber'}
+                title={item.subject || 'Atividade'}
+                sub={item.company?.name || item.opportunity?.title || item.type || 'Sem contexto'}
+                time={item.dueDate ? new Date(item.dueDate).toLocaleDateString('pt-BR') : '-'}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-[var(--crm-ink)]">Alertas e Ações Rápidas</h3>
+            <span className="rounded-full bg-rose-500/20 px-2.5 py-1 text-xs font-semibold text-rose-300">
+              {formatNumber(alertCount)} itens
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {overdueActivities.length > 0 && (
+              <div
+                onClick={() => navigate('/atividades')}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 transition-colors hover:bg-rose-500/15"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+                <div>
+                  <p className="text-sm font-medium text-rose-200">{formatNumber(overdueActivities.length)} atividade(s) atrasada(s)</p>
+                  <p className="text-xs text-rose-300/80">Priorizar tratativa da agenda operacional.</p>
+                </div>
+              </div>
+            )}
+
+            {pendingPreSales.length > 0 && (
+              <div
+                onClick={() => navigate('/pre-vendas')}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 transition-colors hover:bg-amber-500/15"
+              >
+                <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                <div>
+                  <p className="text-sm font-medium text-amber-200">{formatNumber(pendingPreSales.length)} solicitação(ões) de pré-vendas pendente(s)</p>
+                  <p className="text-xs text-amber-300/80">Aguardando precificação ou aprovação técnica.</p>
+                </div>
+              </div>
+            )}
+
+            {inAnalysisB2G.length > 0 && (
+              <div
+                onClick={() => navigate('/b2g-dashboard')}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 transition-colors hover:bg-indigo-500/15"
+              >
+                <Brain className="mt-0.5 h-4 w-4 shrink-0 text-indigo-300" />
+                <div>
+                  <p className="text-sm font-medium text-indigo-200">{formatNumber(inAnalysisB2G.length)} edital(is) em análise</p>
+                  <p className="text-xs text-indigo-300/80">Pendência de decisão GO / NO-GO.</p>
+                </div>
+              </div>
+            )}
+
+            {alertCount === 0 && (
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                <p className="text-sm text-emerald-200">Tudo em dia no período selecionado.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 border-t border-[var(--crm-border)] pt-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--crm-muted)]">Atalhos estratégicos</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Nova Oportunidade', icon: Target, route: '/oportunidades', color: 'text-blue-400' },
+                { label: 'Novo Edital', icon: Gavel, route: '/b2g-dashboard', color: 'text-indigo-400' },
+                (access.accessPreSales || adminLike) && { label: 'Nova Solicitação', icon: ClipboardList, route: '/pre-vendas', color: 'text-amber-400' },
+                { label: 'Nova Atividade', icon: Zap, route: '/atividades', color: 'text-emerald-400' },
+                { label: 'Leads', icon: Layers, route: '/leads', color: 'text-cyan-400' },
+                adminLike && { label: 'Integrações', icon: UserCircle2, route: '/integracoes', color: 'text-purple-400' }
+              ].filter(Boolean).map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => navigate(item.route)}
+                  className="flex items-center gap-2 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2.5 text-xs font-medium text-[var(--crm-muted)] transition-all hover:border-[var(--crm-accent)] hover:text-[var(--crm-ink)]"
+                >
+                  <item.icon className={`h-3.5 w-3.5 ${item.color}`} />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

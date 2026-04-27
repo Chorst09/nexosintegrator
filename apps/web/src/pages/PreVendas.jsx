@@ -1,0 +1,1618 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import {
+  Plus,
+  Search,
+  Eye,
+  Edit,
+  Trash2,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Calculator,
+  FileText,
+  DollarSign,
+  Package,
+  CalendarCheck2,
+  SendHorizontal,
+  RefreshCcw,
+  X,
+  CheckSquare,
+  Maximize2
+} from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+
+import { buildApiUrl, getAuthHeaders } from '../config/api';
+import AnimatedStats from '../components/AnimatedStats';
+import Modal from '../components/Modal';
+import PresentationControls from '../components/PresentationControls';
+import {
+  addFlowMetadataToDescription,
+  getAreaLabel,
+  hydrateActivityFlow
+} from '../utils/activityFlow';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+const STATUS_META = {
+  PENDING: { label: 'Pendente', cls: 'bg-amber-500/20 text-amber-200 border-amber-500/40' },
+  IN_PROGRESS: { label: 'Em andamento', cls: 'bg-sky-500/20 text-sky-200 border-sky-500/40' },
+  COMPLETED: { label: 'Concluida', cls: 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40' },
+  CANCELLED: { label: 'Cancelada', cls: 'bg-red-500/20 text-red-200 border-red-500/40' }
+};
+
+const PRIORITY_META = {
+  LOW: { label: 'Baixa', cls: 'text-green-400' },
+  MEDIUM: { label: 'Media', cls: 'text-yellow-400' },
+  HIGH: { label: 'Alta', cls: 'text-red-400' },
+  URGENT: { label: 'Urgente', cls: 'text-red-300' }
+};
+
+const toPriorityLabel = (priority) => {
+  if (priority === 'HIGH' || priority === 'ALTA') return 'Alta';
+  if (priority === 'LOW' || priority === 'BAIXA') return 'Baixa';
+  if (priority === 'URGENT' || priority === 'URGENTE') return 'Urgente';
+  return 'Média';
+};
+
+const getCurrentUserName = () => {
+  try {
+    const userRaw = localStorage.getItem('user');
+    const user = userRaw ? JSON.parse(userRaw) : {};
+    return user?.name || 'Usuário';
+  } catch {
+    return 'Usuário';
+  }
+};
+
+const CHART_TICK_COLOR = '#94a3b8';
+const CHART_GRID_COLOR = 'rgba(148, 163, 184, 0.16)';
+
+const CHART_OPTIONS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: {
+        color: CHART_TICK_COLOR,
+        usePointStyle: true,
+        boxWidth: 8,
+        boxHeight: 8
+      }
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: CHART_TICK_COLOR },
+      grid: { color: CHART_GRID_COLOR }
+    },
+    y: {
+      ticks: {
+        color: CHART_TICK_COLOR,
+        precision: 0
+      },
+      grid: { color: CHART_GRID_COLOR }
+    }
+  }
+};
+
+const DOUGHNUT_OPTIONS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: {
+        color: CHART_TICK_COLOR,
+        usePointStyle: true,
+        boxWidth: 8,
+        boxHeight: 8
+      }
+    }
+  }
+};
+
+const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+export default function PreVendas() {
+  const navigate = useNavigate();
+  const presentationRef = useRef(null);
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [presentationProgress, setPresentationProgress] = useState({ current: 1, total: 1 });
+  const [activeMenu, setActiveMenu] = useState('solicitacoes');
+
+  const [solicitacoes, setSolicitacoes] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedSolicitacao, setSelectedSolicitacao] = useState(null);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [loading, setLoading] = useState(true);
+
+  const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [registroLoading, setRegistroLoading] = useState(false);
+  const [registroOportunidades, setRegistroOportunidades] = useState([]);
+  const [activitySearch, setActivitySearch] = useState('');
+  const [activityStatusFilter, setActivityStatusFilter] = useState('all');
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [activityForm, setActivityForm] = useState({
+    type: 'TASK',
+    subject: '',
+    description: '',
+    priority: 'MEDIUM',
+    dueDate: '',
+    targetArea: 'COMERCIAL',
+    companyId: '',
+    opportunityId: ''
+  });
+
+  const [formData, setFormData] = useState({
+    titulo: '',
+    descricao: '',
+    prioridade: 'MEDIUM',
+    leadId: '',
+    tiposPrecificacao: [],
+    observacoes: '',
+    prazoEsperado: '',
+    orcamentoEstimado: ''
+  });
+
+  useEffect(() => {
+    loadSolicitacoes();
+    loadPreSalesActivities();
+    loadRegistroOportunidades();
+  }, []);
+
+  const loadSolicitacoes = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(buildApiUrl('/pre-vendas?limit=200'), {
+        headers: getAuthHeaders()
+      });
+
+      const apiRows = Array.isArray(response?.data?.solicitacoes)
+        ? response.data.solicitacoes
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+
+      const mapped = apiRows.map((row) => ({
+        id: row.id,
+        numero: row.numero,
+        titulo: row.titulo,
+        descricao: row.descricao,
+        status: row.status,
+        prioridade: row.prioridade,
+        solicitadoPor: row?.solicitante?.name || 'Usuário',
+        dataCreated: row.createdAt,
+        leadId: row?.lead?.name || '',
+        tiposPrecificacao: Array.isArray(row.tiposPrecificacao) ? row.tiposPrecificacao : [],
+        valorSugerido: row.valorSugerido || 0,
+        custoTotal: row.custoTotal || 0,
+        margemLucro: row.margemLucro || 0
+      }));
+
+      setSolicitacoes(mapped);
+    } catch (error) {
+      console.error('Erro ao carregar solicitações:', error);
+      setSolicitacoes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPreSalesActivities = async () => {
+    try {
+      setActivitiesLoading(true);
+      const response = await axios.get(buildApiUrl('/activities-simple'), {
+        headers: getAuthHeaders()
+      });
+
+      const hydrated = Array.isArray(response.data) ? response.data.map(hydrateActivityFlow) : [];
+      const relatedToPreSales = hydrated
+        .filter((activity) => activity?.flow?.targetArea === 'PRE_VENDAS' || activity?.flow?.sourceArea === 'PRE_VENDAS')
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setActivities(relatedToPreSales);
+    } catch (error) {
+      console.error('Erro ao carregar atividades do Pré-Vendas:', error);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  };
+
+  const loadRegistroOportunidades = async () => {
+    try {
+      setRegistroLoading(true);
+      const response = await axios.get(buildApiUrl('/prevendas-cadastros/oportunidades'), {
+        headers: getAuthHeaders()
+      });
+
+      const payload = response?.data;
+      const rows = Array.isArray(payload?.oportunidades)
+        ? payload.oportunidades
+        : Array.isArray(payload)
+          ? payload
+          : [];
+
+      setRegistroOportunidades(rows);
+    } catch (error) {
+      console.error('Erro ao carregar registro de oportunidades:', error);
+      setRegistroOportunidades([]);
+    } finally {
+      setRegistroLoading(false);
+    }
+  };
+
+  const resetSolicitacaoForm = () => {
+    setFormData({
+      titulo: '',
+      descricao: '',
+      prioridade: 'MEDIUM',
+      leadId: '',
+      tiposPrecificacao: [],
+      observacoes: '',
+      prazoEsperado: '',
+      orcamentoEstimado: ''
+    });
+    setCurrentStep(1);
+  };
+
+  const resetActivityForm = () => {
+    setActivityForm({
+      type: 'TASK',
+      subject: '',
+      description: '',
+      priority: 'MEDIUM',
+      dueDate: '',
+      targetArea: 'COMERCIAL',
+      companyId: '',
+      opportunityId: ''
+    });
+  };
+
+  const handleSolicitacaoSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (!Array.isArray(formData.tiposPrecificacao) || formData.tiposPrecificacao.length === 0) {
+        return;
+      }
+
+      await axios.post(
+        buildApiUrl('/pre-vendas'),
+        {
+          titulo: formData.titulo,
+          descricao: formData.descricao,
+          prioridade: formData.prioridade,
+          tiposPrecificacao: formData.tiposPrecificacao,
+          observacoes: formData.observacoes || ''
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      await loadSolicitacoes();
+      setShowModal(false);
+      resetSolicitacaoForm();
+    } catch (error) {
+      console.error('Erro ao criar solicitação:', error?.response?.data || error);
+    }
+  };
+
+  const handleActivitySubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingActivity(true);
+
+      await axios.post(
+        buildApiUrl('/activities-simple'),
+        {
+          type: activityForm.type,
+          subject: activityForm.subject,
+          priority: activityForm.priority,
+          dueDate: activityForm.dueDate || null,
+          companyId: activityForm.companyId || '',
+          opportunityId: activityForm.opportunityId || '',
+          description: addFlowMetadataToDescription(activityForm.description, {
+            sourceArea: 'PRE_VENDAS',
+            targetArea: activityForm.targetArea,
+            createdFrom: 'PRE_VENDAS',
+            createdByName: getCurrentUserName()
+          })
+        },
+        { headers: getAuthHeaders() }
+      );
+
+      setShowActivityModal(false);
+      resetActivityForm();
+      loadPreSalesActivities();
+    } catch (error) {
+      console.error('Erro ao criar atividade no Pré-Vendas:', error);
+    } finally {
+      setSavingActivity(false);
+    }
+  };
+
+  const updateActivityStatus = async (id, status) => {
+    try {
+      await axios.put(
+        buildApiUrl('/activities-simple'),
+        { id, status },
+        { headers: getAuthHeaders() }
+      );
+      loadPreSalesActivities();
+    } catch (error) {
+      console.error('Erro ao atualizar atividade:', error);
+    }
+  };
+
+  const handleTipoPrecificacao = (tipo) => {
+    setFormData((prev) => ({
+      ...prev,
+      tiposPrecificacao: prev.tiposPrecificacao.includes(tipo)
+        ? prev.tiposPrecificacao.filter((item) => item !== tipo)
+        : [...prev.tiposPrecificacao, tipo]
+    }));
+  };
+
+  const getSolicitacaoStatusColor = (status) => {
+    const colors = {
+      NOVA: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      EM_PRECIFICACAO: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      AGUARDANDO_APROVACAO: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+      FINALIZADA: 'bg-green-500/20 text-green-400 border-green-500/30',
+      CANCELADA: 'bg-red-500/20 text-red-400 border-red-500/30',
+      REJEITADA: 'bg-red-500/20 text-red-400 border-red-500/30'
+    };
+    return colors[status] || colors.NOVA;
+  };
+
+  const getSolicitacaoStatusLabel = (status) => {
+    const labels = {
+      NOVA: 'Nova',
+      EM_PRECIFICACAO: 'Em Precificação',
+      AGUARDANDO_APROVACAO: 'Aguardando Aprovação',
+      FINALIZADA: 'Finalizada',
+      CANCELADA: 'Cancelada',
+      REJEITADA: 'Rejeitada'
+    };
+    return labels[status] || status;
+  };
+
+  const getPrioridadeColor = (prioridade) => {
+    const colors = {
+      BAIXA: 'text-green-400',
+      LOW: 'text-green-400',
+      MEDIA: 'text-yellow-400',
+      MEDIUM: 'text-yellow-400',
+      ALTA: 'text-red-400',
+      HIGH: 'text-red-400',
+      URGENT: 'text-red-300'
+    };
+    return colors[prioridade] || colors.MEDIUM;
+  };
+
+  const solicitacaoStats = [
+    {
+      title: 'Novas Solicitações',
+      value: solicitacoes.filter((item) => item.status === 'NOVA').length,
+      subtitle: 'Demandas recentes',
+      icon: Plus,
+      color: 'from-blue-500 to-blue-600',
+      trend: '+12%'
+    },
+    {
+      title: 'Em Precificação',
+      value: solicitacoes.filter((item) => item.status === 'EM_PRECIFICACAO').length,
+      subtitle: 'Em andamento',
+      icon: Clock,
+      color: 'from-yellow-500 to-orange-500',
+      trend: '-5%'
+    },
+    {
+      title: 'Aguardando Aprovação',
+      value: solicitacoes.filter((item) => item.status === 'AGUARDANDO_APROVACAO').length,
+      subtitle: 'Pendentes de retorno',
+      icon: AlertCircle,
+      color: 'from-purple-500 to-purple-600',
+      trend: '+8%'
+    },
+    {
+      title: 'Finalizadas',
+      value: solicitacoes.filter((item) => item.status === 'FINALIZADA').length,
+      subtitle: 'No mês atual',
+      icon: CheckCircle,
+      color: 'from-green-500 to-green-600',
+      trend: '+12%'
+    }
+  ];
+
+  const activityStats = useMemo(() => {
+    const received = activities.filter((item) => item?.flow?.targetArea === 'PRE_VENDAS').length;
+    const sent = activities.filter((item) => item?.flow?.sourceArea === 'PRE_VENDAS' && item?.flow?.targetArea !== 'PRE_VENDAS').length;
+    const pending = activities.filter((item) => item.status === 'PENDING').length;
+    const completed = activities.filter((item) => item.status === 'COMPLETED').length;
+    return { received, sent, pending, completed };
+  }, [activities]);
+
+  const registroStats = useMemo(() => {
+    const total = registroOportunidades.length;
+    const abertas = registroOportunidades.filter((item) =>
+      ['ABERTA', 'EM_ANALISE', 'EM_COTACAO', 'PRECIFICADA'].includes(String(item?.status || '').toUpperCase())
+    ).length;
+    const ganhas = registroOportunidades.filter((item) => String(item?.status || '').toUpperCase() === 'GANHA').length;
+    const valorPotencial = registroOportunidades.reduce((acc, item) => acc + Number(item?.valorEstimado || 0), 0);
+    const b2g = registroOportunidades.filter((item) => String(item?.origem || '').toUpperCase() === 'B2G').length;
+    return { total, abertas, ganhas, valorPotencial, b2g };
+  }, [registroOportunidades]);
+
+  const registroStatusChartData = useMemo(() => {
+    const statusOrder = ['ABERTA', 'EM_ANALISE', 'EM_COTACAO', 'PRECIFICADA', 'DEVOLVIDA', 'GANHA', 'PERDIDA'];
+    const statusLabels = {
+      ABERTA: 'Aberta',
+      EM_ANALISE: 'Em análise',
+      EM_COTACAO: 'Em cotação',
+      PRECIFICADA: 'Precificada',
+      DEVOLVIDA: 'Devolvida',
+      GANHA: 'Ganha',
+      PERDIDA: 'Perdida'
+    };
+    const counts = statusOrder.map((status) =>
+      registroOportunidades.filter((item) => String(item?.status || '').toUpperCase() === status).length
+    );
+
+    return {
+      labels: statusOrder.map((status) => statusLabels[status]),
+      datasets: [
+        {
+          label: 'Oportunidades',
+          data: counts,
+          backgroundColor: [
+            '#38bdf8',
+            '#facc15',
+            '#f59e0b',
+            '#a78bfa',
+            '#22d3ee',
+            '#34d399',
+            '#fb7185'
+          ],
+          borderRadius: 8,
+          borderSkipped: false
+        }
+      ]
+    };
+  }, [registroOportunidades]);
+
+  const registroOrigemChartData = useMemo(() => {
+    const origemOrder = ['B2B', 'B2G', 'COMERCIAL', 'PRE_VENDAS', 'OUTROS'];
+    const labels = {
+      B2B: 'B2B',
+      B2G: 'B2G',
+      COMERCIAL: 'Comercial',
+      PRE_VENDAS: 'Pré-vendas',
+      OUTROS: 'Outros'
+    };
+
+    const counts = origemOrder.map((origem) => {
+      if (origem === 'OUTROS') {
+        return registroOportunidades.filter((item) => {
+          const normalized = String(item?.origem || '').toUpperCase();
+          return !['B2B', 'B2G', 'COMERCIAL', 'PRE_VENDAS'].includes(normalized);
+        }).length;
+      }
+      return registroOportunidades.filter((item) => String(item?.origem || '').toUpperCase() === origem).length;
+    });
+
+    return {
+      labels: origemOrder.map((origem) => labels[origem]),
+      datasets: [
+        {
+          data: counts,
+          backgroundColor: ['#0ea5e9', '#22c55e', '#f59e0b', '#a855f7', '#64748b'],
+          borderColor: ['#0ea5e9', '#22c55e', '#f59e0b', '#a855f7', '#64748b'],
+          borderWidth: 1
+        }
+      ]
+    };
+  }, [registroOportunidades]);
+
+  const registroModalidadeChartData = useMemo(() => {
+    const labels = ['Venda', 'Locação', 'Serviços', 'Projeto', 'Outros'];
+    const modalities = ['VENDA', 'LOCACAO', 'SERVICOS', 'PROJETO', 'OUTROS'];
+
+    const sums = modalities.map((modality) => {
+      if (modality === 'OUTROS') {
+        return registroOportunidades
+          .filter((item) => {
+            const normalized = String(item?.modalidade || '').toUpperCase();
+            return !['VENDA', 'LOCACAO', 'SERVICOS', 'PROJETO'].includes(normalized);
+          })
+          .reduce((acc, item) => acc + Number(item?.valorEstimado || 0), 0);
+      }
+      return registroOportunidades
+        .filter((item) => String(item?.modalidade || '').toUpperCase() === modality)
+        .reduce((acc, item) => acc + Number(item?.valorEstimado || 0), 0);
+    });
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Valor estimado (R$)',
+          data: sums,
+          backgroundColor: '#22d3ee',
+          borderColor: '#22d3ee',
+          borderRadius: 8,
+          borderSkipped: false
+        }
+      ]
+    };
+  }, [registroOportunidades]);
+
+  const registroEvolucaoChartData = useMemo(() => {
+    const buckets = Array.from({ length: 6 }).map((_, index) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() - (5 - index));
+      return {
+        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: `${monthsShort[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`
+      };
+    });
+
+    const grouped = new Map(buckets.map((item) => [item.key, { total: 0, value: 0 }]));
+    registroOportunidades.forEach((item) => {
+      const createdAt = item?.createdAt ? new Date(item.createdAt) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) return;
+      const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+      const bucket = grouped.get(key);
+      if (!bucket) return;
+      bucket.total += 1;
+      bucket.value += Number(item?.valorEstimado || 0);
+    });
+
+    return {
+      labels: buckets.map((item) => item.label),
+      datasets: [
+        {
+          label: 'Qtd. registros',
+          data: buckets.map((item) => grouped.get(item.key)?.total || 0),
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.2)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3
+        },
+        {
+          label: 'Valor estimado (R$ mil)',
+          data: buckets.map((item) => Math.round((grouped.get(item.key)?.value || 0) / 1000)),
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34, 197, 94, 0.18)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3
+        }
+      ]
+    };
+  }, [registroOportunidades]);
+
+  const filteredSolicitacoes = solicitacoes.filter((solicitacao) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = String(solicitacao.titulo || '').toLowerCase().includes(term)
+      || String(solicitacao.numero || '').toLowerCase().includes(term)
+      || String(solicitacao.descricao || '').toLowerCase().includes(term);
+    const matchesFilter = filterStatus === 'all' || solicitacao.status === filterStatus;
+    return matchesSearch && matchesFilter;
+  });
+
+  const filteredActivities = useMemo(() => {
+    return activities.filter((activity) => {
+      if (activityStatusFilter !== 'all' && activity.status !== activityStatusFilter) return false;
+      if (!activitySearch.trim()) return true;
+
+      const text = [
+        activity.subject,
+        activity.description,
+        activity.company?.name,
+        activity.opportunity?.title,
+        getAreaLabel(activity?.flow?.sourceArea),
+        getAreaLabel(activity?.flow?.targetArea)
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      return text.includes(activitySearch.toLowerCase());
+    });
+  }, [activities, activitySearch, activityStatusFilter]);
+
+  const handlePresentation = async () => {
+    if (typeof document === 'undefined') return;
+
+    try {
+      if (document.fullscreenElement === presentationRef.current) {
+        await document.exitFullscreen();
+      } else {
+        presentationRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+        await presentationRef.current?.requestFullscreen();
+      }
+    } catch {
+      // no-op
+    }
+  };
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const syncPresentationMode = () => {
+      setPresentationMode(document.fullscreenElement === presentationRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', syncPresentationMode);
+    syncPresentationMode();
+
+    return () => document.removeEventListener('fullscreenchange', syncPresentationMode);
+  }, []);
+
+  const getPresentationSteps = () => {
+    const container = presentationRef.current;
+    if (!container) return [];
+
+    return Array.from(container.children).filter(
+      (child) =>
+        child instanceof HTMLElement &&
+        child.dataset.presentationControls !== 'true' &&
+        child.offsetHeight > 40
+    );
+  };
+
+  const resolveCurrentStepIndex = (steps, container) => {
+    const anchor = container.scrollTop + container.clientHeight * 0.24;
+    const matchIndex = steps.findIndex((step) => {
+      const top = step.offsetTop;
+      const bottom = top + step.offsetHeight;
+      return top <= anchor && bottom > anchor;
+    });
+
+    if (matchIndex !== -1) return matchIndex;
+
+    return steps.reduce(
+      (best, step, index) => {
+        const distance = Math.abs(step.offsetTop - anchor);
+        return distance < best.distance ? { index, distance } : best;
+      },
+      { index: 0, distance: Number.POSITIVE_INFINITY }
+    ).index;
+  };
+
+  const updatePresentationProgress = () => {
+    const container = presentationRef.current;
+    if (!container) return;
+
+    const steps = getPresentationSteps();
+    if (steps.length === 0) {
+      setPresentationProgress({ current: 1, total: 1 });
+      return;
+    }
+
+    const currentIndex = resolveCurrentStepIndex(steps, container);
+    const next = { current: currentIndex + 1, total: steps.length };
+
+    setPresentationProgress((prev) => (
+      prev.current === next.current && prev.total === next.total ? prev : next
+    ));
+  };
+
+  const scrollPresentationStep = (direction) => {
+    const container = presentationRef.current;
+    if (!container) return;
+
+    const steps = getPresentationSteps();
+
+    if (steps.length === 0) {
+      container.scrollBy({ top: direction * container.clientHeight * 0.85, behavior: 'smooth' });
+      return;
+    }
+
+    const currentIndex = resolveCurrentStepIndex(steps, container);
+    const baseIndex = currentIndex === -1 ? 0 : currentIndex;
+    const nextIndex = Math.min(Math.max(baseIndex + direction, 0), steps.length - 1);
+
+    const target = steps[nextIndex];
+    if (!target) return;
+
+    const top = Math.max(target.offsetTop - 12, 0);
+    container.scrollTo({ top, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (!presentationMode) return undefined;
+
+    const container = presentationRef.current;
+    if (!container) return undefined;
+
+    const sync = () => updatePresentationProgress();
+    const raf = requestAnimationFrame(sync);
+
+    container.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      container.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+    };
+  }, [presentationMode]);
+
+  useEffect(() => {
+    if (!presentationMode) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'PageDown') {
+        event.preventDefault();
+        scrollPresentationStep(1);
+      } else if (event.key === 'ArrowUp' || event.key === 'PageUp') {
+        event.preventDefault();
+        scrollPresentationStep(-1);
+      } else if (event.key === 'Escape') {
+        handlePresentation();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [presentationMode]);
+
+  const headerActions = activeMenu === 'solicitacoes'
+    ? [
+      {
+        label: 'Apresentação',
+        onClick: handlePresentation,
+        icon: Maximize2,
+        variant: 'secondary'
+      },
+      {
+        label: 'Nova Solicitação',
+        onClick: () => setShowModal(true),
+        icon: Plus,
+        variant: 'primary'
+      }
+    ]
+    : [
+      {
+        label: 'Apresentação',
+        onClick: handlePresentation,
+        icon: Maximize2,
+        variant: 'secondary'
+      },
+      {
+        label: 'Nova Atividade',
+        onClick: () => setShowActivityModal(true),
+        icon: Plus,
+        variant: 'primary'
+      }
+    ];
+
+  return (
+    <div className="space-y-6">
+      <div
+        ref={presentationRef}
+        className={[
+          'p-6 space-y-6',
+          presentationMode ? 'h-screen overflow-y-auto overflow-x-hidden scroll-smooth bg-[#041a38] pb-28' : ''
+        ].join(' ')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setActiveMenu('solicitacoes')}
+            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+              activeMenu === 'solicitacoes'
+                ? 'border-blue-400/60 bg-blue-500/20 text-white'
+                : 'border-gray-600/50 bg-gray-800/40 text-gray-300 hover:bg-gray-700/40'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              <span className="font-semibold">Solicitações</span>
+            </div>
+            <p className="text-xs mt-1 text-gray-300">Controle de pedidos de precificação</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMenu('atividades')}
+            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+              activeMenu === 'atividades'
+                ? 'border-blue-400/60 bg-blue-500/20 text-white'
+                : 'border-gray-600/50 bg-gray-800/40 text-gray-300 hover:bg-gray-700/40'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <CalendarCheck2 className="w-4 h-4" />
+              <span className="font-semibold">Atividades</span>
+            </div>
+            <p className="text-xs mt-1 text-gray-300">Recebidas do Comercial e enviadas pelo Pré-Vendas</p>
+          </button>
+        </div>
+
+        {activeMenu === 'solicitacoes' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {solicitacaoStats.map((stat) => (
+                <AnimatedStats key={stat.title} {...stat} />
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <AnimatedStats title="Registro de Oportunidades" value={registroStats.total} subtitle="Base técnica do Pré-Vendas" icon={Package} color="blue" />
+              <AnimatedStats title="Em Aberto" value={registroStats.abertas} subtitle="Aguardando execução/comercial" icon={Clock} color="orange" />
+              <AnimatedStats title="Ganhas" value={registroStats.ganhas} subtitle="Oportunidades convertidas" icon={CheckCircle} color="green" />
+              <AnimatedStats title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} color="purple" />
+            </div>
+
+            <div className="crm-card rounded-lg p-5">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Dashboard do Registro de Oportunidades</h3>
+                  <p className="text-sm text-slate-300">
+                    Monitoramento por status, origem, modalidade e evolução mensal do Pré-Vendas.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={loadRegistroOportunidades}
+                    className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30"
+                  >
+                    <RefreshCcw className="w-3.5 h-3.5" />
+                    Atualizar Dashboard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/prevendas-registro-oportunidades')}
+                    className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100 hover:bg-cyan-500/30"
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    Abrir Registro
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {registroLoading ? (
+              <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6">
+                <div className="text-center py-6">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
+                  <p className="text-slate-300 mt-2">Carregando dados do registro de oportunidades...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="crm-card rounded-lg p-5">
+                  <h3 className="text-base font-semibold text-white mb-1">Status das Oportunidades</h3>
+                  <p className="text-xs text-slate-400 mb-4">Visão de volume por etapa operacional.</p>
+                  <div className="h-72">
+                    <Bar
+                      data={registroStatusChartData}
+                      options={{
+                        ...CHART_OPTIONS,
+                        plugins: {
+                          ...CHART_OPTIONS.plugins,
+                          legend: { display: false }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="crm-card rounded-lg p-5">
+                  <h3 className="text-base font-semibold text-white mb-1">Origem das Demandas</h3>
+                  <p className="text-xs text-slate-400 mb-4">Distribuição entre B2B, B2G e demais origens.</p>
+                  <div className="h-72">
+                    <Doughnut data={registroOrigemChartData} options={DOUGHNUT_OPTIONS} />
+                  </div>
+                </div>
+
+                <div className="crm-card rounded-lg p-5">
+                  <h3 className="text-base font-semibold text-white mb-1">Valor por Modalidade</h3>
+                  <p className="text-xs text-slate-400 mb-4">Concentração de valor estimado por tipo de projeto.</p>
+                  <div className="h-72">
+                    <Bar
+                      data={registroModalidadeChartData}
+                      options={{
+                        ...CHART_OPTIONS,
+                        plugins: {
+                          ...CHART_OPTIONS.plugins,
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: (context) => {
+                                const rawValue = typeof context.parsed === 'object'
+                                  ? context.parsed.y
+                                  : context.parsed;
+                                const numeric = Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0;
+                                return ` ${numeric.toLocaleString('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL'
+                                })}`;
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="crm-card rounded-lg p-5">
+                  <h3 className="text-base font-semibold text-white mb-1">Evolução Mensal</h3>
+                  <p className="text-xs text-slate-400 mb-4">Quantidade e valor (em R$ mil) dos últimos 6 meses.</p>
+                  <div className="h-72">
+                    <Line data={registroEvolucaoChartData} options={CHART_OPTIONS} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="crm-card rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setFilterStatus('EM_PRECIFICACAO')}>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">Solicitações Pendentes</h3>
+                    <p className="text-sm text-gray-500 dark:text-slate-200">Ver solicitações em precificação</p>
+                  </div>
+                </div>
+              </div>
+              <div className="crm-card rounded-lg p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">Visão Kanban</h3>
+                    <p className="text-sm text-gray-500 dark:text-slate-200">Fluxo de trabalho de precificação</p>
+                  </div>
+                </div>
+              </div>
+              <div className="crm-card rounded-lg p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">Relatórios</h3>
+                    <p className="text-sm text-gray-500 dark:text-slate-200">Análise de performance</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="crm-card rounded-lg p-6">
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar solicitações..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  />
+                </div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="all">Todos os Status</option>
+                  <option value="NOVA">Novas</option>
+                  <option value="EM_PRECIFICACAO">Em Precificação</option>
+                  <option value="AGUARDANDO_APROVACAO">Aguardando Aprovação</option>
+                  <option value="FINALIZADA">Finalizadas</option>
+                  <option value="REJEITADA">Rejeitadas</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-white">Solicitações Recentes</h3>
+              </div>
+
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
+                  <p className="text-slate-300 mt-2">Carregando...</p>
+                </div>
+              ) : filteredSolicitacoes.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                  <p className="text-slate-300">Nenhuma solicitação encontrada</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredSolicitacoes.map((solicitacao) => (
+                    <div
+                      key={solicitacao.id}
+                      className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-4 hover:bg-gray-700/50 transition-all duration-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-sm font-mono text-blue-400">{solicitacao.numero}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getSolicitacaoStatusColor(solicitacao.status)}`}>
+                              {getSolicitacaoStatusLabel(solicitacao.status)}
+                            </span>
+                            <span className={`text-xs font-medium ${getPrioridadeColor(solicitacao.prioridade)}`}>
+                              {toPriorityLabel(solicitacao.prioridade)}
+                            </span>
+                          </div>
+                          <h4 className="text-white font-medium mb-1">{solicitacao.titulo}</h4>
+                          <p className="text-slate-300 text-sm mb-2">{solicitacao.descricao}</p>
+                          <div className="flex items-center gap-4 text-xs text-slate-400">
+                            <span>Solicitado por {solicitacao.solicitadoPor}</span>
+                            <span>•</span>
+                            <span>{solicitacao.dataCreated ? new Date(solicitacao.dataCreated).toLocaleDateString('pt-BR') : '-'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            onClick={() => {
+                              setSelectedSolicitacao(solicitacao);
+                              setShowViewModal(true);
+                            }}
+                            className="p-2 text-slate-300 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                            title="Visualizar"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedSolicitacao(solicitacao);
+                              setShowModal(true);
+                            }}
+                            className="p-2 text-slate-300 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                            title="Editar"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Tem certeza que deseja excluir esta solicitação?')) {
+                                setSolicitacoes((prev) => prev.filter((item) => item.id !== solicitacao.id));
+                              }
+                            }}
+                            className="p-2 text-slate-300 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeMenu === 'atividades' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <AnimatedStats title="Recebidas do Comercial" value={activityStats.received} subtitle="Destino Pré-Vendas" icon={CalendarCheck2} color="blue" />
+              <AnimatedStats title="Enviadas pelo Pré-Vendas" value={activityStats.sent} subtitle="Encaminhamentos internos" icon={SendHorizontal} color="purple" />
+              <AnimatedStats title="Pendentes" value={activityStats.pending} subtitle="Aguardando ação" icon={Clock} color="orange" />
+              <AnimatedStats title="Concluídas" value={activityStats.completed} subtitle="Execução finalizada" icon={CheckCircle} color="green" />
+            </div>
+
+            <div className="crm-card rounded-lg p-6">
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar atividades por assunto, empresa ou área..."
+                    value={activitySearch}
+                    onChange={(e) => setActivitySearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <select
+                    value={activityStatusFilter}
+                    onChange={(e) => setActivityStatusFilter(e.target.value)}
+                    className="px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    <option value="all">Todos os Status</option>
+                    <option value="PENDING">Pendentes</option>
+                    <option value="IN_PROGRESS">Em andamento</option>
+                    <option value="COMPLETED">Concluídas</option>
+                    <option value="CANCELLED">Canceladas</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={loadPreSalesActivities}
+                    className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    Atualizar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-white">Atividades do Fluxo Pré-Vendas</h3>
+              </div>
+
+              {activitiesLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
+                  <p className="text-slate-300 mt-2">Carregando atividades...</p>
+                </div>
+              ) : filteredActivities.length === 0 ? (
+                <div className="text-center py-8">
+                  <CalendarCheck2 className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                  <p className="text-slate-300">Nenhuma atividade no fluxo Pré-Vendas</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredActivities.map((activity) => {
+                    const statusMeta = STATUS_META[activity.status] || STATUS_META.PENDING;
+                    const priorityMeta = PRIORITY_META[activity.priority] || PRIORITY_META.MEDIUM;
+                    return (
+                      <div
+                        key={activity.id}
+                        className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-4 hover:bg-gray-700/50 transition-all duration-200"
+                      >
+                        <div className="flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusMeta.cls}`}>
+                                {statusMeta.label}
+                              </span>
+                              <span className={`text-xs font-medium ${priorityMeta.cls}`}>{priorityMeta.label}</span>
+                              <span className="text-xs px-2 py-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+                                {getAreaLabel(activity?.flow?.sourceArea)} → {getAreaLabel(activity?.flow?.targetArea)}
+                              </span>
+                            </div>
+                            <h4 className="text-white font-medium mb-1">{activity.subject}</h4>
+                            <p className="text-slate-300 text-sm">{activity.description || 'Sem descrição'}</p>
+                            <div className="mt-2 text-xs text-slate-400 flex flex-wrap gap-3">
+                              <span>Empresa: {activity.company?.name || '-'}</span>
+                              <span>Responsável: {activity.assignedTo?.name || '-'}</span>
+                              <span>
+                                Vencimento:{' '}
+                                {activity.dueDate ? new Date(activity.dueDate).toLocaleString('pt-BR') : '-'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {activity.status === 'PENDING' && (
+                              <button
+                                type="button"
+                                onClick={() => updateActivityStatus(activity.id, 'IN_PROGRESS')}
+                                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs inline-flex items-center gap-1"
+                              >
+                                <RefreshCcw className="w-3 h-3" />
+                                Iniciar
+                              </button>
+                            )}
+                            {activity.status === 'IN_PROGRESS' && (
+                              <button
+                                type="button"
+                                onClick={() => updateActivityStatus(activity.id, 'COMPLETED')}
+                                className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs inline-flex items-center gap-1"
+                              >
+                                <CheckSquare className="w-3 h-3" />
+                                Concluir
+                              </button>
+                            )}
+                            {activity.status !== 'COMPLETED' && activity.status !== 'CANCELLED' && (
+                              <button
+                                type="button"
+                                onClick={() => updateActivityStatus(activity.id, 'CANCELLED')}
+                                className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs inline-flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" />
+                                Cancelar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <PresentationControls
+          active={presentationMode}
+          current={presentationProgress.current}
+          total={presentationProgress.total}
+          canPrevious={presentationProgress.current > 1}
+          canNext={presentationProgress.current < presentationProgress.total}
+          onPrevious={() => scrollPresentationStep(-1)}
+          onNext={() => scrollPresentationStep(1)}
+          onExit={handlePresentation}
+        />
+      </div>
+
+      <Modal
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          resetSolicitacaoForm();
+        }}
+        title="Nova Solicitação de Precificação"
+        subtitle="Preencha os dados para solicitar uma precificação ao time técnico"
+      >
+        <form onSubmit={handleSolicitacaoSubmit} className="space-y-6">
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Título da Solicitação *</label>
+                <input
+                  type="text"
+                  value={formData.titulo}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, titulo: e.target.value }))}
+                  placeholder="Ex: Solução de Automação Industrial - Cliente ABC"
+                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Descrição Detalhada *</label>
+                <textarea
+                  value={formData.descricao}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, descricao: e.target.value }))}
+                  placeholder="Descreva os requisitos, escopo, produtos/serviços envolvidos..."
+                  rows={4}
+                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Prioridade</label>
+                  <select
+                    value={formData.prioridade}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, prioridade: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+                  >
+                    <option value="LOW">Baixa</option>
+                    <option value="MEDIUM">Média</option>
+                    <option value="HIGH">Alta</option>
+                    <option value="URGENT">Urgente</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Lead/Oportunidade (Opcional)</label>
+                  <input
+                    type="text"
+                    value={formData.leadId}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, leadId: e.target.value }))}
+                    placeholder="ID do Lead ou Oportunidade"
+                    className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">Tipos de Precificação Necessários *</label>
+                <div className="space-y-3">
+                  {[
+                    { id: 'VENDA', label: 'Venda (Sales)', desc: 'Precificação baseada em custos, impostos e margem de lucro' },
+                    { id: 'LOCACAO', label: 'Locação (MaaS/Rental)', desc: 'Cálculo de mensalidade baseado em depreciação e ROI' },
+                    { id: 'SERVICOS', label: 'Serviços (Service/SaaS)', desc: 'Precificação por hora/homem e custos de projeto' }
+                  ].map((tipo) => (
+                    <label key={tipo.id} className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.tiposPrecificacao.includes(tipo.id)}
+                        onChange={() => handleTipoPrecificacao(tipo.id)}
+                        className="mt-1 w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded"
+                      />
+                      <div>
+                        <div className="text-white font-medium">{tipo.label}</div>
+                        <div className="text-gray-400 text-sm">{tipo.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Package className="w-5 h-5 text-blue-400" />
+                  <h4 className="text-blue-400 font-medium">Informações Adicionais</h4>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Observações e Requisitos Especiais</label>
+                <textarea
+                  value={formData.observacoes || ''}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, observacoes: e.target.value }))}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Prazo Esperado</label>
+                  <input
+                    type="date"
+                    value={formData.prazoEsperado || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, prazoEsperado: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Orçamento Estimado (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.orcamentoEstimado || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, orcamentoEstimado: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between pt-6 border-t border-gray-600/30">
+            {currentStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => setCurrentStep((prev) => prev - 1)}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg"
+              >
+                Voltar
+              </button>
+            ) : <div />}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  resetSolicitacaoForm();
+                }}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg"
+              >
+                Cancelar
+              </button>
+              {currentStep === 1 && formData.tiposPrecificacao.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+                >
+                  Próximo
+                </button>
+              ) : currentStep === 1 && formData.tiposPrecificacao.length === 0 ? (
+                <button
+                  type="button"
+                  disabled
+                  className="px-6 py-3 bg-gray-500/40 text-gray-300 font-medium rounded-lg cursor-not-allowed"
+                >
+                  Selecione um tipo de precificação
+                </button>
+              ) : (
+                <button type="submit" className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg">
+                  Criar Solicitação
+                </button>
+              )}
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={showActivityModal}
+        onClose={() => {
+          setShowActivityModal(false);
+          resetActivityForm();
+        }}
+        title="Nova Atividade do Pré-Vendas"
+        subtitle="Crie atividades para o Comercial, SDR, Diretoria Comercial e Gerente de Contas"
+      >
+        <form onSubmit={handleActivitySubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Tipo</label>
+              <select
+                value={activityForm.type}
+                onChange={(e) => setActivityForm((prev) => ({ ...prev, type: e.target.value }))}
+                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+              >
+                <option value="TASK">Tarefa</option>
+                <option value="FOLLOW_UP">Follow-up</option>
+                <option value="CALL">Ligação</option>
+                <option value="MEETING">Reunião</option>
+                <option value="EMAIL">E-mail</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Prioridade</label>
+              <select
+                value={activityForm.priority}
+                onChange={(e) => setActivityForm((prev) => ({ ...prev, priority: e.target.value }))}
+                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+              >
+                <option value="LOW">Baixa</option>
+                <option value="MEDIUM">Média</option>
+                <option value="HIGH">Alta</option>
+                <option value="URGENT">Urgente</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Assunto *</label>
+              <input
+                required
+                type="text"
+                value={activityForm.subject}
+                onChange={(e) => setActivityForm((prev) => ({ ...prev, subject: e.target.value }))}
+                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Descrição</label>
+              <textarea
+                rows={3}
+                value={activityForm.description}
+                onChange={(e) => setActivityForm((prev) => ({ ...prev, description: e.target.value }))}
+                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Destino</label>
+              <select
+                value={activityForm.targetArea}
+                onChange={(e) => setActivityForm((prev) => ({ ...prev, targetArea: e.target.value }))}
+                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+              >
+                <option value="COMERCIAL">Comercial</option>
+                <option value="GERENTE_CONTAS">Gerente de Contas</option>
+                <option value="SDR">SDR</option>
+                <option value="DIRETORIA_COMERCIAL">Diretoria Comercial</option>
+                <option value="PRE_VENDAS">Pré-Vendas</option>
+              </select>
+              {activityForm.targetArea === 'PRE_VENDAS' && (
+                <p className="mt-1 text-xs text-blue-300">
+                  Este envio será criado como solicitação no módulo Pre-Vendas &gt; Solicitações.
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Vencimento</label>
+              <input
+                type="datetime-local"
+                value={activityForm.dueDate}
+                onChange={(e) => setActivityForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowActivityModal(false);
+                resetActivityForm();
+              }}
+              className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={savingActivity}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg inline-flex items-center gap-2"
+            >
+              <SendHorizontal className="w-4 h-4" />
+              {savingActivity ? 'Enviando...' : 'Criar Atividade'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={showViewModal}
+        onClose={() => setShowViewModal(false)}
+        title={selectedSolicitacao?.titulo || 'Detalhes da Solicitação'}
+        subtitle={`${selectedSolicitacao?.numero} - ${getSolicitacaoStatusLabel(selectedSolicitacao?.status)}`}
+      >
+        {selectedSolicitacao && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Status</label>
+                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium border ${getSolicitacaoStatusColor(selectedSolicitacao.status)}`}>
+                  {getSolicitacaoStatusLabel(selectedSolicitacao.status)}
+                </span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Prioridade</label>
+                <span className={`font-medium ${getPrioridadeColor(selectedSolicitacao.prioridade)}`}>
+                  {toPriorityLabel(selectedSolicitacao.prioridade)}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Descrição</label>
+              <p className="text-white">{selectedSolicitacao.descricao}</p>
+            </div>
+            {selectedSolicitacao.valorSugerido > 0 && (
+              <div className="bg-gray-700/30 rounded-lg p-4">
+                <h4 className="text-white font-medium mb-3">Resultado da Precificação</h4>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div className="text-lg font-semibold text-blue-400">
+                      R$ {selectedSolicitacao.valorSugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-gray-400 text-sm">Preço Sugerido</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-white">
+                      R$ {selectedSolicitacao.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-gray-400 text-sm">Custo Total</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-green-400">
+                      {selectedSolicitacao.margemLucro.toFixed(1)}%
+                    </div>
+                    <div className="text-gray-400 text-sm">Margem</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}

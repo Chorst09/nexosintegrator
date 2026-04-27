@@ -1,0 +1,571 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
+const { authenticateToken, requireRole } = require('../lib/auth.cjs');
+const { normalizeRole, resolveUserAccess, getPermissionTemplate, isMaster } = require('../lib/permissions.cjs');
+
+const router = express.Router();
+const prisma = new PrismaClient();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_EXPIRES_IN = '7d';
+const PRIVILEGED_ROLES = new Set(['MASTER', 'ADMIN', 'DIRECTOR', 'MANAGER']);
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const getAuthMasterKey = () => String(process.env.AUTH_MASTER_KEY || '').trim();
+const getMasterEmails = () =>
+  new Set(
+    String(process.env.MASTER_EMAILS || process.env.MASTER_EMAIL || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+const isMasterEmail = (value) => getMasterEmails().has(normalizeEmail(value));
+
+const sanitizeUserPayload = (user = {}) => {
+  const role = normalizeRole(user.role);
+  const access = resolveUserAccess(role, user);
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role,
+    regionId: user.regionId || null,
+    quota: user.quota ?? null,
+    tenantCompanyId: user.tenantCompanyId || null,
+    accessB2B: access.accessB2B,
+    accessB2G: access.accessB2G,
+    accessPreSales: access.accessPreSales,
+    isCompanyOwner: Boolean(user.isCompanyOwner),
+    permissions: getPermissionTemplate(role, user.permissionOverrides || {}),
+    createdAt: user.createdAt || null
+  };
+};
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+    }
+
+    // Buscar usuário
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive'
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        permissionOverrides: true,
+        isCompanyOwner: true,
+        createdAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    // Verificar senha
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    // Gerar token JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    // Remover senha da resposta
+    const { password: _, ...userWithoutPassword } = user;
+
+    res.json({
+      user: sanitizeUserPayload(userWithoutPassword),
+      token
+    });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Cadastro público de usuário
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password, confirmPassword, role, inviteCode } = req.body || {};
+    const normalizedName = String(name || '').trim();
+    const normalizedEmail = normalizeEmail(email);
+    const rawPassword = String(password || '');
+    const rawConfirmPassword = String(confirmPassword || '');
+    const requestedRole = normalizeRole(role || 'USER');
+
+    if (!normalizedName || !normalizedEmail || !rawPassword) {
+      return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    }
+
+    if (rawPassword.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    }
+
+    if (rawConfirmPassword && rawPassword !== rawConfirmPassword) {
+      return res.status(400).json({ error: 'As senhas não conferem' });
+    }
+
+    let finalRole = 'USER';
+    if (PRIVILEGED_ROLES.has(requestedRole)) {
+      const masterKey = getAuthMasterKey();
+      if (!masterKey || String(inviteCode || '') !== masterKey) {
+        return res.status(403).json({ error: 'Código de convite inválido para perfil administrativo' });
+      }
+      if (requestedRole === 'MASTER' && !isMasterEmail(normalizedEmail)) {
+        return res.status(403).json({ error: 'Este email não está autorizado para role MASTER' });
+      }
+      finalRole = requestedRole;
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive'
+        }
+      },
+      select: { id: true }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email já está em uso' });
+    }
+
+    const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+    const roleAccess = resolveUserAccess(finalRole, {
+      accessB2B: req.body?.accessB2B,
+      accessB2G: req.body?.accessB2G,
+      accessPreSales: req.body?.accessPreSales
+    });
+
+    const user = await prisma.user.create({
+      data: {
+        name: normalizedName,
+        email: normalizedEmail,
+        password: hashedPassword,
+        role: finalRole,
+        accessB2B: roleAccess.accessB2B,
+        accessB2G: roleAccess.accessB2G,
+        accessPreSales: roleAccess.accessPreSales,
+        isCompanyOwner: finalRole === 'ADMIN'
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        isCompanyOwner: true,
+        permissionOverrides: true,
+        createdAt: true
+      }
+    });
+
+    return res.status(201).json({
+      message: 'Usuário criado com sucesso',
+      user: sanitizeUserPayload(user)
+    });
+  } catch (error) {
+    console.error('Erro ao registrar usuário:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Recuperação de senha por código
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email, newPassword, confirmPassword, recoveryCode } = req.body || {};
+    const normalizedEmail = normalizeEmail(email);
+    const nextPassword = String(newPassword || '');
+    const nextPasswordConfirm = String(confirmPassword || '');
+    const masterKey = getAuthMasterKey();
+
+    if (!normalizedEmail || !nextPassword) {
+      return res.status(400).json({ error: 'Email e nova senha são obrigatórios' });
+    }
+
+    if (nextPassword.length < 6) {
+      return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres' });
+    }
+
+    if (nextPasswordConfirm && nextPassword !== nextPasswordConfirm) {
+      return res.status(400).json({ error: 'As senhas não conferem' });
+    }
+
+    if (!masterKey) {
+      return res.status(503).json({ error: 'Recuperação por código indisponível. Contate o administrador.' });
+    }
+
+    if (String(recoveryCode || '') !== masterKey) {
+      return res.status(403).json({ error: 'Código de recuperação inválido' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive'
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const hashedPassword = await bcrypt.hash(nextPassword, 10);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword }
+    });
+
+    return res.json({ message: 'Senha redefinida com sucesso' });
+  } catch (error) {
+    console.error('Erro na recuperação de senha:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Logout
+router.post('/logout', async (req, res) => {
+  try {
+    // Com JWT, não precisamos fazer nada no servidor
+    // O token será invalidado no frontend
+    res.json({ message: 'Logout realizado com sucesso' });
+  } catch (error) {
+    console.error('Erro no logout:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Verificar token
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        isCompanyOwner: true,
+        permissionOverrides: true,
+        createdAt: true
+      }
+    });
+
+    res.json({ user: sanitizeUserPayload(user) });
+  } catch (error) {
+    console.error('Erro na verificação do token:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Alterar senha
+router.put('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Nova senha deve ter pelo menos 6 caracteres' });
+    }
+
+    const userWithPassword = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { id: true, password: true }
+    });
+
+    if (!userWithPassword) {
+      return res.status(401).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Verificar senha atual
+    const isValidPassword = await bcrypt.compare(currentPassword, userWithPassword.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ error: 'Senha atual incorreta' });
+    }
+
+    // Hash da nova senha
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Atualizar senha
+    await prisma.user.update({
+      where: { id: userWithPassword.id },
+      data: { password: hashedPassword }
+    });
+
+    res.json({ message: 'Senha alterada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao alterar senha:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Listar usuários (admin/diretor/manager)
+router.get('/users', authenticateToken, requireRole(['ADMIN', 'DIRECTOR', 'MANAGER']), async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        isCompanyOwner: true,
+        permissionOverrides: true,
+        createdAt: true
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    res.json(users.map(sanitizeUserPayload));
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Criar usuário (apenas admin)
+router.post('/users', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { name, email, password, role, regionId, quota, tenantCompanyId, permissionOverrides } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!name || !normalizedEmail || !password) {
+      return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+    }
+
+    // Verificar se email já existe
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive'
+        }
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email já está em uso' });
+    }
+
+    // Hash da senha
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const normalizedRole = normalizeRole(role || 'USER');
+    if (normalizedRole === 'MASTER' && !isMaster(req.user)) {
+      return res.status(403).json({ error: 'Apenas MASTER pode criar outro usuário MASTER' });
+    }
+
+    const access = resolveUserAccess(normalizedRole, {
+      accessB2B: req.body?.accessB2B,
+      accessB2G: req.body?.accessB2G,
+      accessPreSales: req.body?.accessPreSales
+    });
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: normalizedEmail,
+        password: hashedPassword,
+        role: normalizedRole,
+        regionId,
+        quota,
+        tenantCompanyId: tenantCompanyId || req.user.tenantCompanyId || null,
+        accessB2B: access.accessB2B,
+        accessB2G: access.accessB2G,
+        accessPreSales: access.accessPreSales,
+        permissionOverrides: permissionOverrides && typeof permissionOverrides === 'object' ? permissionOverrides : {},
+        isCompanyOwner: normalizeRole(role) === 'ADMIN'
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        isCompanyOwner: true,
+        permissionOverrides: true,
+        createdAt: true
+      }
+    });
+
+    res.status(201).json(sanitizeUserPayload(user));
+  } catch (error) {
+    console.error('Erro ao criar usuário:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Atualizar usuário (apenas admin/master)
+router.put('/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: 'ID do usuário é obrigatório' });
+    }
+
+    const current = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        role: true,
+        tenantCompanyId: true,
+        isCompanyOwner: true
+      }
+    });
+
+    if (!current) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    if (!isMaster(req.user) && req.user.tenantCompanyId && current.tenantCompanyId !== req.user.tenantCompanyId) {
+      return res.status(403).json({ error: 'Sem permissão para editar usuário de outra empresa' });
+    }
+
+    const nextRole = normalizeRole(req.body?.role || current.role);
+    if (nextRole === 'MASTER' && !isMaster(req.user)) {
+      return res.status(403).json({ error: 'Apenas MASTER pode atribuir role MASTER' });
+    }
+
+    if (current.isCompanyOwner && !isMaster(req.user) && nextRole !== 'ADMIN') {
+      return res.status(403).json({ error: 'Não é permitido remover role ADMIN do dono da empresa' });
+    }
+
+    const normalizedEmail = req.body?.email ? normalizeEmail(req.body.email) : null;
+    if (normalizedEmail) {
+      const existingByEmail = await prisma.user.findFirst({
+        where: {
+          id: { not: id },
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive'
+          }
+        },
+        select: { id: true }
+      });
+      if (existingByEmail) {
+        return res.status(409).json({ error: 'Email já está em uso' });
+      }
+    }
+
+    const access = resolveUserAccess(nextRole, {
+      accessB2B: req.body?.accessB2B,
+      accessB2G: req.body?.accessB2G,
+      accessPreSales: req.body?.accessPreSales
+    });
+
+    const updateData = {
+      name: req.body?.name !== undefined ? String(req.body.name).trim() : undefined,
+      email: normalizedEmail || undefined,
+      role: nextRole,
+      regionId: req.body?.regionId !== undefined ? req.body.regionId : undefined,
+      quota: req.body?.quota !== undefined ? req.body.quota : undefined,
+      accessB2B: access.accessB2B,
+      accessB2G: access.accessB2G,
+      accessPreSales: access.accessPreSales,
+      permissionOverrides:
+        req.body?.permissionOverrides && typeof req.body.permissionOverrides === 'object'
+          ? req.body.permissionOverrides
+          : undefined,
+      isCompanyOwner:
+        req.body?.isCompanyOwner !== undefined
+          ? Boolean(req.body.isCompanyOwner) && nextRole === 'ADMIN'
+          : undefined,
+      tenantCompanyId:
+        isMaster(req.user) && req.body?.tenantCompanyId !== undefined
+          ? req.body.tenantCompanyId
+          : undefined
+    };
+
+    if (req.body?.password) {
+      updateData.password = await bcrypt.hash(String(req.body.password), 10);
+    }
+
+    Object.keys(updateData).forEach((key) => {
+      if (updateData[key] === undefined) delete updateData[key];
+    });
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        isCompanyOwner: true,
+        permissionOverrides: true,
+        createdAt: true
+      }
+    });
+
+    return res.json(sanitizeUserPayload(updated));
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+module.exports = router;

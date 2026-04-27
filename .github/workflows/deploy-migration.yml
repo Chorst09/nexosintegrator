@@ -1,0 +1,110 @@
+name: Deploy Migration Scripts
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/**'
+      - 'GUIA_MIGRACAO_GITHUB.md'
+      - 'CHECKLIST_MIGRACAO_RAPIDO.md'
+      - 'ecosystem.config.js'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-scripts:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Validate shell scripts
+        run: |
+          for script in scripts/*.sh; do
+            echo "Validating $script..."
+            bash -n "$script" || exit 1
+          done
+      
+      - name: Check script permissions
+        run: |
+          for script in scripts/*.sh; do
+            if [ ! -x "$script" ]; then
+              echo "Warning: $script is not executable"
+            fi
+          done
+      
+      - name: Validate documentation
+        run: |
+          if [ ! -f "GUIA_MIGRACAO_GITHUB.md" ]; then
+            echo "Error: GUIA_MIGRACAO_GITHUB.md not found"
+            exit 1
+          fi
+          if [ ! -f "CHECKLIST_MIGRACAO_RAPIDO.md" ]; then
+            echo "Error: CHECKLIST_MIGRACAO_RAPIDO.md not found"
+            exit 1
+          fi
+      
+      - name: Validate ecosystem config
+        run: |
+          if [ ! -f "ecosystem.config.js" ]; then
+            echo "Error: ecosystem.config.js not found"
+            exit 1
+          fi
+          node -c ecosystem.config.js || exit 1
+
+  create-release:
+    needs: validate-scripts
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: migration-${{ github.run_number }}
+          release_name: Migration Scripts Release ${{ github.run_number }}
+          body: |
+            # Migration Scripts Release
+            
+            This release contains all scripts and documentation for migrating to a new KVM server.
+            
+            ## Files Included
+            - `scripts/preparar-servidor-definitivo.sh` - Prepare new server
+            - `scripts/backup-completo.sh` - Create complete backup
+            - `scripts/restaurar-backup.sh` - Restore backup
+            - `scripts/verificar-migracao.sh` - Verify migration
+            - `GUIA_MIGRACAO_GITHUB.md` - Complete migration guide
+            - `CHECKLIST_MIGRACAO_RAPIDO.md` - Quick checklist
+            - `ecosystem.config.js` - PM2 configuration
+            
+            ## Quick Start
+            
+            1. Clone the repository
+            2. Follow the guide in `GUIA_MIGRACAO_GITHUB.md`
+            3. Use the checklist in `CHECKLIST_MIGRACAO_RAPIDO.md`
+            
+            For detailed instructions, see the documentation files.
+          draft: false
+          prerelease: false
+
+  notify:
+    needs: validate-scripts
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify on success
+        if: success()
+        run: echo "✓ Migration scripts validated successfully"
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "✗ Migration scripts validation failed"
+          exit 1

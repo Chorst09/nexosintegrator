@@ -1,0 +1,23 @@
+{
+  "name": "analise-edital-tr-template",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@genkit-ai/google-genai": "^1.28.0",
+    "dotenv": "^16.5.0",
+    "fastify": "^4.28.1",
+    "genkit": "^1.28.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.24",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

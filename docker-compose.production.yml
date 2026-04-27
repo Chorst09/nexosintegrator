@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nexoscrm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexoscrm
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-NexosCRM@2024!}
+      POSTGRES_DB: nexoscrm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexoscrm -d nexoscrm"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - nexoscrm-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexoscrm-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://nexoscrm:${DB_PASSWORD:-NexosCRM@2024!}@postgres:5432/nexoscrm?schema=public
+      JWT_SECRET: ${JWT_SECRET:-NexosCRM_JWT_Super_Secret_2024}
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://209.50.241.25}
+      BCRYPT_ROUNDS: 12
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexoscrm-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://209.50.241.25/api}
+    container_name: nexoscrm-frontend
+    restart: unless-stopped
+    networks:
+      - nexoscrm-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: nexoscrm-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - nexoscrm-net
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  nexoscrm-net:
+    driver: bridge

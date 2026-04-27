@@ -1,0 +1,30 @@
+[build]
+  publish = "apps/web/dist"
+  command = "npm run build:web"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@prisma/client", "prisma", "bcryptjs", "jsonwebtoken", "jspdf", "pdf-parse", "@napi-rs/canvas", "playwright", "playwright-core", "@sparticuz/chromium"]
+  included_files = ["netlify/functions/node_modules/.prisma/**", "netlify/functions/node_modules/@prisma/client/**", "netlify/functions/prisma/**"]
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"

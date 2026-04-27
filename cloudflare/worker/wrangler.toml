@@ -1,0 +1,14 @@
+name = "crmautomatizadob2g-api"
+main = "src/index.js"
+compatibility_date = "2026-03-09"
+workers_dev = true
+account_id = "9359b3ca25a0035c211a8cbf3f76b851"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "crmautomatizadob2bb2g"
+database_id = "500f9700-993b-4a87-a5e7-73b73f81fed0"
+
+[vars]
+NODE_ENV = "production"
+CORS_ORIGIN = "https://crmautomatizadob2g.vercel.app"

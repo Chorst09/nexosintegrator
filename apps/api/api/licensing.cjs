@@ -1,0 +1,1013 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const { PrismaClient } = require('@prisma/client');
+const { authenticateToken, requireRole } = require('../lib/auth.cjs');
+const {
+  normalizeRole,
+  resolveUserAccess,
+  isMaster,
+  canManageLicensing,
+  ROLE_PERMISSION_TEMPLATES,
+  getPermissionTemplate
+} = require('../lib/permissions.cjs');
+
+const router = express.Router();
+
+const prisma = global.__prismaLicensing || new PrismaClient();
+if (process.env.NODE_ENV !== 'production') {
+  global.__prismaLicensing = prisma;
+}
+
+const DEFAULT_LICENSE_PLANS = [
+  {
+    code: 'MENSAL',
+    name: 'Mensal',
+    description: 'Cobranca recorrente mensal',
+    billingCycle: 'MONTHLY',
+    price: 289,
+    seatsIncluded: 1,
+    sortOrder: 10,
+    features: {
+      b2b: true,
+      b2g: true,
+      preSales: true,
+      integrations: true,
+      supportLevel: 'standard'
+    }
+  },
+  {
+    code: 'TRIMESTRAL',
+    name: 'Trimestral',
+    description: 'Cobranca a cada 3 meses',
+    billingCycle: 'QUARTERLY',
+    price: 780.3,
+    seatsIncluded: 3,
+    sortOrder: 20,
+    features: {
+      b2b: true,
+      b2g: true,
+      preSales: true,
+      integrations: true,
+      supportLevel: 'priority'
+    }
+  },
+  {
+    code: 'SEMESTRAL',
+    name: 'Semestral',
+    description: 'Cobranca a cada 6 meses',
+    billingCycle: 'SEMIANNUAL',
+    price: 1473.9,
+    seatsIncluded: 5,
+    sortOrder: 30,
+    features: {
+      b2b: true,
+      b2g: true,
+      preSales: true,
+      integrations: true,
+      supportLevel: 'priority'
+    }
+  },
+  {
+    code: 'ANUAL',
+    name: 'Anual',
+    description: 'Cobranca anual',
+    billingCycle: 'ANNUAL',
+    price: 2774.4,
+    seatsIncluded: 10,
+    sortOrder: 40,
+    features: {
+      b2b: true,
+      b2g: true,
+      preSales: true,
+      integrations: true,
+      supportLevel: 'enterprise'
+    }
+  }
+];
+
+const LICENSE_STATUS = new Set(['PENDING', 'ACTIVE', 'SUSPENDED', 'EXPIRED', 'CANCELED']);
+const COMPANY_STATUS = new Set(['PROSPECT', 'ACTIVE', 'SUSPENDED', 'CANCELED']);
+const PAYMENT_STATUS = new Set(['PENDING', 'CONFIRMED', 'FAILED', 'REFUNDED']);
+
+const normalizeString = (value, maxLen = 255) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLen);
+};
+
+const normalizeFloat = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeInt = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.floor(parsed));
+};
+
+const normalizeDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeCnpj = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length !== 14) return null;
+  return digits;
+};
+
+const normalizeEmail = (value) => {
+  const email = normalizeString(value, 220);
+  if (!email) return null;
+  return email.toLowerCase();
+};
+
+const toPublicPlan = (plan) => ({
+  id: plan.id,
+  code: plan.code,
+  name: plan.name,
+  description: plan.description,
+  billingCycle: plan.billingCycle,
+  price: plan.price,
+  currency: plan.currency,
+  seatsIncluded: plan.seatsIncluded,
+  sortOrder: plan.sortOrder,
+  features: plan.features,
+  isActive: plan.isActive
+});
+
+const roleUiLabel = (role) => {
+  const labels = {
+    MASTER: 'Master',
+    ADMIN: 'Admin',
+    USER: 'User',
+    PRE_SALES: 'Pre-Vendas',
+    MANAGER: 'Manager',
+    DIRECTOR: 'Director',
+    SELLER: 'Seller'
+  };
+
+  return labels[role] || role;
+};
+
+const addMonths = (baseDate, months) => {
+  const date = new Date(baseDate);
+  date.setMonth(date.getMonth() + months);
+  return date;
+};
+
+const calculateEndDate = (startDate, billingCycle) => {
+  if (billingCycle === 'MONTHLY') return addMonths(startDate, 1);
+  if (billingCycle === 'QUARTERLY') return addMonths(startDate, 3);
+  if (billingCycle === 'SEMIANNUAL') return addMonths(startDate, 6);
+  if (billingCycle === 'ANNUAL') return addMonths(startDate, 12);
+  return addMonths(startDate, 1);
+};
+
+const generatePassword = () => {
+  return `Adm${Math.random().toString(36).slice(2, 8)}!${Math.floor(100 + Math.random() * 899)}`;
+};
+
+const resolveMasterEmails = () => {
+  return new Set(
+    String(process.env.MASTER_EMAILS || process.env.MASTER_EMAIL || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  );
+};
+
+const isCodeOwnerEmail = (email) => {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  return resolveMasterEmails().has(normalized);
+};
+
+const ensureDefaultPlans = async () => {
+  for (const plan of DEFAULT_LICENSE_PLANS) {
+    await prisma.licensePlan.upsert({
+      where: { code: plan.code },
+      create: plan,
+      update: {
+        name: plan.name,
+        description: plan.description,
+        billingCycle: plan.billingCycle,
+        price: plan.price,
+        currency: 'BRL',
+        seatsIncluded: plan.seatsIncluded,
+        sortOrder: plan.sortOrder,
+        features: plan.features,
+        isActive: true
+      }
+    });
+  }
+};
+
+const ensureTenantAccess = (req, tenantCompanyId) => {
+  if (!req.user) return false;
+  if (isMaster(req.user)) return true;
+  if (normalizeRole(req.user.actualRole || req.user.role) === 'ADMIN') {
+    return req.user.tenantCompanyId && req.user.tenantCompanyId === tenantCompanyId;
+  }
+  return false;
+};
+
+const mapCompanyWithLicense = (company) => {
+  const activeLicense = (company.licenses || []).find((license) => license.status === 'ACTIVE') || company.licenses?.[0] || null;
+
+  return {
+    id: company.id,
+    name: company.name,
+    legalName: company.legalName,
+    cnpj: company.cnpj,
+    email: company.email,
+    phone: company.phone,
+    status: company.status,
+    notes: company.notes,
+    usersCount: company.users?.length || 0,
+    adminsCount: (company.users || []).filter((user) => normalizeRole(user.role) === 'ADMIN').length,
+    users: (company.users || []).map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: normalizeRole(user.role),
+      accessB2B: Boolean(user.accessB2B),
+      accessB2G: Boolean(user.accessB2G),
+      accessPreSales: Boolean(user.accessPreSales),
+      isCompanyOwner: Boolean(user.isCompanyOwner),
+      createdAt: user.createdAt
+    })),
+    license: activeLicense
+      ? {
+          id: activeLicense.id,
+          status: activeLicense.status,
+          seats: activeLicense.seats,
+          startDate: activeLicense.startDate,
+          endDate: activeLicense.endDate,
+          priceAtPurchase: activeLicense.priceAtPurchase,
+          notes: activeLicense.notes,
+          paymentStatus: activeLicense.paymentStatus,
+          plan: activeLicense.plan
+            ? {
+                id: activeLicense.plan.id,
+                code: activeLicense.plan.code,
+                name: activeLicense.plan.name,
+                billingCycle: activeLicense.plan.billingCycle,
+                price: activeLicense.plan.price,
+                currency: activeLicense.plan.currency,
+                seatsIncluded: activeLicense.plan.seatsIncluded
+              }
+            : null
+        }
+      : null
+  };
+};
+
+// Publico: listagem de planos para checkout inicial
+router.get('/public/plans', async (req, res) => {
+  try {
+    await ensureDefaultPlans();
+
+    const plans = await prisma.licensePlan.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { price: 'asc' }]
+    });
+
+    return res.json({ data: plans.map(toPublicPlan) });
+  } catch (error) {
+    console.error('Erro ao listar planos de licenciamento:', error);
+    return res.status(500).json({ error: 'Erro interno ao listar planos' });
+  }
+});
+
+// Publico: simulacao/confirmacao de pagamento para provisionamento automatico
+router.post('/public/checkout/confirm', async (req, res) => {
+  try {
+    await ensureDefaultPlans();
+
+    const paymentReference = normalizeString(req.body?.paymentReference, 180) || `PAY-${Date.now()}`;
+    const paymentStatus = String(req.body?.paymentStatus || 'CONFIRMED').trim().toUpperCase();
+
+    if (paymentStatus !== 'CONFIRMED') {
+      return res.status(400).json({ error: 'Pagamento ainda não confirmado' });
+    }
+
+    const planCode = normalizeString(req.body?.planCode, 80)?.toUpperCase();
+    const planId = normalizeString(req.body?.planId, 120);
+
+    const companyName = normalizeString(req.body?.company?.name, 220);
+    const legalName = normalizeString(req.body?.company?.legalName, 220);
+    const companyCnpj = normalizeCnpj(req.body?.company?.cnpj);
+    const companyEmail = normalizeEmail(req.body?.company?.email);
+    const companyPhone = normalizeString(req.body?.company?.phone, 40);
+
+    const adminName = normalizeString(req.body?.adminUser?.name, 180);
+    const adminEmail = normalizeEmail(req.body?.adminUser?.email);
+    const adminPasswordInput = normalizeString(req.body?.adminUser?.password, 120);
+
+    if (!companyName || !adminName || !adminEmail) {
+      return res.status(400).json({ error: 'company.name, adminUser.name e adminUser.email são obrigatórios' });
+    }
+
+    const plan = planId
+      ? await prisma.licensePlan.findUnique({ where: { id: planId } })
+      : await prisma.licensePlan.findFirst({ where: { code: planCode || 'MENSAL', isActive: true } });
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Plano não encontrado' });
+    }
+
+    const existingByPayment = await prisma.companyLicense.findFirst({
+      where: {
+        paymentReference,
+        paymentStatus: 'CONFIRMED'
+      },
+      include: {
+        tenantCompany: true,
+        plan: true
+      }
+    });
+
+    if (existingByPayment) {
+      const admin = await prisma.user.findFirst({
+        where: {
+          tenantCompanyId: existingByPayment.tenantCompanyId,
+          role: { in: ['ADMIN', 'MASTER'] }
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true
+        }
+      });
+
+      return res.json({
+        data: {
+          idempotent: true,
+          company: existingByPayment.tenantCompany,
+          plan: existingByPayment.plan,
+          license: existingByPayment,
+          adminUser: admin
+        }
+      });
+    }
+
+    const passwordToUse = adminPasswordInput || generatePassword();
+    const passwordHash = await bcrypt.hash(passwordToUse, 10);
+
+    const startDate = normalizeDate(req.body?.startDate) || new Date();
+    const endDate = normalizeDate(req.body?.endDate) || calculateEndDate(startDate, plan.billingCycle);
+    const seats = normalizeInt(req.body?.seats) || plan.seatsIncluded || 1;
+
+    const result = await prisma.$transaction(async (tx) => {
+      let tenantCompany = null;
+
+      if (companyCnpj) {
+        tenantCompany = await tx.tenantCompany.findUnique({ where: { cnpj: companyCnpj } });
+      }
+
+      if (!tenantCompany && companyEmail) {
+        tenantCompany = await tx.tenantCompany.findFirst({ where: { email: companyEmail } });
+      }
+
+      if (tenantCompany) {
+        tenantCompany = await tx.tenantCompany.update({
+          where: { id: tenantCompany.id },
+          data: {
+            name: companyName,
+            legalName,
+            cnpj: companyCnpj,
+            email: companyEmail,
+            phone: companyPhone,
+            status: 'ACTIVE'
+          }
+        });
+      } else {
+        tenantCompany = await tx.tenantCompany.create({
+          data: {
+            name: companyName,
+            legalName,
+            cnpj: companyCnpj,
+            email: companyEmail,
+            phone: companyPhone,
+            status: 'ACTIVE',
+            notes: `Provisionado automaticamente pelo checkout publico em ${new Date().toISOString()}`
+          }
+        });
+      }
+
+      await tx.companyLicense.updateMany({
+        where: {
+          tenantCompanyId: tenantCompany.id,
+          status: 'ACTIVE'
+        },
+        data: {
+          status: 'EXPIRED'
+        }
+      });
+
+      const license = await tx.companyLicense.create({
+        data: {
+          tenantCompanyId: tenantCompany.id,
+          planId: plan.id,
+          status: 'ACTIVE',
+          seats,
+          startDate,
+          endDate,
+          priceAtPurchase: normalizeFloat(req.body?.priceAtPurchase) || plan.price,
+          notes: normalizeString(req.body?.notes, 600) || `Assinatura (${plan.name}) via checkout público`,
+          paymentReference,
+          paymentStatus: 'CONFIRMED',
+          paymentConfirmedAt: new Date()
+        },
+        include: {
+          plan: true
+        }
+      });
+
+      let adminUser = await tx.user.findFirst({
+        where: {
+          email: {
+            equals: adminEmail,
+            mode: 'insensitive'
+          }
+        }
+      });
+
+      if (adminUser && adminUser.tenantCompanyId && adminUser.tenantCompanyId !== tenantCompany.id) {
+        throw new Error('Já existe usuário com este e-mail em outra empresa.');
+      }
+
+      if (adminUser) {
+        adminUser = await tx.user.update({
+          where: { id: adminUser.id },
+          data: {
+            name: adminName,
+            password: adminPasswordInput ? passwordHash : undefined,
+            role: 'ADMIN',
+            tenantCompanyId: tenantCompany.id,
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            isCompanyOwner: true
+          }
+        });
+      } else {
+        adminUser = await tx.user.create({
+          data: {
+            name: adminName,
+            email: adminEmail,
+            password: passwordHash,
+            role: 'ADMIN',
+            tenantCompanyId: tenantCompany.id,
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            isCompanyOwner: true
+          }
+        });
+      }
+
+      return { tenantCompany, license, adminUser };
+    });
+
+    return res.status(201).json({
+      data: {
+        company: result.tenantCompany,
+        license: result.license,
+        adminUser: {
+          id: result.adminUser.id,
+          name: result.adminUser.name,
+          email: result.adminUser.email,
+          role: result.adminUser.role
+        },
+        credentials: {
+          email: result.adminUser.email,
+          password: adminPasswordInput ? null : passwordToUse
+        },
+        next: {
+          loginUrl: '/login'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao confirmar checkout/licenciamento:', error);
+    return res.status(500).json({ error: error.message || 'Erro interno ao provisionar licenca' });
+  }
+});
+
+// Area autenticada
+router.use(authenticateToken);
+
+router.get('/permissions/templates', (req, res) => {
+  const templates = Object.entries(ROLE_PERMISSION_TEMPLATES).map(([role, permissions]) => ({
+    role,
+    roleLabel: roleUiLabel(role),
+    moduleDefaults: resolveUserAccess(role),
+    permissions
+  }));
+
+  return res.json({ data: templates });
+});
+
+router.get('/plans', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    await ensureDefaultPlans();
+
+    const plans = await prisma.licensePlan.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { price: 'asc' }]
+    });
+
+    return res.json({ data: plans.map(toPublicPlan) });
+  } catch (error) {
+    console.error('Erro ao listar planos (admin):', error);
+    return res.status(500).json({ error: 'Erro ao listar planos' });
+  }
+});
+
+router.post('/plans', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    if (!isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode criar novos planos' });
+    }
+
+    const code = normalizeString(req.body?.code, 80)?.toUpperCase();
+    const name = normalizeString(req.body?.name, 180);
+    const billingCycle = String(req.body?.billingCycle || '').trim().toUpperCase();
+    const price = normalizeFloat(req.body?.price);
+
+    if (!code || !name || !['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL'].includes(billingCycle) || price === null) {
+      return res.status(400).json({ error: 'code, name, billingCycle e price são obrigatórios' });
+    }
+
+    const plan = await prisma.licensePlan.create({
+      data: {
+        code,
+        name,
+        description: normalizeString(req.body?.description, 400),
+        billingCycle,
+        price,
+        currency: normalizeString(req.body?.currency, 8) || 'BRL',
+        seatsIncluded: normalizeInt(req.body?.seatsIncluded) || 1,
+        sortOrder: normalizeInt(req.body?.sortOrder) || 0,
+        features: req.body?.features && typeof req.body.features === 'object' ? req.body.features : {},
+        isActive: req.body?.isActive !== undefined ? Boolean(req.body.isActive) : true
+      }
+    });
+
+    return res.status(201).json({ data: toPublicPlan(plan) });
+  } catch (error) {
+    console.error('Erro ao criar plano:', error);
+    if (String(error.code || '').includes('P2002')) {
+      return res.status(409).json({ error: 'Já existe plano com este código' });
+    }
+    return res.status(500).json({ error: 'Erro ao criar plano' });
+  }
+});
+
+router.put('/plans/:id', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const id = normalizeString(req.params.id, 120);
+    if (!id) return res.status(400).json({ error: 'ID do plano inválido' });
+
+    const data = {
+      name: req.body?.name !== undefined ? normalizeString(req.body.name, 180) : undefined,
+      description: req.body?.description !== undefined ? normalizeString(req.body.description, 400) : undefined,
+      billingCycle: req.body?.billingCycle ? String(req.body.billingCycle).trim().toUpperCase() : undefined,
+      price: req.body?.price !== undefined ? normalizeFloat(req.body.price) : undefined,
+      currency: req.body?.currency !== undefined ? normalizeString(req.body.currency, 8) : undefined,
+      seatsIncluded: req.body?.seatsIncluded !== undefined ? normalizeInt(req.body.seatsIncluded) : undefined,
+      sortOrder: req.body?.sortOrder !== undefined ? normalizeInt(req.body.sortOrder) : undefined,
+      features: req.body?.features !== undefined && typeof req.body.features === 'object' ? req.body.features : undefined,
+      isActive: req.body?.isActive !== undefined ? Boolean(req.body.isActive) : undefined
+    };
+
+    if (data.billingCycle && !['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL'].includes(data.billingCycle)) {
+      return res.status(400).json({ error: 'billingCycle inválido' });
+    }
+
+    Object.keys(data).forEach((key) => {
+      if (data[key] === undefined || data[key] === null) delete data[key];
+    });
+
+    const plan = await prisma.licensePlan.update({
+      where: { id },
+      data
+    });
+
+    return res.json({ data: toPublicPlan(plan) });
+  } catch (error) {
+    console.error('Erro ao atualizar plano:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar plano' });
+  }
+});
+
+router.get('/companies', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const where = {};
+    if (!isMaster(req.user) && req.user.tenantCompanyId) {
+      where.id = req.user.tenantCompanyId;
+    }
+
+    const companies = await prisma.tenantCompany.findMany({
+      where,
+      include: {
+        users: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            isCompanyOwner: true,
+            createdAt: true
+          }
+        },
+        licenses: {
+          include: {
+            plan: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return res.json({
+      data: companies.map(mapCompanyWithLicense),
+      summary: {
+        totalCompanies: companies.length,
+        activeLicenses: companies.filter((company) => company.licenses.some((license) => license.status === 'ACTIVE')).length
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao listar empresas de licenciamento:', error);
+    return res.status(500).json({ error: 'Erro ao listar empresas' });
+  }
+});
+
+router.post('/companies', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    if (!isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode cadastrar empresas manualmente' });
+    }
+
+    const name = normalizeString(req.body?.name, 220);
+    if (!name) {
+      return res.status(400).json({ error: 'name é obrigatório' });
+    }
+
+    const cnpj = normalizeCnpj(req.body?.cnpj);
+
+    const company = await prisma.tenantCompany.create({
+      data: {
+        name,
+        legalName: normalizeString(req.body?.legalName, 220),
+        cnpj,
+        email: normalizeEmail(req.body?.email),
+        phone: normalizeString(req.body?.phone, 40),
+        status: COMPANY_STATUS.has(String(req.body?.status || '').trim().toUpperCase())
+          ? String(req.body.status).trim().toUpperCase()
+          : 'PROSPECT',
+        notes: normalizeString(req.body?.notes, 600)
+      }
+    });
+
+    return res.status(201).json({ data: company });
+  } catch (error) {
+    console.error('Erro ao criar empresa de licenciamento:', error);
+    if (String(error.code || '').includes('P2002')) {
+      return res.status(409).json({ error: 'CNPJ já cadastrado em outra empresa' });
+    }
+    return res.status(500).json({ error: 'Erro ao criar empresa' });
+  }
+});
+
+router.put('/companies/:id/license', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) {
+      return res.status(400).json({ error: 'ID da empresa inválido' });
+    }
+
+    if (!ensureTenantAccess(req, companyId)) {
+      return res.status(403).json({ error: 'Sem permissão para alterar licença desta empresa' });
+    }
+
+    const company = await prisma.tenantCompany.findUnique({ where: { id: companyId } });
+    if (!company) {
+      return res.status(404).json({ error: 'Empresa não encontrada' });
+    }
+
+    const planId = normalizeString(req.body?.planId, 120);
+    let plan = null;
+    if (planId) {
+      plan = await prisma.licensePlan.findUnique({ where: { id: planId } });
+    } else if (req.body?.planCode) {
+      plan = await prisma.licensePlan.findFirst({
+        where: { code: String(req.body.planCode).trim().toUpperCase() }
+      });
+    }
+
+    if (!plan) {
+      return res.status(404).json({ error: 'Plano não encontrado' });
+    }
+
+    const statusInput = String(req.body?.status || 'ACTIVE').trim().toUpperCase();
+    const status = LICENSE_STATUS.has(statusInput) ? statusInput : 'ACTIVE';
+
+    const startDate = normalizeDate(req.body?.startDate) || new Date();
+    const endDate = normalizeDate(req.body?.endDate) || calculateEndDate(startDate, plan.billingCycle);
+    const seats = normalizeInt(req.body?.seats) || plan.seatsIncluded || 1;
+    const paymentStatusInput = String(req.body?.paymentStatus || 'CONFIRMED').trim().toUpperCase();
+    const paymentStatus = PAYMENT_STATUS.has(paymentStatusInput) ? paymentStatusInput : 'CONFIRMED';
+
+    const license = await prisma.$transaction(async (tx) => {
+      await tx.companyLicense.updateMany({
+        where: {
+          tenantCompanyId: companyId,
+          status: 'ACTIVE'
+        },
+        data: {
+          status: status === 'ACTIVE' ? 'EXPIRED' : 'ACTIVE'
+        }
+      });
+
+      return tx.companyLicense.create({
+        data: {
+          tenantCompanyId: companyId,
+          planId: plan.id,
+          status,
+          seats,
+          startDate,
+          endDate,
+          priceAtPurchase: normalizeFloat(req.body?.priceAtPurchase) || plan.price,
+          notes: normalizeString(req.body?.notes, 600),
+          paymentReference: normalizeString(req.body?.paymentReference, 180),
+          paymentStatus,
+          paymentConfirmedAt: paymentStatus === 'CONFIRMED' ? new Date() : null
+        },
+        include: {
+          plan: true
+        }
+      });
+    });
+
+    await prisma.tenantCompany.update({
+      where: { id: companyId },
+      data: {
+        status: status === 'ACTIVE' ? 'ACTIVE' : company.status
+      }
+    });
+
+    return res.json({ data: license });
+  } catch (error) {
+    console.error('Erro ao salvar licença da empresa:', error);
+    if (String(error.code || '').includes('P2002')) {
+      return res.status(409).json({ error: 'paymentReference já utilizada' });
+    }
+    return res.status(500).json({ error: 'Erro ao salvar licença da empresa' });
+  }
+});
+
+router.delete('/companies/:id', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    if (!isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode excluir empresas' });
+    }
+
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) {
+      return res.status(400).json({ error: 'ID da empresa inválido' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.deleteMany({
+        where: {
+          tenantCompanyId: companyId,
+          role: { not: 'MASTER' }
+        }
+      });
+
+      await tx.companyLicense.deleteMany({
+        where: {
+          tenantCompanyId: companyId
+        }
+      });
+
+      await tx.tenantCompany.delete({
+        where: { id: companyId }
+      });
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao excluir empresa:', error);
+    return res.status(500).json({ error: 'Erro ao excluir empresa' });
+  }
+});
+
+router.get('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) return res.status(400).json({ error: 'ID da empresa inválido' });
+
+    if (!ensureTenantAccess(req, companyId)) {
+      return res.status(403).json({ error: 'Sem permissão para listar usuários desta empresa' });
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        tenantCompanyId: companyId
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        isCompanyOwner: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return res.json({ data: users });
+  } catch (error) {
+    console.error('Erro ao listar usuários da empresa:', error);
+    return res.status(500).json({ error: 'Erro ao listar usuários da empresa' });
+  }
+});
+
+router.post('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) return res.status(400).json({ error: 'ID da empresa inválido' });
+
+    if (!ensureTenantAccess(req, companyId)) {
+      return res.status(403).json({ error: 'Sem permissão para criar usuários nesta empresa' });
+    }
+
+    const tenantCompany = await prisma.tenantCompany.findUnique({ where: { id: companyId } });
+    if (!tenantCompany) return res.status(404).json({ error: 'Empresa não encontrada' });
+
+    const name = normalizeString(req.body?.name, 180);
+    const email = normalizeEmail(req.body?.email);
+    const passwordInput = normalizeString(req.body?.password, 120) || generatePassword();
+    const role = normalizeRole(req.body?.role || 'USER');
+
+    if (!name || !email) {
+      return res.status(400).json({ error: 'name e email são obrigatórios' });
+    }
+
+    if (role === 'MASTER') {
+      return res.status(403).json({ error: 'Role MASTER não pode ser criada por esta rota' });
+    }
+
+    if (role === 'ADMIN' && !isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode criar múltiplos administradores globais' });
+    }
+
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: 'insensitive'
+        }
+      }
+    });
+
+    if (existing) {
+      return res.status(409).json({ error: 'Já existe usuário com este email' });
+    }
+
+    const access = resolveUserAccess(role, {
+      accessB2B: req.body?.accessB2B,
+      accessB2G: req.body?.accessB2G,
+      accessPreSales: req.body?.accessPreSales
+    });
+
+    const permissionOverrides = req.body?.permissionOverrides && typeof req.body.permissionOverrides === 'object'
+      ? req.body.permissionOverrides
+      : {};
+
+    const password = await bcrypt.hash(passwordInput, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password,
+        role,
+        tenantCompanyId: companyId,
+        accessB2B: access.accessB2B,
+        accessB2G: access.accessB2G,
+        accessPreSales: access.accessPreSales,
+        permissionOverrides,
+        isCompanyOwner: false
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        createdAt: true
+      }
+    });
+
+    return res.status(201).json({
+      data: {
+        ...user,
+        permissions: getPermissionTemplate(role, permissionOverrides),
+        generatedPassword: req.body?.password ? null : passwordInput
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao criar usuário da empresa:', error);
+    return res.status(500).json({ error: 'Erro ao criar usuário da empresa' });
+  }
+});
+
+router.patch('/users/:id/access', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const userId = normalizeString(req.params.id, 120);
+    if (!userId) return res.status(400).json({ error: 'ID do usuário inválido' });
+
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    if (!current) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    if (!ensureTenantAccess(req, current.tenantCompanyId)) {
+      return res.status(403).json({ error: 'Sem permissão para alterar este usuário' });
+    }
+
+    const role = req.body?.role ? normalizeRole(req.body.role) : normalizeRole(current.role);
+    if (role === 'MASTER') {
+      return res.status(403).json({ error: 'Role MASTER não pode ser editada por esta rota' });
+    }
+
+    const access = resolveUserAccess(role, {
+      accessB2B: req.body?.accessB2B,
+      accessB2G: req.body?.accessB2G,
+      accessPreSales: req.body?.accessPreSales
+    });
+
+    const permissionOverrides = req.body?.permissionOverrides && typeof req.body.permissionOverrides === 'object'
+      ? req.body.permissionOverrides
+      : current.permissionOverrides;
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        role,
+        accessB2B: access.accessB2B,
+        accessB2G: access.accessB2G,
+        accessPreSales: access.accessPreSales,
+        permissionOverrides
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        permissionOverrides: true,
+        tenantCompanyId: true,
+        isCompanyOwner: true
+      }
+    });
+
+    return res.json({
+      data: {
+        ...updated,
+        permissions: getPermissionTemplate(updated.role, updated.permissionOverrides)
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar acesso do usuário:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar acesso do usuário' });
+  }
+});
+
+module.exports = router;

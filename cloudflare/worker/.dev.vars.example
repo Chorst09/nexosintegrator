@@ -1,0 +1,2 @@
+JWT_SECRET=troque-por-um-segredo-forte
+CORS_ORIGIN=https://crmautomatizadokvmvercel.vercel.app

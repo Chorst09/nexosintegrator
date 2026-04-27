@@ -1,0 +1,909 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// === CADASTRO MESTRE ===
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(SELLER)
+  regionId  String?
+  region    Region?  @relation(fields: [regionId], references: [id])
+  quota     Float?
+  createdAt DateTime @default(now())
+  
+  // Relacionamentos
+  opportunities       Opportunity[]
+  activities          Activity[]
+  commissions         Commission[]
+  approvalRequests    ApprovalRequest[] @relation("ApprovalRequester")
+  approvalSteps       ApprovalStep[]    @relation("ApprovalApprover")
+  salesTargets        SalesTarget[]
+  teamBonusDistributions TeamBonusDistribution[]
+  workflowExecutions  WorkflowExecution[]
+  notifications       Notification[]
+  customerOnboardings CustomerOnboarding[]
+  supportTickets      SupportTicket[]
+  ticketResponses     TicketResponse[]
+  churnAlerts         ChurnAlert[]
+}
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  document    String?
+  segment     String?
+  size        CompanySize?
+  website     String?
+  logo        String?
+  address     String?
+  city        String?
+  state       String?
+  country     String   @default("Brasil")
+  regionId    String?
+  region      Region?  @relation(fields: [regionId], references: [id])
+  status      CompanyStatus @default(ACTIVE)
+  leadScore   Int      @default(0)
+  churnRisk   Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  contacts      Contact[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  contracts     Contract[]
+  documents     CompanyDocument[]
+  customerOnboardings CustomerOnboarding[]
+  supportTickets SupportTicket[]
+  npssurveys    NPSSurvey[]
+  churnAlerts   ChurnAlert[]
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  position  String?
+  isPrimary Boolean  @default(false)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  category    String?
+  price       Float
+  margin      Float?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  // Relacionamentos
+  opportunities OpportunityProduct[]
+  proposals     ProposalItem[]
+  prices        ProductPrice[]
+  crossSells    CrossSellRule[] @relation("MainProduct")
+  upSells       UpSellRule[]    @relation("MainProduct")
+  suggestedBy   CrossSellRule[] @relation("SuggestedProduct")
+  upSellTarget  UpSellRule[]    @relation("TargetProduct")
+}
+
+// === FUNIL DE VENDAS ===
+model Opportunity {
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  value           Float
+  probability     Int      @default(50)
+  stage           Stage
+  source          LeadSource?
+  expectedCloseDate DateTime?
+  actualCloseDate DateTime?
+  lossReason      String?
+  
+  // Relacionamentos
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  ownerId   String
+  owner     User    @relation(fields: [ownerId], references: [id])
+  
+  products    OpportunityProduct[]
+  activities  Activity[]
+  proposals   Proposal[]
+  commission  Commission?
+  competitors CompetitorComparison[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OpportunityProduct {
+  id            String      @id @default(uuid())
+  quantity      Int         @default(1)
+  unitPrice     Float
+  discount      Float       @default(0)
+  
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  
+  @@unique([opportunityId, productId])
+}
+
+// === GESTÃO DE ATIVIDADES ===
+model Activity {
+  id          String       @id @default(uuid())
+  type        ActivityType
+  subject     String
+  description String?
+  status      ActivityStatus @default(PENDING)
+  priority    Priority     @default(MEDIUM)
+  dueDate     DateTime?
+  completedAt DateTime?
+  
+  // Relacionamentos
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  assignedToId  String
+  assignedTo    User @relation(fields: [assignedToId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// === PROPOSTAS ===
+model Proposal {
+  id          String   @id @default(uuid())
+  number      String   @unique
+  title       String
+  description String?
+  totalValue  Float
+  discount    Float    @default(0)
+  tax         Float    @default(0)
+  status      ProposalStatus @default(DRAFT)
+  validUntil  DateTime?
+  version     Int      @default(1)
+  
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+  priceTableId  String?
+  priceTable    PriceTable? @relation(fields: [priceTableId], references: [id])
+  templateId    String?
+  template      ProposalTemplate? @relation(fields: [templateId], references: [id])
+  
+  items     ProposalItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProposalTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  
+  // Configurações da Capa
+  coverEnabled     Boolean @default(true)
+  coverTitle       String?
+  coverSubtitle    String?
+  coverLogo        String?
+  coverBackground  String?
+  
+  // Configurações do Cabeçalho
+  headerEnabled    Boolean @default(true)
+  headerLogo       String?
+  headerText       String?
+  headerHeight     Int     @default(80)
+  
+  // Configurações do Rodapé
+  footerEnabled    Boolean @default(true)
+  footerText       String?
+  footerLogo       String?
+  footerHeight     Int     @default(60)
+  
+  // Configurações do Índice
+  indexEnabled     Boolean @default(true)
+  indexTitle       String  @default("Índice")
+  
+  // Configurações de Seções
+  sections         Json    // Array de seções configuráveis
+  
+  // Configurações de Estilo
+  primaryColor     String  @default("#3B82F6")
+  secondaryColor   String  @default("#64748B")
+  fontFamily       String  @default("Inter")
+  fontSize         Int     @default(12)
+  
+  // Configurações de Layout
+  pageMargins      Json    @default("{\"top\": 40, \"right\": 40, \"bottom\": 40, \"left\": 40}")
+  pageSize         String  @default("A4")
+  pageOrientation  String  @default("portrait")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  proposals Proposal[]
+}
+
+model ProposalItem {
+  id          String   @id @default(uuid())
+  quantity    Int      @default(1)
+  unitPrice   Float
+  discount    Float    @default(0)
+  totalPrice  Float
+  
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+// === COMISSIONAMENTO ===
+model Commission {
+  id            String   @id @default(uuid())
+  percentage    Float
+  amount        Float
+  status        CommissionStatus @default(PENDING)
+  paidAt        DateTime?
+  
+  opportunityId String   @unique
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+  sellerId      String
+  seller        User     @relation(fields: [sellerId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// === INTEGRAÇÕES ===
+model Integration {
+  id          String   @id @default(uuid())
+  name        String
+  type        IntegrationType
+  config      Json
+  isActive    Boolean  @default(true)
+  apiKey      String?
+  webhookUrl  String?
+  lastSync    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  syncLogs    IntegrationLog[]
+}
+
+model IntegrationLog {
+  id            String   @id @default(uuid())
+  integrationId String
+  integration   Integration @relation(fields: [integrationId], references: [id])
+  action        String
+  status        LogStatus
+  message       String?
+  data          Json?
+  createdAt     DateTime @default(now())
+}
+
+// === FUNCIONALIDADES AVANÇADAS ===
+model PriceTable {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  validFrom   DateTime
+  validUntil  DateTime?
+  regionId    String?
+  region      Region?  @relation(fields: [regionId], references: [id])
+  customerSegment String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  prices      ProductPrice[]
+  proposals   Proposal[]
+}
+
+model ProductPrice {
+  id           String     @id @default(uuid())
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id])
+  priceTableId String
+  priceTable   PriceTable @relation(fields: [priceTableId], references: [id])
+  price        Float
+  minQuantity  Int        @default(1)
+  maxQuantity  Int?
+  discount     Float      @default(0)
+  
+  @@unique([productId, priceTableId, minQuantity])
+}
+
+model Competitor {
+  id          String   @id @default(uuid())
+  name        String
+  website     String?
+  strengths   String?
+  weaknesses  String?
+  pricing     String?
+  marketShare Float?
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  comparisons CompetitorComparison[]
+}
+
+model CompetitorComparison {
+  id            String      @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+  competitorId  String
+  competitor    Competitor  @relation(fields: [competitorId], references: [id])
+  status        CompetitorStatus
+  notes         String?
+  createdAt     DateTime    @default(now())
+}
+
+model Region {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  country     String   @default("Brasil")
+  state       String?
+  city        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  users       User[]
+  companies   Company[]
+  priceTables PriceTable[]
+  teamBonuses TeamBonus[]
+}
+
+model ApprovalWorkflow {
+  id          String   @id @default(uuid())
+  name        String
+  type        WorkflowType
+  steps       Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  approvals   ApprovalRequest[]
+}
+
+model ApprovalRequest {
+  id          String            @id @default(uuid())
+  workflowId  String
+  workflow    ApprovalWorkflow  @relation(fields: [workflowId], references: [id])
+  entityType  String
+  entityId    String
+  requesterId String
+  requester   User              @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  currentStep Int               @default(0)
+  status      ApprovalStatus
+  data        Json
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  steps       ApprovalStep[]
+}
+
+model ApprovalStep {
+  id          String          @id @default(uuid())
+  requestId   String
+  request     ApprovalRequest @relation(fields: [requestId], references: [id])
+  stepNumber  Int
+  approverId  String
+  approver    User            @relation("ApprovalApprover", fields: [approverId], references: [id])
+  status      StepStatus
+  comments    String?
+  approvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+}
+
+// === CROSS-SELL E UPSELL ===
+model CrossSellRule {
+  id                String  @id @default(uuid())
+  name              String
+  mainProductId     String
+  mainProduct       Product @relation("MainProduct", fields: [mainProductId], references: [id])
+  suggestedProductId String
+  suggestedProduct  Product @relation("SuggestedProduct", fields: [suggestedProductId], references: [id])
+  probability       Float   @default(0.5)
+  discount          Float   @default(0)
+  isActive          Boolean @default(true)
+  createdAt         DateTime @default(now())
+}
+
+model UpSellRule {
+  id              String  @id @default(uuid())
+  name            String
+  mainProductId   String
+  mainProduct     Product @relation("MainProduct", fields: [mainProductId], references: [id])
+  targetProductId String
+  targetProduct   Product @relation("TargetProduct", fields: [targetProductId], references: [id])
+  minQuantity     Int     @default(1)
+  discount        Float   @default(0)
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
+}
+
+// === METAS DE VENDAS ===
+model SalesTarget {
+  id              String   @id @default(uuid())
+  sellerId        String
+  seller          User     @relation(fields: [sellerId], references: [id])
+  targetValue     Float
+  targetDeals     Int      @default(0)
+  startDate       DateTime
+  endDate         DateTime
+  description     String?
+  bonusPercentage Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// === COMISSÕES POR EQUIPE ===
+model TeamBonus {
+  id            String   @id @default(uuid())
+  regionId      String?
+  region        Region?  @relation(fields: [regionId], references: [id])
+  totalAmount   Float
+  description   String
+  period        String
+  criteria      Json
+  createdAt     DateTime @default(now())
+  
+  distributions TeamBonusDistribution[]
+}
+
+model TeamBonusDistribution {
+  id           String    @id @default(uuid())
+  teamBonusId  String
+  teamBonus    TeamBonus @relation(fields: [teamBonusId], references: [id])
+  sellerId     String
+  seller       User      @relation(fields: [sellerId], references: [id])
+  amount       Float
+  percentage   Float
+  createdAt    DateTime  @default(now())
+}
+
+// === WORKFLOWS AVANÇADOS ===
+model AdvancedWorkflow {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  type            WorkflowAdvancedType
+  category        WorkflowCategory @default(GENERAL)
+  trigger         Json
+  conditions      Json
+  actions         Json
+  escalationRules Json?
+  priority        Priority @default(MEDIUM)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  executions      WorkflowExecution[]
+}
+
+model WorkflowExecution {
+  id            String            @id @default(uuid())
+  workflowId    String
+  workflow      AdvancedWorkflow  @relation(fields: [workflowId], references: [id])
+  triggeredById String?
+  triggeredBy   User?             @relation(fields: [triggeredById], references: [id])
+  triggerData   Json
+  status        ExecutionStatus
+  results       Json?
+  error         String?
+  createdAt     DateTime          @default(now())
+  completedAt   DateTime?
+}
+
+// === NOTIFICAÇÕES AVANÇADAS ===
+model Notification {
+  id          String             @id @default(uuid())
+  type        NotificationType
+  title       String
+  message     String
+  channel     NotificationChannel
+  recipientId String
+  recipient   User               @relation(fields: [recipientId], references: [id])
+  status      NotificationStatus
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime           @default(now())
+}
+
+// === PÓS-VENDA ===
+model CustomerOnboarding {
+  id              String   @id @default(uuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id])
+  contractId      String?
+  contract        Contract? @relation(fields: [contractId], references: [id])
+  assignedToId    String
+  assignedTo      User     @relation(fields: [assignedToId], references: [id])
+  status          OnboardingStatus @default(PENDING)
+  expectedEndDate DateTime?
+  actualEndDate   DateTime?
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  steps           OnboardingStep[]
+}
+
+model OnboardingStep {
+  id            String            @id @default(uuid())
+  onboardingId  String
+  onboarding    CustomerOnboarding @relation(fields: [onboardingId], references: [id])
+  title         String
+  description   String?
+  status        StepStatus        @default(PENDING)
+  order         Int
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime          @default(now())
+}
+
+model SupportTicket {
+  id           String        @id @default(uuid())
+  number       String        @unique
+  title        String
+  description  String
+  priority     Priority      @default(MEDIUM)
+  category     String
+  status       TicketStatus  @default(OPEN)
+  companyId    String?
+  company      Company?      @relation(fields: [companyId], references: [id])
+  assignedToId String?
+  assignedTo   User?         @relation(fields: [assignedToId], references: [id])
+  slaDeadline  DateTime?
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  responses    TicketResponse[]
+}
+
+model TicketResponse {
+  id         String        @id @default(uuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id])
+  message    String
+  isInternal Boolean       @default(false)
+  authorId   String
+  author     User          @relation(fields: [authorId], references: [id])
+  createdAt  DateTime      @default(now())
+}
+
+model NPSSurvey {
+  id           String       @id @default(uuid())
+  companyId    String?
+  company      Company?     @relation(fields: [companyId], references: [id])
+  contractId   String?
+  contract     Contract?    @relation(fields: [contractId], references: [id])
+  score        Int?
+  feedback     String?
+  status       SurveyStatus @default(PENDING)
+  sentAt       DateTime?
+  respondedAt  DateTime?
+  createdAt    DateTime     @default(now())
+}
+
+model ChurnAlert {
+  id           String      @id @default(uuid())
+  companyId    String
+  company      Company     @relation(fields: [companyId], references: [id])
+  riskLevel    ChurnRisk
+  score        Float
+  reasons      String[]
+  assignedToId String?
+  assignedTo   User?       @relation(fields: [assignedToId], references: [id])
+  status       AlertStatus @default(ACTIVE)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+// === CONTRATOS ===
+model Contract {
+  id              String   @id @default(uuid())
+  number          String   @unique
+  title           String
+  description     String?
+  value           Float
+  startDate       DateTime
+  endDate         DateTime
+  status          ContractStatus @default(ACTIVE)
+  
+  // Campos de SLA
+  slaResponseTime    Int?     // Tempo de resposta em horas
+  slaResolutionTime  Int?     // Tempo de resolução em horas
+  slaAvailability    Float?   // Disponibilidade em % (ex: 99.9)
+  slaDescription     String?  // Descrição detalhada do SLA
+  
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relacionamentos
+  customerOnboardings CustomerOnboarding[]
+  npsSurveys         NPSSurvey[]
+  attachments        ContractAttachment[]
+}
+
+model ContractAttachment {
+  id          String   @id @default(uuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int
+  path        String
+  
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CompanyDocument {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// === CONFIGURAÇÕES DO SISTEMA ===
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// === ENUMS ===
+enum Role {
+  ADMIN
+  MANAGER
+  DIRECTOR
+  SELLER
+}
+
+enum Stage {
+  LEAD
+  QUALIFICATION
+  DIAGNOSIS
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE
+  WHATSAPP
+  PHONE
+  EMAIL
+  REFERRAL
+  CAMPAIGN
+  MANUAL
+}
+
+enum CompanySize {
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum CompanyStatus {
+  LEAD
+  PROSPECT
+  ACTIVE
+  INACTIVE
+  CHURNED
+}
+
+enum ActivityType {
+  CALL
+  MEETING
+  EMAIL
+  TASK
+  FOLLOW_UP
+}
+
+enum ActivityStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum IntegrationType {
+  ERP
+  WHATSAPP
+  EMAIL_MARKETING
+  VOIP
+  API_EXTERNAL
+  WEBHOOK
+}
+
+enum LogStatus {
+  SUCCESS
+  ERROR
+  WARNING
+  INFO
+}
+
+enum CompetitorStatus {
+  COMPETING
+  WON_AGAINST
+  LOST_TO
+  NOT_COMPETING
+}
+
+enum WorkflowType {
+  PROPOSAL_APPROVAL
+  DISCOUNT_APPROVAL
+  PRICE_APPROVAL
+  CONTRACT_APPROVAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum StepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+enum WorkflowAdvancedType {
+  CONDITIONAL
+  SEQUENTIAL
+  PARALLEL
+  ESCALATION
+  APPROVAL
+  NOTIFICATION
+}
+
+enum WorkflowCategory {
+  GENERAL
+  SALES
+  MARKETING
+  SUPPORT
+  FINANCE
+  HR
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  WORKFLOW
+  APPROVAL
+  REMINDER
+  ALERT
+  SYSTEM
+  MARKETING
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum OnboardingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SurveyStatus {
+  PENDING
+  SENT
+  RESPONDED
+  EXPIRED
+}
+
+enum ChurnRisk {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  RESOLVED
+  DISMISSED
+}
+
+enum ContractStatus {
+  DRAFT
+  AWAITING_SIGNATURE
+  ACTIVE
+  RENEWAL_PENDING
+  EXPIRED
+  CANCELLED
+  RENEWED
+}
