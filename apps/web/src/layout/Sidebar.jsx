@@ -214,16 +214,16 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
 
     return menuSections
       .map((section) => {
-        // The 'administracao' section is for MASTER and ADMIN
+        // The 'administracao' section is MASTER only
         if (section.id === 'administracao') {
-          return role === ROLES.ADMIN ? section : null;
+          return role === ROLES.MASTER ? section : null;
         }
 
         if (section.id === 'configuracao') {
           const items = section.items.filter((item) => {
-            // Only ADMIN can see these settings (master is handled above).
-            if (item.path === '/configuracoes') return role === ROLES.ADMIN;
-            if (item.path === '/funcionalidades-avancadas') return role === ROLES.ADMIN;
+            // ADMIN and MASTER can see settings
+            if (item.path === '/configuracoes') return role === ROLES.ADMIN || role === ROLES.MASTER;
+            if (item.path === '/funcionalidades-avancadas') return role === ROLES.ADMIN || role === ROLES.MASTER;
             return false;
           });
           return items.length > 0 ? { ...section, items } : null;
