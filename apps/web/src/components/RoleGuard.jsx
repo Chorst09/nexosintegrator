@@ -28,7 +28,7 @@ const RoleGuard = ({ children, allowedRoles }) => {
       <div className="min-h-screen grid place-items-center px-6">
         <div className="crm-panel p-8 text-center max-w-lg motion-safe:animate-fade-up">
           <h1 className="text-2xl font-bold text-[var(--crm-ink)] mb-2">Acesso negado</h1>
-          <p className="text-[var(--crm-muted)]">Voce nao tem permissao para acessar esta pagina.</p>
+          <p className="text-[var(--crm-muted)]">Você não tem permissão para acessar esta página.</p>
         </div>
       </div>
     );
