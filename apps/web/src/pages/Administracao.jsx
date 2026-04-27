@@ -3164,7 +3164,7 @@ export default function Administracao() {
                 <option value="USER">User (B2B/B2G)</option>
                 <option value="PRE_SALES">Pre-Vendas</option>
                 <option value="ADMIN">Administrador</option>
-                {isAdminOrMaster && <option value="MASTER">Master</option>}
+                {isMasterSession && <option value="MASTER">Master</option>}
               </select>
             </div>
 
