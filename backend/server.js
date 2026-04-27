@@ -120,6 +120,9 @@ app.use('/api/team-commissions', handleLegacyAPI('./api/team-commissions.js'));
 // Novas APIs - Workflows Avançados
 app.use('/api/advanced-workflows', handleLegacyAPI('./api/advanced-workflows.js'));
 
+// Novas APIs - Licensing
+app.use('/api/licensing', handleLegacyAPI('./api/licensing.js'));
+
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {
   console.error('Error:', error);
