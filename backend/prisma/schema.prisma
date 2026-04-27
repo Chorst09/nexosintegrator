@@ -688,6 +688,7 @@ model SystemSetting {
 
 // === ENUMS ===
 enum Role {
+  MASTER
   ADMIN
   MANAGER
   DIRECTOR
