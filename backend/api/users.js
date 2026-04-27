@@ -3,28 +3,49 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
+const getSessionRole = (req) => {
+  const authHeader = req?.headers?.authorization || req?.headers?.Authorization;
+  const token = typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
+
+  if (!token) {
+    return {
+      error: new Response(
+        JSON.stringify({ error: 'Token de acesso requerido' }),
+        { status: 401 }
+      )
+    };
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return { role: decoded?.role || null };
+  } catch {
+    return {
+      error: new Response(
+        JSON.stringify({ error: 'Token inválido ou expirado' }),
+        { status: 403 }
+      )
+    };
+  }
+};
+
 export default async function handler(req) {
   if (req.method === 'GET') {
     const { role, active } = req.query || {};
-    
-    // Obter role do usuário logado do token
-    const token = req.headers?.authorization?.replace('Bearer ', '');
-    let userRole = null;
-    
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        userRole = decoded.role;
-      } catch (e) {
-        // Token inválido, continuar sem filtro
-      }
-    }
+    const session = getSessionRole(req);
+    if (session.error) return session.error;
+    const userRole = session.role;
+    const isMasterSession = userRole === 'MASTER';
     
     const where = {};
     if (role) where.role = role;
     
-    // Se o usuário é ADMIN, não pode ver usuários MASTER
-    if (userRole === 'ADMIN') {
+    if (!isMasterSession && role === 'MASTER') {
+      return Response.json([]);
+    }
+
+    // Apenas MASTER pode listar usuários MASTER.
+    if (!isMasterSession && !role) {
       where.role = { not: 'MASTER' };
     }
 
@@ -54,24 +75,15 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json();
+    const session = getSessionRole(req);
+    if (session.error) return session.error;
+    const userRole = session.role;
+    const isMasterSession = userRole === 'MASTER';
     
-    // Obter role do usuário logado
-    const token = req.headers?.authorization?.replace('Bearer ', '');
-    let userRole = null;
-    
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        userRole = decoded.role;
-      } catch (e) {
-        // Token inválido
-      }
-    }
-    
-    // ADMIN não pode criar usuários MASTER
-    if (userRole === 'ADMIN' && body.role === 'MASTER') {
+    // Apenas MASTER pode criar usuários MASTER.
+    if (!isMasterSession && body.role === 'MASTER') {
       return new Response(
-        JSON.stringify({ error: 'Usuários ADMIN não podem criar usuários MASTER' }),
+        JSON.stringify({ error: 'Apenas usuários MASTER podem criar usuários MASTER' }),
         { status: 403 }
       );
     }
@@ -100,19 +112,10 @@ export default async function handler(req) {
 
   if (req.method === 'PUT') {
     const body = await req.json();
-    
-    // Obter role do usuário logado
-    const token = req.headers?.authorization?.replace('Bearer ', '');
-    let userRole = null;
-    
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        userRole = decoded.role;
-      } catch (e) {
-        // Token inválido
-      }
-    }
+    const session = getSessionRole(req);
+    if (session.error) return session.error;
+    const userRole = session.role;
+    const isMasterSession = userRole === 'MASTER';
     
     // Verificar se está tentando editar um usuário MASTER
     const targetUser = await prisma.user.findUnique({
@@ -120,17 +123,17 @@ export default async function handler(req) {
       select: { role: true }
     });
     
-    if (targetUser?.role === 'MASTER' && userRole === 'ADMIN') {
+    if (targetUser?.role === 'MASTER' && !isMasterSession) {
       return new Response(
-        JSON.stringify({ error: 'Usuários ADMIN não podem editar usuários MASTER' }),
+        JSON.stringify({ error: 'Apenas usuários MASTER podem editar usuários MASTER' }),
         { status: 403 }
       );
     }
     
-    // ADMIN não pode mudar role para MASTER
-    if (userRole === 'ADMIN' && body.role === 'MASTER') {
+    // Apenas MASTER pode promover usuários para MASTER.
+    if (!isMasterSession && body.role === 'MASTER') {
       return new Response(
-        JSON.stringify({ error: 'Usuários ADMIN não podem criar usuários MASTER' }),
+        JSON.stringify({ error: 'Apenas usuários MASTER podem promover usuários para MASTER' }),
         { status: 403 }
       );
     }

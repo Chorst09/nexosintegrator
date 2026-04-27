@@ -102,7 +102,7 @@ const SETTINGS_TABS = [
   { id: 'backup', label: 'Backup', icon: '💾' },
   { id: 'usuarios_acessos', label: 'Usuários e Acessos', icon: '👥' },
   { id: 'gestao_empresas', label: 'Gestão de Empresas', icon: '🏛️', masterOnly: true, adminRouteOnly: true },
-  { id: 'politicas_role', label: 'Políticas por Role', icon: '🧭' },
+  { id: 'politicas_role', label: 'Políticas por Role', icon: '🧭', masterOnly: true },
   { id: 'licenciamento', label: 'Licenciamento', icon: '🛡️', masterOnly: true }
 ];
 
@@ -431,8 +431,6 @@ export default function Administracao() {
     }
   }, []);
   const isMasterSession = normalizeRole(sessionUser?.role) === 'MASTER';
-  const isAdminSession = normalizeRole(sessionUser?.role) === 'ADMIN';
-  const isAdminOrMaster = isMasterSession || isAdminSession;
   const isAdministrationRoute = location.pathname.startsWith('/administracao');
   const defaultTab = isAdministrationRoute
     ? 'usuarios_acessos'
@@ -440,15 +438,15 @@ export default function Administracao() {
   const availableTabs = useMemo(
     () =>
       SETTINGS_TABS.filter((tab) => {
-        if (tab.masterOnly && !isAdminOrMaster) return false;
+        if (tab.masterOnly && !isMasterSession) return false;
         if (tab.adminRouteOnly && !isAdministrationRoute) return false;
         return true;
       }),
-    [isAdministrationRoute, isAdminOrMaster]
+    [isAdministrationRoute, isMasterSession]
   );
   const rolePolicyVisibleRoles = useMemo(
-    () => (isAdminOrMaster ? ROLE_POLICY_VISIBLE_ROLES : ['USER', 'PRE_SALES', 'ADMIN']),
-    [isAdminOrMaster]
+    () => (isMasterSession ? ROLE_POLICY_VISIBLE_ROLES : ['USER', 'PRE_SALES', 'ADMIN']),
+    [isMasterSession]
   );
   const validTabIds = useMemo(() => new Set(availableTabs.map((tab) => tab.id)), [availableTabs]);
 
@@ -480,9 +478,9 @@ export default function Administracao() {
     console.log('🔵 loadManagementCompanies chamada');
     console.log('👤 isMasterSession:', isMasterSession);
     
-    // Apenas MASTER e ADMIN podem acessar a gestão de empresas
-    if (!isAdminOrMaster) {
-      console.log('⚠️  Usuário não é MASTER nem ADMIN, não pode acessar gestão de empresas');
+    // Gestão global de empresas é exclusiva do MASTER.
+    if (!isMasterSession) {
+      console.log('⚠️  Usuário não é MASTER, não pode acessar gestão de empresas');
       setCompanies([]);
       setLoadingCompanies(false);
       return;
@@ -592,10 +590,10 @@ export default function Administracao() {
 
   useEffect(() => {
     // Carregar empresas quando a tab for acessada
-    if (isAdministrationRoute && activeTab === 'gestao_empresas' && isAdminOrMaster) {
+    if (isAdministrationRoute && activeTab === 'gestao_empresas' && isMasterSession) {
       loadManagementCompanies();
     }
-  }, [activeTab, isAdministrationRoute, isAdminOrMaster]);
+  }, [activeTab, isAdministrationRoute, isMasterSession]);
 
   useEffect(() => {
     if (sessionUser?.email) {
@@ -660,6 +658,13 @@ export default function Administracao() {
   };
 
   const loadLicensingData = async () => {
+    if (!isMasterSession) {
+      setLicensingPlans([]);
+      setLicensingCompanies([]);
+      setLicenseDrafts({});
+      return;
+    }
+
     try {
       setLoadingLicensing(true);
       const [plansRes, companiesRes] = await Promise.all([
@@ -720,7 +725,13 @@ export default function Administracao() {
         logoUrl: settingsData?.logoUrl || null
       });
 
-      await loadLicensingData();
+      if (isMasterSession) {
+        await loadLicensingData();
+      } else {
+        setLicensingPlans([]);
+        setLicensingCompanies([]);
+        setLicenseDrafts({});
+      }
     } catch (e) {
       console.error(e);
       setError(e.message || 'Erro ao carregar dados');
@@ -1943,9 +1954,9 @@ export default function Administracao() {
         {activeTab === 'licenciamento' && (
           <button
             onClick={openNewCompany}
-            disabled={!isAdminOrMaster}
+            disabled={!isMasterSession}
             className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title={isAdminOrMaster ? 'Cadastrar nova empresa' : 'Somente MASTER/ADMIN pode cadastrar empresa manualmente'}
+            title={isMasterSession ? 'Cadastrar nova empresa' : 'Somente MASTER pode cadastrar empresa manualmente'}
           >
             Nova Empresa
           </button>
@@ -1999,8 +2010,8 @@ export default function Administracao() {
             <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-4">
               <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-300">Acesso</div>
               <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {isAdminOrMaster
-                  ? 'Administração global completa (MASTER/ADMIN)'
+                {isMasterSession
+                  ? 'Administração global completa (MASTER)'
                   : 'Configurações da empresa e gestão de usuários (ADMIN)'}
               </div>
             </div>
@@ -2250,7 +2261,7 @@ export default function Administracao() {
 
       {activeTab === 'gestao_empresas' && (
         <div className="space-y-6">
-          {!isAdminOrMaster ? (
+          {!isMasterSession ? (
             <div className="crm-card rounded-2xl p-6">
               <div className="text-center py-16">
                 <div className="text-6xl mb-4">🔒</div>
@@ -2258,7 +2269,7 @@ export default function Administracao() {
                   Acesso Restrito
                 </div>
                 <div className="text-gray-600 dark:text-slate-300">
-                  Apenas usuários com role MASTER ou ADMIN podem acessar a Gestão de Empresas.
+                  Apenas usuários com role MASTER podem acessar a Gestão de Empresas.
                 </div>
               </div>
             </div>
@@ -2607,9 +2618,9 @@ export default function Administracao() {
           <div className="crm-card rounded-2xl p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Empresas e Licenças</h3>
-              {!isAdminOrMaster && (
+              {!isMasterSession && (
                 <div className="text-xs text-amber-600 dark:text-amber-300">
-                  Sem privilégio MASTER/ADMIN: cadastro/exclusão manual de empresa desabilitado.
+                  Sem privilégio MASTER: cadastro/exclusão manual de empresa desabilitado.
                 </div>
               )}
             </div>
@@ -2652,7 +2663,7 @@ export default function Administracao() {
                           <button
                             type="button"
                             onClick={() => deleteCompany(company)}
-                            disabled={!isAdminOrMaster}
+                            disabled={!isMasterSession}
                             className="px-3 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Excluir empresa
@@ -3642,7 +3653,7 @@ export default function Administracao() {
             >
               <option value="USER">User (B2B/B2G)</option>
               <option value="PRE_SALES">Pre-Vendas</option>
-              {isAdminOrMaster && <option value="ADMIN">Admin</option>}
+              {isMasterSession && <option value="ADMIN">Admin</option>}
             </select>
           </div>
 

@@ -1,5 +1,32 @@
 import { prisma } from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+const getAuthToken = (req) => {
+  const authHeader = req?.headers?.authorization || req?.headers?.Authorization;
+  if (typeof authHeader !== 'string') return null;
+  return authHeader.replace(/^Bearer\s+/i, '').trim() || null;
+};
+
+const requireMasterAccess = (req) => {
+  const token = getAuthToken(req);
+
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Token de acesso requerido' }), { status: 401 });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded?.role !== 'MASTER') {
+      return new Response(JSON.stringify({ error: 'Acesso negado' }), { status: 403 });
+    }
+    return null;
+  } catch {
+    return new Response(JSON.stringify({ error: 'Token inválido ou expirado' }), { status: 403 });
+  }
+};
 
 export default async function handler(req) {
   // POST /api/licensing/public/checkout/confirm
@@ -109,6 +136,9 @@ export default async function handler(req) {
 
   // GET /api/licensing/plans
   if (req.method === 'GET' && req.url.includes('/plans')) {
+    const authError = requireMasterAccess(req);
+    if (authError) return authError;
+
     try {
       // Retornar planos padrão
       const plans = [
@@ -162,6 +192,9 @@ export default async function handler(req) {
 
   // GET /api/licensing/companies
   if (req.method === 'GET' && req.url.includes('/companies')) {
+    const authError = requireMasterAccess(req);
+    if (authError) return authError;
+
     try {
       const companies = await prisma.company.findMany({
         select: {

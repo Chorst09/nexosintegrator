@@ -68,6 +68,7 @@ const handleLegacyAPI = (apiPath) => {
         method: req.method,
         url: req.url,
         query: req.query,
+        headers: req.headers || {},
         json: async () => req.body || {}
       };
 
