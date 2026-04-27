@@ -431,6 +431,8 @@ export default function Administracao() {
     }
   }, []);
   const isMasterSession = normalizeRole(sessionUser?.role) === 'MASTER';
+  const isAdminSession = normalizeRole(sessionUser?.role) === 'ADMIN';
+  const isAdminOrMaster = isMasterSession || isAdminSession;
   const isAdministrationRoute = location.pathname.startsWith('/administracao');
   const defaultTab = isAdministrationRoute
     ? 'usuarios_acessos'
@@ -438,15 +440,15 @@ export default function Administracao() {
   const availableTabs = useMemo(
     () =>
       SETTINGS_TABS.filter((tab) => {
-        if (tab.masterOnly && !isMasterSession) return false;
+        if (tab.masterOnly && !isAdminOrMaster) return false;
         if (tab.adminRouteOnly && !isAdministrationRoute) return false;
         return true;
       }),
-    [isAdministrationRoute, isMasterSession]
+    [isAdministrationRoute, isAdminOrMaster]
   );
   const rolePolicyVisibleRoles = useMemo(
-    () => (isMasterSession ? ROLE_POLICY_VISIBLE_ROLES : ['USER', 'PRE_SALES', 'ADMIN']),
-    [isMasterSession]
+    () => (isAdminOrMaster ? ROLE_POLICY_VISIBLE_ROLES : ['USER', 'PRE_SALES', 'ADMIN']),
+    [isAdminOrMaster]
   );
   const validTabIds = useMemo(() => new Set(availableTabs.map((tab) => tab.id)), [availableTabs]);
 
@@ -478,9 +480,9 @@ export default function Administracao() {
     console.log('🔵 loadManagementCompanies chamada');
     console.log('👤 isMasterSession:', isMasterSession);
     
-    // Apenas MASTER pode acessar a gestão de empresas
-    if (!isMasterSession) {
-      console.log('⚠️  Usuário não é MASTER, não pode acessar gestão de empresas');
+    // Apenas MASTER e ADMIN podem acessar a gestão de empresas
+    if (!isAdminOrMaster) {
+      console.log('⚠️  Usuário não é MASTER nem ADMIN, não pode acessar gestão de empresas');
       setCompanies([]);
       setLoadingCompanies(false);
       return;
@@ -590,10 +592,10 @@ export default function Administracao() {
 
   useEffect(() => {
     // Carregar empresas quando a tab for acessada
-    if (isAdministrationRoute && activeTab === 'gestao_empresas' && isMasterSession) {
+    if (isAdministrationRoute && activeTab === 'gestao_empresas' && isAdminOrMaster) {
       loadManagementCompanies();
     }
-  }, [activeTab, isAdministrationRoute, isMasterSession]);
+  }, [activeTab, isAdministrationRoute, isAdminOrMaster]);
 
   useEffect(() => {
     if (sessionUser?.email) {
@@ -1941,9 +1943,9 @@ export default function Administracao() {
         {activeTab === 'licenciamento' && (
           <button
             onClick={openNewCompany}
-            disabled={!isMasterSession}
+            disabled={!isAdminOrMaster}
             className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title={isMasterSession ? 'Cadastrar nova empresa' : 'Somente MASTER pode cadastrar empresa manualmente'}
+            title={isAdminOrMaster ? 'Cadastrar nova empresa' : 'Somente MASTER/ADMIN pode cadastrar empresa manualmente'}
           >
             Nova Empresa
           </button>
@@ -1997,8 +1999,8 @@ export default function Administracao() {
             <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-4">
               <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-300">Acesso</div>
               <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {isMasterSession
-                  ? 'Administração global completa (MASTER)'
+                {isAdminOrMaster
+                  ? 'Administração global completa (MASTER/ADMIN)'
                   : 'Configurações da empresa e gestão de usuários (ADMIN)'}
               </div>
             </div>
@@ -2248,7 +2250,7 @@ export default function Administracao() {
 
       {activeTab === 'gestao_empresas' && (
         <div className="space-y-6">
-          {!isMasterSession ? (
+          {!isAdminOrMaster ? (
             <div className="crm-card rounded-2xl p-6">
               <div className="text-center py-16">
                 <div className="text-6xl mb-4">🔒</div>
@@ -2256,7 +2258,7 @@ export default function Administracao() {
                   Acesso Restrito
                 </div>
                 <div className="text-gray-600 dark:text-slate-300">
-                  Apenas usuários com role MASTER podem acessar a Gestão de Empresas.
+                  Apenas usuários com role MASTER ou ADMIN podem acessar a Gestão de Empresas.
                 </div>
               </div>
             </div>
@@ -2605,9 +2607,9 @@ export default function Administracao() {
           <div className="crm-card rounded-2xl p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Empresas e Licenças</h3>
-              {!isMasterSession && (
+              {!isAdminOrMaster && (
                 <div className="text-xs text-amber-600 dark:text-amber-300">
-                  Sem privilégio MASTER: cadastro/exclusão manual de empresa desabilitado.
+                  Sem privilégio MASTER/ADMIN: cadastro/exclusão manual de empresa desabilitado.
                 </div>
               )}
             </div>
@@ -2650,7 +2652,7 @@ export default function Administracao() {
                           <button
                             type="button"
                             onClick={() => deleteCompany(company)}
-                            disabled={!isMasterSession}
+                            disabled={!isAdminOrMaster}
                             className="px-3 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Excluir empresa
@@ -3162,7 +3164,7 @@ export default function Administracao() {
                 <option value="USER">User (B2B/B2G)</option>
                 <option value="PRE_SALES">Pre-Vendas</option>
                 <option value="ADMIN">Administrador</option>
-                {isMasterSession && <option value="MASTER">Master</option>}
+                {isAdminOrMaster && <option value="MASTER">Master</option>}
               </select>
             </div>
 
@@ -3640,7 +3642,7 @@ export default function Administracao() {
             >
               <option value="USER">User (B2B/B2G)</option>
               <option value="PRE_SALES">Pre-Vendas</option>
-              {isMasterSession && <option value="ADMIN">Admin</option>}
+              {isAdminOrMaster && <option value="ADMIN">Admin</option>}
             </select>
           </div>
 
