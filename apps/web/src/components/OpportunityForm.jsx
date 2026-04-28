@@ -56,6 +56,39 @@ const toNumberOr = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const parseB2GDescription = (value) => {
+  const text = String(value || '').trim();
+  if (!text || !text.startsWith('{')) return null;
+
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveB2GTotalValue = (financialData, fallback = 0) => {
+  const mensal = toNumberOr(financialData?.valorEstimadoMensal, 0);
+  const prazo = toNumberOr(financialData?.prazoContratual, 0);
+
+  if (mensal > 0 && prazo > 0) {
+    return mensal * prazo;
+  }
+
+  const total = toNumberOr(financialData?.valorEstimadoTotal, 0);
+  if (total > 0) {
+    return total;
+  }
+
+  const pontual = toNumberOr(financialData?.valorEstimadoPontual, 0);
+  if (pontual > 0) {
+    return pontual;
+  }
+
+  return fallback;
+};
+
 export default function OpportunityForm({
   formData,
   setFormData,
@@ -76,24 +109,57 @@ export default function OpportunityForm({
   const [activeTab, setActiveTab] = useState('identificacao');
   const [b2gForm, setB2gForm] = useState(() => ({ ...DEFAULT_B2G }));
 
-  const isB2G = selectedOpportunity?.b2gStage ||
-    (selectedOpportunity?.description && selectedOpportunity.description.trim().startsWith('{'));
-
-  const b2gData = useMemo(() => {
-    if (!isB2G || !selectedOpportunity?.description) return {};
-    try { return JSON.parse(selectedOpportunity.description); } catch { return {}; }
-  }, [isB2G, selectedOpportunity]);
+  const parsedB2GDescription = useMemo(
+    () => parseB2GDescription(selectedOpportunity?.description),
+    [selectedOpportunity?.description]
+  );
+  const isB2G = Boolean(selectedOpportunity?.b2gStage || parsedB2GDescription);
+  const isAutoCalculatedTotal = b2gForm.valorEstimadoMensal > 0 && b2gForm.prazoContratual > 0;
 
   useEffect(() => {
-    if (!isB2G || !b2gData || Object.keys(b2gData).length === 0) return;
-    const merged = { ...DEFAULT_B2G, ...b2gData };
-    const fallbackOpportunityValue = toNumberOr(formData.value, 0);
-    const fallbackProbability = toNumberOr(formData.probability, 50);
-    setB2gForm(prev => ({
-      ...prev,
-      numeroEdital: merged.numeroEdital || formData.title || '',
+    if (!isB2G) return;
+
+    const merged = { ...DEFAULT_B2G, ...(parsedB2GDescription || {}) };
+    const fallbackOpportunityValue = toNumberOr(
+      selectedOpportunity?.value,
+      toNumberOr(formData.value, 0)
+    );
+    const fallbackProbability = toNumberOr(
+      selectedOpportunity?.probability,
+      toNumberOr(formData.probability, 50)
+    );
+    const valorEstimadoMensal = toNumberOr(merged.valorEstimadoMensal, 0);
+    const prazoContratual = toNumberOr(merged.prazoContratual, 0);
+    const valorEstimadoPontual = toNumberOr(merged.valorEstimadoPontual, 0);
+    const valorEstimadoTotal = resolveB2GTotalValue(
+      {
+        ...merged,
+        valorEstimadoTotal: toNumberOr(merged.valorEstimadoTotal, fallbackOpportunityValue)
+      },
+      fallbackOpportunityValue
+    );
+    const tipoContrato = (() => {
+      if (merged.tipoContrato && merged.tipoContrato !== DEFAULT_B2G.tipoContrato) {
+        return merged.tipoContrato;
+      }
+
+      if (valorEstimadoMensal > 0 && prazoContratual > 0) {
+        return 'Mensal';
+      }
+
+      if (valorEstimadoPontual > 0) {
+        return 'Pontual';
+      }
+
+      return merged.tipoContrato || DEFAULT_B2G.tipoContrato;
+    })();
+
+    setB2gForm({
+      ...DEFAULT_B2G,
+      ...merged,
+      numeroEdital: merged.numeroEdital || formData.title || selectedOpportunity?.title || '',
       uasgId: merged.uasgId || '',
-      orgaoEntidade: merged.orgaoEntidade || '',
+      orgaoEntidade: merged.orgaoEntidade || selectedOpportunity?.company?.name || '',
       esfera: merged.esfera || 'Municipal',
       ufCidade: merged.ufCidade || '',
       modalidade: merged.modalidade || '',
@@ -105,20 +171,20 @@ export default function OpportunityForm({
       objetoDetalhado: merged.objetoDetalhado || '',
       itemCodigo: merged.itemCodigo || '',
       categoria: merged.categoria || 'Geral',
-      valorEstimadoMensal: toNumberOr(merged.valorEstimadoMensal, 0),
-      valorEstimadoTotal: toNumberOr(merged.valorEstimadoTotal, fallbackOpportunityValue),
-      valorEstimadoPontual: toNumberOr(merged.valorEstimadoPontual, 0),
+      valorEstimadoMensal,
+      valorEstimadoTotal,
+      valorEstimadoPontual,
       valorMaxAceitavel: toNumberOr(merged.valorMaxAceitavel, 0),
       margemEstimada: toNumberOr(merged.margemEstimada, 0),
       ticketEsperado: toNumberOr(merged.ticketEsperado, 0),
-      tipoContrato: merged.tipoContrato || 'Outro',
-      prazoContratual: toNumberOr(merged.prazoContratual, 0),
+      tipoContrato,
+      prazoContratual,
       garantia: toNumberOr(merged.garantia, 0),
       possuiReajuste: Boolean(merged.possuiReajuste),
       dataPublicacao: merged.dataPublicacao || '',
       dataAbertura: merged.dataAbertura || '',
       prazoImpugnacao: merged.prazoImpugnacao || '',
-      envioPropostas: merged.envioPropostas || formData.expectedCloseDate || '',
+      envioPropostas: merged.envioPropostas || formData.expectedCloseDate || selectedOpportunity?.expectedCloseDate?.split('T')[0] || '',
       validadeEstimada: merged.validadeEstimada || '',
       faseAtual: merged.faseAtual || 'analise',
       responsavelComercial: merged.responsavelComercial || '',
@@ -153,22 +219,33 @@ export default function OpportunityForm({
         ? merged.riscos.join('\n')
         : (merged.observacoesJuridicas || ''),
       riscos: Array.isArray(merged.riscos) ? merged.riscos : []
-    }));
-  }, [isB2G, b2gData, formData.expectedCloseDate, formData.probability, formData.title, formData.value]);
+    });
+  }, [
+    isB2G,
+    formData.expectedCloseDate,
+    formData.probability,
+    formData.title,
+    formData.value,
+    parsedB2GDescription,
+    selectedOpportunity?.company?.name,
+    selectedOpportunity?.expectedCloseDate,
+    selectedOpportunity?.probability,
+    selectedOpportunity?.title,
+    selectedOpportunity?.value
+  ]);
 
   const handleSubmitB2G = (e) => {
     e.preventDefault();
-    const updatedDescription = JSON.stringify({
-      ...b2gData,
+    const normalizedB2GForm = {
       ...b2gForm,
+      valorEstimadoTotal: resolveB2GTotalValue(b2gForm, toNumberOr(formData.value, 0))
+    };
+    const updatedDescription = JSON.stringify({
+      ...(parsedB2GDescription || {}),
+      ...normalizedB2GForm,
       updatedAt: new Date().toISOString()
     });
-    const calculatedTotal = (() => {
-      if (b2gForm.tipoContrato === 'Mensal' && b2gForm.valorEstimadoMensal > 0 && b2gForm.prazoContratual > 0) {
-        return b2gForm.valorEstimadoMensal * b2gForm.prazoContratual;
-      }
-      return b2gForm.valorEstimadoTotal;
-    })();
+    const calculatedTotal = normalizedB2GForm.valorEstimadoTotal;
     const mergedValue = Number.isFinite(Number(calculatedTotal)) && Number(calculatedTotal) > 0
       ? calculatedTotal
       : (Number.isFinite(Number(formData.value)) ? formData.value : 0);
@@ -189,6 +266,7 @@ export default function OpportunityForm({
       })()
     };
     const syntheticEvent = { ...e, preventDefault: () => {} };
+    setB2gForm(normalizedB2GForm);
     setFormData(mergedFormData);
     onSubmit(syntheticEvent, mergedFormData);
   };
@@ -438,15 +516,25 @@ export default function OpportunityForm({
               <label className={labelCls}>Valor Estimado Mensal (R$)</label>
               <input type="number" min={0} className={inputCls} value={b2gForm.valorEstimadoMensal} onChange={e => {
                 const mensal = Number(e.target.value);
-                setB2g('valorEstimadoMensal', mensal);
-                if (b2gForm.tipoContrato === 'Mensal' && b2gForm.prazoContratual > 0) {
-                  setB2g('valorEstimadoTotal', mensal * b2gForm.prazoContratual);
-                }
+                setB2gForm(prev => {
+                  const next = { ...prev, valorEstimadoMensal: mensal };
+                  return {
+                    ...next,
+                    valorEstimadoTotal: resolveB2GTotalValue(next, toNumberOr(prev.valorEstimadoTotal, 0))
+                  };
+                });
               }} />
             </div>
             <div>
               <label className={labelCls}>Valor Estimado Total (R$)</label>
-              <input type="number" min={0} className={inputCls} value={b2gForm.valorEstimadoTotal} onChange={e => setB2g('valorEstimadoTotal', Number(e.target.value))} />
+              <input
+                type="number"
+                min={0}
+                className={inputCls}
+                value={b2gForm.valorEstimadoTotal}
+                onChange={e => setB2g('valorEstimadoTotal', Number(e.target.value))}
+                readOnly={isAutoCalculatedTotal}
+              />
             </div>
             <div>
               <label className={labelCls}>Valor Estimado Pontual (R$)</label>
@@ -466,13 +554,7 @@ export default function OpportunityForm({
             </div>
             <div>
               <label className={labelCls}>Tipo de Contrato</label>
-              <select className={inputCls} value={b2gForm.tipoContrato} onChange={e => {
-                const tipo = e.target.value;
-                setB2g('tipoContrato', tipo);
-                if (tipo === 'Mensal' && b2gForm.valorEstimadoMensal > 0 && b2gForm.prazoContratual > 0) {
-                  setB2g('valorEstimadoTotal', b2gForm.valorEstimadoMensal * b2gForm.prazoContratual);
-                }
-              }}>
+              <select className={inputCls} value={b2gForm.tipoContrato} onChange={e => setB2g('tipoContrato', e.target.value)}>
                 <option>Mensal</option>
                 <option>Anual</option>
                 <option>Pontual</option>
@@ -483,10 +565,13 @@ export default function OpportunityForm({
               <label className={labelCls}>Prazo Contratual (meses)</label>
               <input type="number" min={0} className={inputCls} value={b2gForm.prazoContratual} onChange={e => {
                 const prazo = Number(e.target.value);
-                setB2g('prazoContratual', prazo);
-                if (b2gForm.tipoContrato === 'Mensal' && b2gForm.valorEstimadoMensal > 0 && prazo > 0) {
-                  setB2g('valorEstimadoTotal', b2gForm.valorEstimadoMensal * prazo);
-                }
+                setB2gForm(prev => {
+                  const next = { ...prev, prazoContratual: prazo };
+                  return {
+                    ...next,
+                    valorEstimadoTotal: resolveB2GTotalValue(next, toNumberOr(prev.valorEstimadoTotal, 0))
+                  };
+                });
               }} />
             </div>
             <div>
