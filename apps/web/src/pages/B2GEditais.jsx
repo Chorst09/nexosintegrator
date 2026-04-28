@@ -55,6 +55,7 @@ import Modal from '../components/Modal';
 import PresentationControls from '../components/PresentationControls';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { isCompanyInClientType, isOpportunityInClientType } from '../utils/businessModel';
+import { hydrateActivityFlow } from '../utils/activityFlow';
 
 const TYPE_OPTIONS = [
   { value: 'EDITAL', label: 'Edital' },
@@ -1567,6 +1568,16 @@ export default function B2GEditais() {
     const modalityFilter = advancedFilters.modality.trim().toLowerCase();
 
     return activities.filter((item) => {
+      const isB2GActivity =
+        String(item?.company?.clientType || '').toUpperCase() === 'B2G' ||
+        Boolean(item?.opportunity?.b2gStage) ||
+        String(item?.flow?.sourceArea || '').toUpperCase() === 'B2G' ||
+        String(item?.flow?.targetArea || '').toUpperCase() === 'B2G';
+
+      if (!isB2GActivity) {
+        return false;
+      }
+
       const orgText = [
         item?.company?.name,
         item?.opportunity?.company?.name,
@@ -2200,7 +2211,7 @@ export default function B2GEditais() {
 
       if (activitiesRes.ok) {
         const activitiesData = await activitiesRes.json().catch(() => []);
-        setActivities(Array.isArray(activitiesData) ? activitiesData : []);
+        setActivities(Array.isArray(activitiesData) ? activitiesData.map(hydrateActivityFlow) : []);
       } else {
         setActivities([]);
       }
@@ -5925,7 +5936,7 @@ export default function B2GEditais() {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => navigate('/atividades')}
+              onClick={() => navigate('/atividades?openForm=1&sourceArea=B2G&targetArea=PRE_VENDAS&type=SOLICITACAO_ORCAMENTO')}
               className="crm-btn crm-btn-primary h-10 px-4"
             >
               <Plus className="h-4 w-4" />

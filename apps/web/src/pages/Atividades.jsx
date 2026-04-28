@@ -98,6 +98,7 @@ export default function Atividades() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchParams] = useSearchParams();
   const lastOpenedActivityId = useRef(null);
+  const lastAppliedPresetKey = useRef('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
 
@@ -271,6 +272,36 @@ export default function Atividades() {
       lastOpenedActivityId.current = activityId;
     }
   }, [searchParams, atividades]);
+
+  useEffect(() => {
+    if (searchParams.get('openForm') !== '1') return;
+
+    const presetKey = searchParams.toString();
+    if (lastAppliedPresetKey.current === presetKey) return;
+
+    const nextType = searchParams.get('type') || 'TASK';
+    const nextSourceArea = searchParams.get('sourceArea') || 'COMERCIAL';
+    const nextTargetArea = searchParams.get('targetArea') || (nextType === BUDGET_REQUEST_TYPE ? 'PRE_VENDAS' : '');
+    const nextCompanyId = searchParams.get('companyId') || '';
+    const nextOpportunityId = searchParams.get('opportunityId') || '';
+    const nextSubject = searchParams.get('subject') || '';
+    const nextDescription = searchParams.get('description') || '';
+
+    setFormData({
+      type: nextType,
+      subject: nextSubject,
+      description: nextDescription,
+      priority: 'MEDIUM',
+      dueDate: '',
+      companyId: nextCompanyId,
+      opportunityId: nextOpportunityId,
+      assignedToId: '',
+      sourceArea: nextSourceArea,
+      targetArea: nextTargetArea
+    });
+    setShowForm(true);
+    lastAppliedPresetKey.current = presetKey;
+  }, [searchParams]);
 
   const filteredAtividades = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();

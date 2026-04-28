@@ -95,6 +95,19 @@ const getCurrentUser = () => {
 const getCurrentUserName = () => getCurrentUser()?.name || 'Usuário Pré-Vendas';
 const getCurrentUserId = () => getCurrentUser()?.id || null;
 
+const unwrapApiEntity = (payload) => {
+  if (!payload || typeof payload !== 'object') return payload;
+  if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) return payload.data;
+  return payload;
+};
+
+const getPreSalesRows = (payload) => {
+  if (Array.isArray(payload?.solicitacoes)) return payload.solicitacoes;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload)) return payload;
+  return [];
+};
+
 const toNumberOrNull = (value) => {
   if (value === '' || value === null || value === undefined) return null;
   const parsed = Number(value);
@@ -355,11 +368,7 @@ export default function Solicitacoes() {
       ]);
 
       const requestPayload = requestsRes.ok ? await requestsRes.json() : null;
-      const requestRows = Array.isArray(requestPayload?.solicitacoes)
-        ? requestPayload.solicitacoes
-        : Array.isArray(requestPayload)
-          ? requestPayload
-          : [];
+      const requestRows = getPreSalesRows(requestPayload);
 
       const mappedRequests = requestRows.map(mapRequestRow);
       const linkedActivityIds = new Set(mappedRequests.map((item) => item.linkedActivityId).filter(Boolean));
@@ -407,7 +416,8 @@ export default function Solicitacoes() {
       throw new Error(data?.error || 'Falha ao atualizar solicitação');
     }
 
-    return response.json().catch(() => null);
+    const data = await response.json().catch(() => null);
+    return unwrapApiEntity(data);
   };
 
   const updateActivity = async (id, payload) => {
@@ -438,13 +448,21 @@ export default function Solicitacoes() {
 
   const updateItem = async (item, { nextStatus, nextStage, message, pricingPayload, flowOverride } = {}) => {
     if (!item) return;
+    const shouldReturnToOrigin = nextStage === 'DEVOLVIDA' || nextStatus === 'FINALIZADA' || nextStatus === 'REJEITADA' || nextStatus === 'CANCELADA';
+    const effectiveFlowOverride = flowOverride || (
+      shouldReturnToOrigin
+        ? {
+          sourceArea: 'PRE_VENDAS',
+          targetArea: item?.flow?.sourceArea || 'COMERCIAL'
+        }
+        : undefined
+    );
 
     if (item.sourceType === 'ACTIVITY') {
       const activityStatus = ACTIVITY_STATUS_FROM_REQUEST[nextStatus] || 'IN_PROGRESS';
       const payload = {
         status: activityStatus,
-        description: buildActivityDescription(item, message, nextStage, flowOverride),
-        assignedToId: currentUserId || undefined
+        description: buildActivityDescription(item, message, nextStage, effectiveFlowOverride)
       };
       await updateActivity(item.rawActivityId, payload);
       return;
@@ -457,6 +475,14 @@ export default function Solicitacoes() {
       ...(pricingPayload || {})
     };
     await updateRequest(item.id, payload);
+
+    if (item.linkedActivityId) {
+      const activityStatus = ACTIVITY_STATUS_FROM_REQUEST[nextStatus] || 'IN_PROGRESS';
+      await updateActivity(item.linkedActivityId, {
+        status: activityStatus,
+        description: buildActivityDescription(item, message, nextStage, effectiveFlowOverride)
+      });
+    }
   };
 
   const handleAssumir = async (item) => {
@@ -660,7 +686,8 @@ export default function Solicitacoes() {
       throw new Error(data?.error || 'Falha ao gerar solicitação para cotação');
     }
 
-    const created = await response.json().catch(() => null);
+    const createdPayload = await response.json().catch(() => null);
+    const created = unwrapApiEntity(createdPayload);
     if (!created?.id) {
       throw new Error('A solicitação não foi criada corretamente para o fluxo de cotação');
     }
@@ -835,6 +862,19 @@ export default function Solicitacoes() {
         observacoes: nextObservacoes
       });
 
+      if (target.linkedActivityId) {
+        await updateActivity(target.linkedActivityId, {
+          status: 'IN_PROGRESS',
+          description: buildActivityDescription(
+            target,
+            sendToPricing
+              ? `Cotação ${novoRegistro.numeroOrcamento} enviada para precificação.`
+              : `Cotação ${novoRegistro.numeroOrcamento} registrada.`,
+            nextStage
+          )
+        });
+      }
+
       const nextContext = {
         ...target,
         status: 'EM_PRECIFICACAO',
@@ -905,6 +945,13 @@ export default function Solicitacoes() {
         observacoes: nextObservacoes
       });
 
+      if (cotacaoContext.linkedActivityId) {
+        await updateActivity(cotacaoContext.linkedActivityId, {
+          status: ACTIVITY_STATUS_FROM_REQUEST[statusTransition.nextStatus] || 'IN_PROGRESS',
+          description: buildActivityDescription(cotacaoContext, note, nextStage)
+        });
+      }
+
       setCotacaoContext((prev) => ({
         ...prev,
         status: statusTransition.nextStatus,
@@ -964,8 +1011,9 @@ export default function Solicitacoes() {
         .filter(Boolean)
         .join(' ');
 
+      const returnTargetArea = cotacaoContext?.flow?.sourceArea || 'COMERCIAL';
       const nextObservacoes = withStageMarker(
-        `${appendInternalNote(cotacaoContext.observacoes, returnNote)}\nOrigem: PRE_VENDAS\nDestino: COMERCIAL`,
+        `${appendInternalNote(cotacaoContext.observacoes, returnNote)}\nOrigem: PRE_VENDAS\nDestino: ${returnTargetArea}`,
         'DEVOLVIDA'
       );
 
@@ -975,6 +1023,21 @@ export default function Solicitacoes() {
         calculoDetalhes: nextDetails
       });
 
+      if (cotacaoContext.linkedActivityId) {
+        await updateActivity(cotacaoContext.linkedActivityId, {
+          status: 'COMPLETED',
+          description: buildActivityDescription(
+            cotacaoContext,
+            returnNote,
+            'DEVOLVIDA',
+            {
+              sourceArea: 'PRE_VENDAS',
+              targetArea: returnTargetArea
+            }
+          )
+        });
+      }
+
       setCotacaoContext((prev) => ({
         ...prev,
         status: 'FINALIZADA',
@@ -983,7 +1046,7 @@ export default function Solicitacoes() {
         calculoDetalhes: nextDetails,
         flow: {
           sourceArea: 'PRE_VENDAS',
-          targetArea: 'COMERCIAL'
+          targetArea: returnTargetArea
         }
       }));
       setCotacaoFeedback('Solicitação devolvida ao Comercial com sucesso.');

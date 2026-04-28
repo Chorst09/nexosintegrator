@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../lib/auth.cjs');
+const { canAccessModule } = require('../lib/permissions.cjs');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -63,6 +64,8 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true,
+      solicitacoes,
+      total,
       data: solicitacoes,
       pagination: {
         page: parseInt(page),
@@ -288,6 +291,7 @@ router.put('/:id', async (req, res) => {
       valorSugerido,
       custoTotal,
       margemLucro,
+      calculoDetalhes,
       observacoes,
       items = []
     } = req.body;
@@ -305,7 +309,12 @@ router.put('/:id', async (req, res) => {
     }
 
     // Verificar permissões (apenas o solicitante ou admin pode editar)
-    if (solicitacaoExistente.solicitanteId !== req.user.userId && req.user.role !== 'ADMIN') {
+    const userCanOperatePreSales = canAccessModule(req.user, 'PRE_SALES');
+    if (
+      solicitacaoExistente.solicitanteId !== req.user.userId &&
+      req.user.role !== 'ADMIN' &&
+      !userCanOperatePreSales
+    ) {
       return res.status(403).json({
         success: false,
         message: 'Sem permissão para editar esta solicitação'
@@ -322,9 +331,10 @@ router.put('/:id', async (req, res) => {
         status,
         tiposPrecificacao,
         regimeTributario,
-        valorSugerido: valorSugerido ? parseFloat(valorSugerido) : null,
-        custoTotal: custoTotal ? parseFloat(custoTotal) : null,
-        margemLucro: margemLucro ? parseFloat(margemLucro) : null,
+        valorSugerido: valorSugerido === '' || valorSugerido === undefined || valorSugerido === null ? null : parseFloat(valorSugerido),
+        custoTotal: custoTotal === '' || custoTotal === undefined || custoTotal === null ? null : parseFloat(custoTotal),
+        margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? null : parseFloat(margemLucro),
+        calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
         observacoes,
         updatedAt: new Date()
       },

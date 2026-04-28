@@ -109,7 +109,10 @@ const enforceRolePolicies = (req, res, next) => {
     return res.status(403).json({ error: 'Acesso negado' });
   }
 
-  const isPreSalesPath = p.startsWith('/pre-vendas') || p.startsWith('/solicitacoes');
+  const isPreSalesPath =
+    p.startsWith('/pre-vendas') ||
+    p.startsWith('/solicitacoes') ||
+    p.startsWith('/prevendas-cadastros');
   if (isPreSalesPath && !canAccessModule(req.user, 'PRE_SALES')) {
     return res.status(403).json({ error: 'Acesso negado' });
   }
@@ -141,7 +144,14 @@ const enforceRolePolicies = (req, res, next) => {
   }
 
   if (role === 'PRE_SALES') {
-    const allowedPreSalesPrefixes = ['/pre-vendas', '/solicitacoes', '/settings', '/users'];
+    const allowedPreSalesPrefixes = [
+      '/pre-vendas',
+      '/solicitacoes',
+      '/activities-simple',
+      '/prevendas-cadastros',
+      '/settings',
+      '/users'
+    ];
     const allowed = allowedPreSalesPrefixes.some((prefix) => p.startsWith(prefix));
     if (!allowed) {
       return res.status(403).json({ error: 'Acesso negado' });
