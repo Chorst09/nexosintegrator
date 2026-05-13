@@ -124,6 +124,9 @@ app.use('/api/advanced-workflows', handleLegacyAPI('./api/advanced-workflows.js'
 // Novas APIs - Licensing
 app.use('/api/licensing', handleLegacyAPI('./api/licensing.js'));
 
+// B2G - Busca de Licitações e Editais
+app.use('/api/b2g-search', require('./api/b2g-search'));
+
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {
   console.error('Error:', error);

@@ -1,184 +1,168 @@
-import { useState, useEffect } from 'react';
-import {
-  Search,
-  RefreshCcw,
-  Bookmark,
-  Bell,
-  Heart,
-  ExternalLink,
-  Loader2,
-  Trash2,
-  CheckCircle2,
-  Info
-} from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Search, RefreshCcw, ExternalLink, Loader2, Heart, Filter, X, ChevronDown, ChevronUp, Building2, Calendar, DollarSign, MapPin, Tag } from 'lucide-react';
+import { API_BASE_URL, getAuthHeaders } from '../config/api';
 
-// ─── Constantes ──────────────────────────────────────────────────────────────
+// ─── Constantes ───────────────────────────────────────────────────────────────
 
 const ESTADOS_BR = [
-  { sigla: 'AC', nome: 'Acre' },
-  { sigla: 'AL', nome: 'Alagoas' },
-  { sigla: 'AP', nome: 'Amapá' },
-  { sigla: 'AM', nome: 'Amazonas' },
-  { sigla: 'BA', nome: 'Bahia' },
-  { sigla: 'CE', nome: 'Ceará' },
-  { sigla: 'DF', nome: 'Distrito Federal' },
-  { sigla: 'ES', nome: 'Espírito Santo' },
-  { sigla: 'GO', nome: 'Goiás' },
-  { sigla: 'MA', nome: 'Maranhão' },
-  { sigla: 'MT', nome: 'Mato Grosso' },
-  { sigla: 'MS', nome: 'Mato Grosso do Sul' },
-  { sigla: 'MG', nome: 'Minas Gerais' },
-  { sigla: 'PA', nome: 'Pará' },
-  { sigla: 'PB', nome: 'Paraíba' },
-  { sigla: 'PR', nome: 'Paraná' },
-  { sigla: 'PE', nome: 'Pernambuco' },
-  { sigla: 'PI', nome: 'Piauí' },
-  { sigla: 'RJ', nome: 'Rio de Janeiro' },
-  { sigla: 'RN', nome: 'Rio Grande do Norte' },
-  { sigla: 'RS', nome: 'Rio Grande do Sul' },
-  { sigla: 'RO', nome: 'Rondônia' },
-  { sigla: 'RR', nome: 'Roraima' },
-  { sigla: 'SC', nome: 'Santa Catarina' },
-  { sigla: 'SP', nome: 'São Paulo' },
-  { sigla: 'SE', nome: 'Sergipe' },
-  { sigla: 'TO', nome: 'Tocantins' }
+  { sigla: 'AC', nome: 'Acre' }, { sigla: 'AL', nome: 'Alagoas' }, { sigla: 'AP', nome: 'Amapá' },
+  { sigla: 'AM', nome: 'Amazonas' }, { sigla: 'BA', nome: 'Bahia' }, { sigla: 'CE', nome: 'Ceará' },
+  { sigla: 'DF', nome: 'Distrito Federal' }, { sigla: 'ES', nome: 'Espírito Santo' }, { sigla: 'GO', nome: 'Goiás' },
+  { sigla: 'MA', nome: 'Maranhão' }, { sigla: 'MT', nome: 'Mato Grosso' }, { sigla: 'MS', nome: 'Mato Grosso do Sul' },
+  { sigla: 'MG', nome: 'Minas Gerais' }, { sigla: 'PA', nome: 'Pará' }, { sigla: 'PB', nome: 'Paraíba' },
+  { sigla: 'PR', nome: 'Paraná' }, { sigla: 'PE', nome: 'Pernambuco' }, { sigla: 'PI', nome: 'Piauí' },
+  { sigla: 'RJ', nome: 'Rio de Janeiro' }, { sigla: 'RN', nome: 'Rio Grande do Norte' }, { sigla: 'RS', nome: 'Rio Grande do Sul' },
+  { sigla: 'RO', nome: 'Rondônia' }, { sigla: 'RR', nome: 'Roraima' }, { sigla: 'SC', nome: 'Santa Catarina' },
+  { sigla: 'SP', nome: 'São Paulo' }, { sigla: 'SE', nome: 'Sergipe' }, { sigla: 'TO', nome: 'Tocantins' }
 ];
 
-const REGIOES_BR = [
-  { nome: 'Norte', estados: ['AC', 'AP', 'AM', 'PA', 'RO', 'RR', 'TO'] },
-  { nome: 'Nordeste', estados: ['AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI', 'RN', 'SE'] },
-  { nome: 'Centro-Oeste', estados: ['DF', 'GO', 'MT', 'MS'] },
-  { nome: 'Sudeste', estados: ['ES', 'MG', 'RJ', 'SP'] },
-  { nome: 'Sul', estados: ['PR', 'RS', 'SC'] }
+const FONTES = [
+  { id: 'pncp', nome: 'PNCP', logo: '🏛️', descricao: 'Portal Nacional de Contratações Públicas' },
+  { id: 'comprasnet', nome: 'ComprasNet', logo: '🇧🇷', descricao: 'Portal de Compras do Governo Federal' }
 ];
 
-const MODALIDADES = [
-  { id: 6, nome: 'Pregão Eletrônico' },
-  { id: 1, nome: 'Concorrência' },
-  { id: 8, nome: 'Dispensa' },
-  { id: 9, nome: 'Inexigibilidade' },
-  { id: 3, nome: 'Tomada de Preços' },
-  { id: 2, nome: 'Convite' },
-  { id: 5, nome: 'Leilão' },
-  { id: 10, nome: 'RDC' },
-  { id: 13, nome: 'Diálogo Competitivo' }
+const ORDENS = [
+  { value: 'data_desc', label: 'Mais recentes' },
+  { value: 'data_asc', label: 'Mais antigos' },
+  { value: 'valor_desc', label: 'Maior valor' },
+  { value: 'valor_asc', label: 'Menor valor' },
+  { value: 'abertura_asc', label: 'Abertura mais próxima' }
 ];
 
-// ─── API PNCP ─────────────────────────────────────────────────────────────────
-
-const PNCP_BASE_URL = 'https://pncp.gov.br/api/consulta/v1';
-const FALLBACK_MODALIDADE = 6;
-
-const MODALIDADE_EQUIVALENCIA = {
-  6: [6], // Pregão Eletrônico
-  1: [4, 5], // Concorrência (eletrônica/presencial)
-  8: [8], // Dispensa
-  9: [9], // Inexigibilidade
-  3: [4, 5], // Tomada de Preços (equivalência prática)
-  2: [12], // Convite (aproximação por Credenciamento)
-  5: [1, 13], // Leilão (eletrônico/presencial)
-  10: [], // RDC sem código direto na API atual
-  13: [2] // Diálogo Competitivo
+const formatCurrency = (value) => {
+  if (!value) return null;
+  return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-const toPncpDate = (value) => String(value || '').replaceAll('-', '').trim();
-
-const diasAtras = (dias) => {
-  const d = new Date();
-  d.setDate(d.getDate() - dias);
-  return d.toISOString().slice(0, 10);
-};
-
-const expandirModalidades = (ids = []) => {
-  const values = Array.isArray(ids) ? ids : [];
-  const expanded = values.flatMap((id) => MODALIDADE_EQUIVALENCIA[id] || []);
-  const unique = [...new Set(expanded.filter((v) => Number.isInteger(v) && v > 0))];
-  return unique.length > 0 ? unique : [FALLBACK_MODALIDADE];
-};
-
-const dedupeRows = (rows = []) => {
-  const map = new Map();
-  (Array.isArray(rows) ? rows : []).forEach((row, index) => {
-    const key =
-      row?.numeroControlePNCP ||
-      row?.id ||
-      `${row?.anoCompra || ''}-${row?.numeroCompra || ''}-${row?.orgaoEntidade?.cnpj || ''}-${index}`;
-    if (!map.has(key)) map.set(key, row);
-  });
-  return [...map.values()];
-};
-
-async function buscarPNCP(params) {
-  const endpoint = params.endpoint === 'proposta' ? 'proposta' : 'publicacao';
-  const pagina = Number(params.pagina || 1);
-  const tamanhoPagina = Number(params.tamanhoPagina || 20);
-
-  const modalidadeCodes = expandirModalidades(params.modalidades);
-  const selectedUfs = Array.isArray(params.ufs) ? params.ufs.filter(Boolean) : [];
-  const ufTargets = selectedUfs.length > 0 && selectedUfs.length <= 5 ? selectedUfs : [null];
-
-  const baseDateFinal = toPncpDate(params.dataFinal || hoje());
-  const baseDateInicial = toPncpDate(params.dataInicial || diasAtras(30));
-
-  const allRequests = [];
-  modalidadeCodes.forEach((codigoModalidadeContratacao) => {
-    ufTargets.forEach((uf) => {
-      allRequests.push({ codigoModalidadeContratacao, uf });
-    });
-  });
-
-  const requests = allRequests.slice(0, 20);
-  const aggregated = [];
-
-  for (const req of requests) {
-    try {
-      // Usar proxy backend para evitar bloqueio CORS
-      const proxyUrl = new URL('/api/pncp-proxy', window.location.origin);
-      proxyUrl.searchParams.set('endpoint', endpoint);
-      proxyUrl.searchParams.set('dataFinal', baseDateFinal);
-      proxyUrl.searchParams.set('codigoModalidadeContratacao', String(req.codigoModalidadeContratacao));
-      proxyUrl.searchParams.set('pagina', String(pagina));
-      proxyUrl.searchParams.set('tamanhoPagina', String(Math.min(500, Math.max(10, tamanhoPagina))));
-      if (endpoint === 'publicacao') proxyUrl.searchParams.set('dataInicial', baseDateInicial);
-      if (req.uf) proxyUrl.searchParams.set('uf', req.uf);
-
-      const res = await fetch(proxyUrl.toString(), { headers: { Accept: 'application/json' } });
-      if (!res.ok) continue;
-      const data = await res.json().catch(() => null);
-      const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-      aggregated.push(...rows);
-    } catch {
-      // Ignora falha pontual
-    }
-  }
-
-  return dedupeRows(aggregated);
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatarMoeda(valor) {
-  if (valor == null || isNaN(valor)) return '—';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
-}
-
-function formatarData(data) {
-  if (!data) return '—';
+const formatDate = (value) => {
+  if (!value) return null;
   try {
-    return new Intl.DateTimeFormat('pt-BR').format(new Date(data));
-  } catch {
-    return data;
-  }
-}
+    return new Date(value).toLocaleDateString('pt-BR');
+  } catch { return value; }
+};
 
-function hoje() {
-  return new Date().toISOString().slice(0, 10);
-}
+const getFonteColor = (fonte) => {
+  const colors = {
+    'PNCP': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+    'ComprasNet': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+    'Licitações-e (BB)': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
+  };
+  return colors[fonte] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+};
 
-function ontem() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+// ─── Componente Card de Edital ────────────────────────────────────────────────
+
+function CardEdital({ item, favorito, onToggleFavorito }) {
+  const [expandido, setExpandido] = useState(false);
+
+  return (
+    <div className="crm-card rounded-xl p-4 space-y-3 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${getFonteColor(item.fonte)}`}>
+              {item.fonteLogo} {item.fonte}
+            </span>
+            {item.modalidade && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                {item.modalidade}
+              </span>
+            )}
+            {item.status && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                {item.status}
+              </span>
+            )}
+          </div>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-2">
+            {item.titulo}
+          </h3>
+        </div>
+        <button
+          onClick={() => onToggleFavorito(item)}
+          className={`shrink-0 p-1.5 rounded-lg transition-colors ${favorito ? 'text-red-500 bg-red-50 dark:bg-red-900/20' : 'text-gray-400 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
+          title={favorito ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+        >
+          <Heart size={16} fill={favorito ? 'currentColor' : 'none'} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600 dark:text-slate-300">
+        {item.orgao && (
+          <div className="flex items-center gap-1 col-span-2">
+            <Building2 size={12} className="shrink-0" />
+            <span className="truncate">{item.orgao}</span>
+          </div>
+        )}
+        {(item.uf || item.municipio) && (
+          <div className="flex items-center gap-1">
+            <MapPin size={12} className="shrink-0" />
+            <span>{[item.municipio, item.uf].filter(Boolean).join(' - ')}</span>
+          </div>
+        )}
+        {item.valor && (
+          <div className="flex items-center gap-1">
+            <DollarSign size={12} className="shrink-0" />
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(item.valor)}</span>
+          </div>
+        )}
+        {item.dataAbertura && (
+          <div className="flex items-center gap-1">
+            <Calendar size={12} className="shrink-0" />
+            <span>Abertura: {formatDate(item.dataAbertura)}</span>
+          </div>
+        )}
+        {item.dataPublicacao && (
+          <div className="flex items-center gap-1">
+            <Calendar size={12} className="shrink-0" />
+            <span>Publicado: {formatDate(item.dataPublicacao)}</span>
+          </div>
+        )}
+        {item.numero && (
+          <div className="flex items-center gap-1">
+            <Tag size={12} className="shrink-0" />
+            <span>Nº {item.numero}{item.ano ? `/${item.ano}` : ''}</span>
+          </div>
+        )}
+      </div>
+
+      {expandido && item.informacaoComplementar && (
+        <p className="text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3">
+          {item.informacaoComplementar}
+        </p>
+      )}
+
+      <div className="flex items-center justify-between pt-1">
+        <div className="flex gap-2">
+          {item.link && (
+            <a
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+            >
+              <ExternalLink size={12} />
+              Ver edital
+            </a>
+          )}
+          {item.informacaoComplementar && (
+            <button
+              onClick={() => setExpandido(!expandido)}
+              className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400"
+            >
+              {expandido ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {expandido ? 'Menos' : 'Mais detalhes'}
+            </button>
+          )}
+        </div>
+        {item.numeroControlePNCP && (
+          <span className="text-xs text-gray-400 dark:text-slate-500 font-mono truncate max-w-[180px]">
+            {item.numeroControlePNCP}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
@@ -186,1004 +170,320 @@ function ontem() {
 export default function PortalBusca() {
   const [filtros, setFiltros] = useState({
     objeto: '',
-    numeroEdital: '',
-    filtrarPor: 'estado',
-    estados: [],
-    cidades: [],
-    modalidades: [],
-    dataInclusaoInicio: '',
-    dataInclusaoFim: '',
-    dataPrazoInicio: '',
-    dataPrazoFim: '',
-    vigentes: false,
-    comEdital: false,
-    somenteFavoritas: false,
-    buscaExata: false
+    uf: '',
+    dataInicio: '',
+    dataFim: '',
+    fontes: ['pncp', 'comprasnet'],
+    ordem: 'data_desc',
+    incluirPropostas: true
   });
 
   const [resultados, setResultados] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('resultados');
-  const [filtrosSalvos, setFiltrosSalvos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('pncp_filtros_salvos') || '[]'); } catch { return []; }
-  });
-  const [alertas, setAlertas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('pncp_alertas') || '[]'); } catch { return []; }
-  });
+  const [erro, setErro] = useState('');
+  const [total, setTotal] = useState(0);
+  const [porFonte, setPorFonte] = useState({});
+  const [errosFontes, setErrosFontes] = useState([]);
   const [favoritos, setFavoritos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('pncp_favoritos') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('b2g_favoritos') || '[]'); } catch { return []; }
   });
-  const [totalResultados, setTotalResultados] = useState(0);
-  const [erroBusca, setErroBusca] = useState('');
-  const [pagina] = useState(1);
-  const [bllCredentials, setBllCredentials] = useState(() => {
-    try { 
-      return JSON.parse(localStorage.getItem('bll_credentials') || '{"email":"","password":""}'); 
-    } catch { 
-      return { email: '', password: '' }; 
+  const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [buscaFeita, setBuscaFeita] = useState(false);
+
+  const handleBuscar = useCallback(async () => {
+    if (!filtros.objeto.trim() && !filtros.uf) {
+      setErro('Informe ao menos um termo de busca ou selecione um estado.');
+      return;
     }
-  });
-  const [bllStatus, setBllStatus] = useState('não configurado');
 
-  // ── Funções ────────────────────────────────────────────────────────────────
-
-  const handleBuscar = async () => {
     setLoading(true);
-    setActiveTab('resultados');
-    setErroBusca('');
+    setErro('');
+    setBuscaFeita(true);
+
     try {
-      const params = {
-        pagina,
-        tamanhoPagina: 20,
-        endpoint: filtros.vigentes ? 'proposta' : 'publicacao',
-        dataInicial: filtros.dataInclusaoInicio || diasAtras(30),
-        dataFinal: filtros.dataInclusaoFim || hoje(),
-        ufs: filtros.estados,
-        modalidades: filtros.modalidades
-      };
+      const params = new URLSearchParams();
+      if (filtros.objeto) params.set('objeto', filtros.objeto.trim());
+      if (filtros.uf) params.set('uf', filtros.uf);
+      if (filtros.dataInicio) params.set('dataInicio', filtros.dataInicio);
+      if (filtros.dataFim) params.set('dataFim', filtros.dataFim);
+      params.set('fontes', filtros.fontes.join(','));
+      params.set('ordem', filtros.ordem);
+      params.set('incluirPropostas', filtros.incluirPropostas ? 'true' : 'false');
+      params.set('tamanhoPagina', '50');
 
-      // Buscar em paralelo no PNCP, BLL, BNC e ConLicitacao
-      
-      // Função auxiliar para buscar em um portal
-      const buscarPortal = (portal, uf = '') => {
-        // Configurar headers específicos para cada portal
-        const headers = {};
-        
-        if (portal === 'bll' && bllCredentials.email && bllCredentials.password) {
-          headers['X-BLL-Email'] = bllCredentials.email;
-          headers['X-BLL-Password'] = bllCredentials.password;
-        }
-        // TODO: Adicionar suporte para BNC e ConLicitacao quando implementado na interface
-        
-        const url = `/api/bll-proxy?portal=${portal}&objeto=${encodeURIComponent(filtros.objeto || '')}&uf=${uf}&pagina=${pagina}&tamanhoPagina=20`;
-        
-        console.log(`🔍 Buscando em ${portal.toUpperCase()}...`, { hasCredentials: Object.keys(headers).length > 0 });
-        
-        return fetch(url, { headers })
-          .then(r => {
-            console.log(`📡 ${portal.toUpperCase()} response status:`, r.status);
-            return r.ok ? r.json() : { data: [] };
-          })
-          .then(d => {
-            console.log(`✅ ${portal.toUpperCase()} retornou:`, d.total || d.data?.length || 0, 'resultados');
-            return (d.data || []).map(item => ({ ...item, _fonte: portal.toUpperCase() }));
-          })
-          .catch(err => {
-            console.warn(`❌ Erro ao buscar em ${portal}:`, err.message);
-            return [];
-          });
-      };
+      const res = await fetch(`${API_BASE_URL}/b2g-search/search?${params}`, {
+        headers: getAuthHeaders()
+      });
 
-      // Criar promises para todos os portais
-      const portalPromises = [];
-      const portais = ['bll', 'bnc', 'conlicitacao'];
-      
-      if (filtros.estados.length > 0) {
-        // Buscar em cada portal para cada UF selecionada
-        filtros.estados.forEach(uf => {
-          portais.forEach(portal => {
-            portalPromises.push(buscarPortal(portal, uf));
-          });
-        });
-      } else {
-        // Buscar em cada portal sem filtro de UF
-        portais.forEach(portal => {
-          portalPromises.push(buscarPortal(portal));
-        });
-      }
+      if (!res.ok) throw new Error(`Erro ${res.status} ao buscar licitações`);
 
-      const [dataPNCP, ...dataPortaisResults] = await Promise.allSettled([
-        buscarPNCP(params),
-        ...portalPromises
-      ]);
-
-      const dataPortais = dataPortaisResults
-        .filter(r => r.status === 'fulfilled')
-        .flatMap(r => r.value);
-
-      console.log('🔍 Resultados PNCP:', dataPNCP.status === 'fulfilled' ? dataPNCP.value.length : 0);
-      console.log('🔍 Resultados Portais (BLL+BNC+ConLicitacao):', dataPortais.length);
-
-      let data = [
-        ...(dataPNCP.status === 'fulfilled' ? dataPNCP.value : []),
-        ...dataPortais
-      ];
-
-      // Deduplica resultados combinados
-      data = dedupeRows(data);
-
-      console.log('🔍 Total após deduplicação:', data.length);
-
-      // Filtro local por objeto
-      if (filtros.objeto) {
-        const termo = filtros.buscaExata
-          ? filtros.objeto.toLowerCase()
-          : filtros.objeto.toLowerCase();
-        data = data.filter((r) => {
-          const obj = (r.objetoCompra || r.objeto || '').toLowerCase();
-          return filtros.buscaExata ? obj === termo : obj.includes(termo);
-        });
-      }
-
-      // Filtro local por número de edital
-      if (filtros.numeroEdital) {
-        data = data.filter((r) =>
-          (r.numeroCompra || r.numeroEdital || '').toString().includes(filtros.numeroEdital)
-        );
-      }
-
-      // Filtro local por UF (quando múltiplas UFs selecionadas)
-      if (filtros.estados.length > 0) {
-        data = data.filter((r) => filtros.estados.includes(r.unidadeOrgao?.ufSigla || r.uf || ''));
-      }
-
-      // Filtro local por Cidade
-      if (filtros.cidades.length > 0 && filtros.cidades[0]) {
-        const cidade = filtros.cidades[0].toLowerCase();
-        data = data.filter((r) => (r.unidadeOrgao?.municipioNome || r.cidade || '').toLowerCase().includes(cidade));
-      }
-
-      // Filtro local por modalidade (garante consistência dos checkboxes)
-      if (filtros.modalidades.length > 0) {
-        const allowed = expandirModalidades(filtros.modalidades);
-        data = data.filter((r) => allowed.includes(Number(r.modalidadeId)));
-      }
-
-      // Filtro vigentes
-      if (filtros.vigentes) {
-        const now = new Date();
-        data = data.filter((r) => {
-          const prazo = r.dataEncerramentoProposta || r.dataAbertura;
-          return prazo ? new Date(prazo) > now : true;
-        });
-      }
-
-      // Filtro com edital/instrumento convocatório
-      if (filtros.comEdital) {
-        data = data.filter((r) => {
-          const tipo = String(r.tipoInstrumentoConvocatorioNome || '').toLowerCase();
-          return (
-            tipo.includes('edital') ||
-            Boolean(r.linkSistemaOrigem) ||
-            Boolean(r.linkEdital) ||
-            Boolean(r.linkProcessoEletronico)
-          );
-        });
-      }
-
-      // Filtro por Data de Prazo (encerramento de proposta)
-      if (filtros.dataPrazoInicio || filtros.dataPrazoFim) {
-        const inicio = filtros.dataPrazoInicio ? new Date(`${filtros.dataPrazoInicio}T00:00:00`) : null;
-        const fim = filtros.dataPrazoFim ? new Date(`${filtros.dataPrazoFim}T23:59:59`) : null;
-        data = data.filter((r) => {
-          const prazoRaw = r.dataEncerramentoProposta || r.dataAbertura || r.dataAberturaProposta;
-          if (!prazoRaw) return false;
-          const prazo = new Date(prazoRaw);
-          if (Number.isNaN(prazo.getTime())) return false;
-          if (inicio && prazo < inicio) return false;
-          if (fim && prazo > fim) return false;
-          return true;
-        });
-      }
-
-      // Somente favoritas
-      if (filtros.somenteFavoritas) {
-        data = data.filter((r) =>
-          favoritos.includes(r.id || r.numeroControlePNCP || r.numeroCompra)
-        );
-      }
-
-      setResultados(data);
-      setTotalResultados(data.length);
-      if (data.length === 0) {
-        setErroBusca('Nenhum resultado retornado com os filtros atuais na API do PNCP.');
-      }
-    } catch (_error) {
+      const data = await res.json();
+      setResultados(data.data || []);
+      setTotal(data.total || 0);
+      setPorFonte(data.fontes || {});
+      setErrosFontes(data.erros || []);
+    } catch (err) {
+      setErro(err.message || 'Erro ao buscar licitações');
       setResultados([]);
-      setTotalResultados(0);
-      setErroBusca('Falha ao consultar o PNCP. Revise os filtros e tente novamente.');
     } finally {
       setLoading(false);
     }
+  }, [filtros]);
+
+  const toggleFonte = (fonteId) => {
+    setFiltros(prev => ({
+      ...prev,
+      fontes: prev.fontes.includes(fonteId)
+        ? prev.fontes.filter(f => f !== fonteId)
+        : [...prev.fontes, fonteId]
+    }));
   };
 
-  const handleSalvarFiltro = () => {
-    const nome = window.prompt('Nome para este filtro:');
-    if (!nome) return;
-    const novo = { id: Date.now(), nome, filtros, criadoEm: new Date().toISOString() };
-    const lista = [...filtrosSalvos, novo];
-    setFiltrosSalvos(lista);
-    localStorage.setItem('pncp_filtros_salvos', JSON.stringify(lista));
-  };
-
-  const handleExcluirFiltro = (id) => {
-    const lista = filtrosSalvos.filter((f) => f.id !== id);
-    setFiltrosSalvos(lista);
-    localStorage.setItem('pncp_filtros_salvos', JSON.stringify(lista));
-  };
-
-  const handleAplicarFiltro = (f) => {
-    setFiltros(f.filtros);
-    setActiveTab('resultados');
-  };
-
-  const handleFavoritar = (id) => {
-    const lista = favoritos.includes(id)
-      ? favoritos.filter((f) => f !== id)
-      : [...favoritos, id];
-    setFavoritos(lista);
-    localStorage.setItem('pncp_favoritos', JSON.stringify(lista));
-  };
-
-  const handleCriarAlerta = () => {
-    const descricao = [
-      filtros.objeto && `Objeto: "${filtros.objeto}"`,
-      filtros.estados.length && `UF: ${filtros.estados.join(', ')}`,
-      filtros.modalidades.length && `Modalidades: ${filtros.modalidades.join(', ')}`
-    ].filter(Boolean).join(' | ') || 'Todos os filtros atuais';
-
-    const novo = { id: Date.now(), descricao, filtros, criadoEm: new Date().toISOString() };
-    const lista = [...alertas, novo];
-    setAlertas(lista);
-    localStorage.setItem('pncp_alertas', JSON.stringify(lista));
-    alert('Alerta criado com sucesso!');
-  };
-
-  const handleExcluirAlerta = (id) => {
-    const lista = alertas.filter((a) => a.id !== id);
-    setAlertas(lista);
-    localStorage.setItem('pncp_alertas', JSON.stringify(lista));
-  };
-
-  const limparFiltros = () => {
-    setFiltros({
-      objeto: '',
-      numeroEdital: '',
-      filtrarPor: 'estado',
-      estados: [],
-      cidades: [],
-      modalidades: [],
-      dataInclusaoInicio: '',
-      dataInclusaoFim: '',
-      dataPrazoInicio: '',
-      dataPrazoFim: '',
-      vigentes: false,
-      comEdital: false,
-      somenteFavoritas: false,
-      buscaExata: false
+  const toggleFavorito = (item) => {
+    setFavoritos(prev => {
+      const existe = prev.some(f => f.id === item.id);
+      const next = existe ? prev.filter(f => f.id !== item.id) : [...prev, item];
+      localStorage.setItem('b2g_favoritos', JSON.stringify(next));
+      return next;
     });
-    setResultados([]);
-    setTotalResultados(0);
   };
 
-  const handleSalvarCredenciaisBLL = () => {
-    localStorage.setItem('bll_credentials', JSON.stringify(bllCredentials));
-    setBllStatus('salvo');
-    alert('Credenciais do BLL salvas com sucesso!');
-    setTimeout(() => setBllStatus('configurado'), 2000);
-  };
+  const isFavorito = (item) => favoritos.some(f => f.id === item.id);
 
-  const handleTestarCredenciaisBLL = async () => {
-    setBllStatus('testando...');
-    try {
-      const headers = {};
-      if (bllCredentials.email && bllCredentials.password) {
-        headers['X-BLL-Email'] = bllCredentials.email;
-        headers['X-BLL-Password'] = bllCredentials.password;
-      }
-
-      const res = await fetch('/api/bll-proxy?objeto=teste&pagina=1&tamanhoPagina=1', { headers });
-      const data = await res.json();
-      
-      if (data.autenticado) {
-        setBllStatus('✓ autenticado');
-        alert('Credenciais válidas! Login realizado com sucesso.');
-      } else {
-        setBllStatus('✗ falha na autenticação');
-        alert('Não foi possível autenticar. Verifique suas credenciais.');
-      }
-    } catch (err) {
-      setBllStatus('✗ erro');
-      alert('Erro ao testar credenciais: ' + err.message);
-    }
-  };
-
-  const handleLimparCredenciaisBLL = () => {
-    setBllCredentials({ email: '', password: '' });
-    localStorage.removeItem('bll_credentials');
-    setBllStatus('não configurado');
-  };
-
-  const toggleEstado = (sigla) => {
-    setFiltros((prev) => ({
-      ...prev,
-      estados: prev.estados.includes(sigla)
-        ? prev.estados.filter((e) => e !== sigla)
-        : [...prev.estados, sigla]
-    }));
-  };
-
-  const toggleModalidade = (id) => {
-    setFiltros((prev) => ({
-      ...prev,
-      modalidades: prev.modalidades.includes(id)
-        ? prev.modalidades.filter((m) => m !== id)
-        : [...prev.modalidades, id]
-    }));
-  };
-
-  const selecionarTodosEstados = () => {
-    setFiltros((prev) => ({ ...prev, estados: ESTADOS_BR.map((e) => e.sigla) }));
-  };
-
-  // Relevância média: % dos resultados cujo objeto contém o termo buscado
-  const relevanciaMedia = resultados.length === 0 ? 0 : filtros.objeto
-    ? Math.round(
-        (resultados.filter((r) =>
-          (r.objetoCompra || r.objeto || '').toLowerCase().includes(filtros.objeto.toLowerCase())
-        ).length / resultados.length) * 100
-      )
-    : 100;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const itensExibidos = mostrarFavoritos ? favoritos : resultados;
 
   return (
-    <div className="min-h-screen p-4 md:p-6" style={{ background: 'var(--crm-bg, #0f172a)', color: 'var(--crm-ink, #f1f5f9)' }}>
-
+    <div className="space-y-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Portal de Busca de Oportunidades Públicas</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-            Busca em tempo real no PNCP — Portal Nacional de Contratações Públicas
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Portal de Busca de Oportunidades</h1>
+          <p className="text-sm text-gray-600 dark:text-slate-300 mt-1">
+            Busca integrada em múltiplas fontes públicas de licitações e editais
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <button
-            onClick={handleBuscar}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+            onClick={() => setMostrarFavoritos(!mostrarFavoritos)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${mostrarFavoritos ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300'}`}
           >
-            <RefreshCcw className="h-4 w-4" /> Atualizar
-          </button>
-          <button
-            onClick={handleBuscar}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-          >
-            <Search className="h-4 w-4" /> Buscar
-          </button>
-          <button
-            onClick={handleSalvarFiltro}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
-          >
-            <Bookmark className="h-4 w-4" /> Salvar Filtro
-          </button>
-          <button
-            onClick={handleCriarAlerta}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
-          >
-            <Bell className="h-4 w-4" /> Criar Alerta
+            <Heart size={16} fill={mostrarFavoritos ? 'currentColor' : 'none'} />
+            Favoritos ({favoritos.length})
           </button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {[
-          { label: 'Oportunidades exibidas', value: resultados.length },
-          { label: 'Favoritas', value: favoritos.length },
-          { label: 'Relevância média', value: `${relevanciaMedia}%` }
-        ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-xl border p-4"
-            style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
+      {/* Fontes disponíveis */}
+      <div className="flex flex-wrap gap-2">
+        {FONTES.map(fonte => (
+          <button
+            key={fonte.id}
+            onClick={() => toggleFonte(fonte.id)}
+            title={fonte.descricao}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              filtros.fontes.includes(fonte.id)
+                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                : 'border-gray-300 bg-white text-gray-500 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600'
+            }`}
           >
-            <div className="text-2xl font-bold text-white">{kpi.value}</div>
-            <div className="mt-1 text-xs" style={{ color: 'var(--crm-muted, #94a3b8)' }}>{kpi.label}</div>
-          </div>
+            <span>{fonte.logo}</span>
+            <span>{fonte.nome}</span>
+            {filtros.fontes.includes(fonte.id) && <X size={10} />}
+          </button>
         ))}
       </div>
 
-      {/* Busca Inteligente */}
-      <div
-        className="mb-6 rounded-xl border p-5"
-        style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-      >
-        <h2 className="mb-4 text-base font-semibold text-white">Busca Inteligente</h2>
-
-        {/* Row 1: Objeto + Nº Edital */}
-        <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Objeto</label>
+      {/* Formulário de busca */}
+      <div className="crm-card rounded-2xl p-5 space-y-4">
+        <div className="flex gap-3">
+          <div className="flex-1 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Pesquise por objeto"
               value={filtros.objeto}
-              onChange={(e) => setFiltros((p) => ({ ...p, objeto: e.target.value }))}
-              className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500"
-              style={{ borderColor: 'var(--crm-border, #334155)' }}
+              onChange={e => setFiltros(prev => ({ ...prev, objeto: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && handleBuscar()}
+              placeholder="Ex: equipamentos de informática, serviços de limpeza, obras..."
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Nº Edital</label>
-            <input
-              type="text"
-              placeholder="Pesquise por Nº Edital"
-              value={filtros.numeroEdital}
-              onChange={(e) => setFiltros((p) => ({ ...p, numeroEdital: e.target.value }))}
-              className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500"
-              style={{ borderColor: 'var(--crm-border, #334155)' }}
-            />
-          </div>
-        </div>
-
-        {/* Busca Exata */}
-        <div className="mb-3 flex items-center gap-2">
-          <input
-            id="buscaExata"
-            type="checkbox"
-            checked={filtros.buscaExata}
-            onChange={(e) => setFiltros((p) => ({ ...p, buscaExata: e.target.checked }))}
-            className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-blue-500"
-          />
-          <label htmlFor="buscaExata" className="text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Busca Exata</label>
-        </div>
-
-        {/* Filtrar por Estado | Região */}
-        <div className="mb-3 flex items-center gap-4">
-          <span className="text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Filtrar por:</span>
-          {['estado', 'regiao'].map((op) => (
-            <label key={op} className="flex cursor-pointer items-center gap-1.5 text-sm text-white">
-              <input
-                type="radio"
-                name="filtrarPor"
-                value={op}
-                checked={filtros.filtrarPor === op}
-                onChange={() => setFiltros((p) => ({ ...p, filtrarPor: op, estados: [] }))}
-                className="accent-blue-500"
-              />
-              {op === 'estado' ? 'Estado' : 'Região'}
-            </label>
-          ))}
-        </div>
-
-        {/* Estado / Região + Cidade + Modalidades */}
-        <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-          {/* Estados ou Regiões */}
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                {filtros.filtrarPor === 'estado' ? 'Estado(s)' : 'Região'}
-              </label>
-              <button
-                type="button"
-                onClick={selecionarTodosEstados}
-                className="text-xs text-blue-400 hover:underline"
-              >
-                Todos os Estados
-              </button>
-            </div>
-            {filtros.filtrarPor === 'estado' ? (
-              <div
-                className="max-h-32 overflow-y-auto rounded-lg border p-2"
-                style={{ borderColor: 'var(--crm-border, #334155)', background: 'var(--crm-bg, #0f172a)' }}
-              >
-                {ESTADOS_BR.map((e) => (
-                  <label key={e.sigla} className="flex cursor-pointer items-center gap-1.5 py-0.5 text-xs text-white">
-                    <input
-                      type="checkbox"
-                      checked={filtros.estados.includes(e.sigla)}
-                      onChange={() => toggleEstado(e.sigla)}
-                      className="accent-blue-500"
-                    />
-                    {e.sigla} — {e.nome}
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <div
-                className="rounded-lg border p-2"
-                style={{ borderColor: 'var(--crm-border, #334155)', background: 'var(--crm-bg, #0f172a)' }}
-              >
-                {REGIOES_BR.map((r) => (
-                  <label key={r.nome} className="flex cursor-pointer items-center gap-1.5 py-0.5 text-xs text-white">
-                    <input
-                      type="checkbox"
-                      checked={r.estados.every((s) => filtros.estados.includes(s))}
-                      onChange={() => {
-                        const allSelected = r.estados.every((s) => filtros.estados.includes(s));
-                        setFiltros((p) => ({
-                          ...p,
-                          estados: allSelected
-                            ? p.estados.filter((s) => !r.estados.includes(s))
-                            : [...new Set([...p.estados, ...r.estados])]
-                        }));
-                      }}
-                      className="accent-blue-500"
-                    />
-                    {r.nome}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Cidade */}
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Cidade</label>
-            <input
-              type="text"
-              placeholder="Filtrar por cidade"
-              value={filtros.cidades[0] || ''}
-              onChange={(e) => setFiltros((p) => ({ ...p, cidades: e.target.value ? [e.target.value] : [] }))}
-              className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500"
-              style={{ borderColor: 'var(--crm-border, #334155)' }}
-            />
-          </div>
-
-          {/* Modalidades */}
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Modalidades</label>
-            <div
-              className="max-h-32 overflow-y-auto rounded-lg border p-2"
-              style={{ borderColor: 'var(--crm-border, #334155)', background: 'var(--crm-bg, #0f172a)' }}
-            >
-              {MODALIDADES.map((m) => (
-                <label key={m.id} className="flex cursor-pointer items-center gap-1.5 py-0.5 text-xs text-white">
-                  <input
-                    type="checkbox"
-                    checked={filtros.modalidades.includes(m.id)}
-                    onChange={() => toggleModalidade(m.id)}
-                    className="accent-blue-500"
-                  />
-                  {m.nome}
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Datas */}
-        <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {/* Data Inclusão */}
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Data Inclusão</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={filtros.dataInclusaoInicio}
-                onChange={(e) => setFiltros((p) => ({ ...p, dataInclusaoInicio: e.target.value }))}
-                className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                style={{ borderColor: 'var(--crm-border, #334155)' }}
-              />
-              <span className="text-xs text-slate-500">—</span>
-              <input
-                type="date"
-                value={filtros.dataInclusaoFim}
-                onChange={(e) => setFiltros((p) => ({ ...p, dataInclusaoFim: e.target.value }))}
-                className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                style={{ borderColor: 'var(--crm-border, #334155)' }}
-              />
-            </div>
-            <div className="mt-1 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setFiltros((p) => ({ ...p, dataInclusaoInicio: hoje(), dataInclusaoFim: hoje() }))}
-                className="text-xs text-blue-400 hover:underline"
-              >
-                hoje
-              </button>
-              <button
-                type="button"
-                onClick={() => setFiltros((p) => ({ ...p, dataInclusaoInicio: ontem(), dataInclusaoFim: ontem() }))}
-                className="text-xs text-blue-400 hover:underline"
-              >
-                ontem
-              </button>
-            </div>
-          </div>
-
-          {/* Data Prazo */}
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Data Prazo</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={filtros.dataPrazoInicio}
-                onChange={(e) => setFiltros((p) => ({ ...p, dataPrazoInicio: e.target.value }))}
-                className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                style={{ borderColor: 'var(--crm-border, #334155)' }}
-              />
-              <span className="text-xs text-slate-500">—</span>
-              <input
-                type="date"
-                value={filtros.dataPrazoFim}
-                onChange={(e) => setFiltros((p) => ({ ...p, dataPrazoFim: e.target.value }))}
-                className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                style={{ borderColor: 'var(--crm-border, #334155)' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Checkboxes finais */}
-        <div className="mb-4 flex flex-wrap gap-4">
-          {[
-            { key: 'vigentes', label: 'Vigentes' },
-            { key: 'comEdital', label: 'Com Edital' },
-            { key: 'somenteFavoritas', label: 'Somente favoritas' }
-          ].map(({ key, label }) => (
-            <label key={key} className="flex cursor-pointer items-center gap-2 text-sm text-white">
-              <input
-                type="checkbox"
-                checked={filtros[key]}
-                onChange={(e) => setFiltros((p) => ({ ...p, [key]: e.target.checked }))}
-                className="h-4 w-4 rounded accent-blue-500"
-              />
-              {label}
-            </label>
-          ))}
-          <button
-            type="button"
-            onClick={limparFiltros}
-            className="ml-auto text-xs text-slate-400 hover:text-white hover:underline"
+          <select
+            value={filtros.uf}
+            onChange={e => setFiltros(prev => ({ ...prev, uf: e.target.value }))}
+            className="px-3 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-blue-500"
           >
-            Limpar filtros
-          </button>
-        </div>
-
-        {/* Botão Buscar */}
-        <div className="flex justify-center">
+            <option value="">Todos os estados</option>
+            {ESTADOS_BR.map(e => (
+              <option key={e.sigla} value={e.sigla}>{e.sigla} - {e.nome}</option>
+            ))}
+          </select>
           <button
             onClick={handleBuscar}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-blue-500 disabled:opacity-60"
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium text-sm"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Buscar em Todos os Portais
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            {loading ? 'Buscando...' : 'Buscar'}
           </button>
+        </div>
+
+        {/* Filtros avançados */}
+        <div>
+          <button
+            onClick={() => setFiltrosAbertos(!filtrosAbertos)}
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200"
+          >
+            <Filter size={14} />
+            Filtros avançados
+            {filtrosAbertos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          {filtrosAbertos && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Data início</label>
+                <input
+                  type="date"
+                  value={filtros.dataInicio}
+                  onChange={e => setFiltros(prev => ({ ...prev, dataInicio: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Data fim</label>
+                <input
+                  type="date"
+                  value={filtros.dataFim}
+                  onChange={e => setFiltros(prev => ({ ...prev, dataFim: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Ordenar por</label>
+                <select
+                  value={filtros.ordem}
+                  onChange={e => setFiltros(prev => ({ ...prev, ordem: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm"
+                >
+                  {ORDENS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filtros.incluirPropostas}
+                    onChange={e => setFiltros(prev => ({ ...prev, incluirPropostas: e.target.checked }))}
+                    className="rounded"
+                  />
+                  Incluir licitações em fase de proposta
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-4 flex gap-1 border-b" style={{ borderColor: 'var(--crm-border, #334155)' }}>
-        {[
-          { id: 'resultados', label: `Resultados (${resultados.length})` },
-          { id: 'filtrosSalvos', label: `Filtros Salvos (${filtrosSalvos.length})` },
-          { id: 'alertas', label: `Alertas (${alertas.length})` },
-          { id: 'ingestao', label: 'Ingestão' }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={[
-              'px-4 py-2 text-sm font-medium transition border-b-2 -mb-px',
-              activeTab === tab.id
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-slate-400 hover:text-white'
-            ].join(' ')}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Erro */}
+      {erro && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
+          {erro}
+        </div>
+      )}
 
-      {/* Tab: Resultados */}
-      {activeTab === 'resultados' && (
-        <div>
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+      {/* Avisos de fontes com erro */}
+      {errosFontes.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 px-4 py-3 rounded-lg text-xs">
+          <strong>Algumas fontes retornaram erros:</strong> {errosFontes.join(' | ')}
+        </div>
+      )}
+
+      {/* Resultados */}
+      {(buscaFeita || mostrarFavoritos) && (
+        <div className="space-y-4">
+          {/* Cabeçalho dos resultados */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                {mostrarFavoritos ? `Favoritos (${favoritos.length})` : `${total} resultado${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}`}
+              </h2>
+              {!mostrarFavoritos && Object.keys(porFonte).length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {Object.entries(porFonte).map(([fonte, count]) => (
+                    <span key={fonte} className={`text-xs px-2 py-0.5 rounded-full font-medium ${getFonteColor(fonte)}`}>
+                      {fonte}: {count}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : resultados.length === 0 ? (
-            <div
-              className="rounded-xl border p-10 text-center"
-              style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-            >
-              <Search className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-              <p className="text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                Nenhuma oportunidade encontrada para os filtros selecionados.
-                <br />Use os filtros acima e clique em <strong className="text-white">Buscar</strong>.
+            {!mostrarFavoritos && buscaFeita && (
+              <button
+                onClick={handleBuscar}
+                disabled={loading}
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200"
+              >
+                <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
+                Atualizar
+              </button>
+            )}
+          </div>
+
+          {/* Lista */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 size={40} className="animate-spin text-blue-500" />
+              <p className="text-gray-600 dark:text-slate-300 text-sm">Buscando em múltiplas fontes...</p>
+              <div className="flex gap-3 text-xs text-gray-500 dark:text-slate-400">
+                {filtros.fontes.map(f => {
+                  const fonte = FONTES.find(x => x.id === f);
+                  return fonte ? <span key={f}>{fonte.logo} {fonte.nome}</span> : null;
+                })}
+              </div>
+            </div>
+          ) : itensExibidos.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="text-5xl mb-4">{mostrarFavoritos ? '❤️' : '🔍'}</div>
+              <p className="text-gray-600 dark:text-slate-300 font-medium">
+                {mostrarFavoritos ? 'Nenhum favorito salvo' : 'Nenhum resultado encontrado'}
+              </p>
+              <p className="text-gray-500 dark:text-slate-400 text-sm mt-1">
+                {mostrarFavoritos ? 'Salve editais clicando no ícone de coração' : 'Tente outros termos ou ampliar o período de busca'}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {resultados.map((r, i) => {
-                const id = r.id || r.numeroControlePNCP || r.numeroCompra || i;
-                const isFav = favoritos.includes(id);
-                const encerrado = r.dataEncerramentoProposta
-                  ? new Date(r.dataEncerramentoProposta) < new Date()
-                  : false;
-
-                return (
-                  <div
-                    key={id}
-                    className="flex flex-col rounded-xl border p-4 transition hover:border-blue-500/40"
-                    style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-                  >
-                    {/* Badge status + fonte */}
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className={[
-                            'rounded-full px-2 py-0.5 text-xs font-semibold',
-                            encerrado
-                              ? 'bg-red-500/20 text-red-300'
-                              : 'bg-green-500/20 text-green-300'
-                          ].join(' ')}
-                        >
-                          {encerrado ? 'Encerrado' : 'Aberto'}
-                        </span>
-                        {/* Badge de fonte */}
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                          r._fonte === 'BLL' ? 'bg-orange-500/20 text-orange-300' :
-                          r._fonte === 'BNC' ? 'bg-purple-500/20 text-purple-300' :
-                          r._fonte === 'CONLICITACAO' ? 'bg-green-500/20 text-green-300' :
-                          'bg-blue-500/20 text-blue-300'
-                        }`}>
-                          {r._fonte || 'PNCP'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleFavoritar(id)}
-                        title={isFav ? 'Remover favorito' : 'Favoritar'}
-                        className="transition"
-                      >
-                        <Heart
-                          className={['h-4 w-4', isFav ? 'fill-red-400 text-red-400' : 'text-slate-500 hover:text-red-400'].join(' ')}
-                        />
-                      </button>
-                    </div>
-
-                    {/* Objeto */}
-                    <p className="mb-2 line-clamp-2 text-sm font-semibold text-white">
-                      {r.objetoCompra || r.objeto || '—'}
-                    </p>
-
-                    {/* Detalhes */}
-                    <div className="mt-auto space-y-1 text-xs" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                      <div><span className="font-medium text-slate-300">Órgão:</span> {r.orgaoEntidade?.razaoSocial || r.orgao || '—'}</div>
-                      <div><span className="font-medium text-slate-300">Modalidade:</span> {r.modalidadeNome || r.modalidade || '—'}</div>
-                      <div><span className="font-medium text-slate-300">Valor estimado:</span> {formatarMoeda(r.valorTotalEstimado ?? r.valor)}</div>
-                      <div><span className="font-medium text-slate-300">Abertura:</span> {formatarData(r.dataAberturaProposta || r.dataAbertura)}</div>
-                      <div><span className="font-medium text-slate-300">UF:</span> {r.unidadeOrgao?.ufSigla || r.uf || '—'}</div>
-                    </div>
-
-                    {/* Ver Edital */}
-                    {(r.linkSistemaOrigem || r.linkEdital) && (
-                      <a
-                        href={r.linkSistemaOrigem || r.linkEdital}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-400 hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" /> Ver Edital
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 gap-3">
+              {itensExibidos.map(item => (
+                <CardEdital
+                  key={item.id}
+                  item={item}
+                  favorito={isFavorito(item)}
+                  onToggleFavorito={toggleFavorito}
+                />
+              ))}
             </div>
-          )}
-          {!!erroBusca && (
-            <p className="mt-4 text-center text-sm text-amber-300">{erroBusca}</p>
           )}
         </div>
       )}
 
-      {/* Tab: Filtros Salvos */}
-      {activeTab === 'filtrosSalvos' && (
-        <div className="space-y-3">
-          {filtrosSalvos.length === 0 ? (
-            <div
-              className="rounded-xl border p-8 text-center"
-              style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-            >
-              <Bookmark className="mx-auto mb-2 h-8 w-8 text-slate-600" />
-              <p className="text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Nenhum filtro salvo ainda.</p>
-            </div>
-          ) : filtrosSalvos.map((f) => (
-            <div
-              key={f.id}
-              className="flex items-center justify-between rounded-xl border p-4"
-              style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-            >
-              <div>
-                <div className="font-semibold text-white">{f.nome}</div>
-                <div className="text-xs" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                  Salvo em {formatarData(f.criadoEm)}
-                </div>
+      {/* Estado inicial */}
+      {!buscaFeita && !mostrarFavoritos && (
+        <div className="text-center py-20">
+          <div className="text-6xl mb-4">🏛️</div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            Busque oportunidades públicas
+          </h3>
+          <p className="text-gray-600 dark:text-slate-300 text-sm max-w-md mx-auto">
+            Digite um termo de busca e selecione as fontes desejadas. O sistema buscará em paralelo no PNCP e ComprasNet.
+          </p>
+          <div className="flex justify-center gap-4 mt-6 text-sm text-gray-500 dark:text-slate-400">
+            {FONTES.map(f => (
+              <div key={f.id} className="flex items-center gap-1">
+                <span>{f.logo}</span>
+                <span>{f.nome}</span>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleAplicarFiltro(f)}
-                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
-                >
-                  Aplicar
-                </button>
-                <button
-                  onClick={() => handleExcluirFiltro(f.id)}
-                  className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Tab: Alertas */}
-      {activeTab === 'alertas' && (
-        <div className="space-y-3">
-          {alertas.length === 0 ? (
-            <div
-              className="rounded-xl border p-8 text-center"
-              style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-            >
-              <Bell className="mx-auto mb-2 h-8 w-8 text-slate-600" />
-              <p className="text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>Nenhum alerta criado ainda.</p>
-            </div>
-          ) : alertas.map((a) => (
-            <div
-              key={a.id}
-              className="flex items-center justify-between rounded-xl border p-4"
-              style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-            >
-              <div>
-                <div className="font-semibold text-white">{a.descricao}</div>
-                <div className="text-xs" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                  Criado em {formatarData(a.criadoEm)}
-                </div>
-              </div>
-              <button
-                onClick={() => handleExcluirAlerta(a.id)}
-                className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Tab: Ingestão */}
-      {activeTab === 'ingestao' && (
-        <div className="space-y-4">
-          {/* PNCP */}
-          <div
-            className="rounded-xl border p-6"
-            style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-          >
-            <div className="mb-4 flex items-center gap-3">
-              <Info className="h-5 w-5 text-blue-400" />
-              <h3 className="text-base font-semibold text-white">PNCP — Portal Nacional de Contratações Públicas</h3>
-            </div>
-            <div className="mb-3 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-400" />
-              <span className="text-sm font-semibold text-green-400">API PNCP: Conectada (sem credenciais)</span>
-            </div>
-            <div className="space-y-2 text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-              <p>Busca em tempo real via API pública do Governo Federal.</p>
-              <code className="block rounded bg-slate-800 px-2 py-1 text-xs text-blue-300">
-                https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao
-              </code>
-              <p className="text-xs text-slate-500">Nenhuma credencial necessária.</p>
-            </div>
-          </div>
-
-          {/* BLL */}
-          <div
-            className="rounded-xl border p-6"
-            style={{ background: 'var(--crm-surface, #1e293b)', borderColor: 'var(--crm-border, #334155)' }}
-          >
-            <div className="mb-4 flex items-center gap-3">
-              <Info className="h-5 w-5 text-orange-400" />
-              <h3 className="text-base font-semibold text-white">BLL — Bolsa de Licitações e Leilões</h3>
-            </div>
-            <div className="mb-3 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-orange-400" />
-              <span className="text-sm font-semibold text-orange-400">
-                Status: {bllStatus}
-              </span>
-            </div>
-
-            {/* Formulário de Credenciais */}
-            <div className="mb-4 space-y-3 rounded-lg border border-slate-600/40 bg-slate-900/40 p-4">
-              <h4 className="text-sm font-semibold text-white">Configurar Credenciais</h4>
-              
-              <div>
-                <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                  Email
-                </label>
-                <input
-                  type="email"
-                  placeholder="seu-email@exemplo.com"
-                  value={bllCredentials.email}
-                  onChange={(e) => setBllCredentials(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-orange-500"
-                  style={{ borderColor: 'var(--crm-border, #334155)' }}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-                  Senha
-                </label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={bllCredentials.password}
-                  onChange={(e) => setBllCredentials(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-orange-500"
-                  style={{ borderColor: 'var(--crm-border, #334155)' }}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSalvarCredenciaisBLL}
-                  disabled={!bllCredentials.email || !bllCredentials.password}
-                  className="flex-1 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Salvar
-                </button>
-                <button
-                  onClick={handleTestarCredenciaisBLL}
-                  disabled={!bllCredentials.email || !bllCredentials.password}
-                  className="flex-1 rounded-lg border border-orange-500/30 bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300 transition hover:bg-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Testar
-                </button>
-                <button
-                  onClick={handleLimparCredenciaisBLL}
-                  className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/20"
-                >
-                  Limpar
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm" style={{ color: 'var(--crm-muted, #94a3b8)' }}>
-              <p>As buscas são realizadas automaticamente em todos os portais ao clicar em <strong className="text-white">Buscar</strong>.</p>
-              <p>Os resultados aparecem com badges coloridos: 
-                <span className="rounded-full bg-blue-500/20 text-blue-300 px-2 py-0.5 text-xs font-bold ml-1">PNCP</span>
-                <span className="rounded-full bg-orange-500/20 text-orange-300 px-2 py-0.5 text-xs font-bold ml-1">BLL</span>
-                <span className="rounded-full bg-purple-500/20 text-purple-300 px-2 py-0.5 text-xs font-bold ml-1">BNC</span>
-                <span className="rounded-full bg-green-500/20 text-green-300 px-2 py-0.5 text-xs font-bold ml-1">CONLICITACAO</span>
-              </p>
-              <p className="text-xs text-slate-500">
-                Suas credenciais são armazenadas localmente no navegador e enviadas de forma segura através do proxy do backend.
-              </p>
-              <a
-                href="https://bll.org.br"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-orange-400 hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" /> Acessar portal BLL
-              </a>
-            </div>
+            ))}
           </div>
         </div>
       )}
