@@ -53,10 +53,10 @@ const formatDate = (value) => {
 
 const getFonteBadgeClass = (fonte) => {
   const map = {
-    'PNCP': 'bg-blue-100 text-blue-800 border border-blue-200',
-    'ComprasNet': 'bg-green-100 text-green-800 border border-green-200',
+    'PNCP': 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
+    'ComprasNet': 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700',
   };
-  return map[fonte] || 'bg-slate-100 text-slate-700 border border-slate-200';
+  return map[fonte] || 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
 };
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -65,11 +65,11 @@ function Toast({ toasts }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
       {toasts.map(t => (
-        <div key={t.id} className={`flex items-start gap-3 bg-white border-l-4 ${t.error ? 'border-red-500' : 'border-blue-500'} shadow-xl p-4 rounded-lg max-w-sm animate-fade-in`}>
+        <div key={t.id} className={`flex items-start gap-3 bg-white dark:bg-slate-800 border-l-4 ${t.error ? 'border-red-500' : 'border-blue-500'} shadow-xl p-4 rounded-lg max-w-sm animate-fade-in`}>
           <span className="text-xl mt-0.5">{t.error ? '❌' : '✅'}</span>
           <div>
-            <p className="font-bold text-slate-800 text-sm">{t.title}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{t.text}</p>
+            <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{t.title}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t.text}</p>
           </div>
         </div>
       ))}
@@ -83,8 +83,8 @@ function CardEdital({ item, favorito, onToggleFavorito }) {
   const vigente = item.status && !['encerrado', 'cancelado', 'revogado'].includes(item.status.toLowerCase());
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border hover:border-blue-400 hover:shadow-md transition duration-200 overflow-hidden group ${vigente ? 'border-slate-200' : 'border-slate-200 opacity-80'}`}>
-      <div className={`border-l-4 ${vigente ? 'border-blue-500' : 'border-slate-300'} p-5 md:p-6`}>
+    <div className={`bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition duration-200 overflow-hidden group ${vigente ? 'border-slate-200 dark:border-slate-700' : 'border-slate-200 dark:border-slate-700 opacity-80'}`}>
+      <div className={`border-l-4 ${vigente ? 'border-blue-500' : 'border-slate-400 dark:border-slate-600'} p-5 md:p-6`}>
 
         {/* Header */}
         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-3">
@@ -94,64 +94,64 @@ function CardEdital({ item, favorito, onToggleFavorito }) {
                 {item.fonteLogo} {item.fonte}
               </span>
               {vigente ? (
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md flex items-center gap-1.5">
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 px-2 py-1 rounded-md flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Vigente
                 </span>
               ) : (
-                <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded-md flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md flex items-center gap-1.5">
                   <Lock size={10} /> Encerrado
                 </span>
               )}
               {item.modalidade && (
-                <span className="text-xs text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded-md">
+                <span className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md">
                   {item.modalidade}
                 </span>
               )}
             </div>
-            <h3 className="text-base font-bold text-slate-800 group-hover:text-blue-700 transition line-clamp-1">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-1">
               {item.orgao || 'Órgão não informado'}
             </h3>
           </div>
 
           {/* Valor */}
-          <div className="text-left md:text-right bg-slate-50 md:bg-transparent p-3 md:p-0 rounded-lg border border-slate-100 md:border-none shrink-0">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-0.5">Valor Estimado</p>
+          <div className="text-left md:text-right bg-slate-50 dark:bg-slate-700/40 md:bg-transparent md:dark:bg-transparent p-3 md:p-0 rounded-lg border border-slate-100 dark:border-slate-700 md:border-none shrink-0">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Valor Estimado</p>
             {item.valor ? (
-              <p className="text-xl font-bold text-emerald-600">{formatCurrency(item.valor)}</p>
+              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.valor)}</p>
             ) : (
-              <p className="text-sm text-slate-400 italic">Não informado</p>
+              <p className="text-sm text-slate-400 dark:text-slate-500 italic">Não informado</p>
             )}
           </div>
         </div>
 
         {/* Objeto */}
-        <p className="text-sm text-slate-600 mb-4 line-clamp-2 leading-relaxed">{item.titulo}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 line-clamp-2 leading-relaxed">{item.titulo}</p>
 
         {/* Metadados */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-slate-600 mb-5 pb-5 border-b border-slate-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-slate-600 dark:text-slate-300 mb-5 pb-5 border-b border-slate-100 dark:border-slate-700">
           <div>
-            <p className="font-medium text-slate-400 uppercase tracking-wider text-[10px] mb-1">Localização</p>
-            <p className="font-semibold text-slate-700 flex items-center gap-1">
-              <MapPin size={11} className="text-slate-400" />
+            <p className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mb-1">Localização</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              <MapPin size={11} className="text-slate-400 dark:text-slate-500" />
               {[item.municipio, item.uf].filter(Boolean).join(' - ') || '-'}
             </p>
           </div>
           <div>
-            <p className="font-medium text-slate-400 uppercase tracking-wider text-[10px] mb-1">Modalidade</p>
-            <p className="font-semibold text-slate-700">{item.modalidade || '-'}</p>
+            <p className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mb-1">Modalidade</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200">{item.modalidade || '-'}</p>
           </div>
           <div>
-            <p className="font-medium text-slate-400 uppercase tracking-wider text-[10px] mb-1">Publicação</p>
-            <p className="font-semibold text-slate-700 flex items-center gap-1">
-              <Calendar size={11} className="text-slate-400" />
+            <p className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mb-1">Publicação</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              <Calendar size={11} className="text-slate-400 dark:text-slate-500" />
               {formatDate(item.dataPublicacao) || '-'}
             </p>
           </div>
           <div>
-            <p className="font-medium text-slate-400 uppercase tracking-wider text-[10px] mb-1">Abertura</p>
-            <p className="font-semibold text-slate-700 flex items-center gap-1">
-              <Calendar size={11} className="text-slate-400" />
+            <p className="font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px] mb-1">Abertura</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              <Calendar size={11} className="text-slate-400 dark:text-slate-500" />
               {formatDate(item.dataAbertura) || '-'}
             </p>
           </div>
@@ -164,8 +164,8 @@ function CardEdital({ item, favorito, onToggleFavorito }) {
               onClick={() => onToggleFavorito(item)}
               className={`flex items-center gap-2 text-sm px-4 py-2.5 rounded-lg font-semibold border transition ${
                 favorito
-                  ? 'text-red-600 bg-red-50 border-red-200 hover:bg-red-100'
-                  : 'text-slate-500 bg-slate-50 border-slate-200 hover:bg-slate-100'
+                  ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30'
+                  : 'text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
             >
               <Heart size={14} fill={favorito ? 'currentColor' : 'none'} />
@@ -178,12 +178,12 @@ function CardEdital({ item, favorito, onToggleFavorito }) {
               href={item.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition shadow-sm flex items-center justify-center gap-2"
+              className="w-full sm:w-auto bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 px-5 py-2.5 rounded-lg text-sm font-semibold transition shadow-sm flex items-center justify-center gap-2"
             >
               Ir para o Portal <ExternalLink size={13} className="opacity-70" />
             </a>
           ) : (
-            <span className="w-full sm:w-auto bg-slate-200 text-slate-400 px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
+            <span className="w-full sm:w-auto bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 cursor-not-allowed">
               Link não disponível
             </span>
           )}
@@ -354,7 +354,7 @@ export default function PortalBusca() {
       <Toast toasts={toasts} />
 
       {/* Tabs de navegação */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-1 px-4 py-2">
           {[
             { id: 'busca', label: 'Início', icon: <Search size={14} /> },
@@ -367,7 +367,7 @@ export default function PortalBusca() {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
                 activeTab === tab.id
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               {tab.icon} {tab.label}
@@ -377,7 +377,9 @@ export default function PortalBusca() {
             <button
               onClick={() => { setMostrarFavoritos(!mostrarFavoritos); setActiveTab('busca'); }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                mostrarFavoritos ? 'bg-red-100 text-red-700' : 'text-slate-500 hover:bg-slate-100'
+                mostrarFavoritos
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               <Heart size={14} fill={mostrarFavoritos ? 'currentColor' : 'none'} />
@@ -391,10 +393,10 @@ export default function PortalBusca() {
       {activeTab === 'busca' && (
         <div className="flex flex-col flex-1">
           {/* Header de busca */}
-          <div className="bg-white border-b border-slate-200 pb-6 pt-8 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 pb-6 pt-8 shadow-sm">
             <div className="px-4 max-w-5xl mx-auto">
-              <h2 className="text-2xl font-bold text-slate-800 mb-1">Buscador Unificado</h2>
-              <p className="text-slate-500 text-sm mb-6">Pesquise editais de todas as esferas públicas em um só lugar.</p>
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Buscador Unificado</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Pesquise editais de todas as esferas públicas em um só lugar.</p>
               <div className="flex flex-col md:flex-row gap-3">
                 <div className="relative flex-1">
                   <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -404,7 +406,7 @@ export default function PortalBusca() {
                     onChange={e => setObjeto(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Ex: Aquisição de Notebooks, Obras, Merenda..."
-                    className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-base transition placeholder:text-slate-400"
+                    className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm text-base transition placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
                 <button
@@ -424,65 +426,65 @@ export default function PortalBusca() {
 
             {/* Sidebar de filtros */}
             <div className="w-full md:w-64 shrink-0">
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 sticky top-20">
+              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-20">
                 <div className="flex justify-between items-center mb-5">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                     <Filter size={16} className="text-blue-600" /> Filtros
                   </h3>
-                  <button onClick={limparFiltros} className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline">
+                  <button onClick={limparFiltros} className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline">
                     Limpar
                   </button>
                 </div>
 
                 {/* Status */}
                 <div className="mb-5">
-                  <h4 className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wider">Status do Edital</h4>
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Status do Edital</h4>
                   <label className="flex items-center gap-3 cursor-pointer group mb-2">
                     <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 group-hover:text-slate-900">Apenas Vigentes (Abertos)</span>
+                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Apenas Vigentes (Abertos)</span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 group-hover:text-slate-900">Incluir em Proposta</span>
+                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Incluir em Proposta</span>
                   </label>
                 </div>
 
                 {/* Localização */}
-                <div className="mb-5 pt-4 border-t border-slate-100">
-                  <h4 className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wider">Localização</h4>
+                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Localização</h4>
                   <div className="mb-3">
-                    <label className="block text-xs text-slate-500 mb-1">Estado</label>
-                    <select value={uf} onChange={e => setUf(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Estado</label>
+                    <select value={uf} onChange={e => setUf(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
                       <option value="">Todo o Brasil</option>
                       {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla} - {e.nome}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Cidade</label>
-                    <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Digite a cidade..." className="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-slate-400" />
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Cidade</label>
+                    <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Digite a cidade..." className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
                   </div>
                 </div>
 
                 {/* Período */}
-                <div className="mb-5 pt-4 border-t border-slate-100">
-                  <h4 className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wider">Período</h4>
+                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Período</h4>
                   <div className="mb-2">
-                    <label className="block text-xs text-slate-500 mb-1">De</label>
-                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De</label>
+                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">Até</label>
-                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
+                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                   </div>
                 </div>
 
                 {/* Fontes */}
-                <div className="pt-4 border-t border-slate-100">
-                  <h4 className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wider">Fontes</h4>
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Fontes</h4>
                   {FONTES_CONFIG.map(f => (
                     <label key={f.id} className="flex items-center gap-3 cursor-pointer group mb-2">
                       <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-sm text-slate-600 group-hover:text-slate-900">{f.icon} {f.nome}</span>
+                      <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
                     </label>
                   ))}
                 </div>
@@ -493,24 +495,24 @@ export default function PortalBusca() {
             <div className="flex-1 min-w-0">
               {/* Cabeçalho resultados */}
               <div className="flex justify-between items-center mb-5">
-                <h3 className="font-medium text-slate-600">
-                  <span className="font-bold text-slate-800 text-lg">
+                <h3 className="font-medium text-slate-600 dark:text-slate-300">
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-lg">
                     {mostrarFavoritos ? favoritos.length : itensExibidos.length}
                   </span>{' '}
                   {mostrarFavoritos ? 'favorito(s)' : 'resultado(s) encontrado(s)'}
                   {!mostrarFavoritos && Object.keys(porFonte).length > 0 && (
-                    <span className="ml-2 text-xs text-slate-400">
+                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
                       ({Object.entries(porFonte).map(([f, n]) => `${f}: ${n}`).join(', ')})
                     </span>
                   )}
                 </h3>
                 <div className="flex items-center gap-2">
                   {buscaFeita && !mostrarFavoritos && (
-                    <button onClick={handleBuscar} disabled={loading} className="flex items-center gap-1 text-sm text-slate-500 hover:text-blue-600 transition">
+                    <button onClick={handleBuscar} disabled={loading} className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
                       <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
                     </button>
                   )}
-                  <select value={ordem} onChange={e => setOrdem(e.target.value)} className="border-none bg-transparent text-sm font-medium text-slate-600 cursor-pointer outline-none hover:text-blue-600 transition">
+                  <select value={ordem} onChange={e => setOrdem(e.target.value)} className="border-none bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 cursor-pointer outline-none hover:text-blue-600 dark:hover:text-blue-400 transition">
                     {ORDENS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
@@ -518,25 +520,25 @@ export default function PortalBusca() {
 
               {/* Erro */}
               {erro && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm mb-4">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm mb-4">
                   {erro}
                 </div>
               )}
 
               {/* Loading */}
               {loading ? (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-16 text-center">
+                <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-16 text-center">
                   <Loader2 size={40} className="animate-spin text-blue-500 mx-auto mb-4" />
-                  <p className="font-medium text-slate-700">Buscando em múltiplas fontes...</p>
-                  <p className="text-sm text-slate-400 mt-1">{fontesAtivas.map(f => FONTES_CONFIG.find(x => x.id === f)?.nome).filter(Boolean).join(', ')}</p>
+                  <p className="font-medium text-slate-700 dark:text-slate-200">Buscando em múltiplas fontes...</p>
+                  <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{fontesAtivas.map(f => FONTES_CONFIG.find(x => x.id === f)?.nome).filter(Boolean).join(', ')}</p>
                 </div>
               ) : itensExibidos.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-16 text-center">
+                <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-16 text-center">
                   <span className="text-5xl block mb-4">{mostrarFavoritos ? '❤️' : buscaFeita ? '🔍' : '🏛️'}</span>
-                  <p className="font-medium text-lg text-slate-700">
+                  <p className="font-medium text-lg text-slate-700 dark:text-slate-200">
                     {mostrarFavoritos ? 'Nenhum favorito salvo' : buscaFeita ? 'Nenhum edital encontrado' : 'Pronto para buscar'}
                   </p>
-                  <p className="text-sm text-slate-400 mt-1">
+                  <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
                     {mostrarFavoritos ? 'Salve editais clicando em "Salvar"' : buscaFeita ? 'Tente mudar os filtros ou usar outras palavras-chave.' : 'Digite um termo e clique em Buscar.'}
                   </p>
                 </div>
@@ -556,34 +558,34 @@ export default function PortalBusca() {
       {activeTab === 'fontes' && (
         <div className="p-6 max-w-5xl mx-auto w-full">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-800">Fontes de Dados Integradas</h2>
-            <p className="text-slate-500 text-sm mt-1">Gerencie e monitore o status de extração dos motores de busca.</p>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Fontes de Dados Integradas</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Gerencie e monitore o status de extração dos motores de busca.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {FONTES_CONFIG.map(fonte => (
-              <div key={fonte.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition">
+              <div key={fonte.id} className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 hover:shadow-md transition">
                 <div className="flex justify-between items-start mb-4">
-                  <div className={`p-3 rounded-lg text-2xl bg-${fonte.cor}-100`}>{fonte.icon}</div>
-                  <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                  <div className="p-3 rounded-lg text-2xl bg-blue-100 dark:bg-blue-900/30">{fonte.icon}</div>
+                  <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-700">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Operacional
                   </span>
                 </div>
-                <h3 className="font-bold text-slate-800 text-lg">{fonte.nome}</h3>
-                <p className="text-sm text-slate-500 mb-4">{fonte.descricao}</p>
-                <div className="text-sm border-t border-slate-100 pt-3 space-y-1">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{fonte.nome}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{fonte.descricao}</p>
+                <div className="text-sm border-t border-slate-100 dark:border-slate-700 pt-3 space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Método:</span>
-                    <span className="font-medium text-slate-700">{fonte.metodo}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Método:</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-200">{fonte.metodo}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Sincronização:</span>
-                    <span className="font-medium text-emerald-600">{fonte.sync}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Sincronização:</span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">{fonte.sync}</span>
                   </div>
                 </div>
               </div>
             ))}
             {/* Card adicionar */}
-            <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-6 text-slate-400 hover:text-blue-500 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition">
+            <div className="bg-slate-50 dark:bg-slate-800/30 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center p-6 text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer transition">
               <Plus size={32} className="mb-2" />
               <span className="font-medium text-sm">Adicionar Nova Fonte</span>
               <span className="text-xs mt-1 text-center">Em breve: BLL, BNC, ConLicitação</span>
@@ -596,29 +598,29 @@ export default function PortalBusca() {
       {activeTab === 'alertas' && (
         <div className="p-6 max-w-3xl mx-auto w-full">
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-slate-800">Alertas Inteligentes</h2>
-            <p className="text-slate-500 text-sm mt-1">Configure alertas para ser notificado quando um edital do seu interesse for publicado.</p>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Alertas Inteligentes</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Configure alertas para ser notificado quando um edital do seu interesse for publicado.</p>
           </div>
 
           {/* Formulário */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+          <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 mb-6">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700 pb-3">
               <Bell size={16} className="text-blue-500" /> Criar Novo Alerta
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Palavras-chave no Objeto</label>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Palavras-chave no Objeto</label>
                 <input
                   type="text"
                   value={alertaForm.palavras}
                   onChange={e => setAlertaForm(prev => ({ ...prev, palavras: e.target.value }))}
                   placeholder="Ex: Computadores, Obras, Medicamentos"
-                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Estado</label>
-                <select value={alertaForm.uf} onChange={e => setAlertaForm(prev => ({ ...prev, uf: e.target.value }))} className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Estado</label>
+                <select value={alertaForm.uf} onChange={e => setAlertaForm(prev => ({ ...prev, uf: e.target.value }))} className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
                   <option value="">Qualquer Estado</option>
                   {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
                 </select>
@@ -634,21 +636,21 @@ export default function PortalBusca() {
           {/* Lista de alertas */}
           {alertas.length > 0 ? (
             <div className="space-y-3">
-              <h3 className="font-semibold text-slate-700 text-sm">Alertas ativos ({alertas.length})</h3>
+              <h3 className="font-semibold text-slate-700 dark:text-slate-300 text-sm">Alertas ativos ({alertas.length})</h3>
               {alertas.map(alerta => (
-                <div key={alerta.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between">
+                <div key={alerta.id} className="bg-white dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-slate-800 text-sm">{alerta.palavras}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{alerta.uf || 'Todo o Brasil'} · Criado em {alerta.criadoEm}</p>
+                    <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{alerta.palavras}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{alerta.uf || 'Todo o Brasil'} · Criado em {alerta.criadoEm}</p>
                   </div>
-                  <button onClick={() => removerAlerta(alerta.id)} className="text-slate-400 hover:text-red-500 transition p-1">
+                  <button onClick={() => removerAlerta(alerta.id)} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition p-1">
                     <X size={16} />
                   </button>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-slate-400">
+            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
               <Bell size={40} className="mx-auto mb-3 opacity-30" />
               <p className="text-sm">Nenhum alerta configurado ainda.</p>
             </div>
