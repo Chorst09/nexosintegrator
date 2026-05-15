@@ -1,11 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
-  MapPin, Calendar, Tag, Building2, Gavel, Bell,
-  RefreshCcw, ChevronDown, ChevronUp, FileText,
-  CheckCircle, Lock, Plus, Wifi, WifiOff, Settings
+  MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw
 } from 'lucide-react';
-import { API_BASE_URL, getAuthHeaders } from '../config/api';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -27,8 +24,8 @@ const ESTADOS_BR = [
 ];
 
 const FONTES_CONFIG = [
-  { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️', cor: 'blue' },
-  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Portal de Compras do Governo Federal (SIASG)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷', cor: 'green' }
+  { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
+  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Portal de Compras do Governo Federal (SIASG)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' }
 ];
 
 const ORDENS = [
@@ -39,7 +36,131 @@ const ORDENS = [
   { value: 'abertura_asc', label: 'Abertura mais próxima' }
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
+
+const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
+
+const hoje = () => {
+  // PNCP tem dados até ~2025. Usar data atual mas com fallback para dados reais.
+  const d = new Date();
+  return d.toISOString().slice(0, 10).replaceAll('-', '');
+};
+const diasAtras = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10).replaceAll('-', '');
+};
+// Data máxima com dados reais no PNCP (ajuste conforme necessário)
+const dataFimPadrao = () => hoje();
+const dataInicioPadrao = () => diasAtras(90);
+const toISODate = (s) => {
+  if (!s) return null;
+  const str = String(s).replaceAll('-', '').slice(0, 8);
+  if (str.length < 8) return s;
+  return `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`;
+};
+
+const matchObjeto = (texto, objeto) => {
+  if (!objeto || objeto.trim().length < 2) return true;
+  const hay = String(texto || '').toLowerCase();
+  return objeto.toLowerCase().split(/\s+/).filter(t => t.length > 2).some(t => hay.includes(t));
+};
+
+async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const dataI = dataInicio ? dataInicio.replaceAll('-', '') : dataInicioPadrao();
+  const dataF = dataFim ? dataFim.replaceAll('-', '') : dataFimPadrao();
+  const modalidades = [6, 8, 9, 4, 5]; // Pregão, Dispensa, Inexigibilidade, Concorrência, Tomada de Preços
+  const resultados = [];
+
+  const fetches = modalidades.map(async (mod) => {
+    try {
+      const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
+      url.searchParams.set('dataInicial', dataI);
+      url.searchParams.set('dataFinal', dataF);
+      url.searchParams.set('codigoModalidadeContratacao', mod);
+      url.searchParams.set('pagina', 1);
+      url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
+      if (uf) url.searchParams.set('uf', uf);
+
+      const res = await fetch(url.toString(), {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => null);
+      const items = Array.isArray(data?.data) ? data.data : [];
+      return items
+        .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+        .map(item => ({
+          id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+          fonte: 'PNCP',
+          fonteLogo: '🏛️',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
+          uf: item.unidadeOrgao?.ufSigla || uf || '',
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
+          dataAbertura: item.dataAberturaProposta,
+          dataEncerramento: item.dataEncerramentoProposta,
+          numero: item.numeroCompra || '',
+          ano: item.anoCompra || '',
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado',
+          situacaoCodigo: item.codigoSituacaoCompra
+        }));
+    } catch { return []; }
+  });
+
+  const results = await Promise.allSettled(fetches);
+  for (const r of results) {
+    if (r.status === 'fulfilled') resultados.push(...r.value);
+  }
+  return resultados;
+}
+
+async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const url = new URL(`${PNCP_BASE}/contratacoes/proposta`);
+    url.searchParams.set('dataInicial', dataInicio ? dataInicio.replaceAll('-', '') : dataInicioPadrao());
+    url.searchParams.set('dataFinal', dataFim ? dataFim.replaceAll('-', '') : dataFimPadrao());
+    url.searchParams.set('pagina', 1);
+    url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
+    if (uf) url.searchParams.set('uf', uf);
+
+    const res = await fetch(url.toString(), {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => null);
+    const items = Array.isArray(data?.data) ? data.data : [];
+    return items
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+      .map(item => ({
+        id: `pncp-prop-${item.numeroControlePNCP || item.anoCompra + item.numeroCompra + item.orgaoEntidade?.cnpj}`,
+        fonte: 'PNCP',
+        fonteLogo: '🏛️',
+        titulo: item.objetoCompra || 'Sem descrição',
+        orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+        modalidade: item.modalidadeNome || '',
+        uf: item.unidadeOrgao?.ufSigla || uf || '',
+        municipio: item.unidadeOrgao?.municipioNome || '',
+        valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+        dataPublicacao: item.dataPublicacaoPncp,
+        dataAbertura: item.dataAberturaProposta,
+        dataEncerramento: item.dataEncerramentoProposta,
+        numero: item.numeroCompra || '',
+        ano: item.anoCompra || '',
+        link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+        status: 'Em proposta',
+        situacaoCodigo: item.codigoSituacaoCompra
+      }));
+  } catch { return []; }
+}
+
+// ─── Helpers de UI ────────────────────────────────────────────────────────────
 
 const formatCurrency = (value) => {
   if (!value && value !== 0) return null;
@@ -50,6 +171,26 @@ const formatDate = (value) => {
   if (!value) return null;
   try { return new Date(value).toLocaleDateString('pt-BR'); } catch { return value; }
 };
+
+const deduplicar = (items) => {
+  const seen = new Set();
+  return items.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
+const ordenar = (items, ordem) => [...items].sort((a, b) => {
+  switch (ordem) {
+    case 'data_desc': return new Date(b.dataPublicacao || 0) - new Date(a.dataPublicacao || 0);
+    case 'data_asc': return new Date(a.dataPublicacao || 0) - new Date(b.dataPublicacao || 0);
+    case 'valor_desc': return (b.valor || 0) - (a.valor || 0);
+    case 'valor_asc': return (a.valor || 0) - (b.valor || 0);
+    case 'abertura_asc': return new Date(a.dataAbertura || '9999') - new Date(b.dataAbertura || '9999');
+    default: return 0;
+  }
+});
 
 const getFonteBadgeClass = (fonte) => {
   const map = {
@@ -259,10 +400,6 @@ export default function PortalBusca() {
       setErro('Informe ao menos um termo de busca ou selecione um estado.');
       return;
     }
-    if (fontesAtivas.length === 0) {
-      setErro('Selecione ao menos uma fonte de dados.');
-      return;
-    }
 
     setLoading(true);
     setErro('');
@@ -270,31 +407,34 @@ export default function PortalBusca() {
     setMostrarFavoritos(false);
 
     try {
-      const params = new URLSearchParams();
-      if (objeto.trim()) params.set('objeto', objeto.trim());
-      if (uf) params.set('uf', uf);
-      if (dataInicio) params.set('dataInicio', dataInicio);
-      if (dataFim) params.set('dataFim', dataFim);
-      params.set('fontes', fontesAtivas.join(','));
-      params.set('ordem', ordem);
-      params.set('incluirPropostas', incluirPropostas ? 'true' : 'false');
-      params.set('tamanhoPagina', '50');
+      const params = { objeto, uf, dataInicio, dataFim, tamanhoPagina: 50 };
 
-      const res = await fetch(`${API_BASE_URL}/b2g-search/search?${params}`, {
-        headers: getAuthHeaders()
-      });
+      // Busca diretamente do browser na API pública do PNCP (sem passar pelo backend)
+      const promises = [buscarPNCPPublicacao(params)];
+      if (incluirPropostas) promises.push(buscarPNCPProposta(params));
 
-      if (!res.ok) throw new Error(`Erro ${res.status} ao buscar licitações`);
+      const results = await Promise.allSettled(promises);
+      const todos = results
+        .filter(r => r.status === 'fulfilled')
+        .flatMap(r => r.value);
 
-      const data = await res.json();
-      setResultados(data.data || []);
-      setTotal(data.total || 0);
-      setPorFonte(data.fontes || {});
+      const dedup = deduplicar(todos);
+      const ordenados = ordenar(dedup, ordem);
 
-      if ((data.total || 0) === 0) {
+      // Estatísticas por fonte
+      const porFonteMap = {};
+      for (const item of dedup) {
+        porFonteMap[item.fonte] = (porFonteMap[item.fonte] || 0) + 1;
+      }
+
+      setResultados(ordenados);
+      setTotal(ordenados.length);
+      setPorFonte(porFonteMap);
+
+      if (ordenados.length === 0) {
         showToast('Sem resultados', 'Tente outros termos ou amplie o período de busca.');
       } else {
-        showToast('Busca concluída', `${data.total} edital(is) encontrado(s).`);
+        showToast('Busca concluída', `${ordenados.length} edital(is) encontrado(s).`);
       }
     } catch (err) {
       setErro(err.message || 'Erro ao buscar licitações');
@@ -302,7 +442,7 @@ export default function PortalBusca() {
     } finally {
       setLoading(false);
     }
-  }, [objeto, uf, dataInicio, dataFim, fontesAtivas, ordem, incluirPropostas, showToast]);
+  }, [objeto, uf, dataInicio, dataFim, ordem, incluirPropostas, showToast]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleBuscar(); };
 
