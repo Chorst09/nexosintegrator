@@ -22,8 +22,8 @@ if ! command -v sshpass &> /dev/null; then
     SSH_CMD="ssh -p $SERVER_PORT"
     SCP_CMD="scp -P $SERVER_PORT"
 else
-    SSH_CMD="sshpass -p 'tq6vJPwtZbOCW3kj' ssh -p $SERVER_PORT -o StrictHostKeyChecking=no"
-    SCP_CMD="sshpass -p 'tq6vJPwtZbOCW3kj' scp -P $SERVER_PORT -o StrictHostKeyChecking=no"
+    SSH_CMD="sshpass -p tq6vJPwtZbOCW3kj ssh -p $SERVER_PORT -o StrictHostKeyChecking=no"
+    SCP_CMD="sshpass -p tq6vJPwtZbOCW3kj scp -P $SERVER_PORT -o StrictHostKeyChecking=no"
 fi
 
 echo ""
