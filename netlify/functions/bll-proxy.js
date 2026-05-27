@@ -171,6 +171,35 @@ export async function handler(event) {
     };
   }
 
+  // Ação especial: testar login/configuração da fonte
+  if (qs.action === 'login') {
+    const status = checkCredentials(headers);
+    const configured = Boolean(status?.[portal]?.configured);
+    let autenticado = configured;
+
+    if (portal === 'bll' && configured) {
+      autenticado = Boolean(await loginBLL(headers));
+    }
+
+    return {
+      statusCode: autenticado ? 200 : 401,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-BLL-Email, X-BLL-Password, X-BNC-Email, X-BNC-Password, X-ConLicitacao-Email, X-ConLicitacao-Password',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS'
+      },
+      body: JSON.stringify({
+        portal: portal.toUpperCase(),
+        configured,
+        autenticado,
+        message: autenticado
+          ? 'Fonte autenticada/configurada para busca'
+          : 'Credenciais ausentes ou inválidas'
+      })
+    };
+  }
+
   try {
     let results = [];
     let usedScraper = false;

@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
-  MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw
+  MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2
 } from 'lucide-react';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -27,6 +27,22 @@ const FONTES_CONFIG = [
   { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
   { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Portal de Compras do Governo Federal (SIASG)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' }
 ];
+
+const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
+
+const FONTES_PAGAS = [
+  { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' },
+  { portal: 'bnc', nome: 'BNC Compras', descricao: 'Banco Nacional de Compras', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🏦' },
+  { portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎' }
+];
+
+const novaFonteForm = () => ({
+  portal: 'conlicitacao',
+  nome: 'ConLicitação',
+  usuario: '',
+  senha: '',
+  ativa: true
+});
 
 const ORDENS = [
   { value: 'data_desc', label: 'Mais recentes primeiro' },
@@ -196,9 +212,61 @@ const getFonteBadgeClass = (fonte) => {
   const map = {
     'PNCP': 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
     'ComprasNet': 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700',
+    'BLL': 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
+    'BNC': 'bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
+    'ConLicitação': 'bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700',
   };
   return map[fonte] || 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
 };
+
+const getFonteDisplayName = (fonte) => {
+  if (fonte.portal === 'conlicitacao') return 'ConLicitação';
+  return String(fonte.nome || fonte.portal || '').replace(' Compras', '').toUpperCase();
+};
+
+const normalizePortalItem = (item, fonte) => ({
+  id: item.id || `${fonte.portal}-${item.numeroCompra || item.numero || Date.now()}-${Math.random()}`,
+  fonte: getFonteDisplayName(fonte),
+  fonteLogo: fonte.icon,
+  titulo: item.titulo || item.objetoCompra || item.objeto || item.descricao || 'Sem descrição',
+  orgao: item.orgao || item.orgaoEntidade?.razaoSocial || item.entidade || '',
+  modalidade: item.modalidade || item.modalidadeNome || item.tipo || '',
+  uf: item.uf || item.unidadeOrgao?.ufSigla || '',
+  municipio: item.municipio || item.cidade || item.unidadeOrgao?.municipioNome || '',
+  valor: (item.valor || item.valorTotalEstimado) ? Number(item.valor || item.valorTotalEstimado) : null,
+  dataPublicacao: item.dataPublicacao || item.dataPublicacaoPncp || null,
+  dataAbertura: item.dataAbertura || item.dataAberturaProposta || null,
+  dataEncerramento: item.dataEncerramento || item.dataEncerramentoProposta || null,
+  numero: item.numero || item.numeroCompra || '',
+  ano: item.ano || '',
+  link: item.link || item.linkSistemaOrigem || '',
+  status: item.status || item.situacao || 'Aberto'
+});
+
+async function buscarFonteIntegrada(fonte, params) {
+  if (!fonte.usuario || !fonte.senha) return [];
+
+  const url = new URL('/api/bll-proxy', window.location.origin);
+  url.searchParams.set('portal', fonte.portal);
+  url.searchParams.set('objeto', params.objeto || '');
+  url.searchParams.set('uf', params.uf || '');
+  url.searchParams.set('tamanhoPagina', params.tamanhoPagina || 20);
+  if (fonte.portal !== 'bll') url.searchParams.set('useScraper', 'true');
+
+  const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
+  const res = await fetch(url.toString(), {
+    headers: {
+      [`x-${headerPrefix}-email`]: fonte.usuario,
+      [`x-${headerPrefix}-password`]: fonte.senha
+    },
+    signal: AbortSignal.timeout(30000)
+  });
+
+  if (!res.ok) return [];
+  const payload = await res.json().catch(() => null);
+  const items = Array.isArray(payload?.data) ? payload.data : [];
+  return items.map(item => normalizePortalItem(item, fonte));
+}
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -347,9 +415,22 @@ export default function PortalBusca() {
   const [ordem, setOrdem] = useState('data_desc');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
-  const [fontesAtivas, setFontesAtivas] = useState(['pncp', 'comprasnet']);
+  const [fontesAtivas, setFontesAtivas] = useState(() => {
+    try {
+      const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
+      return ['pncp', 'comprasnet', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
+    } catch {
+      return ['pncp', 'comprasnet'];
+    }
+  });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [fontesIntegradas, setFontesIntegradas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]'); } catch { return []; }
+  });
+  const [modalFonteAberto, setModalFonteAberto] = useState(false);
+  const [fonteForm, setFonteForm] = useState(novaFonteForm);
+  const [testandoFonte, setTestandoFonte] = useState(false);
 
   // Resultados
   const [resultados, setResultados] = useState([]);
@@ -373,6 +454,11 @@ export default function PortalBusca() {
 
   // Toasts
   const [toasts, setToasts] = useState([]);
+
+  const fontesDisponiveis = useMemo(
+    () => [...FONTES_CONFIG, ...fontesIntegradas],
+    [fontesIntegradas]
+  );
 
   const showToast = useCallback((title, text, error = false) => {
     const id = Date.now();
@@ -409,9 +495,20 @@ export default function PortalBusca() {
     try {
       const params = { objeto, uf, dataInicio, dataFim, tamanhoPagina: 50 };
 
-      // Busca diretamente do browser na API pública do PNCP (sem passar pelo backend)
-      const promises = [buscarPNCPPublicacao(params)];
-      if (incluirPropostas) promises.push(buscarPNCPProposta(params));
+      const promises = [];
+      if (fontesAtivas.includes('pncp')) {
+        promises.push(buscarPNCPPublicacao(params));
+        if (incluirPropostas) promises.push(buscarPNCPProposta(params));
+      }
+      fontesIntegradas
+        .filter(fonte => fonte.ativa && fontesAtivas.includes(fonte.id))
+        .forEach(fonte => promises.push(buscarFonteIntegrada(fonte, params)));
+
+      if (promises.length === 0) {
+        setErro('Selecione ao menos uma fonte ativa para buscar.');
+        setLoading(false);
+        return;
+      }
 
       const results = await Promise.allSettled(promises);
       const todos = results
@@ -442,14 +539,14 @@ export default function PortalBusca() {
     } finally {
       setLoading(false);
     }
-  }, [objeto, uf, dataInicio, dataFim, ordem, incluirPropostas, showToast]);
+  }, [objeto, uf, dataInicio, dataFim, ordem, incluirPropostas, fontesAtivas, fontesIntegradas, showToast]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleBuscar(); };
 
   const limparFiltros = () => {
     setObjeto(''); setUf(''); setCidade('');
     setApenasVigentes(false); setDataInicio(''); setDataFim('');
-    setOrdem('data_desc'); setFontesAtivas(['pncp', 'comprasnet']);
+    setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
   };
 
@@ -470,6 +567,92 @@ export default function PortalBusca() {
   };
 
   const isFavorito = (item) => favoritos.some(f => f.id === item.id);
+
+  const persistirFontes = (next) => {
+    setFontesIntegradas(next);
+    localStorage.setItem(FONTES_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const abrirNovaFonte = () => {
+    setFonteForm(novaFonteForm());
+    setModalFonteAberto(true);
+  };
+
+  const atualizarPortalFonte = (portal) => {
+    const template = FONTES_PAGAS.find(f => f.portal === portal) || FONTES_PAGAS[0];
+    setFonteForm(prev => ({ ...prev, portal, nome: template.nome }));
+  };
+
+  const testarLoginFonte = async (fonte = fonteForm) => {
+    if (!fonte.usuario.trim() || !fonte.senha.trim()) {
+      showToast('Credenciais obrigatórias', 'Informe usuário e senha da fonte.', true);
+      return false;
+    }
+
+    setTestandoFonte(true);
+    try {
+      const url = new URL('/api/bll-proxy', window.location.origin);
+      url.searchParams.set('portal', fonte.portal);
+      url.searchParams.set('action', 'login');
+      const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
+      const res = await fetch(url.toString(), {
+        headers: {
+          [`x-${headerPrefix}-email`]: fonte.usuario,
+          [`x-${headerPrefix}-password`]: fonte.senha
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) throw new Error('Falha ao acessar o proxy da fonte');
+
+      const data = await res.json().catch(() => null);
+      if (!data?.autenticado) throw new Error(data?.message || 'O proxy não reconheceu as credenciais enviadas');
+
+      showToast('Login configurado', `${fonte.nome} está pronta para busca autenticada.`);
+      return true;
+    } catch (err) {
+      showToast('Login não concluído', err.message || 'Verifique as credenciais e tente novamente.', true);
+      return false;
+    } finally {
+      setTestandoFonte(false);
+    }
+  };
+
+  const salvarFonte = async () => {
+    const template = FONTES_PAGAS.find(f => f.portal === fonteForm.portal) || FONTES_PAGAS[0];
+    const nome = fonteForm.nome.trim() || template.nome;
+    const loginOk = await testarLoginFonte({ ...fonteForm, nome });
+    if (!loginOk) return;
+
+    const existente = fontesIntegradas.find(f => f.portal === fonteForm.portal);
+    const fonte = {
+      id: existente?.id || `${fonteForm.portal}-${Date.now()}`,
+      portal: fonteForm.portal,
+      nome,
+      descricao: template.descricao,
+      metodo: template.metodo,
+      sync: template.sync,
+      icon: template.icon,
+      usuario: fonteForm.usuario.trim(),
+      senha: fonteForm.senha,
+      ativa: fonteForm.ativa,
+      loginStatus: 'connected',
+      ultimoLogin: new Date().toISOString()
+    };
+
+    const next = existente
+      ? fontesIntegradas.map(item => item.portal === fonte.portal ? fonte : item)
+      : [...fontesIntegradas, fonte];
+    persistirFontes(next);
+    setFontesAtivas(prev => fonte.ativa && !prev.includes(fonte.id) ? [...prev, fonte.id] : prev);
+    setModalFonteAberto(false);
+  };
+
+  const removerFonte = (id) => {
+    const next = fontesIntegradas.filter(f => f.id !== id);
+    persistirFontes(next);
+    setFontesAtivas(prev => prev.filter(fonteId => fonteId !== id));
+    showToast('Fonte removida', 'A integração foi removida do portal de busca.');
+  };
 
   const salvarAlerta = () => {
     if (!alertaForm.palavras.trim()) return;
@@ -621,7 +804,7 @@ export default function PortalBusca() {
                 {/* Fontes */}
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
                   <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Fontes</h4>
-                  {FONTES_CONFIG.map(f => (
+                  {fontesDisponiveis.map(f => (
                     <label key={f.id} className="flex items-center gap-3 cursor-pointer group mb-2">
                       <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
                       <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
@@ -670,7 +853,7 @@ export default function PortalBusca() {
                 <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-16 text-center">
                   <Loader2 size={40} className="animate-spin text-blue-500 mx-auto mb-4" />
                   <p className="font-medium text-slate-700 dark:text-slate-200">Buscando em múltiplas fontes...</p>
-                  <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{fontesAtivas.map(f => FONTES_CONFIG.find(x => x.id === f)?.nome).filter(Boolean).join(', ')}</p>
+                  <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{fontesAtivas.map(f => fontesDisponiveis.find(x => x.id === f)?.nome).filter(Boolean).join(', ')}</p>
                 </div>
               ) : itensExibidos.length === 0 ? (
                 <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-16 text-center">
@@ -702,13 +885,21 @@ export default function PortalBusca() {
             <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Gerencie e monitore o status de extração dos motores de busca.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {FONTES_CONFIG.map(fonte => (
+            {fontesDisponiveis.map(fonte => (
               <div key={fonte.id} className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 hover:shadow-md transition">
                 <div className="flex justify-between items-start mb-4">
                   <div className="p-3 rounded-lg text-2xl bg-blue-100 dark:bg-blue-900/30">{fonte.icon}</div>
-                  <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-700">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Operacional
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`${fonte.loginStatus === 'connected' || !fonte.portal ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700'} text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 border`}>
+                      <span className={`w-2 h-2 rounded-full ${fonte.loginStatus === 'connected' || !fonte.portal ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                      {fonte.loginStatus === 'connected' ? 'Conectada' : !fonte.portal ? 'Operacional' : 'Configurar'}
+                    </span>
+                    {fonte.portal && (
+                      <button onClick={() => removerFonte(fonte.id)} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 transition p-1">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{fonte.nome}</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{fonte.descricao}</p>
@@ -721,14 +912,114 @@ export default function PortalBusca() {
                     <span className="text-slate-500 dark:text-slate-400">Sincronização:</span>
                     <span className="font-medium text-emerald-600 dark:text-emerald-400">{fonte.sync}</span>
                   </div>
+                  {fonte.usuario && (
+                    <div className="flex justify-between gap-3">
+                      <span className="text-slate-500 dark:text-slate-400">Usuário:</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-200 truncate">{fonte.usuario}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
             {/* Card adicionar */}
-            <div className="bg-slate-50 dark:bg-slate-800/30 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center p-6 text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer transition">
+            <button
+              type="button"
+              onClick={abrirNovaFonte}
+              className="bg-slate-50 dark:bg-slate-800/30 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl flex flex-col items-center justify-center p-6 text-slate-400 dark:text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer transition min-h-[230px]"
+            >
               <Plus size={32} className="mb-2" />
               <span className="font-medium text-sm">Adicionar Nova Fonte</span>
-              <span className="text-xs mt-1 text-center">Em breve: BLL, BNC, ConLicitação</span>
+              <span className="text-xs mt-1 text-center">BLL, BNC, ConLicitação</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {modalFonteAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-start justify-between gap-4 p-6 border-b border-slate-200 dark:border-slate-700">
+              <div>
+                <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">Adicionar Fonte</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Configure o acesso ao portal pago.</p>
+              </div>
+              <button onClick={() => setModalFonteAberto(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Portal</label>
+                <select
+                  value={fonteForm.portal}
+                  onChange={e => atualizarPortalFonte(e.target.value)}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                >
+                  {FONTES_PAGAS.map(fonte => (
+                    <option key={fonte.portal} value={fonte.portal}>{fonte.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Nome da fonte</label>
+                <input
+                  type="text"
+                  value={fonteForm.nome}
+                  onChange={e => setFonteForm(prev => ({ ...prev, nome: e.target.value }))}
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Usuário</label>
+                  <input
+                    type="text"
+                    value={fonteForm.usuario}
+                    onChange={e => setFonteForm(prev => ({ ...prev, usuario: e.target.value }))}
+                    placeholder="email ou login"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Senha</label>
+                  <input
+                    type="password"
+                    value={fonteForm.senha}
+                    onChange={e => setFonteForm(prev => ({ ...prev, senha: e.target.value }))}
+                    placeholder="senha do portal"
+                    className="w-full border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={fonteForm.ativa} onChange={e => setFonteForm(prev => ({ ...prev, ativa: e.target.checked }))} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                <span className="text-sm text-slate-600 dark:text-slate-300">Usar esta fonte nas buscas</span>
+              </label>
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => testarLoginFonte()}
+                disabled={testandoFonte}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
+              >
+                {testandoFonte ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                Testar login
+              </button>
+              <button
+                type="button"
+                onClick={salvarFonte}
+                disabled={testandoFonte}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-60"
+              >
+                {testandoFonte ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                Salvar fonte
+              </button>
             </div>
           </div>
         </div>
