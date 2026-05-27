@@ -45,10 +45,10 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/web
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://209.50.241.25/api}
+        VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: nexoscrm-frontend
     restart: unless-stopped
     networks:

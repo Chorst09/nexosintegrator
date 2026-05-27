@@ -86,8 +86,17 @@ $SSH_CMD $SERVER_USER@$SERVER_IP << 'ENDSSH'
     tar -xzf nexoscrm-deploy.tar.gz
     rm nexoscrm-deploy.tar.gz
     
-    # Copiar .env de produção
-    cp .env.production .env
+    # Preparar .env de produção sem quebrar deploys quando o arquivo local não existir
+    if [ -f .env.production ]; then
+        cp .env.production .env
+    elif [ ! -f .env ]; then
+        cat > .env << 'ENVEOF'
+DB_PASSWORD=NexosCRM@2024!
+JWT_SECRET=NexosCRM_JWT_Super_Secret_2024
+CORS_ORIGIN=http://209.50.241.25
+VITE_API_URL=/api
+ENVEOF
+    fi
     
     echo "✅ Arquivos extraídos"
 ENDSSH

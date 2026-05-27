@@ -126,6 +126,7 @@ app.use('/api/licensing', handleLegacyAPI('./api/licensing.js'));
 
 // B2G - Busca de Licitações e Editais
 app.use('/api/b2g-search', require('./api/b2g-search'));
+app.use('/api/bll-proxy', require('./api/bll-proxy'));
 
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {
