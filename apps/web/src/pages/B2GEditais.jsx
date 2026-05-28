@@ -3465,6 +3465,7 @@ export default function B2GEditais() {
 
     setSavingLeadAnalysis(true);
     try {
+      // 1. Atualizar a empresa (lead)
       const response = await fetch(buildApiUrl('/companies'), {
         method: 'PUT',
         headers: getAuthHeaders(),
@@ -3490,7 +3491,75 @@ export default function B2GEditais() {
       }
 
       setLeads((prev) => prev.map((item) => (item.id === lead.id ? { ...item, ...data } : item)));
-      setFeedback({ type: 'success', message: `Decisão ${decisionConfig.label} salva no lead B2G.` });
+
+      // 2. Se GO: criar oportunidade e redirecionar
+      if (leadAnalysisDecision === 'GO') {
+        const userRaw = localStorage.getItem('user');
+        const user = userRaw ? JSON.parse(userRaw) : null;
+
+        // Extrair dados do edital do campo address
+        const addressText = String(lead.address || '');
+        const extractField = (label) => {
+          const match = addressText.match(new RegExp(`${label}:\\s*(.+)`));
+          return match ? match[1].trim() : '';
+        };
+
+        const b2gData = {
+          orgaoEntidade: lead.name || '',
+          objetoResumido: extractField('Objeto'),
+          modalidade: extractField('Modalidade'),
+          portal: extractField('Fonte'),
+          linkBriefing: extractField('Link') || lead.website || '',
+          ufCidade: [lead.city, lead.state].filter(Boolean).join('/') || '',
+          decisao: 'GO',
+          probabilidadeGanho: 75,
+          faseAtual: 'analise',
+          grauRisco: 'Médio',
+          observacoes: leadAnalysisNotes.trim(),
+          convertedAt: new Date().toISOString(),
+          sourcePortal: extractField('Fonte') || 'PNCP'
+        };
+
+        const oppTitle = `[B2G] ${(extractField('Edital') ? extractField('Edital') + ' - ' : '')}${lead.name || 'Oportunidade B2G'}`.slice(0, 220);
+
+        const oppResponse = await fetch(buildApiUrl('/opportunities'), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            title: oppTitle,
+            description: JSON.stringify(b2gData),
+            value: 0,
+            probability: 75,
+            stage: 'DIAGNOSIS',
+            source: 'MANUAL',
+            companyId: lead.id,
+            ownerId: user?.id || null
+          })
+        });
+
+        const oppData = await oppResponse.json().catch(() => ({}));
+
+        if (oppResponse.ok && oppData?.id) {
+          setOpportunities((prev) => {
+            const next = prev.filter((item) => item.id !== oppData.id);
+            return [oppData, ...next];
+          });
+          setFeedback({ type: 'success', message: 'GO! Oportunidade criada. Redirecionando...' });
+          setSelectedLeadAnalysisId('');
+          setLeadAnalysisDecision('ANALISE');
+          setLeadAnalysisNotes('');
+          // Redirecionar para oportunidades B2G
+          setTimeout(() => {
+            navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(oppData.id)}&mode=edit`);
+          }, 1000);
+          return;
+        } else {
+          setFeedback({ type: 'success', message: `GO salvo. Erro ao criar oportunidade: ${oppData?.error || 'tente novamente.'}` });
+        }
+      } else {
+        setFeedback({ type: 'success', message: `Decisão ${decisionConfig.label} salva no lead B2G.` });
+      }
+
       setSelectedLeadAnalysisId('');
       setLeadAnalysisDecision('ANALISE');
       setLeadAnalysisNotes('');
@@ -6668,10 +6737,10 @@ export default function B2GEditais() {
                 type="button"
                 onClick={handleSaveLeadAnalysis}
                 disabled={savingLeadAnalysis}
-                className="crm-btn crm-btn-primary h-11 px-5"
+                className={`crm-btn h-11 px-5 ${leadAnalysisDecision === 'GO' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : leadAnalysisDecision === 'NO_GO' ? 'bg-red-600 hover:bg-red-500 text-white' : 'crm-btn-primary'}`}
               >
                 {savingLeadAnalysis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Salvar decisão
+                {leadAnalysisDecision === 'GO' ? '✅ GO — Criar Oportunidade' : leadAnalysisDecision === 'NO_GO' ? '❌ Registrar NO GO' : 'Salvar decisão'}
               </button>
             </div>
           </div>
