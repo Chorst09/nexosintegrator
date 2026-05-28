@@ -52,6 +52,20 @@ const ORDENS = [
   { value: 'abertura_asc', label: 'Abertura mais próxima' }
 ];
 
+const MODALIDADES_CONLICITACAO = [
+  { id: '', nome: 'Todas as modalidades' },
+  { id: 10, nome: 'Pregão Eletrônico' },
+  { id: 11, nome: 'Pregão Presencial' },
+  { id: 4, nome: 'Concorrência' },
+  { id: 7, nome: 'Dispensa de Licitação' },
+  { id: 13, nome: 'Tomada de Preço' },
+  { id: 6, nome: 'Convite' },
+  { id: 8, nome: 'Leilão' },
+  { id: 1, nome: 'Audiência Pública' },
+  { id: 2, nome: 'Compra Eletrônica' },
+  { id: 12, nome: 'RDC' }
+];
+
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
@@ -250,6 +264,18 @@ async function buscarFonteIntegrada(fonte, params) {
   url.searchParams.set('portal', fonte.portal);
   url.searchParams.set('objeto', params.objeto || '');
   url.searchParams.set('uf', params.uf || '');
+  url.searchParams.set('cidade', params.cidade || '');
+  url.searchParams.set('dataInicio', params.dataInicio || '');
+  url.searchParams.set('dataFim', params.dataFim || '');
+  url.searchParams.set('dataPrazoInicio', params.dataPrazoInicio || '');
+  url.searchParams.set('dataPrazoFim', params.dataPrazoFim || '');
+  url.searchParams.set('exactSearch', params.exactSearch ? 'true' : '');
+  url.searchParams.set('apenasVigentes', params.apenasVigentes ? 'true' : '');
+  url.searchParams.set('comEdital', params.comEdital ? 'true' : '');
+  url.searchParams.set('comMonitoramentoChat', params.comMonitoramentoChat ? 'true' : '');
+  url.searchParams.set('numeroEdital', params.numeroEdital || '');
+  url.searchParams.set('numeroConlicitacao', params.numeroConlicitacao || '');
+  url.searchParams.set('modalidadeId', params.modalidadeId || '');
   url.searchParams.set('tamanhoPagina', params.tamanhoPagina || 20);
   if (fonte.portal !== 'bll') url.searchParams.set('useScraper', 'true');
 
@@ -262,7 +288,10 @@ async function buscarFonteIntegrada(fonte, params) {
     signal: AbortSignal.timeout(30000)
   });
 
-  if (!res.ok) return [];
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new Error(payload?.erro || payload?.message || `Falha ao buscar em ${getFonteDisplayName(fonte)}`);
+  }
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.data) ? payload.data : [];
   return items.map(item => normalizePortalItem(item, fonte));
@@ -412,9 +441,17 @@ export default function PortalBusca() {
   const [uf, setUf] = useState('');
   const [cidade, setCidade] = useState('');
   const [apenasVigentes, setApenasVigentes] = useState(false);
+  const [buscaExata, setBuscaExata] = useState(false);
+  const [comEdital, setComEdital] = useState(false);
+  const [comMonitoramentoChat, setComMonitoramentoChat] = useState(false);
+  const [numeroEdital, setNumeroEdital] = useState('');
+  const [numeroConlicitacao, setNumeroConlicitacao] = useState('');
+  const [modalidadeId, setModalidadeId] = useState('');
   const [ordem, setOrdem] = useState('data_desc');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [dataPrazoInicio, setDataPrazoInicio] = useState('');
+  const [dataPrazoFim, setDataPrazoFim] = useState('');
   const [fontesAtivas, setFontesAtivas] = useState(() => {
     try {
       const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
@@ -482,8 +519,19 @@ export default function PortalBusca() {
   const itensExibidos = mostrarFavoritos ? favoritos : resultadosFiltrados;
 
   const handleBuscar = useCallback(async () => {
-    if (!objeto.trim() && !uf) {
-      setErro('Informe ao menos um termo de busca ou selecione um estado.');
+    const hasAdvancedFilter = [
+      cidade,
+      dataInicio,
+      dataFim,
+      dataPrazoInicio,
+      dataPrazoFim,
+      numeroEdital,
+      numeroConlicitacao,
+      modalidadeId
+    ].some(value => String(value || '').trim());
+
+    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat) {
+      setErro('Informe ao menos um termo, número, período ou filtro de localização/status.');
       return;
     }
 
@@ -493,7 +541,23 @@ export default function PortalBusca() {
     setMostrarFavoritos(false);
 
     try {
-      const params = { objeto, uf, dataInicio, dataFim, tamanhoPagina: 50 };
+      const params = {
+        objeto,
+        uf,
+        cidade,
+        dataInicio,
+        dataFim,
+        dataPrazoInicio,
+        dataPrazoFim,
+        exactSearch: buscaExata,
+        apenasVigentes,
+        comEdital,
+        comMonitoramentoChat,
+        numeroEdital,
+        numeroConlicitacao,
+        modalidadeId,
+        tamanhoPagina: 50
+      };
 
       const promises = [];
       if (fontesAtivas.includes('pncp')) {
@@ -539,13 +603,35 @@ export default function PortalBusca() {
     } finally {
       setLoading(false);
     }
-  }, [objeto, uf, dataInicio, dataFim, ordem, incluirPropostas, fontesAtivas, fontesIntegradas, showToast]);
+  }, [
+    objeto,
+    uf,
+    cidade,
+    dataInicio,
+    dataFim,
+    dataPrazoInicio,
+    dataPrazoFim,
+    buscaExata,
+    apenasVigentes,
+    comEdital,
+    comMonitoramentoChat,
+    numeroEdital,
+    numeroConlicitacao,
+    modalidadeId,
+    ordem,
+    incluirPropostas,
+    fontesAtivas,
+    fontesIntegradas,
+    showToast
+  ]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleBuscar(); };
 
   const limparFiltros = () => {
     setObjeto(''); setUf(''); setCidade('');
-    setApenasVigentes(false); setDataInicio(''); setDataFim('');
+    setApenasVigentes(false); setBuscaExata(false); setComEdital(false); setComMonitoramentoChat(false);
+    setNumeroEdital(''); setNumeroConlicitacao(''); setModalidadeId('');
+    setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
     setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
   };
@@ -772,6 +858,39 @@ export default function PortalBusca() {
                   </label>
                 </div>
 
+                {/* ConLicitações */}
+                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Filtros ConLicitações</h4>
+                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
+                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata por objeto</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
+                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group mb-3">
+                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com monitoramento de chat</span>
+                  </label>
+                  <div className="mb-3">
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Nº Edital</label>
+                    <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Ex: 12/2026" className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Nº ConLicitação</label>
+                    <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código interno" className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Modalidade</label>
+                    <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
+                      {MODALIDADES_CONLICITACAO.map(modalidade => (
+                        <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* Localização */}
                 <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
                   <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Localização</h4>
@@ -798,6 +917,18 @@ export default function PortalBusca() {
                   <div>
                     <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
                     <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
+                  </div>
+                </div>
+
+                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Data Prazo</h4>
+                  <div className="mb-2">
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De</label>
+                    <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
+                    <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                   </div>
                 </div>
 
