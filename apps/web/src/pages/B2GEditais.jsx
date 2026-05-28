@@ -42,6 +42,8 @@ import {
   SlidersHorizontal,
   Tag,
   Target,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   TrendingUp,
   User,
@@ -1212,6 +1214,10 @@ export default function B2GEditais() {
   const [movingOpportunityId, setMovingOpportunityId] = useState('');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState('');
   const [deletingLeadId, setDeletingLeadId] = useState('');
+  const [selectedLeadAnalysisId, setSelectedLeadAnalysisId] = useState('');
+  const [leadAnalysisDecision, setLeadAnalysisDecision] = useState('ANALISE');
+  const [leadAnalysisNotes, setLeadAnalysisNotes] = useState('');
+  const [savingLeadAnalysis, setSavingLeadAnalysis] = useState(false);
   const [deletingOpportunityId, setDeletingOpportunityId] = useState('');
   const [deletingNoticeId, setDeletingNoticeId] = useState('');
   const [deletingSavedSummaryId, setDeletingSavedSummaryId] = useState('');
@@ -1695,6 +1701,11 @@ export default function B2GEditais() {
       return haystack.includes(term);
     });
   }, [advancedFilteredOpportunities, opportunitySearch]);
+
+  const selectedLeadAnalysis = useMemo(
+    () => leads.find((item) => item.id === selectedLeadAnalysisId) || null,
+    [leads, selectedLeadAnalysisId]
+  );
 
   const sortedFilteredOpportunities = useMemo(() => {
     const rows = filteredOpportunities.slice();
@@ -3412,6 +3423,85 @@ export default function B2GEditais() {
     }
   };
 
+  const inferLeadDecision = (lead) => {
+    const text = `${lead?.segment || ''}\n${lead?.address || ''}`.toUpperCase();
+    if (text.includes('NO GO')) return 'NO_GO';
+    if (/\bGO\b/.test(text)) return 'GO';
+    return 'ANALISE';
+  };
+
+  const openLeadAnalysis = (lead) => {
+    if (!lead?.id) return;
+    setSelectedLeadAnalysisId(lead.id);
+    setLeadAnalysisDecision(inferLeadDecision(lead));
+    setLeadAnalysisNotes('');
+    setFeedback({ type: '', message: '' });
+  };
+
+  const closeLeadAnalysis = () => {
+    if (savingLeadAnalysis) return;
+    setSelectedLeadAnalysisId('');
+    setLeadAnalysisDecision('ANALISE');
+    setLeadAnalysisNotes('');
+  };
+
+  const handleSaveLeadAnalysis = async () => {
+    const lead = selectedLeadAnalysis;
+    if (!lead?.id || savingLeadAnalysis) return;
+
+    const decisionConfig = {
+      ANALISE: { label: 'Em análise', status: 'LEAD', score: 65 },
+      GO: { label: 'GO', status: 'PROSPECT', score: 85 },
+      NO_GO: { label: 'NO GO', status: 'INACTIVE', score: 20 }
+    }[leadAnalysisDecision] || { label: 'Em análise', status: 'LEAD', score: 65 };
+
+    const previousNotes = String(lead.address || '').trim();
+    const analysisBlock = [
+      `Decisão B2G: ${decisionConfig.label}`,
+      `Atualizado em: ${new Date().toLocaleString('pt-BR')}`,
+      leadAnalysisNotes.trim() ? `Observações: ${leadAnalysisNotes.trim()}` : ''
+    ].filter(Boolean).join('\n');
+    const nextAddress = [previousNotes, analysisBlock].filter(Boolean).join('\n\n---\n');
+
+    setSavingLeadAnalysis(true);
+    try {
+      const response = await fetch(buildApiUrl('/companies'), {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          id: lead.id,
+          name: lead.name,
+          document: lead.document,
+          segment: `B2G Governo | ${decisionConfig.label}`,
+          size: lead.size,
+          website: lead.website,
+          address: nextAddress,
+          city: lead.city,
+          state: lead.state,
+          status: decisionConfig.status,
+          leadScore: decisionConfig.score,
+          contacts: lead.contacts || []
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || 'Não foi possível salvar a análise do lead.');
+      }
+
+      setLeads((prev) => prev.map((item) => (item.id === lead.id ? { ...item, ...data } : item)));
+      setFeedback({ type: 'success', message: `Decisão ${decisionConfig.label} salva no lead B2G.` });
+      setSelectedLeadAnalysisId('');
+      setLeadAnalysisDecision('ANALISE');
+      setLeadAnalysisNotes('');
+    } catch (error) {
+      console.error('Erro ao salvar análise do lead:', error);
+      setFeedback({ type: 'error', message: error.message || 'Erro ao salvar análise do lead.' });
+    } finally {
+      setSavingLeadAnalysis(false);
+    }
+  };
+
   const handleKanbanDragStart = (event, opportunity) => {
     const opportunityId = normalizeEntityId(opportunity?.id);
     if (!opportunityId || movingOpportunityId) return;
@@ -4566,6 +4656,24 @@ export default function B2GEditais() {
                   <div>Cidade: {[item.city, item.state].filter(Boolean).join(' - ') || '-'}</div>
                   <div>Lead score: {Number(item.leadScore || 0)}</div>
                   <div>Status: {COMPANY_STATUS_LABELS[item.status] || item.status || '-'}</div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openLeadAnalysis(item)}
+                    className="crm-btn crm-btn-secondary h-10 px-4"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Analisar
+                  </button>
+                  <span className="inline-flex h-10 items-center rounded-xl border border-[color:var(--crm-border)] px-3 text-xs font-semibold text-[var(--crm-muted)]">
+                    {inferLeadDecision(item) === 'NO_GO'
+                      ? 'NO GO'
+                      : inferLeadDecision(item) === 'GO'
+                        ? 'GO'
+                        : 'Em análise'}
+                  </span>
                 </div>
               </div>
             ))}
@@ -6459,6 +6567,116 @@ export default function B2GEditais() {
           Seção em construção.
         </div>
       )}
+
+      <Modal
+        isOpen={Boolean(selectedLeadAnalysis)}
+        onClose={closeLeadAnalysis}
+        title="Análise do Lead B2G"
+        size="large"
+      >
+        {selectedLeadAnalysis && (
+          <div className="space-y-5">
+            <div className="crm-card p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs uppercase tracking-[0.08em] text-[var(--crm-muted)]">Lead B2G</div>
+                  <h3 className="mt-1 text-xl font-bold text-[var(--crm-ink)]">{selectedLeadAnalysis.name}</h3>
+                  <div className="mt-2 text-sm text-[var(--crm-muted)]">{selectedLeadAnalysis.segment || 'Segmento não informado'}</div>
+                </div>
+                <span className="rounded-full border border-[color:var(--crm-border)] px-3 py-1 text-xs font-semibold text-[var(--crm-muted)]">
+                  {COMPANY_STATUS_LABELS[selectedLeadAnalysis.status] || selectedLeadAnalysis.status || '-'}
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 text-sm text-[var(--crm-muted)] md:grid-cols-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.08em]">Localização</div>
+                  <div className="mt-1 font-semibold text-[var(--crm-ink)]">
+                    {[selectedLeadAnalysis.city, selectedLeadAnalysis.state].filter(Boolean).join(' - ') || '-'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.08em]">Lead score</div>
+                  <div className="mt-1 font-semibold text-[var(--crm-ink)]">{Number(selectedLeadAnalysis.leadScore || 0)}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.08em]">Origem</div>
+                  <div className="mt-1 font-semibold text-[var(--crm-ink)]">Busca de Editais</div>
+                </div>
+              </div>
+
+              {selectedLeadAnalysis.address && (
+                <div className="mt-4 rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.5)] p-4">
+                  <div className="text-xs uppercase tracking-[0.08em] text-[var(--crm-muted)]">Dados do edital</div>
+                  <pre className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--crm-ink)]">
+                    {selectedLeadAnalysis.address}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-bold text-[var(--crm-ink)]">Decisão</label>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                {[
+                  { id: 'ANALISE', label: 'Em Análise', icon: Tag },
+                  { id: 'GO', label: 'GO', icon: ThumbsUp },
+                  { id: 'NO_GO', label: 'NO GO', icon: ThumbsDown }
+                ].map((option) => {
+                  const Icon = option.icon;
+                  const active = leadAnalysisDecision === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setLeadAnalysisDecision(option.id)}
+                      className={[
+                        'min-h-24 rounded-2xl border px-4 py-3 text-center transition-all',
+                        active
+                          ? 'border-blue-500 bg-blue-500/12 text-blue-600 ring-2 ring-blue-500/40 dark:text-blue-300'
+                          : 'border-[color:var(--crm-border)] text-[var(--crm-muted)] hover:border-blue-500/60 hover:text-blue-500'
+                      ].join(' ')}
+                    >
+                      <Icon className="mx-auto h-6 w-6" />
+                      <div className="mt-2 text-sm font-bold">{option.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-bold text-[var(--crm-ink)]">Observações da análise</label>
+              <textarea
+                className="crm-input mt-2 min-h-28"
+                value={leadAnalysisNotes}
+                onChange={(event) => setLeadAnalysisNotes(event.target.value)}
+                placeholder="Justificativa da decisão, próximos passos, riscos, documentos necessários..."
+              />
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeLeadAnalysis}
+                disabled={savingLeadAnalysis}
+                className="crm-btn crm-btn-secondary h-11 px-5"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveLeadAnalysis}
+                disabled={savingLeadAnalysis}
+                className="crm-btn crm-btn-primary h-11 px-5"
+              >
+                {savingLeadAnalysis ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Salvar decisão
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         isOpen={Boolean(
