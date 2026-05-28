@@ -3,6 +3,7 @@ import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
   MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2
 } from 'lucide-react';
+import { buildApiUrl } from '../config/api';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -260,7 +261,7 @@ const normalizePortalItem = (item, fonte) => ({
 async function buscarFonteIntegrada(fonte, params) {
   if (!fonte.usuario || !fonte.senha) return [];
 
-  const url = new URL('/api/bll-proxy', window.location.origin);
+  const url = new URL(buildApiUrl('/bll-proxy'), window.location.origin);
   url.searchParams.set('portal', fonte.portal);
   url.searchParams.set('objeto', params.objeto || '');
   url.searchParams.set('uf', params.uf || '');
@@ -677,7 +678,7 @@ export default function PortalBusca() {
 
     setTestandoFonte(true);
     try {
-      const url = new URL('/api/bll-proxy', window.location.origin);
+      const url = new URL(buildApiUrl('/bll-proxy'), window.location.origin);
       url.searchParams.set('portal', fonte.portal);
       url.searchParams.set('action', 'login');
       const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;

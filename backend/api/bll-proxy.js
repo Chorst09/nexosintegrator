@@ -88,6 +88,31 @@ const conlicitacaoHeaders = (cookie = '') => ({
   ...(cookie ? { Cookie: cookie } : {})
 });
 
+const logConlicitacao = (message, details = {}) => {
+  console.log('[conlicitacao]', message, details);
+};
+
+async function validateConlicitacaoSession(cookie) {
+  if (!cookie) return false;
+
+  const params = new URLSearchParams({ page: '1', per_page: '1' });
+  const url = new URL('/biddings.json', CONLICITACAO_API_BASE);
+  for (const [key, value] of params.entries()) url.searchParams.append(key, value);
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    redirect: 'manual',
+    headers: conlicitacaoHeaders(cookie)
+  });
+
+  logConlicitacao('validacao de sessao', {
+    status: response.status,
+    location: response.headers.get('location') || ''
+  });
+
+  return response.ok && response.status < 300;
+}
+
 async function loginBLL(headers = {}) {
   if (bllToken && Date.now() < bllTokenExpiry) return bllToken;
 
@@ -132,7 +157,13 @@ async function loginBLL(headers = {}) {
 
 async function loginConlicitacao(headers = {}, { force = false } = {}) {
   const credentials = getCredentials('conlicitacao', headers);
-  if (!credentials.email || !credentials.password) return null;
+  if (!credentials.email || !credentials.password) {
+    logConlicitacao('credenciais ausentes', {
+      hasEmail: Boolean(credentials.email),
+      hasPassword: Boolean(credentials.password)
+    });
+    return null;
+  }
 
   const key = sessionKey(credentials);
   const cached = conlicitacaoSessions.get(key);
@@ -152,8 +183,19 @@ async function loginConlicitacao(headers = {}, { force = false } = {}) {
   const cookie = mergeCookies('', parseSetCookie(response.headers));
   const contentType = response.headers.get('content-type') || '';
   const data = contentType.includes('application/json') ? await response.json().catch(() => null) : null;
+  const location = response.headers.get('location') || '';
 
-  if (!response.ok || response.status >= 300 || !cookie) {
+  logConlicitacao('retorno do login', {
+    status: response.status,
+    contentType,
+    location,
+    hasCookie: Boolean(cookie)
+  });
+
+  const loginLooksAccepted = response.ok || (response.status >= 300 && response.status < 400 && cookie);
+  const validSession = loginLooksAccepted && await validateConlicitacaoSession(cookie).catch(() => false);
+
+  if (!validSession) {
     conlicitacaoSessions.delete(key);
     return null;
   }
@@ -183,6 +225,11 @@ async function conlicitacaoFetch(path, { headers = {}, params, retry = true } = 
   });
 
   session.cookie = mergeCookies(session.cookie, parseSetCookie(response.headers));
+  logConlicitacao('requisicao', {
+    path,
+    status: response.status,
+    location: response.headers.get('location') || ''
+  });
 
   if ((response.status === 401 || response.status === 302) && retry) {
     session = await loginConlicitacao(headers, { force: true });
@@ -233,24 +280,30 @@ const buildConlicitacaoParams = async ({ query, headers }) => {
   const modalityId = resolveModalityId(query.modalidadeId || query.modalidade);
 
   const params = new URLSearchParams();
+  const setIfPresent = (key, value) => {
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      params.set(key, String(value));
+    }
+  };
+
   params.set('page', String(Math.max(1, Number(query.pagina) || 1)));
   params.set('per_page', String(Math.max(10, Math.min(Number(query.tamanhoPagina) || 20, 50))));
-  params.set('objeto', query.objeto || query.q || '');
-  params.set('id', query.numeroConlicitacao || '');
-  params.set('orgao_uasg', query.codigoOrgao || '');
-  params.set('processo', query.processo || '');
-  params.set('notice_number', query.numeroEdital || '');
-  params.set('nome_orgao', query.orgao || '');
-  params.set('itens', query.itens || '');
-  params.set('observacao', query.observacao || '');
-  params.set('exact_search', truthy(query.exactSearch) ? 'true' : '');
-  params.set('vigente_somente', truthy(query.apenasVigentes) ? 'true' : '');
-  params.set('tem_edital', truthy(query.comEdital) ? 'true' : '');
-  params.set('pregao_tem', truthy(query.comMonitoramentoChat) ? 'true' : '');
-  params.set('modified[from]', toConlicitacaoDate(query.dataInicio));
-  params.set('modified[to]', toConlicitacaoDate(query.dataFim, true));
-  params.set('data_validade[from]', toConlicitacaoDate(query.dataPrazoInicio));
-  params.set('data_validade[to]', toConlicitacaoDate(query.dataPrazoFim, true));
+  setIfPresent('objeto', query.objeto || query.q);
+  setIfPresent('id', query.numeroConlicitacao);
+  setIfPresent('orgao_uasg', query.codigoOrgao);
+  setIfPresent('processo', query.processo);
+  setIfPresent('notice_number', query.numeroEdital);
+  setIfPresent('nome_orgao', query.orgao);
+  setIfPresent('itens', query.itens);
+  setIfPresent('observacao', query.observacao);
+  setIfPresent('exact_search', truthy(query.exactSearch) ? 'true' : '');
+  setIfPresent('vigente_somente', truthy(query.apenasVigentes) ? 'true' : '');
+  setIfPresent('tem_edital', truthy(query.comEdital) ? 'true' : '');
+  setIfPresent('pregao_tem', truthy(query.comMonitoramentoChat) ? 'true' : '');
+  setIfPresent('modified[from]', toConlicitacaoDate(query.dataInicio));
+  setIfPresent('modified[to]', toConlicitacaoDate(query.dataFim, true));
+  setIfPresent('data_validade[from]', toConlicitacaoDate(query.dataPrazoInicio));
+  setIfPresent('data_validade[to]', toConlicitacaoDate(query.dataPrazoFim, true));
 
   appendArray(params, 'orgao_estado_id', stateId ? [stateId] : []);
   appendArray(params, 'cities_ids', cityId ? [cityId] : []);
@@ -297,15 +350,35 @@ const normalizeConlicitacaoItem = (item, index) => {
   };
 };
 
+const extractConlicitacaoItems = (payload) => {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.biddings,
+    payload?.licitacoes,
+    payload?.items,
+    payload?.results,
+    payload?.records,
+    payload?.data?.data,
+    payload?.data?.biddings,
+    payload?.data?.licitacoes,
+    payload?.data?.items,
+    payload?.data?.results,
+    payload?.data?.records
+  ];
+
+  const list = candidates.find(Array.isArray) || [];
+  logConlicitacao('resultado da busca', {
+    total: list.length,
+    keys: payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 12) : []
+  });
+  return list;
+};
+
 async function buscarConlicitacao({ query, headers }) {
   const params = await buildConlicitacaoParams({ query, headers });
   const data = await conlicitacaoFetch('/biddings.json', { headers, params });
-  const items = Array.isArray(data) ? data
-    : Array.isArray(data?.data) ? data.data
-    : Array.isArray(data?.biddings) ? data.biddings
-    : Array.isArray(data?.licitacoes) ? data.licitacoes
-    : Array.isArray(data?.items) ? data.items
-    : [];
+  const items = extractConlicitacaoItems(data);
 
   return items.map(normalizeConlicitacaoItem);
 }
@@ -382,11 +455,16 @@ router.get('/', async (req, res) => {
   }
 
   if (req.query.action === 'login') {
-    const autenticado = portal === 'bll'
-      ? configured && Boolean(await loginBLL(req.headers))
-      : portal === 'conlicitacao'
-        ? Boolean(await loginConlicitacao(req.headers, { force: true }))
-        : configured;
+    let autenticado = false;
+    try {
+      autenticado = portal === 'bll'
+        ? configured && Boolean(await loginBLL(req.headers))
+        : portal === 'conlicitacao'
+          ? Boolean(await loginConlicitacao(req.headers, { force: true }))
+          : configured;
+    } catch (error) {
+      console.error('[bll-proxy] Erro ao autenticar fonte:', error);
+    }
 
     return res.status(autenticado ? 200 : 401).json({
       portal: portal.toUpperCase(),
