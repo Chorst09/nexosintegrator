@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
   MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2,
@@ -559,6 +560,25 @@ function SalvarLeadModal({
               className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950/30 p-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
             />
           </div>
+
+          {decisao === 'GO' && (
+            <div className="rounded-xl border border-emerald-700/60 bg-emerald-900/20 px-4 py-3 text-sm text-emerald-300 flex items-start gap-2">
+              <span className="text-lg">✅</span>
+              <div>
+                <p className="font-bold">GO selecionado</p>
+                <p className="text-emerald-400 text-xs mt-0.5">Uma oportunidade B2G será criada automaticamente e você será redirecionado para o Kanban de Oportunidades.</p>
+              </div>
+            </div>
+          )}
+          {decisao === 'NO_GO' && (
+            <div className="rounded-xl border border-red-700/60 bg-red-900/20 px-4 py-3 text-sm text-red-300 flex items-start gap-2">
+              <span className="text-lg">❌</span>
+              <div>
+                <p className="font-bold">NO GO selecionado</p>
+                <p className="text-red-400 text-xs mt-0.5">O edital será registrado como descartado. Você pode reverter depois em B2G &gt; Leads.</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col-reverse gap-3 border-t border-slate-800 px-6 py-5 sm:flex-row sm:justify-end">
@@ -574,10 +594,16 @@ function SalvarLeadModal({
             type="button"
             onClick={onSalvar}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-400 px-6 py-3 text-sm font-bold text-slate-950 transition hover:bg-blue-300 disabled:opacity-60"
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold transition disabled:opacity-60 ${
+              decisao === 'GO'
+                ? 'bg-emerald-400 hover:bg-emerald-300 text-slate-950'
+                : decisao === 'NO_GO'
+                ? 'bg-red-500 hover:bg-red-400 text-white'
+                : 'bg-blue-400 hover:bg-blue-300 text-slate-950'
+            }`}
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <BookmarkPlus size={16} />}
-            Salvar Lead
+            {decisao === 'GO' ? '✅ GO — Criar Oportunidade' : decisao === 'NO_GO' ? '❌ Registrar NO GO' : 'Salvar Lead'}
           </button>
         </div>
       </div>
@@ -588,6 +614,7 @@ function SalvarLeadModal({
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export default function PortalBusca() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('busca'); // 'busca' | 'fontes' | 'alertas'
 
   // Busca
@@ -852,7 +879,8 @@ export default function PortalBusca() {
 
     setSalvandoLeadId(item.id);
     try {
-      const response = await fetch(buildApiUrl('/companies'), {
+      // 1. Buscar ou criar empresa (órgão)
+      const companyResponse = await fetch(buildApiUrl('/companies'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -862,18 +890,85 @@ export default function PortalBusca() {
           address: notes,
           city: item.municipio || '',
           state: item.uf || '',
-          status: 'LEAD',
+          status: leadDecisao === 'GO' ? 'PROSPECT' : 'LEAD',
           leadScore: leadDecisao === 'GO' ? 85 : leadDecisao === 'ANALISE' ? 65 : 35,
           clientType: 'B2G',
           autoDistribute: false
         })
       });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data?.error || data?.message || 'Não foi possível salvar o lead B2G.');
+      const companyData = await companyResponse.json().catch(() => ({}));
+      if (!companyResponse.ok) {
+        throw new Error(companyData?.error || companyData?.message || 'Não foi possível salvar o lead B2G.');
       }
 
+      // 2. Se decisão for GO, criar oportunidade e redirecionar
+      if (leadDecisao === 'GO') {
+        // Obter usuário logado
+        const userRaw = localStorage.getItem('user');
+        const user = userRaw ? JSON.parse(userRaw) : null;
+
+        // Montar dados B2G ricos para a oportunidade
+        const b2gData = {
+          numeroEdital: item.numero || '',
+          orgaoEntidade: leadName,
+          modalidade: item.modalidade || '',
+          objetoResumido: item.titulo || '',
+          objetoDetalhado: item.titulo || '',
+          portal: item.fonte || 'PNCP',
+          linkBriefing: item.link || '',
+          ufCidade: [item.municipio, item.uf].filter(Boolean).join('/') || '',
+          dataPublicacao: item.dataPublicacao || '',
+          dataAbertura: item.dataAbertura || '',
+          envioPropostas: item.dataEncerramento || item.dataAbertura || '',
+          decisao: 'GO',
+          probabilidadeGanho: 75,
+          faseAtual: 'analise',
+          grauRisco: 'Médio',
+          observacoes: leadObservacoes.trim(),
+          convertedAt: new Date().toISOString(),
+          sourcePortal: item.fonte || 'PNCP',
+          numeroControlePNCP: item.numeroControlePNCP || item.id || ''
+        };
+
+        const opportunityResponse = await fetch(buildApiUrl('/opportunities'), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            title: `[B2G] ${item.numero ? item.numero + ' - ' : ''}${(item.titulo || leadName).slice(0, 200)}`,
+            description: JSON.stringify(b2gData),
+            value: item.valor || 0,
+            probability: 75,
+            stage: 'DIAGNOSIS',
+            source: 'MANUAL',
+            expectedCloseDate: item.dataAbertura || item.dataEncerramento || null,
+            companyId: companyData.id,
+            ownerId: user?.id || null
+          })
+        });
+
+        const opportunityData = await opportunityResponse.json().catch(() => ({}));
+
+        if (!opportunityResponse.ok) {
+          // Mesmo se falhar a oportunidade, o lead foi salvo
+          showToast('Lead salvo', 'Lead salvo, mas houve erro ao criar oportunidade. Acesse B2G > Oportunidades.');
+        } else {
+          setLeadsSalvos(prev => {
+            const next = prev.includes(item.id) ? prev : [...prev, item.id];
+            localStorage.setItem('b2g_busca_leads_salvos_v1', JSON.stringify(next));
+            return next;
+          });
+          setLeadModalItem(null);
+          setLeadObservacoes('');
+          showToast('GO! Oportunidade criada', 'Redirecionando para Oportunidades B2G...');
+          // Redirecionar para oportunidades B2G
+          setTimeout(() => {
+            navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(opportunityData.id)}&mode=edit`);
+          }, 1200);
+          return;
+        }
+      }
+
+      // Para ANALISE e NO_GO: apenas salvar como lead
       setLeadsSalvos(prev => {
         const next = prev.includes(item.id) ? prev : [...prev, item.id];
         localStorage.setItem('b2g_busca_leads_salvos_v1', JSON.stringify(next));
@@ -881,7 +976,10 @@ export default function PortalBusca() {
       });
       setLeadModalItem(null);
       setLeadObservacoes('');
-      showToast('Lead salvo', 'O edital foi salvo em B2G > Leads.');
+      showToast(
+        leadDecisao === 'NO_GO' ? 'NO GO registrado' : 'Lead salvo',
+        leadDecisao === 'NO_GO' ? 'Edital marcado como NO GO.' : 'O edital foi salvo em B2G > Leads.'
+      );
     } catch (error) {
       showToast('Erro ao salvar lead', error.message || 'Tente novamente.', true);
     } finally {
