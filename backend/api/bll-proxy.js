@@ -312,7 +312,34 @@ const buildConlicitacaoParams = async ({ query, headers }) => {
   return params;
 };
 
-const first = (...values) => values.find((value) => value !== null && value !== undefined && String(value).trim() !== '');
+const objectTextKeys = [
+  'nome',
+  'name',
+  'label',
+  'descricao',
+  'description',
+  'sigla',
+  'acronym',
+  'uf',
+  'codigo',
+  'id'
+];
+
+const toPlainText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(toPlainText).filter(Boolean).join(', ');
+  if (typeof value === 'object') {
+    for (const key of objectTextKeys) {
+      const text = toPlainText(value[key]);
+      if (text) return text;
+    }
+  }
+  return '';
+};
+
+const first = (...values) => values.map(toPlainText).find(Boolean) || '';
 
 const toNumber = (value) => {
   if (typeof value === 'number') return value;
@@ -322,7 +349,18 @@ const toNumber = (value) => {
 };
 
 const normalizeConlicitacaoItem = (item, index) => {
-  const state = first(item.orgao_estado, item.estado, item.uf, item.state, item.orgao?.estado, item.city?.state?.acronym);
+  const state = first(
+    item.orgao_estado?.sigla,
+    item.orgao_estado?.uf,
+    item.estado?.sigla,
+    item.estado?.uf,
+    item.uf,
+    item.state?.acronym,
+    item.orgao?.estado?.sigla,
+    item.city?.state?.acronym,
+    item.orgao_estado,
+    item.estado
+  );
   const city = first(item.orgao_cidade, item.cidade, item.municipio, item.city?.nome, item.city?.name);
   const sourceUrl = first(item.url_fonte, item.url_portal, item.link, item.source_url, item.portal_url);
   const id = first(item.id, item.bidding_id, item.conlicitacao_id, item.codigo, `conlicitacao-${Date.now()}-${index}`);

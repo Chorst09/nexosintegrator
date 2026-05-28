@@ -239,23 +239,38 @@ const getFonteDisplayName = (fonte) => {
   return String(fonte.nome || fonte.portal || '').replace(' Compras', '').toUpperCase();
 };
 
+const toDisplayText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(toDisplayText).filter(Boolean).join(', ');
+  if (typeof value === 'object') {
+    const keys = ['nome', 'name', 'label', 'descricao', 'description', 'sigla', 'acronym', 'uf', 'codigo', 'id'];
+    for (const key of keys) {
+      const text = toDisplayText(value[key]);
+      if (text) return text;
+    }
+  }
+  return '';
+};
+
 const normalizePortalItem = (item, fonte) => ({
   id: item.id || `${fonte.portal}-${item.numeroCompra || item.numero || Date.now()}-${Math.random()}`,
   fonte: getFonteDisplayName(fonte),
   fonteLogo: fonte.icon,
-  titulo: item.titulo || item.objetoCompra || item.objeto || item.descricao || 'Sem descrição',
-  orgao: item.orgao || item.orgaoEntidade?.razaoSocial || item.entidade || '',
-  modalidade: item.modalidade || item.modalidadeNome || item.tipo || '',
-  uf: item.uf || item.unidadeOrgao?.ufSigla || '',
-  municipio: item.municipio || item.cidade || item.unidadeOrgao?.municipioNome || '',
+  titulo: toDisplayText(item.titulo || item.objetoCompra || item.objeto || item.descricao) || 'Sem descrição',
+  orgao: toDisplayText(item.orgao || item.orgaoEntidade?.razaoSocial || item.entidade),
+  modalidade: toDisplayText(item.modalidade || item.modalidadeNome || item.tipo),
+  uf: toDisplayText(item.uf || item.unidadeOrgao?.ufSigla),
+  municipio: toDisplayText(item.municipio || item.cidade || item.unidadeOrgao?.municipioNome),
   valor: (item.valor || item.valorTotalEstimado) ? Number(item.valor || item.valorTotalEstimado) : null,
   dataPublicacao: item.dataPublicacao || item.dataPublicacaoPncp || null,
   dataAbertura: item.dataAbertura || item.dataAberturaProposta || null,
   dataEncerramento: item.dataEncerramento || item.dataEncerramentoProposta || null,
-  numero: item.numero || item.numeroCompra || '',
+  numero: toDisplayText(item.numero || item.numeroCompra),
   ano: item.ano || '',
-  link: item.link || item.linkSistemaOrigem || '',
-  status: item.status || item.situacao || 'Aberto'
+  link: toDisplayText(item.link || item.linkSistemaOrigem),
+  status: toDisplayText(item.status || item.situacao) || 'Aberto'
 });
 
 async function buscarFonteIntegrada(fonte, params) {
