@@ -53,6 +53,8 @@ const runOptionalCleanup = async (operation) => {
 
 export default async function handler(req) {
   if (req.method === 'GET') {
+    const clientType = String(req.query?.clientType || '').toUpperCase();
+    const where = clientType === 'B2B' || clientType === 'B2G' ? { clientType } : {};
     const id = resolveCompanyId(req);
     
     // Se tem ID, buscar empresa específica com todos os relacionamentos
@@ -116,7 +118,9 @@ export default async function handler(req) {
     }
     
     // Listagem de empresas
-    const where = {};
+    if (clientType === 'B2B' || clientType === 'B2G') {
+      where.clientType = clientType;
+    }
     if (req.user?.role === 'SELLER') {
       // "Meus leads": por região ou por oportunidades do vendedor
       where.OR = [
@@ -158,12 +162,14 @@ export default async function handler(req) {
         name: body.name,
         document: body.document,
         segment: body.segment,
+        clientType: body.clientType === 'B2G' ? 'B2G' : body.clientType === 'B2B' ? 'B2B' : undefined,
         size: body.size,
         website: body.website,
         address: body.address,
         city: body.city,
         state: body.state,
         status: body.status || 'LEAD',
+        leadScore: Number.isFinite(Number(body.leadScore)) ? Number(body.leadScore) : undefined,
         regionId,
         contacts: contactsToCreate.length > 0
           ? { create: contactsToCreate }

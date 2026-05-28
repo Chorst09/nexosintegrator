@@ -26,6 +26,7 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json();
+    const autoDistribute = body.autoDistribute !== false;
     const company = await prisma.company.create({
       data: {
         name: body.name,
@@ -37,6 +38,7 @@ export default async function handler(req) {
         city: body.city,
         state: body.state,
         status: body.status || 'LEAD',
+        leadScore: Number.isFinite(Number(body.leadScore)) ? Number(body.leadScore) : undefined,
         contacts: body.contacts ? {
           create: body.contacts.map(contact => ({
             name: contact.name,
@@ -60,7 +62,7 @@ export default async function handler(req) {
     }
     
     // Se é um lead, criar oportunidade e distribuir automaticamente
-    if (company.status === 'LEAD') {
+    if (company.status === 'LEAD' && autoDistribute) {
       try {
         const distributionResult = await createOpportunityForLead(
           company.id, 

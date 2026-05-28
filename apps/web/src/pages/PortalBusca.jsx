@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
-  MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2
+  MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2,
+  BookmarkPlus, ThumbsUp, ThumbsDown, Tag, Building2
 } from 'lucide-react';
-import { buildApiUrl } from '../config/api';
+import { buildApiUrl, getAuthHeaders } from '../config/api';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -333,7 +334,7 @@ function Toast({ toasts }) {
 
 // ─── Card de Edital ───────────────────────────────────────────────────────────
 
-function CardEdital({ item, favorito, onToggleFavorito }) {
+function CardEdital({ item, favorito, leadSalvo, salvandoLead, onToggleFavorito, onAbrirSalvarLead }) {
   const vigente = item.status && !['encerrado', 'cancelado', 'revogado'].includes(item.status.toLowerCase());
 
   return (
@@ -425,6 +426,24 @@ function CardEdital({ item, favorito, onToggleFavorito }) {
               <Heart size={14} fill={favorito ? 'currentColor' : 'none'} />
               {favorito ? 'Salvo' : 'Salvar'}
             </button>
+            <button
+              onClick={() => onAbrirSalvarLead(item)}
+              disabled={leadSalvo || salvandoLead}
+              className={`flex items-center gap-2 text-sm px-4 py-2.5 rounded-lg font-semibold border transition ${
+                leadSalvo
+                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 cursor-default'
+                  : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+              } disabled:opacity-75`}
+            >
+              {salvandoLead ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : leadSalvo ? (
+                <CheckCircle size={14} />
+              ) : (
+                <BookmarkPlus size={14} />
+              )}
+              {leadSalvo ? 'Lead salvo' : 'Salvar Lead'}
+            </button>
           </div>
 
           {item.link ? (
@@ -441,6 +460,125 @@ function CardEdital({ item, favorito, onToggleFavorito }) {
               Link não disponível
             </span>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SalvarLeadModal({
+  item,
+  decisao,
+  observacoes,
+  saving,
+  onDecisao,
+  onObservacoes,
+  onClose,
+  onSalvar
+}) {
+  if (!item) return null;
+
+  const decisions = [
+    { id: 'ANALISE', label: 'Em Análise', icon: <Tag size={20} /> },
+    { id: 'GO', label: 'GO', icon: <ThumbsUp size={20} /> },
+    { id: 'NO_GO', label: 'NO GO', icon: <ThumbsDown size={20} /> }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6">
+      <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-6 py-5">
+          <div>
+            <h3 className="flex items-center gap-3 text-xl font-bold">
+              <BookmarkPlus className="text-blue-300" size={24} />
+              Salvar como Lead
+            </h3>
+            <p className="mt-1 text-sm text-slate-300">Analise este edital e registre sua decisão antes de avançar.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-300 hover:bg-slate-800 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="rounded-xl border border-blue-900/80 bg-slate-800/70 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-lg font-bold text-white">{item.numero || item.id}</p>
+                <p className="mt-3 flex items-center gap-2 text-sm text-slate-200">
+                  <Building2 size={16} className="text-slate-400" />
+                  {item.orgao || 'Órgão não informado'}
+                </p>
+                <p className="mt-2 flex items-center gap-2 text-sm text-slate-300">
+                  <MapPin size={16} className="text-slate-400" />
+                  {[item.municipio, item.uf].filter(Boolean).join(' - ') || 'Local não informado'}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full border border-blue-500/60 px-4 py-2 text-xs font-bold uppercase text-blue-200">
+                {item.modalidade || item.fonte || 'Edital'}
+              </span>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-slate-300">{item.titulo}</p>
+            <div className="mt-4 flex flex-col gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <span className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <Calendar size={16} className="text-blue-300" />
+                {formatDate(item.dataAbertura || item.dataEncerramento || item.dataPublicacao) || 'Data não informada'}
+              </span>
+              <span className="text-sm font-semibold text-emerald-300">{item.status || 'Não informado'}</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-3 block text-sm font-bold text-slate-100">Decisão</label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {decisions.map(option => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onDecisao(option.id)}
+                  className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition ${
+                    decisao === option.id
+                      ? 'border-blue-400 bg-blue-500/20 text-blue-200 ring-2 ring-blue-400'
+                      : 'border-slate-700 bg-slate-950/20 text-slate-300 hover:border-blue-500/70 hover:text-blue-200'
+                  }`}
+                >
+                  {option.icon}
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-bold text-slate-100">Observações (opcional)</label>
+            <textarea
+              value={observacoes}
+              onChange={(event) => onObservacoes(event.target.value)}
+              rows={4}
+              placeholder="Justificativa da decisão, pontos de atenção, concorrentes identificados..."
+              className="w-full resize-y rounded-xl border border-slate-700 bg-slate-950/30 p-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-slate-800 px-6 py-5 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onSalvar}
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-400 px-6 py-3 text-sm font-bold text-slate-950 transition hover:bg-blue-300 disabled:opacity-60"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <BookmarkPlus size={16} />}
+            Salvar Lead
+          </button>
         </div>
       </div>
     </div>
@@ -492,6 +630,13 @@ export default function PortalBusca() {
   const [total, setTotal] = useState(0);
   const [porFonte, setPorFonte] = useState({});
   const [buscaFeita, setBuscaFeita] = useState(false);
+  const [leadModalItem, setLeadModalItem] = useState(null);
+  const [leadDecisao, setLeadDecisao] = useState('ANALISE');
+  const [leadObservacoes, setLeadObservacoes] = useState('');
+  const [salvandoLeadId, setSalvandoLeadId] = useState('');
+  const [leadsSalvos, setLeadsSalvos] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('b2g_busca_leads_salvos_v1') || '[]'); } catch { return []; }
+  });
 
   // Favoritos
   const [favoritos, setFavoritos] = useState(() => {
@@ -670,6 +815,80 @@ export default function PortalBusca() {
 
   const isFavorito = (item) => favoritos.some(f => f.id === item.id);
 
+  const isLeadSalvo = (item) => leadsSalvos.some(id => String(id) === String(item.id));
+
+  const abrirSalvarLead = (item) => {
+    setLeadModalItem(item);
+    setLeadDecisao('ANALISE');
+    setLeadObservacoes('');
+  };
+
+  const fecharSalvarLead = () => {
+    if (salvandoLeadId) return;
+    setLeadModalItem(null);
+    setLeadObservacoes('');
+    setLeadDecisao('ANALISE');
+  };
+
+  const salvarLead = async () => {
+    if (!leadModalItem || salvandoLeadId) return;
+
+    const item = leadModalItem;
+    const leadName = (item.orgao || item.titulo || 'Órgão B2G').slice(0, 180);
+    const decisionLabel = {
+      ANALISE: 'Em análise',
+      GO: 'GO',
+      NO_GO: 'NO GO'
+    }[leadDecisao] || 'Em análise';
+    const notes = [
+      `Edital: ${item.numero || item.id || '-'}`,
+      `Fonte: ${item.fonte || '-'}`,
+      `Modalidade: ${item.modalidade || '-'}`,
+      `Objeto: ${item.titulo || '-'}`,
+      `Decisão: ${decisionLabel}`,
+      item.link ? `Link: ${item.link}` : '',
+      leadObservacoes.trim() ? `Observações: ${leadObservacoes.trim()}` : ''
+    ].filter(Boolean).join('\n');
+
+    setSalvandoLeadId(item.id);
+    try {
+      const response = await fetch(buildApiUrl('/companies'), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: leadName,
+          segment: `B2G Governo | ${item.fonte || 'Busca de Editais'} | ${decisionLabel}`,
+          website: item.link || '',
+          address: notes,
+          city: item.municipio || '',
+          state: item.uf || '',
+          status: 'LEAD',
+          leadScore: leadDecisao === 'GO' ? 85 : leadDecisao === 'ANALISE' ? 65 : 35,
+          clientType: 'B2G',
+          autoDistribute: false
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || 'Não foi possível salvar o lead B2G.');
+      }
+
+      setLeadsSalvos(prev => {
+        const next = prev.includes(item.id) ? prev : [...prev, item.id];
+        localStorage.setItem('b2g_busca_leads_salvos_v1', JSON.stringify(next));
+        return next;
+      });
+      setLeadModalItem(null);
+      setLeadObservacoes('');
+      showToast('Lead salvo', 'O edital foi salvo em B2G > Leads.');
+    } catch (error) {
+      showToast('Erro ao salvar lead', error.message || 'Tente novamente.', true);
+    } finally {
+      setSalvandoLeadId('');
+    }
+  };
+
   const persistirFontes = (next) => {
     setFontesIntegradas(next);
     localStorage.setItem(FONTES_STORAGE_KEY, JSON.stringify(next));
@@ -777,6 +996,16 @@ export default function PortalBusca() {
   return (
     <div className="flex flex-col min-h-full">
       <Toast toasts={toasts} />
+      <SalvarLeadModal
+        item={leadModalItem}
+        decisao={leadDecisao}
+        observacoes={leadObservacoes}
+        saving={Boolean(salvandoLeadId)}
+        onDecisao={setLeadDecisao}
+        onObservacoes={setLeadObservacoes}
+        onClose={fecharSalvarLead}
+        onSalvar={salvarLead}
+      />
 
       {/* Tabs de navegação */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
@@ -1015,7 +1244,15 @@ export default function PortalBusca() {
               ) : (
                 <div className="space-y-4">
                   {itensExibidos.map(item => (
-                    <CardEdital key={item.id} item={item} favorito={isFavorito(item)} onToggleFavorito={toggleFavorito} />
+                    <CardEdital
+                      key={item.id}
+                      item={item}
+                      favorito={isFavorito(item)}
+                      leadSalvo={isLeadSalvo(item)}
+                      salvandoLead={salvandoLeadId === item.id}
+                      onToggleFavorito={toggleFavorito}
+                      onAbrirSalvarLead={abrirSalvarLead}
+                    />
                   ))}
                 </div>
               )}
