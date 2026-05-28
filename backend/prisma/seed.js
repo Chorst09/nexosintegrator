@@ -43,6 +43,22 @@ async function main() {
   });
 
   // Criar usuários com senhas hasheadas
+  const master = await prisma.user.upsert({
+    where: { email: 'chorstconsult@gmail.com' },
+    update: {
+      name: 'Master Admin',
+      role: 'MASTER',
+      quota: 999999
+    },
+    create: {
+      name: 'Master Admin',
+      email: 'chorstconsult@gmail.com',
+      password: await bcrypt.hash('Admin@2026', 10),
+      role: 'MASTER',
+      quota: 999999
+    }
+  });
+
   const admin = await prisma.user.upsert({
     where: { email: 'admin@crm.com' },
     update: {},

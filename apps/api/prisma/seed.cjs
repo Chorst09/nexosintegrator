@@ -47,11 +47,15 @@ async function main() {
   // Usuário MASTER
   const master = await prisma.user.upsert({
     where: { email: 'chorstconsult@gmail.com' },
-    update: {},
+    update: {
+      name: 'Master Admin',
+      role: 'MASTER',
+      quota: 999999
+    },
     create: {
       name: 'Master Admin',
       email: 'chorstconsult@gmail.com',
-      password: await bcrypt.hash('Double@@2026', 10),
+      password: await bcrypt.hash('Admin@2026', 10),
       role: 'MASTER',
       quota: 999999
     }
