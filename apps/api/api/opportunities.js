@@ -10,8 +10,11 @@ const parsePathIdFromUrl = (urlValue) => {
   if (!urlValue) return null;
 
   const cleanPath = String(urlValue).split('?')[0];
-  const segments = cleanPath.split('/').filter(Boolean);
-  return segments.length > 0 ? decodeURIComponent(segments[0]) : null;
+  const segments = cleanPath
+    .split('/')
+    .filter(Boolean)
+    .filter((segment) => !['api', 'opportunities'].includes(segment));
+  return segments.length > 0 ? decodeURIComponent(segments[segments.length - 1]) : null;
 };
 
 const resolveOpportunityId = (req, body) =>
@@ -136,14 +139,15 @@ export default async function handler(req) {
 
   if (req.method === "PUT") {
     const body = await req.json();
+    const opportunityId = resolveOpportunityId(req, body);
 
-    if (!body.id) {
+    if (!opportunityId) {
       return new Response('id é obrigatório', { status: 400 });
     }
 
     if (req.user?.role === 'SELLER') {
       const existing = await prisma.opportunity.findUnique({
-        where: { id: body.id },
+        where: { id: opportunityId },
         select: { ownerId: true }
       });
       if (!existing) return new Response('Not found', { status: 404 });
@@ -177,7 +181,7 @@ export default async function handler(req) {
     }
     
     const opportunity = await prisma.opportunity.update({
-      where: { id: body.id },
+      where: { id: opportunityId },
       data: updateData,
       include: {
         company: true,

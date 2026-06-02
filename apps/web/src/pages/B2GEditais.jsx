@@ -2199,7 +2199,7 @@ export default function B2GEditais() {
       const [companiesRes, opportunitiesRes, activitiesRes] = await Promise.all([
         fetch(buildApiUrl('/companies?clientType=B2G'), { headers: getAuthHeaders() }),
         fetch(buildApiUrl('/opportunities?clientType=B2G'), { headers: getAuthHeaders() }),
-        fetch(buildApiUrl('/activities-simple'), { headers: getAuthHeaders() })
+        fetch(buildApiUrl('/activities-simple?clientType=B2G'), { headers: getAuthHeaders() })
       ]);
 
       if (companiesRes.ok) {
@@ -3357,7 +3357,7 @@ export default function B2GEditais() {
     setDeletingOpportunityId(opportunity.id);
     try {
       const response = await fetch(
-        buildApiUrl(`/opportunities/${encodeURIComponent(opportunity.id)}`),
+        buildApiUrl(`/opportunities/${encodeURIComponent(opportunity.id)}?clientType=B2G`),
         {
         method: 'DELETE',
         headers: getAuthHeaders()
@@ -3388,10 +3388,9 @@ export default function B2GEditais() {
 
     setDeletingLeadId(lead.id);
     try {
-      const response = await fetch(buildApiUrl('/companies'), {
+      const response = await fetch(buildApiUrl(`/companies/${encodeURIComponent(lead.id)}?clientType=B2G`), {
         method: 'DELETE',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ id: lead.id })
+        headers: getAuthHeaders()
       });
       const data = await response.json().catch(() => ({}));
 
@@ -3466,7 +3465,7 @@ export default function B2GEditais() {
     setSavingLeadAnalysis(true);
     try {
       // 1. Atualizar a empresa (lead)
-      const response = await fetch(buildApiUrl('/companies'), {
+      const response = await fetch(buildApiUrl(`/companies/${encodeURIComponent(lead.id)}?clientType=B2G`), {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -3522,7 +3521,7 @@ export default function B2GEditais() {
 
         const oppTitle = `[B2G] ${(extractField('Edital') ? extractField('Edital') + ' - ' : '')}${lead.name || 'Oportunidade B2G'}`.slice(0, 220);
 
-        const oppResponse = await fetch(buildApiUrl('/opportunities'), {
+        const oppResponse = await fetch(buildApiUrl('/opportunities?clientType=B2G'), {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -3628,7 +3627,7 @@ export default function B2GEditais() {
 
     try {
       const response = await fetch(
-        buildApiUrl(`/opportunities/${encodeURIComponent(opportunityId)}`),
+        buildApiUrl(`/opportunities/${encodeURIComponent(opportunityId)}?clientType=B2G`),
         {
         method: 'PUT',
         headers: getAuthHeaders(),

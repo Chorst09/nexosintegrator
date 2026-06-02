@@ -292,7 +292,7 @@ export default function Oportunidades() {
 
     // Race condition: oportunidade ainda não carregou na lista — busca direto pela API
     if (loading) return; // aguarda o fetch terminar, o useEffect vai re-rodar
-    fetch(buildApiUrl(`/opportunities/${encodeURIComponent(opportunityId)}`), {
+    fetch(buildScopedOpportunityByIdUrl(opportunityId), {
       headers: getAuthHeaders()
     })
       .then(r => r.ok ? r.json() : null)

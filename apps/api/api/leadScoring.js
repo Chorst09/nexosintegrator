@@ -8,7 +8,7 @@ import {
 
 export default async function handler(req) {
   if (req.method === 'GET') {
-    const { action, companyId, minScore, maxScore } = req.query || {};
+    const { action, companyId, minScore, maxScore, clientType } = req.query || {};
     
     try {
       if (action === 'calculate' && companyId) {
@@ -27,7 +27,8 @@ export default async function handler(req) {
         // Buscar empresas por faixa de score
         const companies = await getCompaniesByScoreRange(
           parseInt(minScore) || 0,
-          parseInt(maxScore) || 100
+          parseInt(maxScore) || 100,
+          clientType
         );
         
         const companiesWithClassification = companies.map(company => ({
@@ -40,10 +41,10 @@ export default async function handler(req) {
       
       if (action === 'stats') {
         // Estatísticas de lead scoring
-        const hotLeads = await getCompaniesByScoreRange(80, 100);
-        const warmLeads = await getCompaniesByScoreRange(60, 79);
-        const coldLeads = await getCompaniesByScoreRange(40, 59);
-        const lowPriority = await getCompaniesByScoreRange(0, 39);
+        const hotLeads = await getCompaniesByScoreRange(80, 100, clientType);
+        const warmLeads = await getCompaniesByScoreRange(60, 79, clientType);
+        const coldLeads = await getCompaniesByScoreRange(40, 59, clientType);
+        const lowPriority = await getCompaniesByScoreRange(0, 39, clientType);
         
         return Response.json({
           hotLeads: hotLeads.length,
@@ -63,7 +64,7 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json();
-    const { action, companyId } = body;
+    const { action, companyId, clientType } = body;
     
     try {
       if (action === 'update' && companyId) {
@@ -81,7 +82,7 @@ export default async function handler(req) {
       
       if (action === 'recalculate-all') {
         // Recalcular todos os scores
-        const results = await recalculateAllLeadScores();
+        const results = await recalculateAllLeadScores(clientType);
         
         const successful = results.filter(r => !r.error).length;
         const failed = results.filter(r => r.error).length;

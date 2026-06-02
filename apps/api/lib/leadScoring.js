@@ -137,9 +137,13 @@ export async function updateCompanyLeadScore(companyId) {
 }
 
 // Função para recalcular scores de todas as empresas
-export async function recalculateAllLeadScores() {
+export async function recalculateAllLeadScores(clientType = null) {
   try {
+    const normalizedClientType = String(clientType || '').trim().toUpperCase();
     const companies = await prisma.company.findMany({
+      where: normalizedClientType === 'B2B' || normalizedClientType === 'B2G'
+        ? { clientType: normalizedClientType }
+        : undefined,
       select: { id: true }
     });
 
@@ -163,14 +167,18 @@ export async function recalculateAllLeadScores() {
 }
 
 // Função para obter empresas por faixa de score
-export async function getCompaniesByScoreRange(minScore = 0, maxScore = 100) {
+export async function getCompaniesByScoreRange(minScore = 0, maxScore = 100, clientType = null) {
   try {
+    const normalizedClientType = String(clientType || '').trim().toUpperCase();
     return await prisma.company.findMany({
       where: {
         leadScore: {
           gte: minScore,
           lte: maxScore
-        }
+        },
+        ...(normalizedClientType === 'B2B' || normalizedClientType === 'B2G'
+          ? { clientType: normalizedClientType }
+          : {})
       },
       include: {
         contacts: true,

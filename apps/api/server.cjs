@@ -100,6 +100,7 @@ const enforceRolePolicies = (req, res, next) => {
   // Path here is WITHOUT the /api prefix because this middleware is mounted at /api
   const p = req.path || '/';
   const role = normalizeRole(req.user.actualRole || req.user.role);
+  const requestedClientType = String(req.query?.clientType || '').trim().toUpperCase();
 
   // MASTER tem acesso total ao sistema, mas queries devem filtrar por tenantCompanyId
   if (isMaster(req.user) || role === 'ADMIN') return next();
@@ -117,8 +118,21 @@ const enforceRolePolicies = (req, res, next) => {
     return res.status(403).json({ error: 'Acesso negado' });
   }
 
+  const isSharedPipelineB2GPath =
+    requestedClientType === 'B2G' &&
+    (
+      p.startsWith('/companies') ||
+      p.startsWith('/clients') ||
+      p.startsWith('/opportunities') ||
+      p.startsWith('/activities') ||
+      p.startsWith('/activities-simple') ||
+      p.startsWith('/dashboard') ||
+      p.startsWith('/leadScoring') ||
+      p.startsWith('/leadDistribution')
+    );
+
   const isB2GPath =
-    p.startsWith('/b2g') || p.startsWith('/ai-analysis') || p.startsWith('/analyses');
+    p.startsWith('/b2g') || p.startsWith('/ai-analysis') || p.startsWith('/analyses') || isSharedPipelineB2GPath;
   if (isB2GPath && !canAccessModule(req.user, 'B2G')) {
     return res.status(403).json({ error: 'Acesso negado' });
   }
@@ -139,7 +153,7 @@ const enforceRolePolicies = (req, res, next) => {
     '/leadDistribution'
   ];
   const isB2BPath = isB2BPathPrefixes.some((prefix) => p.startsWith(prefix));
-  if (isB2BPath && !canAccessModule(req.user, 'B2B')) {
+  if (isB2BPath && requestedClientType !== 'B2G' && !canAccessModule(req.user, 'B2B')) {
     return res.status(403).json({ error: 'Acesso negado' });
   }
 

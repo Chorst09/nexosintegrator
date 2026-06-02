@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { 
   Target, 
@@ -18,6 +19,7 @@ import PageHeader from '../components/PageHeader';
 import AnimatedStats from '../components/AnimatedStats';
 import GradientCard from '../components/GradientCard';
 import Modal from '../components/Modal';
+import { normalizeClientType } from '../utils/businessModel';
 
 const PROJECT_CLIENT_TYPE_OPTIONS = [
   { value: 'NEW_CLIENT', label: 'Cliente Novo' },
@@ -64,16 +66,20 @@ export default function LeadManagement() {
   const [showManualLeadModal, setShowManualLeadModal] = useState(false);
   const [savingManualLead, setSavingManualLead] = useState(false);
   const [manualLeadForm, setManualLeadForm] = useState(MANUAL_LEAD_INITIAL_STATE);
+  const [searchParams] = useSearchParams();
+  const requestedClientType = normalizeClientType(searchParams.get('clientType'));
+  const leadClientType = requestedClientType || 'B2B';
+  const scopedClientTypeQuery = `clientType=${encodeURIComponent(leadClientType)}`;
 
   useEffect(() => {
     fetchLeadStats();
     fetchCompanies();
     fetchSellers();
-  }, []);
+  }, [leadClientType]);
 
   const fetchLeadStats = async () => {
     try {
-      const response = await fetch(buildApiUrl('/leadScoring?action=stats&clientType=B2B'), {
+      const response = await fetch(buildApiUrl(`/leadScoring?action=stats&${scopedClientTypeQuery}`), {
         headers: getAuthHeaders()
       });
       const data = await response.json();
@@ -85,7 +91,7 @@ export default function LeadManagement() {
 
   const fetchCompanies = async () => {
     try {
-      const response = await fetch(buildApiUrl('/leadScoring?action=range&minScore=0&maxScore=100&clientType=B2B'), {
+      const response = await fetch(buildApiUrl(`/leadScoring?action=range&minScore=0&maxScore=100&${scopedClientTypeQuery}`), {
         headers: getAuthHeaders()
       });
       const data = await response.json();
@@ -99,7 +105,7 @@ export default function LeadManagement() {
 
   const fetchSellers = async () => {
     try {
-      const response = await fetch(buildApiUrl('/leadDistribution?action=sellers'), {
+      const response = await fetch(buildApiUrl(`/leadDistribution?action=sellers&${scopedClientTypeQuery}`), {
         headers: getAuthHeaders()
       });
       const data = await response.json();
@@ -137,7 +143,7 @@ export default function LeadManagement() {
 
     try {
       setSavingManualLead(true);
-      const response = await fetch(buildApiUrl('/companies'), {
+      const response = await fetch(buildApiUrl(`/companies?${scopedClientTypeQuery}`), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -150,6 +156,7 @@ export default function LeadManagement() {
           city: manualLeadForm.city.trim() || null,
           state: manualLeadForm.state.trim().toUpperCase() || null,
           status: 'LEAD',
+          clientType: leadClientType,
           autoDistribute: manualLeadForm.autoDistribute,
           contacts
         })
@@ -185,10 +192,10 @@ export default function LeadManagement() {
 
     try {
       setProcessingScores(true);
-      const response = await fetch(buildApiUrl('/leadScoring'), {
+      const response = await fetch(buildApiUrl(`/leadScoring?${scopedClientTypeQuery}`), {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ action: 'recalculate-all' })
+        body: JSON.stringify({ action: 'recalculate-all', clientType: leadClientType })
       });
       
       const result = await response.json();
@@ -217,7 +224,7 @@ export default function LeadManagement() {
 
     try {
       setProcessingDistribution(true);
-      const response = await fetch(buildApiUrl('/leadDistribution'), {
+      const response = await fetch(buildApiUrl(`/leadDistribution?${scopedClientTypeQuery}`), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ 
@@ -251,7 +258,7 @@ export default function LeadManagement() {
       const projectName = (projectNameByCompany[companyId] || `Projeto ${company?.name || ''}`).trim();
       const projectClientType = projectClientTypeByCompany[companyId] || 'NEW_CLIENT';
 
-      const response = await fetch(buildApiUrl('/leadDistribution'), {
+      const response = await fetch(buildApiUrl(`/leadDistribution?${scopedClientTypeQuery}`), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ 
@@ -313,7 +320,7 @@ export default function LeadManagement() {
     }
 
     try {
-      const response = await fetch(buildApiUrl(`/companies?id=${company.id}`), {
+      const response = await fetch(buildApiUrl(`/companies/${encodeURIComponent(company.id)}?${scopedClientTypeQuery}`), {
         method: 'DELETE',
         headers: getAuthHeaders()
       });

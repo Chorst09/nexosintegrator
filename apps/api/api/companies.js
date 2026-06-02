@@ -6,8 +6,11 @@ const parsePathIdFromUrl = (urlValue) => {
   if (!urlValue) return null;
 
   const cleanPath = String(urlValue).split('?')[0];
-  const segments = cleanPath.split('/').filter(Boolean);
-  return segments.length > 0 ? decodeURIComponent(segments[0]) : null;
+  const segments = cleanPath
+    .split('/')
+    .filter(Boolean)
+    .filter((segment) => !['api', 'companies'].includes(segment));
+  return segments.length > 0 ? decodeURIComponent(segments[segments.length - 1]) : null;
 };
 
 const resolveCompanyId = (req, body) => {
