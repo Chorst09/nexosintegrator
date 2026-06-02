@@ -75,8 +75,23 @@ const handleLegacyAPI = (apiPath) => {
       const response = await handler(request);
       
       if (response instanceof Response) {
-        const data = await response.json();
-        res.status(response.status || 200).json(data);
+        const status = response.status || 200;
+        const contentType = response.headers?.get?.('content-type') || '';
+
+        if (status === 204) {
+          return res.sendStatus(204);
+        }
+
+        if (contentType.includes('application/json')) {
+          const data = await response.json().catch(() => ({}));
+          return res.status(status).json(data);
+        }
+
+        const text = await response.text().catch(() => '');
+        if (!text) {
+          return res.sendStatus(status);
+        }
+        return res.status(status).send(text);
       } else {
         res.json(response);
       }

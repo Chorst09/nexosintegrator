@@ -1,6 +1,38 @@
 import { prisma } from "../lib/prisma.js";
 import { updateCompanyLeadScore } from '../lib/leadScoring.js';
 
+const parsePathIdFromUrl = (urlValue) => {
+  if (!urlValue) return null;
+
+  const cleanPath = String(urlValue).split('?')[0];
+  const segments = cleanPath
+    .split('/')
+    .filter(Boolean)
+    .filter((segment) => !['api', 'opportunities'].includes(segment));
+  return segments.length > 0 ? decodeURIComponent(segments[segments.length - 1]) : null;
+};
+
+const resolveOpportunityId = (req, body) =>
+  body?.id || req.query?.id || parsePathIdFromUrl(req.url);
+
+const isSchemaDriftError = (error) => {
+  return error?.code === 'P2021' || error?.code === 'P2022';
+};
+
+const isMissingOptionalModelError = (error) => {
+  return error instanceof TypeError && /Cannot read properties of undefined/.test(error.message || '');
+};
+
+const runOptionalCleanup = async (operation) => {
+  try {
+    await operation();
+  } catch (error) {
+    if (!isSchemaDriftError(error) && !isMissingOptionalModelError(error)) {
+      throw error;
+    }
+  }
+};
+
 export default async function handler(req) {
   if (req.method === "GET") {
     const { stage, ownerId } = req.query || {};
@@ -96,6 +128,11 @@ export default async function handler(req) {
 
   if (req.method === "PUT") {
     const body = await req.json();
+    const opportunityId = resolveOpportunityId(req, body);
+
+    if (!opportunityId) {
+      return new Response('id é obrigatório', { status: 400 });
+    }
     
     const updateData = {};
     if (body.stage) updateData.stage = body.stage;
@@ -112,7 +149,7 @@ export default async function handler(req) {
     }
     
     const opportunity = await prisma.opportunity.update({
-      where: { id: body.id },
+      where: { id: opportunityId },
       data: updateData,
       include: {
         company: true,
@@ -137,6 +174,78 @@ export default async function handler(req) {
     return Response.json(opportunity);
   }
 
+  if (req.method === "DELETE") {
+    const body = await req.json().catch(() => ({}));
+    const opportunityId = resolveOpportunityId(req, body);
+
+    if (!opportunityId) {
+      return new Response('id é obrigatório', { status: 400 });
+    }
+
+    const existing = await prisma.opportunity.findUnique({
+      where: { id: opportunityId },
+      select: {
+        id: true,
+        companyId: true
+      }
+    });
+
+    if (!existing) {
+      return new Response('Oportunidade não encontrada', { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await runOptionalCleanup(() => tx.preSalesRequest.updateMany({
+        where: { opportunityId },
+        data: { opportunityId: null }
+      }));
+
+      await tx.commission.deleteMany({
+        where: { opportunityId }
+      });
+
+      await tx.competitorComparison.deleteMany({
+        where: { opportunityId }
+      });
+
+      const proposals = await tx.proposal.findMany({
+        where: { opportunityId },
+        select: { id: true }
+      });
+      const proposalIds = proposals.map((item) => item.id);
+
+      if (proposalIds.length > 0) {
+        await tx.proposalItem.deleteMany({
+          where: { proposalId: { in: proposalIds } }
+        });
+      }
+
+      await tx.proposal.deleteMany({
+        where: { opportunityId }
+      });
+
+      await tx.activity.updateMany({
+        where: { opportunityId },
+        data: { opportunityId: null }
+      });
+
+      await tx.opportunityProduct.deleteMany({
+        where: { opportunityId }
+      });
+
+      await tx.opportunity.delete({
+        where: { id: opportunityId }
+      });
+    });
+
+    try {
+      await updateCompanyLeadScore(existing.companyId);
+    } catch (error) {
+      console.error('Erro ao atualizar lead score após exclusão:', error);
+    }
+
+    return Response.json({ success: true, id: opportunityId });
+  }
+
   return new Response("Method not allowed", { status: 405 });
 }
-
