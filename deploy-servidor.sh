@@ -51,8 +51,9 @@ echo ""
 echo "📁 Passo 2: Enviando arquivos para o servidor..."
 
 # Criar arquivo tar excluindo node_modules e arquivos desnecessários
-tar --exclude='./node_modules' \
+COPYFILE_DISABLE=1 tar --exclude='./node_modules' \
     --exclude='./.git' \
+    --exclude='./test-login-admin.js' \
     --exclude='./frontend/node_modules' \
     --exclude='./backend/node_modules' \
     --exclude='./apps/*/node_modules' \
