@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart3,
@@ -32,6 +32,8 @@ import {
 import { API_BASE_URL, API_ENDPOINTS, getAuthHeaders } from '../config/api';
 import { getUserAccess, normalizeRole, roleLabel as formatRoleLabel, ROLES, isMaster } from '../utils/permissions';
 
+const SIDEBAR_SCROLL_KEY = 'crm-sidebar-scroll-top';
+
 const resolvePublicUrl = (maybeRelativeUrl) => {
   if (!maybeRelativeUrl) return null;
   if (/^https?:\/\//i.test(maybeRelativeUrl)) return maybeRelativeUrl;
@@ -46,6 +48,7 @@ const resolvePublicUrl = (maybeRelativeUrl) => {
 
 export default function Sidebar({ open = false, onOpenChange = () => {} }) {
   const location = useLocation();
+  const navRef = useRef(null);
   const userRaw = localStorage.getItem('user');
   const user = userRaw ? JSON.parse(userRaw) : null;
   const role = normalizeRole(user?.role || null);
@@ -263,6 +266,34 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
       .filter((section) => section.items && section.items.length > 0);
   }, [menuSections, role, access.accessB2B, access.accessB2G, access.accessPreSales, user]);
 
+  useEffect(() => {
+    const activeSection = filteredMenuSections.find((section) =>
+      section.items.some((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
+    );
+
+    if (!activeSection) return;
+
+    setExpandedSections((prev) => (
+      prev[activeSection.id] ? prev : { ...prev, [activeSection.id]: true }
+    ));
+  }, [filteredMenuSections, location.pathname]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return undefined;
+
+    const restoreScroll = () => {
+      const saved = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY));
+      if (Number.isFinite(saved)) {
+        nav.scrollTop = saved;
+      }
+    };
+
+    restoreScroll();
+    const frame = window.requestAnimationFrame(restoreScroll);
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
+
   const toggleSection = (e, section) => {
     e.preventDefault();
     e.stopPropagation();
@@ -278,6 +309,13 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
     window.location.href = '/login';
   };
 
+  const saveSidebarScroll = () => {
+    const nav = navRef.current;
+    if (nav) {
+      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(nav.scrollTop));
+    }
+  };
+
   const userName = user?.name || 'Usuario';
   const initial = (userName?.trim()?.[0] || 'U').toUpperCase();
 
@@ -288,6 +326,7 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
       <NavLink
         to={item.path}
         title={item.description}
+        onClick={saveSidebarScroll}
         className={({ isActive }) => [
           'group relative flex w-full items-start gap-3 overflow-hidden rounded-2xl px-3 py-2.5',
           'border transition-all duration-300 ease-out',
@@ -352,7 +391,12 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
         </div>
       </div>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4">
+      <nav
+        ref={navRef}
+        aria-label="Menu principal"
+        onScroll={saveSidebarScroll}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-gutter:stable]"
+      >
         {filteredMenuSections.map((section) => {
           const SectionIcon = section.icon;
           const isOpen = !!expandedSections[section.id];
