@@ -13,8 +13,16 @@ APP_DIR="/opt/nexoscrm"
 
 echo "🚀 Iniciando deploy do NexosCRM para $SERVER_IP..."
 
-SSH_CMD="ssh -p $SERVER_PORT"
-SCP_CMD="scp -P $SERVER_PORT"
+SSH_OPTIONS="-o StrictHostKeyChecking=accept-new -p $SERVER_PORT"
+SCP_OPTIONS="-o StrictHostKeyChecking=accept-new -P $SERVER_PORT"
+
+if [ -n "${SSHPASS:-}" ]; then
+    SSH_CMD="sshpass -e ssh $SSH_OPTIONS"
+    SCP_CMD="sshpass -e scp $SCP_OPTIONS"
+else
+    SSH_CMD="ssh $SSH_OPTIONS"
+    SCP_CMD="scp $SCP_OPTIONS"
+fi
 
 echo ""
 echo "📦 Passo 1: Preparando servidor..."
