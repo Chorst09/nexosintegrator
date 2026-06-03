@@ -11,7 +11,7 @@ NC='\033[0m'
 
 # Array de usuários para testar
 declare -a USERS=(
-    "chorstconsult@gmail.com:Double@@2026:MASTER"
+    "chorstconsult@gmail.com:<ADMIN_PASSWORD>:MASTER"
     "admin@crm.com:admin123:ADMIN"
     "joao@crm.com:vendedor123:SELLER"
     "maria@crm.com:vendedor123:SELLER"

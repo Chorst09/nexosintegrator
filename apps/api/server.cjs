@@ -53,10 +53,14 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // If no explicit CORS_ORIGIN configured, allow all.
+    // In local development, allow browser origins when no explicit allowlist is configured.
     if (corsOrigins.length === 0) {
-      console.log('✅ CORS permitido - nenhuma restrição configurada');
-      return callback(null, true);
+      if (isDevelopment) {
+        console.log('✅ CORS permitido - ambiente de desenvolvimento sem restrição configurada');
+        return callback(null, true);
+      }
+      console.log('❌ CORS bloqueado - CORS_ORIGIN não configurado em produção');
+      return callback(new Error('CORS_ORIGIN precisa estar configurado em produção'));
     }
 
     if (corsOrigins.includes(origin)) {
@@ -177,11 +181,11 @@ const enforceRolePolicies = (req, res, next) => {
 
 // Middlewares
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '35mb' }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Servir arquivos estáticos (uploads)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Expor apenas assets públicos do sistema. Documentos e anexos passam por rotas autenticadas.
+app.use('/uploads/system', express.static(path.join(__dirname, 'uploads/system')));
 
 // Rotas públicas
 app.use('/api/auth', authRoutes);

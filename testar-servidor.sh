@@ -11,7 +11,7 @@ echo "🔍 Testando conexão com $SERVER_IP..."
 
 # Verificar se sshpass está disponível
 if command -v sshpass &> /dev/null; then
-    SSH_CMD="sshpass -p 'tq6vJPwtZbOCW3kj' ssh -p $SERVER_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+    SSH_CMD="sshpass -p '<SSH_PASSWORD>' ssh -p $SERVER_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10"
     echo "   Usando sshpass para autenticação automática"
 else
     SSH_CMD="ssh -p $SERVER_PORT -o ConnectTimeout=10"

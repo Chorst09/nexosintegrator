@@ -5,7 +5,15 @@ import { moduleFromPath, canAccessModule, roleSatisfiesAllowed } from '../utils/
 const RoleGuard = ({ children, allowedRoles }) => {
   const location = useLocation();
   const userRaw = localStorage.getItem('user');
-  const user = userRaw ? JSON.parse(userRaw) : null;
+  let user = null;
+
+  try {
+    user = userRaw ? JSON.parse(userRaw) : null;
+  } catch (error) {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  }
+
   const role = user?.role || null;
 
   if (!allowedRoles || allowedRoles.length === 0) return children;

@@ -2,7 +2,7 @@
 
 ## Pré-requisitos
 - Acesso SSH ao servidor 209.50.241.25
-- Credenciais: root / tq6vJPwtZbOCW3kj
+- Credenciais: root / <SSH_PASSWORD>
 
 ## Deploy Automático (Recomendado)
 

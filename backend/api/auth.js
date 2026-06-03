@@ -7,7 +7,11 @@ const { authenticateToken } = require('../lib/auth');
 const router = express.Router();
 const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) throw new Error('JWT_SECRET precisa estar configurado');
+  return secret;
+})();
 const JWT_EXPIRES_IN = '7d';
 
 // Login

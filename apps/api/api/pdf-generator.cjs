@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { jsPDF } = require('jspdf');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // POST /api/pdf-generator/orcamento
 router.post('/orcamento', async (req, res) => {

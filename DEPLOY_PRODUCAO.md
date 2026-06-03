@@ -5,7 +5,7 @@
 - **IP**: 209.50.241.25
 - **Usuário**: root
 - **Porta SSH**: 22
-- **Senha**: tq6vJPwtZbOCW3kj
+- **Senha**: <SSH_PASSWORD>
 
 ## 🎯 Deploy Automático
 
@@ -26,7 +26,7 @@ O script irá:
 
 - **URL**: http://209.50.241.25
 - **Login**: admin@nexoscrm.com
-- **Senha**: Admin@2024!
+- **Senha**: <ADMIN_PASSWORD>
 
 ⚠️ **IMPORTANTE**: Troque a senha após o primeiro acesso!
 

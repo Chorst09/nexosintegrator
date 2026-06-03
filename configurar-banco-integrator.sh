@@ -5,12 +5,12 @@
 
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🗄️ Configurando banco PostgreSQL do Integrator..."
 echo "Credenciais:"
 echo "  User: Chorst"
-echo "  Password: Double@@2026"
+echo "  Password: <ADMIN_PASSWORD>"
 echo "  Port: 5433"
 
 cat > setup_integrator_db.exp << 'EOF'
@@ -33,20 +33,20 @@ expect {
         expect "# "
         
         # Testar conexão com o banco
-        send "PGPASSWORD='Double@@2026' psql -h localhost -p 5433 -U Chorst -d postgres -c '\\l'\r"
+        send "PGPASSWORD='<ADMIN_PASSWORD>' psql -h localhost -p 5433 -U Chorst -d postgres -c '\\l'\r"
         expect "# "
         
         send "echo '🗄️ Criando banco nexoscrm se não existir...'\r"
         expect "# "
         
         # Criar banco nexoscrm
-        send "PGPASSWORD='Double@@2026' psql -h localhost -p 5433 -U Chorst -d postgres -c \"CREATE DATABASE nexoscrm;\" 2>/dev/null || echo 'Banco já existe ou erro na criação'\r"
+        send "PGPASSWORD='<ADMIN_PASSWORD>' psql -h localhost -p 5433 -U Chorst -d postgres -c \"CREATE DATABASE nexoscrm;\" 2>/dev/null || echo 'Banco já existe ou erro na criação'\r"
         expect "# "
         
         send "echo '✅ Verificando se banco nexoscrm foi criado...'\r"
         expect "# "
         
-        send "PGPASSWORD='Double@@2026' psql -h localhost -p 5433 -U Chorst -d postgres -c \"\\l\" | grep nexoscrm\r"
+        send "PGPASSWORD='<ADMIN_PASSWORD>' psql -h localhost -p 5433 -U Chorst -d postgres -c \"\\l\" | grep nexoscrm\r"
         expect "# "
         
         send "echo '📁 Atualizando configurações da aplicação...'\r"
@@ -56,7 +56,7 @@ expect {
         expect "# "
         
         # Atualizar .env com as credenciais corretas
-        send "cat > .env << 'ENVEOF'\n# Backend Environment Variables - PRODUÇÃO\nNODE_ENV=production\nPORT=3001\nHOST=0.0.0.0\n\n# Database Configuration - Integrator PostgreSQL\nDATABASE_URL=postgresql://Chorst:Double@@2026@localhost:5433/nexoscrm?schema=public\n\n# JWT Configuration\nJWT_SECRET=NexosCRM_JWT_Super_Secret_2024_Troque_Esta_Chave\nJWT_EXPIRES_IN=7d\nJWT_REFRESH_SECRET=NexosCRM_Refresh_Secret_2024_Troque_Esta_Chave\nJWT_REFRESH_EXPIRES_IN=30d\n\n# CORS Configuration\nCORS_ORIGIN=http://209.50.241.25\n\n# File Upload Configuration\nMAX_FILE_SIZE=10485760\nUPLOAD_PATH=./uploads\n\n# Security\nBCRYPT_ROUNDS=12\nSESSION_SECRET=NexosCRM_Session_Secret_2024\n\n# Logging\nLOG_LEVEL=info\nLOG_FILE=logs/app.log\n\n# Rate Limiting\nRATE_LIMIT_WINDOW_MS=900000\nRATE_LIMIT_MAX_REQUESTS=100\nENVEOF\r"
+        send "cat > .env << 'ENVEOF'\n# Backend Environment Variables - PRODUÇÃO\nNODE_ENV=production\nPORT=3001\nHOST=0.0.0.0\n\n# Database Configuration - Integrator PostgreSQL\nDATABASE_URL=postgresql://Chorst:<ADMIN_PASSWORD>@localhost:5433/nexoscrm?schema=public\n\n# JWT Configuration\nJWT_SECRET=<JWT_SECRET>\nJWT_EXPIRES_IN=7d\nJWT_REFRESH_SECRET=NexosCRM_Refresh_Secret_2024_Troque_Esta_Chave\nJWT_REFRESH_EXPIRES_IN=30d\n\n# CORS Configuration\nCORS_ORIGIN=http://209.50.241.25\n\n# File Upload Configuration\nMAX_FILE_SIZE=10485760\nUPLOAD_PATH=./uploads\n\n# Security\nBCRYPT_ROUNDS=12\nSESSION_SECRET=NexosCRM_Session_Secret_2024\n\n# Logging\nLOG_LEVEL=info\nLOG_FILE=logs/app.log\n\n# Rate Limiting\nRATE_LIMIT_WINDOW_MS=900000\nRATE_LIMIT_MAX_REQUESTS=100\nENVEOF\r"
         expect "# "
         
         send "cp .env backend/.env\r"
@@ -135,4 +135,4 @@ echo "   Database: nexoscrm"
 echo ""
 echo "🌐 Acesse: http://$SERVER_IP"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"

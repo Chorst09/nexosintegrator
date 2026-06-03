@@ -2,15 +2,11 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken, requireRole } = require('../lib/auth.cjs');
 
 const router = express.Router();
 
-const prisma = global.__prismaIntegrationApi || new PrismaClient();
-if (process.env.NODE_ENV !== 'production') {
-  global.__prismaIntegrationApi = prisma;
-}
 
 const OAUTH_DEFAULT_TTL_SECONDS = Number(process.env.INTEGRATION_OAUTH_TOKEN_TTL_SECONDS || 3600);
 const IDEMPOTENCY_TTL_HOURS = Number(process.env.INTEGRATION_IDEMPOTENCY_TTL_HOURS || 24);

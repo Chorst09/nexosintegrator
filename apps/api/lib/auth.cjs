@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('./prisma.cjs');
 const { normalizeRole, getPermissionTemplate, isMaster } = require('./permissions.cjs');
+const { getJwtSecret } = require('./security.cjs');
 
-const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = getJwtSecret();
 
 function getBearerToken(req) {
   const header = req.headers.authorization || '';

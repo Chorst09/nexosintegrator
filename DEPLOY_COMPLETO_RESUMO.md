@@ -57,7 +57,7 @@ O sistema está no ar, mas você precisa configurar o banco de dados para que o 
 
 ```
 Email: chorstconsult@gmail.com
-Senha: Double@@2026
+Senha: <ADMIN_PASSWORD>
 Role: MASTER
 ```
 

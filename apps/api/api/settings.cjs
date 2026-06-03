@@ -2,15 +2,11 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { requireRole } = require('../lib/auth.cjs');
 
 const router = express.Router();
 
-const prisma = global.__prismaSettings || new PrismaClient();
-if (process.env.NODE_ENV !== 'production') {
-  global.__prismaSettings = prisma;
-}
 
 const SETTINGS_KEYS = {
   appName: 'app_name',
@@ -113,16 +109,27 @@ const storage = multer.diskStorage({
   },
   filename(req, file, cb) {
     const ext = (path.extname(file.originalname || '') || '').toLowerCase();
-    const safeExt = ext.match(/^\.(png|jpe?g|webp|gif|svg)$/) ? ext : '';
+    const safeExt = ext.match(/^\.(png|jpe?g|webp|gif)$/) ? ext : '';
     cb(null, `logo-${Date.now()}${safeExt}`);
   }
 });
+
+const allowedLogoTypes = new Map([
+  ['image/png', ['.png']],
+  ['image/jpeg', ['.jpg', '.jpeg']],
+  ['image/jpg', ['.jpg', '.jpeg']],
+  ['image/webp', ['.webp']],
+  ['image/gif', ['.gif']]
+]);
 
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter(req, file, cb) {
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const allowedExtensions = allowedLogoTypes.get(file.mimetype || '');
+
+    if (!allowedExtensions || !allowedExtensions.includes(ext)) {
       return cb(new Error('Arquivo inválido. Envie uma imagem.'));
     }
     return cb(null, true);

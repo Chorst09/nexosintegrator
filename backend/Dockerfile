@@ -14,6 +14,10 @@ RUN npm ci --only=production
 # Copiar código fonte
 COPY . .
 
+# A imagem de produção deve usar as variáveis injetadas pelo Docker Compose.
+# Arquivos .env locais podem sobrescrever DATABASE_URL durante comandos Prisma.
+RUN rm -f .env .env.production
+
 # Gerar Prisma Client
 RUN npx prisma generate
 

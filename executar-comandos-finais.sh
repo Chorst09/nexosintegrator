@@ -7,7 +7,7 @@ echo "🚀 Executando comandos finais..."
 
 # Usar sshpass se disponível
 if command -v sshpass &> /dev/null; then
-    SSH_CMD="sshpass -p 'tq6vJPwtZbOCW3kj' ssh -o StrictHostKeyChecking=no root@209.50.241.25"
+    SSH_CMD="sshpass -p '<SSH_PASSWORD>' ssh -o StrictHostKeyChecking=no root@209.50.241.25"
 else
     SSH_CMD="ssh root@209.50.241.25"
 fi
@@ -49,7 +49,7 @@ cat > dist/index.html << 'HTMLEOF'
             </div>
             <div class="form-group">
                 <label for="password">Senha:</label>
-                <input type="password" id="password" value="Admin@2024!" required>
+                <input type="password" id="password" value="<ADMIN_PASSWORD>" required>
             </div>
             <button type="submit">Entrar no Sistema</button>
         </form>
@@ -147,4 +147,4 @@ echo "🎉 DEPLOY FINALIZADO!"
 echo ""
 echo "🌐 Acesse: http://209.50.241.25"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"

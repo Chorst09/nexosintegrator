@@ -52,7 +52,7 @@ chore: Remover arquivos de build antigos do dist
 
 ```
 Email: chorstconsult@gmail.com
-Senha: Double@@2026
+Senha: <ADMIN_PASSWORD>
 Role: MASTER
 ```
 

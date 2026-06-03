@@ -4,7 +4,7 @@
 # ============================================
 
 # 1. Criar usuário PostgreSQL corretamente
-sudo -u postgres psql -c "CREATE USER chorst WITH PASSWORD 'Double@@2026';"
+sudo -u postgres psql -c "CREATE USER chorst WITH PASSWORD '<ADMIN_PASSWORD>';"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE nexoscrm TO chorst;"
 
 # 2. Atualizar .env com usuário em minúsculo
@@ -13,8 +13,8 @@ cat > .env << 'EOF'
 NODE_ENV=production
 PORT=3001
 HOST=0.0.0.0
-DATABASE_URL=postgresql://chorst:Double@@2026@localhost:5432/nexoscrm?schema=public
-JWT_SECRET=NexosCRM_JWT_Super_Secret_2024
+DATABASE_URL=postgresql://chorst:<ADMIN_PASSWORD>@localhost:5432/nexoscrm?schema=public
+JWT_SECRET=<JWT_SECRET>
 JWT_EXPIRES_IN=7d
 CORS_ORIGIN=http://209.50.241.25:3001
 BCRYPT_ROUNDS=12
@@ -34,7 +34,7 @@ const prisma = new PrismaClient();
 
 async function createAdmin() {
   try {
-    const hash = await bcrypt.hash('Admin@2024!', 12);
+    const hash = await bcrypt.hash('<ADMIN_PASSWORD>', 12);
     const user = await prisma.user.create({
       data: {
         name: 'Administrador',
@@ -64,4 +64,4 @@ curl http://localhost:3001/ | head -5
 echo "✅ Sistema pronto!"
 echo "🌐 Acesse: http://209.50.241.25:3001"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"

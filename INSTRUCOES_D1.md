@@ -2,7 +2,7 @@
 
 ## Credenciais do Usuário MASTER
 - **Email**: chorstconsult@gmail.com
-- **Senha**: Double@@2026
+- **Senha**: <ADMIN_PASSWORD>
 - **Role**: MASTER (acesso completo)
 
 ## Opção 1: Via Cloudflare Dashboard (Recomendado)
@@ -36,7 +36,7 @@ wrangler d1 execute <SEU_DATABASE_NAME> --command="SELECT id, name, email, role 
 
 ## Observações Importantes
 
-1. **Hash da Senha**: O hash `$2a$10$lEFTEG7UgssVpXdXZateveMCXj.sptPgchR3NPZezkDaRZRIUACBq` corresponde à senha `Double@@2026`
+1. **Hash da Senha**: O hash `$2a$10$lEFTEG7UgssVpXdXZateveMCXj.sptPgchR3NPZezkDaRZRIUACBq` corresponde à senha `<ADMIN_PASSWORD>`
 
 2. **UUID no D1**: O D1 (SQLite) não tem `gen_random_uuid()` como PostgreSQL, por isso usamos `lower(hex(randomblob(16)))` para gerar um ID único
 
@@ -49,7 +49,7 @@ wrangler d1 execute <SEU_DATABASE_NAME> --command="SELECT id, name, email, role 
 1. Acesse o sistema em produção
 2. Faça login com:
    - Email: chorstconsult@gmail.com
-   - Senha: Double@@2026
+   - Senha: <ADMIN_PASSWORD>
 3. Vá em **Administração** → **Gestão de Empresas**
 4. Agora você pode cadastrar empresas manualmente!
 

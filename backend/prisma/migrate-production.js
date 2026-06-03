@@ -15,8 +15,12 @@ async function main() {
     if (existingAdmin) {
       console.log('✅ Usuário admin já existe');
     } else {
-      // Criar usuário administrador
-      const hashedPassword = await bcrypt.hash('Admin@2024!', 12);
+      // Criar usuário administrador com senha injetada pelo ambiente de produção.
+      const adminPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+      if (!adminPassword) {
+        throw new Error('ADMIN_PASSWORD precisa estar configurado para criar o admin inicial');
+      }
+      const hashedPassword = await bcrypt.hash(adminPassword, 12);
       
       const admin = await prisma.user.create({
         data: {

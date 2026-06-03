@@ -39,7 +39,7 @@ cat > dist/index.html << 'EOF'
             </div>
             <div class="form-group">
                 <label for="password">Senha:</label>
-                <input type="password" id="password" value="Admin@2024!" required>
+                <input type="password" id="password" value="<ADMIN_PASSWORD>" required>
             </div>
             <button type="submit">Entrar</button>
         </form>

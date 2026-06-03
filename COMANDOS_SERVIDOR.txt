@@ -10,7 +10,7 @@ apt-get install -y nodejs postgresql postgresql-contrib nginx
 # 2. CONFIGURAR POSTGRESQL
 sudo -u postgres createuser nexoscrm
 sudo -u postgres createdb nexoscrm
-sudo -u postgres psql -c "ALTER USER nexoscrm PASSWORD 'NexosCRM@2024!';"
+sudo -u postgres psql -c "ALTER USER nexoscrm PASSWORD '<DB_PASSWORD>';"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE nexoscrm TO nexoscrm;"
 
 # 3. CRIAR DIRETÓRIO
@@ -81,4 +81,4 @@ systemctl status postgresql
 echo "✅ Deploy concluído!"
 echo "🌐 Acesse: http://209.50.241.25"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"

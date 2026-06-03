@@ -1,5 +1,5 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -9,10 +9,6 @@ const { requireRole } = require('../lib/auth.cjs');
 
 const router = express.Router();
 
-const prisma = global.__prismaB2G || new PrismaClient();
-if (process.env.NODE_ENV !== 'production') {
-  global.__prismaB2G = prisma;
-}
 
 const ALLOWED_TYPES = new Set([
   'EDITAL',

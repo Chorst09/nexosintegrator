@@ -6,7 +6,7 @@
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
 SERVER_PORT="22"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🔍 Diagnóstico completo de conexão SSH"
 echo "======================================"

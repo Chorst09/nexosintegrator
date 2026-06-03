@@ -11,7 +11,7 @@
 - PORT=3002
 + PORT=3000
 - DATABASE_URL=postgresql://postgres:postgres@localhost:5432/crm?schema=public
-+ DATABASE_URL=postgresql://Chorstconsult:Double@@2026@localhost:5432/crm_com
++ DATABASE_URL=postgresql://Chorstconsult:<ADMIN_PASSWORD>@localhost:5432/crm_com
 - JWT_SECRET=dev-secret-key-change-in-production
 + JWT_SECRET=seu-secret-super-seguro-aqui-mude-em-producao
 - CORS_ORIGIN=http://localhost:5173

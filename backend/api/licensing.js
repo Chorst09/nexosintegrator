@@ -2,7 +2,11 @@ import { prisma } from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) throw new Error('JWT_SECRET precisa estar configurado');
+  return secret;
+})();
 
 const getAuthToken = (req) => {
   const authHeader = req?.headers?.authorization || req?.headers?.Authorization;

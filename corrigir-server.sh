@@ -5,7 +5,7 @@
 
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🔧 Corrigindo problema do ES Module no server.js..."
 
@@ -121,7 +121,7 @@ echo "🎉 DEPLOY FINALIZADO!"
 echo ""
 echo "🌐 Acesse: http://$SERVER_IP"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"
 echo ""
 echo "🗄️ Banco PostgreSQL Integrator:"
 echo "   Host: localhost:5433"

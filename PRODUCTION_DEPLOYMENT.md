@@ -5,7 +5,7 @@
 - **IP**: 209.50.241.25
 - **Usuário**: root
 - **Porta SSH**: 22
-- **Senha**: tq6vJPwtZbOCW3kj
+- **Senha**: <SSH_PASSWORD>
 
 ## Arquitetura de Produção
 
@@ -135,7 +135,7 @@ HOST=0.0.0.0
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nexoscrm?schema=public
 
 # JWT
-JWT_SECRET=NexosCRM_JWT_Super_Secret_2024_CHANGE_THIS
+JWT_SECRET=<JWT_SECRET>
 JWT_EXPIRES_IN=7d
 JWT_REFRESH_SECRET=NexosCRM_Refresh_Secret_2024_CHANGE_THIS
 JWT_REFRESH_EXPIRES_IN=30d

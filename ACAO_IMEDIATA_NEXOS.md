@@ -77,7 +77,7 @@ WHERE email = 'chorstconsult@gmail.com';
 
 | Domínio | Usuário | Senha | Status |
 |---------|---------|-------|--------|
-| crmautomatizadob2g.vercel.app | admin@crm.com | Double@@2026 | ✅ OK |
+| crmautomatizadob2g.vercel.app | admin@crm.com | <ADMIN_PASSWORD> | ✅ OK |
 | crmcomercial.chorstconsult.com.br | admin@crm.com | admin123 | ✅ OK |
 | nexos.chorstconsult.com.br | chorstconsult@gmail.com | admin123 | ⏳ Configurar |
 

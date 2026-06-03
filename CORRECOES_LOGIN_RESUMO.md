@@ -48,7 +48,7 @@ server: {
 ### ✅ Teste 2: Login do Usuário MASTER
 - Endpoint: `http://localhost:3002/api/auth/login`
 - Email: chorstconsult@gmail.com
-- Senha: Double@@2026
+- Senha: <ADMIN_PASSWORD>
 - Status: 200 OK
 - Token JWT: Gerado com sucesso
 
@@ -75,7 +75,7 @@ server: {
 
 ```
 Email: chorstconsult@gmail.com
-Senha: Double@@2026
+Senha: <ADMIN_PASSWORD>
 Role: MASTER
 ```
 
@@ -117,7 +117,7 @@ Role: MASTER
 3. Clique no botão "Entrar" no canto superior direito
 4. Preencha:
    - Email: `chorstconsult@gmail.com`
-   - Senha: `Double@@2026`
+   - Senha: `<ADMIN_PASSWORD>`
 5. Clique em "Entrar"
 6. Você será redirecionado para `/administracao`
 
@@ -130,7 +130,7 @@ Role: MASTER
 ```bash
 curl -X POST http://localhost:3002/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}'
+  -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}'
 ```
 
 ---
@@ -206,7 +206,7 @@ cd apps/api && npm run dev
 # Teste individual via curl
 curl -X POST http://localhost:3002/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}'
+  -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}'
 ```
 
 ### Acessar Banco de Dados

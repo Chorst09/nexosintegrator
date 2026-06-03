@@ -1,14 +1,14 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken, requireRole } = require('../lib/auth.cjs');
 const { normalizeRole, resolveUserAccess, getPermissionTemplate, isMaster } = require('../lib/permissions.cjs');
+const { getJwtSecret } = require('../lib/security.cjs');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = getJwtSecret();
 const JWT_EXPIRES_IN = '7d';
 const PRIVILEGED_ROLES = new Set(['MASTER', 'ADMIN', 'DIRECTOR', 'MANAGER']);
 

@@ -91,7 +91,7 @@ SELECT id, name, email, role, active FROM users WHERE email = 'master@master.com
 - **Database**: postgres
 - **Port**: 5432
 - **User**: postgres
-- **Password**: Double@@2026!@
+- **Password**: <ADMIN_PASSWORD>
 
 ## Connection String (URL encoded)
 

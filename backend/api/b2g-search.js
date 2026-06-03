@@ -12,7 +12,11 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) throw new Error('JWT_SECRET precisa estar configurado');
+  return secret;
+})();
 
 // Middleware de autenticação simples
 const auth = (req, res, next) => {

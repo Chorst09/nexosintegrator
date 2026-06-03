@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken, requireRole } = require('../lib/auth.cjs');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // ===== WORKFLOWS =====
 

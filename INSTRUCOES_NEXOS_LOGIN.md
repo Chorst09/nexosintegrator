@@ -70,7 +70,7 @@ Isso configurará a senha como: **admin123**
 
 ## Passo 5: Alterar Senha (opcional)
 
-Se quiser usar a senha Double@@2026, execute no D1:
+Se quiser usar a senha <ADMIN_PASSWORD>, execute no D1:
 
 ```sql
 UPDATE users 
@@ -82,7 +82,7 @@ WHERE email = 'chorstconsult@gmail.com';
 
 | Domínio | Usuário MASTER | Senha | Status |
 |---------|---------------|-------|--------|
-| crmautomatizadob2g.vercel.app | admin@crm.com | Double@@2026 | ✅ Funcionando |
+| crmautomatizadob2g.vercel.app | admin@crm.com | <ADMIN_PASSWORD> | ✅ Funcionando |
 | crmcomercial.chorstconsult.com.br | admin@crm.com | admin123 | ✅ Funcionando |
 | nexos.chorstconsult.com.br | chorstconsult@gmail.com | admin123 | ⏳ Aguardando teste |
 

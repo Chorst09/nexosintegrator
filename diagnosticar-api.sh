@@ -5,7 +5,7 @@
 
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🔍 Diagnosticando problemas da API..."
 
@@ -49,7 +49,7 @@ expect {
         send "echo '🗄️ Testando conexão com banco...'\r"
         expect "# "
         
-        send "PGPASSWORD='Double@@2026' psql -h localhost -p 5433 -U Chorst -d nexoscrm -c 'SELECT 1;' 2>/dev/null || echo 'Erro na conexão com banco'\r"
+        send "PGPASSWORD='<ADMIN_PASSWORD>' psql -h localhost -p 5433 -U Chorst -d nexoscrm -c 'SELECT 1;' 2>/dev/null || echo 'Erro na conexão com banco'\r"
         expect "# "
         
         send "echo '🔄 Parando e reiniciando API...'\r"

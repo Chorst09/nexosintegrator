@@ -24,7 +24,7 @@ INSERT INTO "User" (
   gen_random_uuid(),
   'Master Admin',
   'chorstconsult@gmail.com',
-  '$2a$10$YourHashedPasswordHere', -- Senha: Double@@2026
+  '$2a$10$YourHashedPasswordHere', -- Senha: <ADMIN_PASSWORD>
   'MASTER',
   999999,
   NOW(),
@@ -61,12 +61,12 @@ Depois que o login funcionar:
 3. Crie manualmente o usuário:
    - Nome: Master Admin
    - Email: chorstconsult@gmail.com
-   - Senha: Double@@2026
+   - Senha: <ADMIN_PASSWORD>
    - Role: MASTER
 
 ## Senha Hash (bcrypt)
 
-A senha `Double@@2026` com bcrypt (10 rounds) gera um hash como:
+A senha `<ADMIN_PASSWORD>` com bcrypt (10 rounds) gera um hash como:
 ```
 $2a$10$[hash_aqui]
 ```
@@ -75,7 +75,7 @@ Para gerar o hash correto, você pode usar:
 
 ```javascript
 const bcrypt = require('bcryptjs');
-const hash = await bcrypt.hash('Double@@2026', 10);
+const hash = await bcrypt.hash('<ADMIN_PASSWORD>', 10);
 console.log(hash);
 ```
 
@@ -125,7 +125,7 @@ O erro "Could not establish connection" que você está vendo no navegador é po
 
 4. **Testar o login:**
    - Email: chorstconsult@gmail.com
-   - Senha: Double@@2026
+   - Senha: <ADMIN_PASSWORD>
 
 ## Arquivo Modificado
 

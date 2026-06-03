@@ -1,10 +1,9 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('./prisma.cjs');
 const {
   propostaComercialDouble,
   propostaTecnicaDouble
 } = require('./proposal-template-presets.cjs');
 
-const prisma = new PrismaClient();
 
 const LEGACY_COVER_BACKGROUNDS = new Set([
   'linear-gradient(135deg, #0B1220 0%, #1E40AF 55%, #0EA5E9 120%)',

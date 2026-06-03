@@ -5,7 +5,7 @@
 
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🚀 Deploy Automático do NexosCRM"
 echo "================================"
@@ -55,7 +55,7 @@ expect {
         send "sudo -u postgres createdb nexoscrm 2>/dev/null || true\r"
         expect "# "
         
-        send "sudo -u postgres psql -c \"ALTER USER nexoscrm PASSWORD 'NexosCRM@2024!';\"\r"
+        send "sudo -u postgres psql -c \"ALTER USER nexoscrm PASSWORD '<DB_PASSWORD>';\"\r"
         expect "# "
         
         send "sudo -u postgres psql -c \"GRANT ALL PRIVILEGES ON DATABASE nexoscrm TO nexoscrm;\"\r"
@@ -213,4 +213,4 @@ echo ""
 echo "✅ Deploy concluído!"
 echo "🌐 Acesse: http://$SERVER_IP"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"

@@ -5,7 +5,7 @@
 
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🔧 Executando correção final completa..."
 
@@ -43,7 +43,7 @@ expect {
         send "sudo -u postgres createdb nexoscrm 2>/dev/null || echo 'Banco ja existe'\r"
         expect "# "
         
-        send "sudo -u postgres psql -c \"ALTER USER Chorst PASSWORD 'Double@@2026';\"\r"
+        send "sudo -u postgres psql -c \"ALTER USER Chorst PASSWORD '<ADMIN_PASSWORD>';\"\r"
         expect "# "
         
         send "sudo -u postgres psql -c \"GRANT ALL PRIVILEGES ON DATABASE nexoscrm TO Chorst;\"\r"
@@ -52,7 +52,7 @@ expect {
         send "echo '📝 Atualizando configuracao do banco...'\r"
         expect "# "
         
-        send "cat > .env << 'ENVEOF'\nNODE_ENV=production\nPORT=3001\nHOST=0.0.0.0\nDATABASE_URL=postgresql://Chorst:Double@@2026@localhost:5432/nexoscrm?schema=public\nJWT_SECRET=NexosCRM_JWT_Super_Secret_2024\nJWT_EXPIRES_IN=7d\nCORS_ORIGIN=http://209.50.241.25:3001\nBCRYPT_ROUNDS=12\nMAX_FILE_SIZE=10485760\nUPLOAD_PATH=./uploads\nLOG_LEVEL=info\nENVEOF\r"
+        send "cat > .env << 'ENVEOF'\nNODE_ENV=production\nPORT=3001\nHOST=0.0.0.0\nDATABASE_URL=postgresql://Chorst:<ADMIN_PASSWORD>@localhost:5432/nexoscrm?schema=public\nJWT_SECRET=<JWT_SECRET>\nJWT_EXPIRES_IN=7d\nCORS_ORIGIN=http://209.50.241.25:3001\nBCRYPT_ROUNDS=12\nMAX_FILE_SIZE=10485760\nUPLOAD_PATH=./uploads\nLOG_LEVEL=info\nENVEOF\r"
         expect "# "
         
         send "echo '🔄 Executando migrations...'\r"
@@ -67,7 +67,7 @@ expect {
         send "echo '👤 Criando usuario admin...'\r"
         expect "# "
         
-        send "node -e \"const { PrismaClient } = require('@prisma/client'); const bcrypt = require('bcryptjs'); const prisma = new PrismaClient(); async function createAdmin() { try { const existing = await prisma.user.findUnique({ where: { email: 'admin@nexoscrm.com' } }); if (existing) { console.log('Admin ja existe'); return; } const hash = await bcrypt.hash('Admin@2024!', 12); const user = await prisma.user.create({ data: { name: 'Administrador', email: 'admin@nexoscrm.com', password: hash, role: 'ADMIN' } }); console.log('Admin criado:', user.email); } catch(e) { console.error('Erro:', e.message); } finally { await prisma.\\$disconnect(); } } createAdmin();\"\r"
+        send "node -e \"const { PrismaClient } = require('@prisma/client'); const bcrypt = require('bcryptjs'); const prisma = new PrismaClient(); async function createAdmin() { try { const existing = await prisma.user.findUnique({ where: { email: 'admin@nexoscrm.com' } }); if (existing) { console.log('Admin ja existe'); return; } const hash = await bcrypt.hash('<ADMIN_PASSWORD>', 12); const user = await prisma.user.create({ data: { name: 'Administrador', email: 'admin@nexoscrm.com', password: hash, role: 'ADMIN' } }); console.log('Admin criado:', user.email); } catch(e) { console.error('Erro:', e.message); } finally { await prisma.\\$disconnect(); } } createAdmin();\"\r"
         expect "# "
         
         send "echo '🔄 Reiniciando aplicacao...'\r"
@@ -121,6 +121,6 @@ echo "🎉 CORREÇÃO FINALIZADA!"
 echo ""
 echo "🌐 Acesse: http://$SERVER_IP:3001"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"
 echo ""
 echo "✅ Sistema NexosCRM totalmente funcional!"

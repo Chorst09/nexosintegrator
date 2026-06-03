@@ -52,7 +52,7 @@ proxy: {
 
 ```
 Email: chorstconsult@gmail.com
-Senha: Double@@2026
+Senha: <ADMIN_PASSWORD>
 Role: MASTER
 ```
 
@@ -96,7 +96,7 @@ Abra o navegador em: http://localhost:5174
 ### 3. Preencha as Credenciais
 ```
 Email: chorstconsult@gmail.com
-Senha: Double@@2026
+Senha: <ADMIN_PASSWORD>
 ```
 
 ### 4. Clique em "Entrar"
@@ -122,7 +122,7 @@ Testa login de 4 usuários diferentes (MASTER, ADMIN, 2 SELLERS).
 ```bash
 curl -X POST http://localhost:3002/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}'
+  -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}'
 ```
 
 ### Teste no Navegador
@@ -134,7 +134,7 @@ Abra o arquivo `test-login.html` no navegador para teste interativo.
 
 | Email | Senha | Role | Região |
 |-------|-------|------|--------|
-| chorstconsult@gmail.com | Double@@2026 | MASTER | - |
+| chorstconsult@gmail.com | <ADMIN_PASSWORD> | MASTER | - |
 | admin@crm.com | admin123 | ADMIN | - |
 | joao@crm.com | vendedor123 | SELLER | São Paulo |
 | maria@crm.com | vendedor123 | SELLER | São Paulo |

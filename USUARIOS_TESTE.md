@@ -10,7 +10,7 @@ Todos os usuários abaixo foram criados no seed do banco de dados e estão pront
 
 ### Master Admin
 - **Email**: `chorstconsult@gmail.com`
-- **Senha**: `Double@@2026`
+- **Senha**: `<ADMIN_PASSWORD>`
 - **Role**: MASTER
 - **Acesso**: Todas as funcionalidades do sistema
 - **Rota após login**: `/administracao`
@@ -104,7 +104,7 @@ Todos os usuários abaixo foram criados no seed do banco de dados e estão pront
 # Exemplo: Login do MASTER
 curl -X POST http://localhost:3002/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}'
+  -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}'
 
 # Exemplo: Login de um vendedor
 curl -X POST http://localhost:3002/api/auth/login \

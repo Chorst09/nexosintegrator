@@ -2,11 +2,11 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth.cjs');
+const { canAccessCompany, canAccessCompanyDocument } = require('../lib/access-control.cjs');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -54,6 +54,15 @@ const upload = multer({
 router.get('/:id/documents', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const access = await canAccessCompany(prisma, req.user, id);
+
+    if (access.missing) {
+      return res.status(404).json({ error: 'Empresa não encontrada' });
+    }
+
+    if (!access.allowed) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
 
     const documents = await prisma.companyDocument.findMany({
       where: { companyId: id },
@@ -83,13 +92,16 @@ router.post('/:id/documents', authenticateToken, upload.single('file'), async (r
       return res.status(400).json({ error: 'Nenhum arquivo foi enviado' });
     }
 
-    const company = await prisma.company.findUnique({
-      where: { id }
-    });
+    const access = await canAccessCompany(prisma, req.user, id);
 
-    if (!company) {
+    if (access.missing) {
       fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Empresa não encontrada' });
+    }
+
+    if (!access.allowed) {
+      fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
     const document = await prisma.companyDocument.create({
@@ -118,13 +130,17 @@ router.get('/document/:documentId/download', authenticateToken, async (req, res)
   try {
     const { documentId } = req.params;
 
-    const document = await prisma.companyDocument.findUnique({
-      where: { id: documentId }
-    });
+    const access = await canAccessCompanyDocument(prisma, req.user, documentId);
 
-    if (!document) {
+    if (access.missing) {
       return res.status(404).json({ error: 'Arquivo não encontrado' });
     }
+
+    if (!access.allowed) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { document } = access;
 
     if (!fs.existsSync(document.path)) {
       return res.status(404).json({ error: 'Arquivo não encontrado no servidor' });
@@ -146,13 +162,17 @@ router.delete('/document/:documentId', authenticateToken, async (req, res) => {
   try {
     const { documentId } = req.params;
 
-    const document = await prisma.companyDocument.findUnique({
-      where: { id: documentId }
-    });
+    const access = await canAccessCompanyDocument(prisma, req.user, documentId);
 
-    if (!document) {
+    if (access.missing) {
       return res.status(404).json({ error: 'Arquivo não encontrado' });
     }
+
+    if (!access.allowed) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const { document } = access;
 
     if (fs.existsSync(document.path)) {
       fs.unlinkSync(document.path);

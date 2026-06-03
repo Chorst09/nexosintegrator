@@ -13,7 +13,7 @@ No canto superior direito da landing page
 ### 3️⃣ Use as Credenciais do MASTER
 ```
 Email: chorstconsult@gmail.com
-Senha: Double@@2026
+Senha: <ADMIN_PASSWORD>
 ```
 
 ### 4️⃣ Clique em "Entrar"

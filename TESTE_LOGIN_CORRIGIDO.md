@@ -8,7 +8,7 @@ O sistema de login foi corrigido e está funcionando corretamente.
 
 ### 1. Usuário MASTER Criado
 - **Email**: chorstconsult@gmail.com
-- **Senha**: Double@@2026
+- **Senha**: <ADMIN_PASSWORD>
 - **Role**: MASTER
 - **Status**: ✅ Criado com sucesso no banco de dados
 
@@ -39,7 +39,7 @@ proxy: {
 ```bash
 curl -X POST http://localhost:3002/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}'
+  -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}'
 ```
 **Resultado**: ✅ 200 OK - Token gerado com sucesso
 
@@ -47,7 +47,7 @@ curl -X POST http://localhost:3002/api/auth/login \
 ```bash
 curl -X POST http://localhost:5174/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}'
+  -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}'
 ```
 **Resultado**: ✅ 200 OK - Proxy funcionando
 
@@ -70,7 +70,7 @@ WHERE email = 'chorstconsult@gmail.com';
 2. Clique em "Entrar" (se não estiver na tela de login)
 3. Preencha os dados:
    - **Email**: chorstconsult@gmail.com
-   - **Senha**: Double@@2026
+   - **Senha**: <ADMIN_PASSWORD>
 4. Clique em "Entrar"
 5. Você será redirecionado para `/administracao` (área do MASTER)
 
@@ -82,7 +82,7 @@ fetch('http://localhost:3002/api/auth/login', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     email: 'chorstconsult@gmail.com',
-    password: 'Double@@2026'
+    password: '<ADMIN_PASSWORD>'
   })
 })
 .then(r => r.json())

@@ -49,7 +49,7 @@
    - Host: `localhost`
    - Database: `crm_com`
    - User: `Chorstconsult`
-   - Password: `Double@@2026`
+   - Password: `<ADMIN_PASSWORD>`
 
 ## 🔧 Troubleshooting
 

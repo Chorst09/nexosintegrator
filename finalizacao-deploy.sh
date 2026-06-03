@@ -5,7 +5,7 @@
 
 SERVER_IP="209.50.241.25"
 SERVER_USER="root"
-SERVER_PASS="tq6vJPwtZbOCW3kj"
+SERVER_PASS="<SSH_PASSWORD>"
 
 echo "🏁 Finalizando deploy..."
 
@@ -74,7 +74,7 @@ echo "✅ DEPLOY CONCLUÍDO!"
 echo ""
 echo "🎯 Acesse agora: http://$SERVER_IP"
 echo "📧 Login: admin@nexoscrm.com"
-echo "🔑 Senha: Admin@2024!"
+echo "🔑 Senha: <ADMIN_PASSWORD>"
 echo ""
 echo "📊 Sistema NexosCRM implantado com:"
 echo "   ✅ Backend Node.js (porta 3001)"

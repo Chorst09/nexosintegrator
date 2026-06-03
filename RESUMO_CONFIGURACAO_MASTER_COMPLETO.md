@@ -16,7 +16,7 @@
 - Deploy realizado
 
 ### 3. Usuário MASTER Local
-- Criado no PostgreSQL local: chorstconsult@gmail.com / Double@@2026
+- Criado no PostgreSQL local: chorstconsult@gmail.com / <ADMIN_PASSWORD>
 - Role: MASTER com acesso completo
 - Testado e funcionando
 
@@ -36,7 +36,7 @@
 ### 1. crmautomatizadob2g.vercel.app
 - **Branch**: main
 - **Usuário MASTER**: admin@crm.com
-- **Senha**: Double@@2026
+- **Senha**: <ADMIN_PASSWORD>
 - **Status**: ✅ Funcionando perfeitamente
 - **Funcionalidades**: Todas disponíveis
 
@@ -121,12 +121,12 @@ Siga as instruções em: `INSTRUCOES_NEXOS_LOGIN.md`
 
 ### Desenvolvimento Local
 - Email: chorstconsult@gmail.com
-- Senha: Double@@2026
+- Senha: <ADMIN_PASSWORD>
 - Banco: PostgreSQL local
 
 ### Produção - crmautomatizadob2g.vercel.app
 - Email: admin@crm.com
-- Senha: Double@@2026
+- Senha: <ADMIN_PASSWORD>
 - Banco: Cloudflare D1
 
 ### Produção - crmcomercial.chorstconsult.com.br
@@ -180,7 +180,7 @@ Siga as instruções em: `INSTRUCOES_NEXOS_LOGIN.md`
 
 ### Hash de Senhas
 - admin123: `$2b$10$lTKAs0VqeitQZRE5/t5ZtuLnZ83pcXURoJAmtBgB/zUlqaa4BnvTw.`
-- Double@@2026: `$2a$10$lEFTEG7UgssVpXdXZateveMCXj.sptPgchR3NPZezkDaRZRIUACBq`
+- <ADMIN_PASSWORD>: `$2a$10$lEFTEG7UgssVpXdXZateveMCXj.sptPgchR3NPZezkDaRZRIUACBq`
 
 ## ✨ Conclusão
 

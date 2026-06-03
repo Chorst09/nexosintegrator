@@ -8,7 +8,7 @@ O pacote `nexoscrm-deploy.tar.gz` foi criado com sucesso!
 ```bash
 ssh root@209.50.241.25
 ```
-**Senha**: `tq6vJPwtZbOCW3kj`
+**Senha**: `<SSH_PASSWORD>`
 
 ### 2️⃣ Preparar Diretório
 ```bash
@@ -76,7 +76,7 @@ docker compose -f docker-compose.production.yml exec backend node prisma/migrate
 
 **Acesse**: http://209.50.241.25
 **Login**: admin@nexoscrm.com
-**Senha**: Admin@2024!
+**Senha**: <ADMIN_PASSWORD>
 
 ## 🔧 Comandos Úteis
 

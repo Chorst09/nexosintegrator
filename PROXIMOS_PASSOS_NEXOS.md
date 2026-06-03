@@ -98,7 +98,7 @@ Procure por erros relacionados a:
 - **Database**: postgres
 - **Port**: 5432
 - **User**: postgres
-- **Password**: Double@@2026!@
+- **Password**: <ADMIN_PASSWORD>
 
 ### Connection String (URL encoded)
 ```

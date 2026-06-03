@@ -72,7 +72,7 @@ CORS_ORIGIN=http://localhost:5173
 # DEPOIS
 NODE_ENV=production
 PORT=3000
-DATABASE_URL=postgresql://Chorstconsult:Double@@2026@localhost:5432/crm_com
+DATABASE_URL=postgresql://Chorstconsult:<ADMIN_PASSWORD>@localhost:5432/crm_com
 JWT_SECRET=seu-secret-super-seguro-aqui-mude-em-producao
 CORS_ORIGIN=http://crm.chorstconsult.com.br,http://72.60.195.200:8081,http://localhost:8081
 ```

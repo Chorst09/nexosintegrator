@@ -253,7 +253,7 @@ Se o seed não funcionar, crie o usuário MASTER via SQL:
 
 ```sql
 -- 1. Gerar hash da senha (use bcrypt online ou node)
--- Senha: Double@@2026
+-- Senha: <ADMIN_PASSWORD>
 -- Hash: $2a$10$... (use: https://bcrypt-generator.com/)
 
 -- 2. Inserir usuário
@@ -337,7 +337,7 @@ npx prisma migrate deploy
 2. **Faça login com o MASTER:**
    ```
    Email: chorstconsult@gmail.com
-   Senha: Double@@2026
+   Senha: <ADMIN_PASSWORD>
    ```
 
 3. **Altere a senha do MASTER:**

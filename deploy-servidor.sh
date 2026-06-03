@@ -13,18 +13,8 @@ APP_DIR="/opt/nexoscrm"
 
 echo "🚀 Iniciando deploy do NexosCRM para $SERVER_IP..."
 
-# 1. Verificar se sshpass está instalado (para senha via script)
-if ! command -v sshpass &> /dev/null; then
-    echo "⚠️  sshpass não encontrado. Instale com: brew install sshpass"
-    echo "   Ou use: ssh-copy-id root@$SERVER_IP para configurar chave SSH"
-    echo ""
-    echo "   Continuando sem sshpass (será pedida a senha manualmente)..."
-    SSH_CMD="ssh -p $SERVER_PORT"
-    SCP_CMD="scp -P $SERVER_PORT"
-else
-    SSH_CMD="sshpass -p tq6vJPwtZbOCW3kj ssh -p $SERVER_PORT -o StrictHostKeyChecking=no"
-    SCP_CMD="sshpass -p tq6vJPwtZbOCW3kj scp -P $SERVER_PORT -o StrictHostKeyChecking=no"
-fi
+SSH_CMD="ssh -p $SERVER_PORT"
+SCP_CMD="scp -P $SERVER_PORT"
 
 echo ""
 echo "📦 Passo 1: Preparando servidor..."
@@ -86,16 +76,13 @@ $SSH_CMD $SERVER_USER@$SERVER_IP << 'ENDSSH'
     tar -xzf nexoscrm-deploy.tar.gz
     rm nexoscrm-deploy.tar.gz
     
-    # Preparar .env de produção sem quebrar deploys quando o arquivo local não existir
+    # Preparar .env de produção sem gravar segredos no repositório ou no script
     if [ -f .env.production ]; then
         cp .env.production .env
     elif [ ! -f .env ]; then
-        cat > .env << 'ENVEOF'
-DB_PASSWORD=NexosCRM@2024!
-JWT_SECRET=NexosCRM_JWT_Super_Secret_2024
-CORS_ORIGIN=http://209.50.241.25
-VITE_API_URL=/api
-ENVEOF
+        echo "❌ Arquivo .env não encontrado em /opt/nexoscrm."
+        echo "   Crie .env com DB_PASSWORD, DATABASE_URL, JWT_SECRET, CORS_ORIGIN e VITE_API_URL antes do deploy."
+        exit 1
     fi
     
     echo "✅ Arquivos extraídos"
@@ -148,6 +135,5 @@ echo "✅ Deploy concluído!"
 echo ""
 echo "🌐 Acesse: http://$SERVER_IP"
 echo "📧 Login:  admin@nexoscrm.com"
-echo "🔑 Senha:  Admin@2024!"
 echo ""
-echo "⚠️  IMPORTANTE: Troque a senha após o primeiro acesso!"
+echo "⚠️  Use a senha administrativa definida no ambiente seguro de produção."

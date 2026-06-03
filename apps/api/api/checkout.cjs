@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
 // Configuração do Mercado Pago (adicionar no .env)

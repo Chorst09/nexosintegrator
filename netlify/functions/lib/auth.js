@@ -2,7 +2,11 @@ import jwt from 'jsonwebtoken';
 import getPrisma from './prisma.js';
 import { normalizeRole, getPermissionTemplate, isMaster } from './permissions.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = (() => {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) throw new Error('JWT_SECRET precisa estar configurado');
+  return secret;
+})();
 
 function getBearerToken(headers) {
   const header = headers.authorization || headers.Authorization || '';

@@ -25,7 +25,7 @@ echo ""
 echo "🔐 Teste 2: Testando login do usuário MASTER..."
 LOGIN_RESPONSE=$(curl -s -X POST http://localhost:3002/api/auth/login \
     -H "Content-Type: application/json" \
-    -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}')
+    -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}')
 
 if echo "$LOGIN_RESPONSE" | grep -q "token"; then
     echo -e "${GREEN}✅ Login realizado com sucesso${NC}"
@@ -68,7 +68,7 @@ echo ""
 echo "🔄 Teste 4: Testando proxy do Vite..."
 PROXY_RESPONSE=$(curl -s -X POST http://localhost:5174/api/auth/login \
     -H "Content-Type: application/json" \
-    -d '{"email":"chorstconsult@gmail.com","password":"Double@@2026"}')
+    -d '{"email":"chorstconsult@gmail.com","password":"<ADMIN_PASSWORD>"}')
 
 if echo "$PROXY_RESPONSE" | grep -q "token"; then
     echo -e "${GREEN}✅ Proxy do Vite funcionando corretamente${NC}"
@@ -97,7 +97,7 @@ echo "=================================="
 echo ""
 echo "📋 Credenciais de acesso:"
 echo "   Email: chorstconsult@gmail.com"
-echo "   Senha: Double@@2026"
+echo "   Senha: <ADMIN_PASSWORD>"
 echo ""
 echo "🌐 URLs:"
 echo "   Frontend: http://localhost:5174"

@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth.cjs');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Listar propostas
 router.get('/', authenticateToken, async (req, res) => {

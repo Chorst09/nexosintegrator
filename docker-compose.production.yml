@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: nexoscrm
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-NexosCRM@2024!}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
       POSTGRES_DB: nexoscrm
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -28,9 +28,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://nexoscrm:${DB_PASSWORD:-NexosCRM@2024!}@postgres:5432/nexoscrm?schema=public
-      JWT_SECRET: ${JWT_SECRET:-NexosCRM_JWT_Super_Secret_2024}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
       JWT_EXPIRES_IN: 7d
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://209.50.241.25}
       BCRYPT_ROUNDS: 12
     volumes:

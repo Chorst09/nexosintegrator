@@ -1,10 +1,9 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth.cjs');
 const { canAccessModule } = require('../lib/permissions.cjs');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);

@@ -367,7 +367,9 @@ export default function OpportunityForm({
 
         <div className={modalActionsClass || 'flex justify-end gap-3 mt-6'}>
           <button type="button" onClick={onCancel} className={modalCancelButtonClass}>Cancelar</button>
-          <button type="submit" className={modalSubmitButtonClass}>Salvar Alterações</button>
+          <button type="submit" className={modalSubmitButtonClass}>
+            {selectedOpportunity ? 'Salvar Alterações' : 'Criar Oportunidade'}
+          </button>
         </div>
       </form>
     );
@@ -818,7 +820,7 @@ export default function OpportunityForm({
           Cancelar
         </button>
         <button type="submit" className={modalSubmitButtonClass}>
-          Salvar Alterações
+          {selectedOpportunity ? 'Salvar Alterações' : 'Criar Oportunidade'}
         </button>
       </div>
     </form>

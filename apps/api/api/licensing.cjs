@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken, requireRole } = require('../lib/auth.cjs');
 const {
   normalizeRole,
@@ -13,10 +13,6 @@ const {
 
 const router = express.Router();
 
-const prisma = global.__prismaLicensing || new PrismaClient();
-if (process.env.NODE_ENV !== 'production') {
-  global.__prismaLicensing = prisma;
-}
 
 const DEFAULT_LICENSE_PLANS = [
   {

@@ -9,7 +9,7 @@ Configurar banco de dados PostgreSQL (Supabase) para o domínio nexos.chorstcons
 - ✅ Projeto criado: `crmnexos`
 - ✅ Host: `db.fozahazpowzlrtqkxhur.supabase.co`
 - ✅ Database: `postgres`
-- ✅ Senha configurada: `Double@@2026!@`
+- ✅ Senha configurada: `<ADMIN_PASSWORD>`
 
 ### 2. Estrutura do Banco
 - ✅ 7 tabelas criadas:

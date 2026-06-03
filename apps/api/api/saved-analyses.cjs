@@ -1,12 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { requireRole } = require('../lib/auth.cjs');
 
 const router = express.Router();
-const prisma = global.__prismaSavedAnalyses || new PrismaClient();
-if (process.env.NODE_ENV !== 'production') {
-  global.__prismaSavedAnalyses = prisma;
-}
 
 const USER_ALLOWED_ROLES = ['ADMIN', 'DIRECTOR', 'MANAGER', 'SELLER', 'PRE_SALES', 'USER'];
 const ALLOWED_SCOPE_ROLES = new Set(['master', 'admin', 'user']);
