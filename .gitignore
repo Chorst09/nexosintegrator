@@ -12,7 +12,6 @@ coverage/
 dist/
 build/
 .netlify/
-.vercel/
 .wrangler/
 
 # Environment variables
@@ -75,4 +74,3 @@ uploads/
 
 # Build artifacts
 *.tsbuildinfo
-.vercel
