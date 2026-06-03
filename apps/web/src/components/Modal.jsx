@@ -1,4 +1,5 @@
 import { ArrowLeft, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '../theme/ThemeProvider';
 
 const Modal = ({
@@ -46,10 +47,10 @@ const Modal = ({
   const isFullSize = size === 'full';
   const maxWidthClass = size === 'large' ? 'max-w-4xl w-full' : 'max-w-2xl w-full';
 
-  return (
+  return createPortal(
     <div 
       className={[
-        'fixed inset-0 z-[200] bg-black/60 motion-safe:animate-fade-in',
+        'fixed inset-0 z-[1000] bg-black/60 motion-safe:animate-fade-in',
         isFullSize
           ? (fullBleed ? '' : 'lg:pl-[312px]')
           : 'flex items-center justify-center p-4 lg:pl-[312px]'
@@ -109,7 +110,8 @@ const Modal = ({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
