@@ -1,6 +1,6 @@
 // Configuração da API - Detecta automaticamente o ambiente
 const getApiBaseUrl = () => {
-  // Em produção (Vercel), usa URL relativa
+  // Em produção, usa URL relativa
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     return '/api';
   }

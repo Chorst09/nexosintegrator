@@ -11,4 +11,4 @@ database_id = "500f9700-993b-4a87-a5e7-73b73f81fed0"
 
 [vars]
 NODE_ENV = "production"
-CORS_ORIGIN = "https://crmautomatizadob2g.vercel.app"
+CORS_ORIGIN = "http://209.50.241.25"

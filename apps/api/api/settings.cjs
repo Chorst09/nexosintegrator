@@ -86,9 +86,7 @@ router.put('/', requireRole(['ADMIN']), async (req, res) => {
   }
 });
 
-const uploadsDir = process.env.VERCEL
-  ? path.join('/tmp', 'crm-uploads', 'system')
-  : path.join(__dirname, '..', 'uploads', 'system');
+const uploadsDir = path.join(__dirname, '..', 'uploads', 'system');
 
 const ensureUploadsDir = () => {
   try {
