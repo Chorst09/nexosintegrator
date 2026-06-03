@@ -104,6 +104,10 @@ const DEMO_EXPENSES: Expense[] = [
   { tipo: 'Seguro', desc: 'Seguro de carga NF #004521', valor: 120, metodo: 'venda', pagador: 'Proprio', conta: '3.1.01.02' },
 ];
 
+const CALCULATOR_PROPOSALS_STORAGE_KEY = 'crm-calculadoras-propostas-v1';
+const CALCULATOR_PROPOSALS_SESSION_KEY = 'crm-calculadoras-propostas-session-v1';
+const LEGACY_PROPOSALS_STORAGE_KEY = 'savedProposals';
+
 const expenseTypes = ['Frete', 'Seguro', 'Imposto', 'Armazenagem', 'Desembaraco', 'Comissao', 'Outros'];
 const rateioModes: RateioMode[] = ['custo', 'venda', 'qty', 'peso'];
 const modeLabels: Record<RateioMode, string> = {
@@ -127,6 +131,115 @@ const fmtRound = (value: number) => new Intl.NumberFormat('pt-BR', {
 const pct = (value: number) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
 const cloneItems = () => DEMO_ITEMS.map(item => ({ ...item }));
 const cloneExpenses = () => DEMO_EXPENSES.map(expense => ({ ...expense }));
+const proposalNumberOf = (proposal: any) => proposal?.proposalNumber || proposal?.number || '-';
+const proposalClientOf = (proposal: any) => (
+  proposal?.clientInfo?.company ||
+  proposal?.clientInfo?.name ||
+  proposal?.client?.companyName ||
+  proposal?.client?.contactName ||
+  'Cliente nao informado'
+);
+const proposalOperationOf = (proposal: any) => proposal?.operationType || proposal?.pricing?.operationType || proposal?.calculatorType || 'venda';
+const proposalTotalOf = (proposal: any) => proposal?.totalValue ?? proposal?.result?.finalPrice ?? proposal?.result?.monthlyPrice ?? 0;
+const proposalItemsCountOf = (proposal: any) => {
+  if (Array.isArray(proposal?.quoteItems)) return proposal.quoteItems.length;
+  const snapshot = proposal?.snapshot || {};
+  return (snapshot.saleItems?.length || 0) + (snapshot.rentalItems?.length || 0) + (snapshot.serviceItems?.length || 0);
+};
+const proposalMarginOf = (proposal: any) => {
+  const raw = proposal?.desiredMargin ?? proposal?.pricing?.desiredMargin;
+  return typeof raw === 'number' ? D(raw / 100, 4) : undefined;
+};
+const parseStoredProposals = (storage: Storage, key: string) => {
+  try {
+    const parsed = JSON.parse(storage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+const loadCalculatorProposals = () => {
+  const byId = new Map<string, any>();
+  [
+    ...parseStoredProposals(localStorage, CALCULATOR_PROPOSALS_STORAGE_KEY),
+    ...parseStoredProposals(sessionStorage, CALCULATOR_PROPOSALS_SESSION_KEY),
+    ...parseStoredProposals(localStorage, LEGACY_PROPOSALS_STORAGE_KEY),
+  ].forEach((proposal) => {
+    const key = String(proposal?.id || proposalNumberOf(proposal));
+    if (key && key !== '-') byId.set(key, proposal);
+  });
+  return Array.from(byId.values()).sort((a, b) =>
+    new Date(b?.updatedAt || b?.createdAt || 0).getTime() - new Date(a?.updatedAt || a?.createdAt || 0).getTime()
+  );
+};
+const buildRateioItemsFromProposal = (proposal: any): RateioItem[] => {
+  const number = proposalNumberOf(proposal);
+  const margin = proposalMarginOf(proposal);
+
+  if (Array.isArray(proposal?.quoteItems)) {
+    const isLocacao = proposalOperationOf(proposal) === 'locacao';
+    return proposal.quoteItems.map((item: any, i: number) => {
+      const precoUnit = D(item.price, 2);
+      const custoUnit = isLocacao ? precoUnit : D(item.baseCost || precoUnit, 2);
+      return {
+        sku: `PROP-${number}-${i + 1}`,
+        desc: item.description,
+        ncm: item.ncm || '8471.30.19',
+        custo: custoUnit,
+        preco: precoUnit,
+        qty: Number(item.quantity) || 1,
+        un: isLocacao ? '/mes' : 'UN',
+        margemProposta: margin,
+        importedFromProposal: true,
+      };
+    });
+  }
+
+  const snapshot = proposal?.snapshot || {};
+  const saleItems = (snapshot.saleItems || []).map((item: any, i: number) => ({
+    sku: `PROP-${number}-V${i + 1}`,
+    desc: item.description || `Item de venda ${i + 1}`,
+    ncm: item.ncm || '8471.30.19',
+    custo: D(item.unitCost || item.baseCost || 0, 2),
+    preco: D(item.calculation?.rbUnitario || item.price || item.unitPrice || item.unitCost || 0, 2),
+    qty: Number(item.quantity) || 1,
+    un: 'UN',
+    margemProposta: margin,
+    importedFromProposal: true,
+  }));
+  const rentalItems = (snapshot.rentalItems || []).map((item: any, i: number) => {
+    const price = D(item.calculation?.rbUnitario || item.monthlyPrice || item.price || 0, 2);
+    return {
+      sku: `PROP-${number}-L${i + 1}`,
+      desc: item.description || `Item de locacao ${i + 1}`,
+      ncm: item.ncm || '8471.30.19',
+      custo: D(item.calculation?.monthlyCost || price, 2),
+      preco: price,
+      qty: Number(item.quantity) || 1,
+      un: '/mes',
+      margemProposta: margin,
+      importedFromProposal: true,
+    };
+  });
+  const serviceItems = (snapshot.serviceItems || []).map((item: any, i: number) => {
+    const hours = Number(item.estimatedHours) || 1;
+    const totalCost = D(item.calculation?.totalCost || 0, 2);
+    const totalSell = D(item.calculation?.totalSellPrice || 0, 2);
+    return {
+      sku: `PROP-${number}-S${i + 1}`,
+      desc: item.description || `Servico ${i + 1}`,
+      ncm: item.ncm || 'SERV',
+      custo: D(item.calculation?.hourlyCost || (hours > 0 ? totalCost / hours : 0), 2),
+      preco: D(item.calculation?.sellPricePerHour || (hours > 0 ? totalSell / hours : 0), 2),
+      qty: hours,
+      un: 'H',
+      margemProposta: margin,
+      importedFromProposal: true,
+    };
+  });
+
+  return [...saleItems, ...rentalItems, ...serviceItems].filter(item => item.preco > 0 || item.custo > 0);
+};
 
 function calcRateio(
   items: RateioItem[],
@@ -522,44 +635,29 @@ export default function RateioPrecificacaoV2() {
 
   // ── IMPORTAR PROPOSTA ──
   const importarProposta = (proposal: any) => {
-    const isLocacao = proposal.operationType === 'locacao';
+    const operation = proposalOperationOf(proposal);
+    const isLocacao = operation === 'locacao';
+    const number = proposalNumberOf(proposal);
+    const client = proposalClientOf(proposal);
+    const novosItens = buildRateioItemsFromProposal(proposal);
 
-    const novosItens: RateioItem[] = proposal.quoteItems.map((item: any, i: number) => {
-      // Locação: custo e preço = mensalidade unitária (item.price = mensalidade/un)
-      // Venda: custo = baseCost, preço = price unitário
-      const precoUnit = D(item.price, 2);          // preço unitário já precificado pela proposta
-      const custoUnit = isLocacao
-        ? precoUnit                                // locação importada usa valor comercial mensal como base do rateio
-        : D(item.baseCost || precoUnit, 2);
-      const margemProposta = typeof proposal.desiredMargin === 'number'
-        ? D(proposal.desiredMargin / 100, 4)
-        : undefined;
-
-      return {
-        sku: `PROP-${proposal.proposalNumber}-${i + 1}`,
-        desc: item.description,
-        ncm: '8471.30.19',
-        custo: custoUnit,
-        preco: precoUnit,
-        qty: item.quantity,
-        un: isLocacao ? '/mês' : 'UN',
-        margemProposta,
-        importedFromProposal: true,
-      };
-    });
+    if (!novosItens.length) {
+      window.alert('A proposta selecionada nao possui itens precificados para importar.');
+      return;
+    }
 
     setItems(novosItens);
     setManualWeights({});
     setScopeMode('todos');
     setTargetIndexes(novosItens[0] ? ['0'] : []);
     setSourceIndexes(novosItens.length > 1 ? novosItens.slice(1).map((_, index) => String(index + 1)) : []);
-    setRateioName(`Proposta #${proposal.proposalNumber} - ${proposal.clientInfo?.company || proposal.clientInfo?.name}${isLocacao ? ` (locação)` : ''}`);
+    setRateioName(`Proposta #${number} - ${client}${isLocacao ? ` (locacao)` : ''}`);
     setNf(prev => ({
       ...prev,
-      numero: proposal.proposalNumber,
-      emitente: proposal.clientInfo?.company || proposal.clientInfo?.name || '',
+      numero: number,
+      emitente: client,
       data: proposal.createdAt?.slice(0, 10) || prev.data,
-      natureza: isLocacao ? 'Locacao de Equipamentos' : prev.natureza,
+      natureza: isLocacao ? 'Locacao de Equipamentos' : operation === 'servicos' ? 'Prestacao de Servicos' : prev.natureza,
     }));
     setShowImportModal(false);
     setTab('nf');
@@ -1422,21 +1520,21 @@ function ImportPropostaModal({ onImport, onClose }: { onImport: (p: any) => void
   const [proposals, setProposals] = React.useState<any[]>([]);
   const [search, setSearch] = React.useState('');
   React.useEffect(() => {
-    try { setProposals(JSON.parse(localStorage.getItem('savedProposals') || '[]')); } catch {}
+    setProposals(loadCalculatorProposals());
   }, []);
+  const normalizedSearch = search.toLowerCase();
   const filtered = proposals.filter(p =>
-    p.proposalNumber?.includes(search) ||
-    p.clientInfo?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.clientInfo?.company?.toLowerCase().includes(search.toLowerCase())
+    String(proposalNumberOf(p)).toLowerCase().includes(normalizedSearch) ||
+    proposalClientOf(p).toLowerCase().includes(normalizedSearch)
   );
-  const typeLabel = (t: string) => ({ venda: 'Venda', locacao: 'Locação', servicos: 'Serviços' }[t] || t);
+  const typeLabel = (t: string) => ({ venda: 'Venda', vendas: 'Venda', locacao: 'Locação', servicos: 'Serviços', mixed: 'Proposta Mista' }[t] || t);
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:'16px'}}>
       <div style={{background:'#fff',borderRadius:'12px',width:'100%',maxWidth:'700px',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
         <div style={{background:'linear-gradient(135deg,#1a4f8a,#0f766e)',color:'#fff',padding:'20px 24px',borderRadius:'12px 12px 0 0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div>
             <div style={{fontSize:'16px',fontWeight:800}}>📋 Importar Proposta</div>
-            <div style={{fontSize:'11px',opacity:0.8,marginTop:'2px'}}>Selecione uma proposta para usar como base do rateio</div>
+            <div style={{fontSize:'11px',opacity:0.8,marginTop:'2px'}}>Selecione uma proposta salva na Calculadora para usar como base do rateio</div>
           </div>
           <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'#fff',borderRadius:'6px',padding:'6px 10px',cursor:'pointer',fontSize:'16px'}}>✕</button>
         </div>
@@ -1456,14 +1554,14 @@ function ImportPropostaModal({ onImport, onClose }: { onImport: (p: any) => void
               onMouseLeave={e => (e.currentTarget.style.borderColor = '#e2e6ed', e.currentTarget.style.background = '#fff')}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div>
-                  <div style={{fontWeight:800,fontSize:'14px',color:'#1a1f2e'}}>#{p.proposalNumber}</div>
-                  <div style={{fontSize:'12px',color:'#6b7280',marginTop:'2px'}}>{p.clientInfo?.company || p.clientInfo?.name}</div>
+                  <div style={{fontWeight:800,fontSize:'14px',color:'#1a1f2e'}}>#{proposalNumberOf(p)}</div>
+                  <div style={{fontSize:'12px',color:'#6b7280',marginTop:'2px'}}>{proposalClientOf(p)}</div>
                 </div>
                 <div style={{textAlign:'right'}}>
                   <div style={{fontWeight:800,color:'#1a4f8a',fontFamily:'monospace'}}>
-                    {p.totalValue?.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}
+                    {proposalTotalOf(p).toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}
                   </div>
-                  <div style={{fontSize:'11px',color:'#6b7280'}}>{typeLabel(p.operationType)} · {p.quoteItems?.length} itens</div>
+                  <div style={{fontSize:'11px',color:'#6b7280'}}>{typeLabel(proposalOperationOf(p))} · {proposalItemsCountOf(p)} itens</div>
                 </div>
               </div>
               <div style={{fontSize:'11px',color:'#9ca3af',marginTop:'6px'}}>
