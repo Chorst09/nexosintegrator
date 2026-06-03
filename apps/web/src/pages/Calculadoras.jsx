@@ -2804,14 +2804,22 @@ export default function Calculadoras() {
         isOpen={showModal}
         onClose={closeCalculatorModal}
         title={`Calculadora de ${activeCalcLabel}`}
-        size="large"
-        backgroundColor="auto"
+        size="full"
+        fullBleed
+        backLabel="Voltar"
+        onBack={closeCalculatorModal}
+        showCloseButton={false}
+        closeOnOverlayClick={false}
+        backgroundColor="dark"
+        contentClassName="p-0"
+        panelClassName="bg-slate-950"
       >
-        <div className="space-y-6">
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
-            <div className="grid grid-cols-1 xl:grid-cols-[300px_220px_auto] gap-3 items-end">
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Nº Proposta</label>
+        <div className="min-h-full bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_30%),linear-gradient(135deg,#020617,#0f172a_45%,#111827)] text-slate-100">
+          <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 p-4 shadow-xl shadow-black/20">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(190px,260px)_minmax(190px,260px)_1fr] xl:items-end">
+              <div className="min-w-0">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Nº Proposta</label>
                 <input
                   type="text"
                   value={proposalForm.number}
@@ -2820,23 +2828,23 @@ export default function Calculadoras() {
                     setProposalForm((prev) => ({ ...prev, number: nextNumber }));
                     setProposalSearchNumber(nextNumber);
                   }}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-base font-semibold text-white outline-none transition focus:border-cyan-400"
                 />
               </div>
-              <div>
-                <label className="block text-sm text-slate-300 mb-1">Buscar Nº</label>
+              <div className="min-w-0">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Buscar Nº</label>
                 <input
                   type="text"
                   value={proposalSearchNumber}
                   onChange={(event) => setProposalSearchNumber(event.target.value)}
-                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-base font-semibold text-white outline-none transition focus:border-cyan-400"
                 />
               </div>
-              <div className="flex flex-wrap gap-2 xl:justify-end">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                 <button
                   type="button"
                   onClick={() => startNewProposal(currentTab)}
-                  className="px-4 py-3 rounded-lg border border-cyan-400/40 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25 inline-flex items-center gap-2"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 py-3 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
                 >
                   <FilePlus2 className="w-4 h-4" />
                   Nova
@@ -2844,7 +2852,7 @@ export default function Calculadoras() {
                 <button
                   type="button"
                   onClick={searchProposalByNumber}
-                  className="px-4 py-3 rounded-lg border border-cyan-400/40 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25 inline-flex items-center gap-2"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 py-3 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
                 >
                   <Search className="w-4 h-4" />
                   Buscar
@@ -2852,7 +2860,7 @@ export default function Calculadoras() {
                 <button
                   type="button"
                   onClick={handleSaveAndReturnHome}
-                  className="px-4 py-3 rounded-lg border border-blue-400/60 bg-blue-500/80 text-white hover:bg-blue-500 inline-flex items-center gap-2"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-400/60 bg-blue-500/85 px-4 py-3 font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
                 >
                   <Save className="w-4 h-4" />
                   Salvar
@@ -2860,7 +2868,7 @@ export default function Calculadoras() {
                 <button
                   type="button"
                   onClick={generateProposalSummary}
-                  className="px-4 py-3 rounded-lg border border-emerald-400/40 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25 inline-flex items-center gap-2"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 font-semibold text-emerald-100 transition hover:bg-emerald-500/25"
                 >
                   <FileText className="w-4 h-4" />
                   Gerar
@@ -2880,7 +2888,7 @@ export default function Calculadoras() {
           ) : null}
 
           {calculatorStep === 'proposal' && (
-            <div className="rounded-xl border border-cyan-400/35 bg-slate-900/80 overflow-hidden">
+            <div className="rounded-lg border border-cyan-400/35 bg-slate-900/80 overflow-hidden">
               <div className="bg-cyan-500/30 border-b border-cyan-400/30 px-5 py-4">
                 <h4 className="text-2xl font-bold text-white">Informações da Proposta</h4>
               </div>
@@ -2972,7 +2980,7 @@ export default function Calculadoras() {
 
           {calculatorStep === 'calculation' && (
             <>
-              <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="text-sm text-slate-400">Cliente</div>
                   <div className="text-lg font-semibold text-white">
@@ -2988,7 +2996,7 @@ export default function Calculadoras() {
                 </button>
               </div>
 
-              <div className="flex space-x-2 bg-slate-800/60 rounded-xl p-2 border border-slate-600/30">
+              <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-600/30 bg-slate-800/60 p-2">
                 {calculadoras.map((calc) => (
                   <button
                     key={calc.id}
@@ -2996,7 +3004,7 @@ export default function Calculadoras() {
                     onClick={() => {
                       setCurrentTab(calc.id);
                     }}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold transition-all ${
+                    className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-all ${
                       currentTab === calc.id
                         ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/25'
                         : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
@@ -3009,7 +3017,7 @@ export default function Calculadoras() {
               </div>
 
               {operationType === 'venda' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-3 rounded-lg border border-slate-700 bg-slate-900/70">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-3 rounded-lg border border-slate-700 bg-slate-900/80">
                   {!isReformaRegimeSelected ? (
                     <label className="inline-flex items-center gap-2 text-sm text-slate-200">
                       <input
@@ -3074,7 +3082,7 @@ export default function Calculadoras() {
                 </div>
               )}
 
-              <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4">
                 <h4 className="text-lg font-semibold text-blue-300 mb-4">⚙️ Parâmetros de Cálculo</h4>
                 <div className="overflow-x-auto rounded-lg border border-slate-700">
                   <table className="w-full text-sm">
@@ -3136,7 +3144,7 @@ export default function Calculadoras() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+              <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4">
                 <div className="text-center mb-4">
                   <div className="text-sm text-slate-400">
                     {operationType === 'locacao' ? 'Preço Mensal Sugerido' : 'Preço Final Sugerido'}
@@ -3168,7 +3176,7 @@ export default function Calculadoras() {
               </div>
 
               {calculationPreview.operationAnalysis.length > 0 && (
-                <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4 space-y-4">
+                <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4 space-y-4">
                   <h4 className="text-lg font-semibold text-cyan-300">Análise</h4>
                   {calculationPreview.operationAnalysis.map((section) => (
                     <div key={section.title} className="rounded-lg border border-slate-700 p-3 bg-slate-950/40">
@@ -3341,11 +3349,12 @@ export default function Calculadoras() {
                   onClick={closeCalculatorModal}
                   className="px-6 py-3 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800"
                 >
-                  Fechar
+                  Voltar
                 </button>
               </div>
             </>
           )}
+          </div>
         </div>
       </Modal>
 

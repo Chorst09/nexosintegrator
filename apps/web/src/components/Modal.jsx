@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { useTheme } from '../theme/ThemeProvider';
 
 const Modal = ({
@@ -9,6 +9,11 @@ const Modal = ({
   showCloseButton = true,
   closeOnOverlayClick = true,
   size = 'default', // 'default' | 'large' | 'full'
+  fullBleed = false,
+  backLabel = '',
+  onBack = null,
+  contentClassName = '',
+  panelClassName = '',
   // 'auto' follows the app theme; keep 'white'/'dark' for legacy call sites.
   backgroundColor = 'auto'
 }) => {
@@ -45,7 +50,9 @@ const Modal = ({
     <div 
       className={[
         'fixed inset-0 z-[200] bg-black/60 motion-safe:animate-fade-in',
-        isFullSize ? 'lg:pl-[312px]' : 'flex items-center justify-center p-4 lg:pl-[312px]'
+        isFullSize
+          ? (fullBleed ? '' : 'lg:pl-[312px]')
+          : 'flex items-center justify-center p-4 lg:pl-[312px]'
       ].join(' ')}
       onClick={handleOverlayClick}
     >
@@ -54,12 +61,13 @@ const Modal = ({
           'crm-panel w-full overflow-hidden flex flex-col',
           isFullSize ? 'h-[100dvh] max-w-none max-h-none rounded-none border-0' : `${maxWidthClass} max-h-[92vh]`,
           'motion-safe:animate-scale-in',
-          bgOverrideClass
+          bgOverrideClass,
+          panelClassName
         ].join(' ')}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        {(title || showCloseButton) && (
+        {(title || showCloseButton || backLabel) && (
           <div 
             className={[
               'flex items-center justify-between gap-4 px-6 py-4',
@@ -67,10 +75,22 @@ const Modal = ({
               'bg-[rgb(var(--crm-surface-rgb)_/_0.55)]'
             ].join(' ')}
           >
-            {title && (
-              <h3 className={`text-xl font-bold ${textClass}`}>{title}</h3>
-            )}
-            {showCloseButton && (
+            <div className="flex min-w-0 items-center gap-3">
+              {backLabel && (
+                <button
+                  type="button"
+                  onClick={onBack || onClose}
+                  className={`${buttonClass} inline-flex items-center gap-2 rounded-xl border border-[color:var(--crm-border)] px-3 py-2 text-sm font-semibold transition-colors`}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  {backLabel}
+                </button>
+              )}
+              {title && (
+                <h3 className={`truncate text-xl font-bold ${textClass}`}>{title}</h3>
+              )}
+            </div>
+            {showCloseButton && !backLabel && (
               <button
                 onClick={onClose}
                 className={`${buttonClass} transition-colors p-2 rounded-xl`}
@@ -84,7 +104,7 @@ const Modal = ({
 
         {/* Content */}
         <div 
-          className="flex-1 min-h-0 p-6 overflow-y-auto"
+          className={['flex-1 min-h-0 overflow-y-auto', contentClassName || 'p-6'].join(' ')}
         >
           {children}
         </div>
