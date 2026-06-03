@@ -80,6 +80,13 @@ $SSH_CMD $SERVER_USER@$SERVER_IP << 'ENDSSH'
     if [ -f docker-compose.production.yml ]; then
         docker compose -f docker-compose.production.yml down 2>/dev/null || true
     fi
+
+    # Limpar arquivos antigos para que deleções locais também cheguem à produção.
+    find . -mindepth 1 \
+        ! -name '.env' \
+        ! -name '.env.production' \
+        ! -name 'nexoscrm-deploy.tar.gz' \
+        -exec rm -rf {} +
     
     # Extrair arquivos
     tar -xzf nexoscrm-deploy.tar.gz
