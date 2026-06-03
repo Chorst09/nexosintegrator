@@ -150,7 +150,8 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
         { path: '/prevendas-distribuidores', label: 'Distribuidores', icon: Building2, description: 'Base de distribuidores homologados' },
         { path: '/prevendas-fornecedores', label: 'Fornecedores', icon: Package, description: 'Base de fornecedores homologados' },
         { path: '/prevendas-registro-oportunidades', label: 'Registro de Oportunidades', icon: Target, description: 'Registro técnico para Pré-Vendas' },
-        { path: '/calculadoras', label: 'Calculadoras', icon: Calculator, description: 'Venda, locacao e servicos' }
+        { path: '/calculadoras', label: 'Calculadoras', icon: Calculator, description: 'Venda, locacao e servicos' },
+        { path: '/rateio-produtos', label: 'Rateio de Produtos', icon: Calculator, description: 'Rateio e precificacao de produtos' }
       ]
     },
     {
