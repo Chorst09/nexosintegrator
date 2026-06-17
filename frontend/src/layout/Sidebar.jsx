@@ -1,6 +1,6 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function Sidebar() {
   const location = useLocation();
@@ -10,6 +10,8 @@ export default function Sidebar() {
     automacao: true,
     configuracao: false
   });
+  const scrollPositions = useRef({});
+  const sidebarRef = useRef(null);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -17,6 +19,22 @@ export default function Sidebar() {
       [section]: !prev[section]
     }));
   };
+
+  useEffect(() => {
+    const currentPath = location.pathname;
+    if (sidebarRef.current) {
+      scrollPositions.current[currentPath] = sidebarRef.current.scrollTop;
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const currentPath = location.pathname;
+    if (sidebarRef.current && scrollPositions.current[currentPath] !== undefined) {
+      requestAnimationFrame(() => {
+        sidebarRef.current.scrollTop = scrollPositions.current[currentPath];
+      });
+    }
+  }, [location.pathname]);
 
   const menuSections = [
     {
@@ -193,13 +211,16 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-scrollbar" style={{ 
-        padding: '16px 0', 
-        height: 'calc(100vh - 220px)', 
-        overflowY: 'auto',
-        scrollbarWidth: 'thin',
-        scrollbarColor: 'rgba(255,255,255,0.2) transparent'
-      }}>
+      <nav 
+        ref={sidebarRef}
+        className="sidebar-scrollbar" 
+        style={{ 
+          padding: '16px 0', 
+          height: 'calc(100vh - 220px)', 
+          overflowY: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(255,255,255,0.2) transparent'
+        }}>
         {menuSections.map((section) => (
           <div key={section.id} style={{ marginBottom: '8px' }}>
             {/* Section Header */}
