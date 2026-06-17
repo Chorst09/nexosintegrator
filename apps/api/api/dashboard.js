@@ -159,11 +159,11 @@ export default async function handler(req) {
 
         // Mapear temperatura para stages
         const stageMap = {
-          FRIA: ['LEAD', 'QUALIFICATION'],
-          MORNA: ['DIAGNOSIS', 'PROPOSAL'],
-          QUENTE: ['NEGOTIATION'],
-          GANHA: ['WON'],
-          PERDIDA: ['LOST']
+          '0': ['LEAD', 'QUALIFICATION'],
+          '25': ['DIAGNOSIS', 'PROPOSAL'],
+          '50': ['NEGOTIATION'],
+          '75': ['WON'],
+          '100': ['LOST']
         };
 
         if (temperature && stageMap[temperature]) {
@@ -233,11 +233,11 @@ export default async function handler(req) {
         });
 
         const temperatureCounts = {
-          fria: allStages.filter(s => ['LEAD', 'QUALIFICATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
-          morna: allStages.filter(s => ['DIAGNOSIS', 'PROPOSAL'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
-          quente: allStages.filter(s => ['NEGOTIATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
-          ganha: allStages.filter(s => s.stage === 'WON').reduce((sum, s) => sum + s._count.stage, 0),
-          perdida: allStages.filter(s => s.stage === 'LOST').reduce((sum, s) => sum + s._count.stage, 0)
+          0: allStages.filter(s => ['LEAD', 'QUALIFICATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
+          25: allStages.filter(s => ['DIAGNOSIS', 'PROPOSAL'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
+          50: allStages.filter(s => ['NEGOTIATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
+          75: allStages.filter(s => s.stage === 'WON').reduce((sum, s) => sum + s._count.stage, 0),
+          100: allStages.filter(s => s.stage === 'LOST').reduce((sum, s) => sum + s._count.stage, 0)
         };
 
         // Nomes dos vendedores

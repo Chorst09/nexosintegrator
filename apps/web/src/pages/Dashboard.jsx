@@ -76,20 +76,20 @@ export default function Dashboard() {
 
   const temperatureOptions = [
     { value: '', label: 'Todas as Temperaturas' },
-    { value: 'FRIA', label: '❄️ Fria', stage: 'LEAD/QUALIFICATION' },
-    { value: 'MORNA', label: '🌤️ Morna', stage: 'DIAGNOSIS/PROPOSAL' },
-    { value: 'QUENTE', label: '🔥 Quente', stage: 'NEGOTIATION' },
-    { value: 'GANHA', label: '✅ Ganha', stage: 'WON' },
-    { value: 'PERDIDA', label: '❌ Perdida', stage: 'LOST' }
+    { value: '0', label: '0%', stage: 'LEAD/QUALIFICATION' },
+    { value: '25', label: '25%', stage: 'DIAGNOSIS/PROPOSAL' },
+    { value: '50', label: '50%', stage: 'NEGOTIATION' },
+    { value: '75', label: '75%', stage: 'WON' },
+    { value: '100', label: '100%', stage: 'LOST' }
   ];
 
   const getTemperatureFromStage = (stage) => {
-    if (['LEAD', 'QUALIFICATION'].includes(stage)) return 'FRIA';
-    if (['DIAGNOSIS', 'PROPOSAL'].includes(stage)) return 'MORNA';
-    if (['NEGOTIATION'].includes(stage)) return 'QUENTE';
-    if (stage === 'WON') return 'GANHA';
-    if (stage === 'LOST') return 'PERDIDA';
-    return 'FRIA';
+    if (['LEAD', 'QUALIFICATION'].includes(stage)) return '0';
+    if (['DIAGNOSIS', 'PROPOSAL'].includes(stage)) return '25';
+    if (['NEGOTIATION'].includes(stage)) return '50';
+    if (stage === 'WON') return '75';
+    if (stage === 'LOST') return '100';
+    return '0';
   };
 
   const getTemperatureLabel = (temp) => {
@@ -240,7 +240,7 @@ export default function Dashboard() {
   };
 
   const temperatureCounts = dashboardData?.temperatureCounts || {
-    fria: 0, morna: 0, quente: 0, ganha: 0, perdida: 0
+    0: 0, 25: 0, 50: 0, 75: 0, 100: 0
   };
 
   const handlePresentation = async () => {
@@ -625,19 +625,19 @@ export default function Dashboard() {
           {/* Temperatura Counts */}
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
-              ❄️ Fria: <span className="font-semibold text-white">{temperatureCounts.fria}</span>
+              0%: <span className="font-semibold text-white">{temperatureCounts[0]}</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
-              🌤️ Morna: <span className="font-semibold text-white">{temperatureCounts.morna}</span>
+              25%: <span className="font-semibold text-white">{temperatureCounts[25]}</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
-              🔥 Quente: <span className="font-semibold text-white">{temperatureCounts.quente}</span>
+              50%: <span className="font-semibold text-white">{temperatureCounts[50]}</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
-              ✅ Ganha: <span className="font-semibold text-white">{temperatureCounts.ganha}</span>
+              75%: <span className="font-semibold text-white">{temperatureCounts[75]}</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
-              ❌ Perdida: <span className="font-semibold text-white">{temperatureCounts.perdida}</span>
+              100%: <span className="font-semibold text-white">{temperatureCounts[100]}</span>
             </span>
           </div>
         </section>
@@ -912,15 +912,15 @@ export default function Dashboard() {
                         <td className="px-2 py-2 text-center">
                           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium"
                             style={{
-                              backgroundColor: temp === 'FRIA' ? 'rgba(59,130,246,0.2)' :
-                                temp === 'MORNA' ? 'rgba(251,191,36,0.2)' :
-                                temp === 'QUENTE' ? 'rgba(239,68,68,0.2)' :
-                                temp === 'GANHA' ? 'rgba(34,197,94,0.2)' :
+                              backgroundColor: temp === '0' ? 'rgba(59,130,246,0.2)' :
+                                temp === '25' ? 'rgba(251,191,36,0.2)' :
+                                temp === '50' ? 'rgba(239,68,68,0.2)' :
+                                temp === '75' ? 'rgba(34,197,94,0.2)' :
                                 'rgba(107,114,128,0.2)',
-                              color: temp === 'FRIA' ? '#93c5fd' :
-                                temp === 'MORNA' ? '#fcd34d' :
-                                temp === 'QUENTE' ? '#fca5a5' :
-                                temp === 'GANHA' ? '#86efac' :
+                              color: temp === '0' ? '#93c5fd' :
+                                temp === '25' ? '#fcd34d' :
+                                temp === '50' ? '#fca5a5' :
+                                temp === '75' ? '#86efac' :
                                 '#d1d5db'
                             }}
                           >
