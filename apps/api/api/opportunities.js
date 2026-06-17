@@ -102,6 +102,7 @@ export default async function handler(req) {
         b2gStage: body.b2gStage || null,
         source: body.source,
         expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
+        notes: body.notes,
         companyId: body.companyId,
         ownerId: resolvedOwnerId,
         products: body.products ? {
@@ -174,6 +175,7 @@ export default async function handler(req) {
     if (body.b2gStage !== undefined) updateData.b2gStage = body.b2gStage || null;
     if (body.expectedCloseDate) updateData.expectedCloseDate = new Date(body.expectedCloseDate);
     if (body.lossReason) updateData.lossReason = body.lossReason;
+    if (body.notes !== undefined) updateData.notes = body.notes;
     
     // Se mudou para WON, definir data de fechamento
     if (body.stage === 'WON') {

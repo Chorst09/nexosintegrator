@@ -368,6 +368,7 @@ export default function Oportunidades() {
         ownerId: payloadFormData.ownerId || '',
         b2gStage: payloadFormData.b2gStage || null,
         lossReason: payloadFormData.lossReason || null,
+        notes: payloadFormData.notes || null,
       };
 
       const response = await fetch(url, {
@@ -426,7 +427,8 @@ export default function Oportunidades() {
       source: opportunity.source || 'MANUAL',
       expectedCloseDate: opportunity.expectedCloseDate ? opportunity.expectedCloseDate.split('T')[0] : '',
       companyId: opportunity.companyId,
-      ownerId: opportunity.ownerId
+      ownerId: opportunity.ownerId,
+      notes: opportunity.notes || ''
     });
     setShowModal(true);
   };
@@ -936,6 +938,13 @@ export default function Oportunidades() {
               <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.7)] p-5">
                 <h3 className="text-lg font-semibold text-[var(--crm-ink)] mb-2">Descrição</h3>
                 <p className="text-[var(--crm-muted)] leading-relaxed whitespace-pre-wrap">{selectedOpportunity.description}</p>
+              </div>
+            )}
+
+            {selectedOpportunity.notes && (
+              <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.08)] p-5">
+                <h3 className="text-sm font-semibold text-[var(--crm-ink)] mb-2">Acompanhamento</h3>
+                <p className="text-[var(--crm-muted)] leading-relaxed whitespace-pre-wrap">{selectedOpportunity.notes}</p>
               </div>
             )}
 

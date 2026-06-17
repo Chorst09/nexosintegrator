@@ -132,6 +132,7 @@ model Opportunity {
   expectedCloseDate DateTime?
   actualCloseDate DateTime?
   lossReason      String?
+  notes           String?
   
   // Relacionamentos
   companyId String

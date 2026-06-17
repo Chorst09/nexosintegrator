@@ -363,6 +363,11 @@ export default function OpportunityForm({
             <label className={labelCls}>Telefone do Responsável</label>
             <input type="tel" className={inputCls} value={formData.ownerPhone || ''} onChange={e => setFormData(p => ({ ...p, ownerPhone: e.target.value }))} placeholder="(00) 00000-0000" />
           </div>
+
+          <div className="sm:col-span-2">
+            <label className={labelCls}>Acompanhamento</label>
+            <textarea className={inputCls} rows={4} value={formData.notes || ''} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))} placeholder="Anotações sobre o acompanhamento da oportunidade..." />
+          </div>
         </div>
 
         <div className={modalActionsClass || 'flex justify-end gap-3 mt-6'}>

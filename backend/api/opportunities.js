@@ -92,6 +92,7 @@ export default async function handler(req) {
         stage: body.stage || 'LEAD',
         source: body.source,
         expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
+        notes: body.notes,
         companyId: body.companyId,
         ownerId: body.ownerId,
         products: body.products ? {
@@ -142,6 +143,7 @@ export default async function handler(req) {
     if (body.probability !== undefined) updateData.probability = body.probability;
     if (body.expectedCloseDate) updateData.expectedCloseDate = new Date(body.expectedCloseDate);
     if (body.lossReason) updateData.lossReason = body.lossReason;
+    if (body.notes !== undefined) updateData.notes = body.notes;
     
     // Se mudou para WON, definir data de fechamento
     if (body.stage === 'WON') {
