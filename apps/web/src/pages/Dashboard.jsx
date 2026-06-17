@@ -5,11 +5,14 @@ import {
   BarChart3,
   Clock3,
   DollarSign,
+  Filter,
   Maximize2,
   PieChart,
+  Search,
   Target,
   TrendingUp,
   Users,
+  X,
   Zap
 } from 'lucide-react';
 
@@ -64,51 +67,106 @@ export default function Dashboard() {
   const [presentationProgress, setPresentationProgress] = useState({ current: 1, total: 1 });
   const presentationRef = useRef(null);
   const [realData, setRealData] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedOwnerId, setSelectedOwnerId] = useState('');
+  const [selectedTemperature, setSelectedTemperature] = useState('');
+  const [users, setUsers] = useState([]);
+  const [filteredOpportunities, setFilteredOpportunities] = useState([]);
 
-  useEffect(() => {
-    const loadRealData = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
-        const [oppsRes, companiesRes] = await Promise.allSettled([
-          fetch('/api/opportunities?clientType=B2B', { headers }).then(r => r.ok ? r.json() : []),
-          fetch('/api/companies?clientType=B2B', { headers }).then(r => r.ok ? r.json() : [])
-        ]);
-        const opps = oppsRes.status === 'fulfilled' && Array.isArray(oppsRes.value) ? oppsRes.value : [];
-        const companies = companiesRes.status === 'fulfilled' && Array.isArray(companiesRes.value) ? companiesRes.value : [];
+  const temperatureOptions = [
+    { value: '', label: 'Todas as Temperaturas' },
+    { value: 'FRIA', label: '❄️ Fria', stage: 'LEAD/QUALIFICATION' },
+    { value: 'MORNA', label: '🌤️ Morna', stage: 'DIAGNOSIS/PROPOSAL' },
+    { value: 'QUENTE', label: '🔥 Quente', stage: 'NEGOTIATION' },
+    { value: 'GANHA', label: '✅ Ganha', stage: 'WON' },
+    { value: 'PERDIDA', label: '❌ Perdida', stage: 'LOST' }
+  ];
 
-        const open = opps.filter(o => !['WON', 'LOST'].includes(o.stage));
-        const won = opps.filter(o => o.stage === 'WON');
-        const lost = opps.filter(o => o.stage === 'LOST');
-        const pipelineValue = open.reduce((s, o) => s + (o.value || 0), 0);
-        const wonValue = won.reduce((s, o) => s + (o.value || 0), 0);
-        const conversionRate = opps.length > 0 ? (won.length / opps.length) * 100 : 0;
-        const avgTicket = won.length > 0 ? wonValue / won.length : 0;
+  const getTemperatureFromStage = (stage) => {
+    if (['LEAD', 'QUALIFICATION'].includes(stage)) return 'FRIA';
+    if (['DIAGNOSIS', 'PROPOSAL'].includes(stage)) return 'MORNA';
+    if (['NEGOTIATION'].includes(stage)) return 'QUENTE';
+    if (stage === 'WON') return 'GANHA';
+    if (stage === 'LOST') return 'PERDIDA';
+    return 'FRIA';
+  };
 
+  const getTemperatureLabel = (temp) => {
+    const found = temperatureOptions.find(o => o.value === temp);
+    return found ? found.label : temp;
+  };
+
+  const resetFilters = () => {
+    setSelectedOwnerId('');
+    setSelectedTemperature('');
+  };
+
+  const fetchDashboardData = async (ownerId, temperature) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+      const params = new URLSearchParams();
+      params.set('type', 'b2b');
+      if (ownerId) params.set('ownerId', ownerId);
+      if (temperature) params.set('temperature', temperature);
+
+      const res = await fetch(`/api/dashboard?${params.toString()}`, { headers });
+      const data = await res.json();
+
+      if (data) {
+        setDashboardData(data);
+        setFilteredOpportunities(data.opportunities || []);
         setRealData({
           kpis: {
-            pipelineValue,
-            wonValue,
-            conversionRate,
-            avgTicket,
-            totalOpportunities: opps.length,
-            wonOpportunities: won.length,
-            lostOpportunities: lost.length,
-            totalCompanies: companies.length,
+            pipelineValue: data.kpis?.pipelineValue || 0,
+            wonValue: data.kpis?.wonValue || 0,
+            conversionRate: data.kpis?.conversionRate || 0,
+            avgTicket: data.kpis?.avgTicket || 0,
+            totalOpportunities: data.kpis?.totalOpportunities || 0,
+            wonOpportunities: data.kpis?.wonOpportunities || 0,
+            lostOpportunities: data.kpis?.lostOpportunities || 0,
+            totalCompanies: data.kpis?.totalCompanies || 0,
             monthlyGrowth: 0,
-            activeLeads: open.length,
+            activeLeads: data.kpis?.totalOpportunities || 0,
             avgCycleDays: 0,
             slaCompliance: 0,
             forecastAccuracy: 0,
             pipelineVelocity: 0
           }
         });
-      } catch (e) {
-        console.error('Erro ao carregar dados do dashboard B2B:', e);
       }
-    };
-    loadRealData();
+    } catch (e) {
+      console.error('Erro ao carregar dashboard B2B:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      const res = await fetch('/api/users', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error('Erro ao carregar usuarios:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    fetchDashboardData('', '');
   }, []);
+
+  useEffect(() => {
+    fetchDashboardData(selectedOwnerId, selectedTemperature);
+  }, [selectedOwnerId, selectedTemperature]);
 
   const kpis = realData?.kpis || {
     pipelineValue: 0, wonValue: 0, conversionRate: 0, avgTicket: 0,
@@ -118,7 +176,7 @@ export default function Dashboard() {
   };
 
   const charts = {
-    funnel: [
+    funnel: dashboardData?.charts?.funnel || [
       { stage: 'LEAD_GENERATION', _count: { stage: 450 }, _sum: { value: 3200000 } },
       { stage: 'LEAD_QUALIFICATION', _count: { stage: 280 }, _sum: { value: 2800000 } },
       { stage: 'PROBLEM_ASSESSMENT', _count: { stage: 180 }, _sum: { value: 2450000 } },
@@ -126,7 +184,7 @@ export default function Dashboard() {
       { stage: 'CONVERSION', _count: { stage: 65 }, _sum: { value: 1340000 } },
       { stage: 'CLOSING', _count: { stage: 38 }, _sum: { value: 890000 } }
     ],
-    monthlyRevenue: [
+    monthlyRevenue: dashboardData?.charts?.monthlyRevenue || [
       { month: '2024-07-01', revenue: 650000 },
       { month: '2024-08-01', revenue: 720000 },
       { month: '2024-09-01', revenue: 580000 },
@@ -134,20 +192,24 @@ export default function Dashboard() {
       { month: '2024-11-01', revenue: 760000 },
       { month: '2024-12-01', revenue: 920000 }
     ],
-    opportunitiesBySource: [
-      { source: 'Website', count: 45 },
-      { source: 'Indicacao', count: 32 },
-      { source: 'LinkedIn', count: 28 },
-      { source: 'Google Ads', count: 25 },
-      { source: 'Outros', count: 26 }
-    ],
-    performanceByUser: [
-      { user: 'Joao Silva', won: 12, value: 340000 },
-      { user: 'Maria Santos', won: 8, value: 280000 },
-      { user: 'Pedro Costa', won: 10, value: 320000 },
-      { user: 'Ana Oliveira', won: 6, value: 180000 },
-      { user: 'Carlos Lima', won: 9, value: 250000 }
-    ],
+    opportunitiesBySource: (dashboardData?.charts?.leadSources || []).length > 0
+      ? dashboardData.charts.leadSources.map(s => ({ source: s.source, count: s._count?.source || 0 }))
+      : [
+        { source: 'Website', count: 45 },
+        { source: 'Indicacao', count: 32 },
+        { source: 'LinkedIn', count: 28 },
+        { source: 'Google Ads', count: 25 },
+        { source: 'Outros', count: 26 }
+      ],
+    performanceByUser: (dashboardData?.charts?.sellerPerformance || []).length > 0
+      ? dashboardData.charts.sellerPerformance.map(s => ({ user: s.sellerName, won: s.deals, value: s.revenue }))
+      : [
+        { user: 'Joao Silva', won: 12, value: 340000 },
+        { user: 'Maria Santos', won: 8, value: 280000 },
+        { user: 'Pedro Costa', won: 10, value: 320000 },
+        { user: 'Ana Oliveira', won: 6, value: 180000 },
+        { user: 'Carlos Lima', won: 9, value: 250000 }
+      ],
     velocityByStage: [
       { stage: 'Geracao', days: 7 },
       { stage: 'Qualificacao', days: 9 },
@@ -175,6 +237,10 @@ export default function Dashboard() {
       { name: 'Atlas Energia', stage: 'Solucao', risk: 'Concorrente ativo', value: 260000 },
       { name: 'NorteLog', stage: 'Diagnostico', risk: 'Stakeholder ausente', value: 148000 }
     ]
+  };
+
+  const temperatureCounts = dashboardData?.temperatureCounts || {
+    fria: 0, morna: 0, quente: 0, ganha: 0, perdida: 0
   };
 
   const handlePresentation = async () => {
@@ -503,6 +569,79 @@ export default function Dashboard() {
         </div>
         </section>
 
+        {/* Filtros */}
+        <section className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-[#8fd1ff]" />
+              <span className="text-xs font-semibold text-[#cde3fb]">Filtros:</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-[#aac6e4]">Gerente de Contas</label>
+              <select
+                value={selectedOwnerId}
+                onChange={(e) => setSelectedOwnerId(e.target.value)}
+                className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/90 px-2.5 py-1.5 text-xs text-[#d9edff] focus:outline-none focus:border-[#8fd1ff]"
+              >
+                <option value="">Todos os gerentes</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-[#aac6e4]">Temperatura</label>
+              <select
+                value={selectedTemperature}
+                onChange={(e) => setSelectedTemperature(e.target.value)}
+                className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/90 px-2.5 py-1.5 text-xs text-[#d9edff] focus:outline-none focus:border-[#8fd1ff]"
+              >
+                {temperatureOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {(selectedOwnerId || selectedTemperature) && (
+              <button
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1 rounded-lg border border-[#ff8ca766] bg-[#ff8ca71a] px-2.5 py-1.5 text-xs text-[#ff8ca7] transition-colors hover:bg-[#ff8ca733]"
+              >
+                <X className="h-3 w-3" />
+                Limpar Filtros
+              </button>
+            )}
+
+            {loading && (
+              <div className="ml-auto flex items-center gap-2 text-[10px] text-[#aac6e4]">
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-[#8fd1ff] border-t-transparent" />
+                Carregando...
+              </div>
+            )}
+          </div>
+
+          {/* Temperatura Counts */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
+              ❄️ Fria: <span className="font-semibold text-white">{temperatureCounts.fria}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
+              🌤️ Morna: <span className="font-semibold text-white">{temperatureCounts.morna}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
+              🔥 Quente: <span className="font-semibold text-white">{temperatureCounts.quente}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
+              ✅ Ganha: <span className="font-semibold text-white">{temperatureCounts.ganha}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
+              ❌ Perdida: <span className="font-semibold text-white">{temperatureCounts.perdida}</span>
+            </span>
+          </div>
+        </section>
+
         <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
           <div className="flex items-center justify-between">
@@ -725,6 +864,82 @@ export default function Dashboard() {
             {kpis.totalCompanies} contas monitoradas
           </div>
         </div>
+        </section>
+
+        {/* Oportunidades Filtradas */}
+        <section className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-black text-[#dcecff]">
+                Oportunidades
+              </h3>
+              <p className="text-xs text-[#aac6e4]">
+                {filteredOpportunities.length} oportunidade{filteredOpportunities.length !== 1 ? 's' : ''} encontrada{filteredOpportunities.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <Target className="h-4 w-4 text-[#8fd1ff]" />
+          </div>
+
+          {filteredOpportunities.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[#74b9f353] text-[10px] uppercase tracking-[0.08em] text-[#9fb9d7]">
+                    <th className="px-2 py-2 text-left">Titulo</th>
+                    <th className="px-2 py-2 text-left">Empresa</th>
+                    <th className="px-2 py-2 text-left">Gerente</th>
+                    <th className="px-2 py-2 text-right">Valor</th>
+                    <th className="px-2 py-2 text-center">Estagio</th>
+                    <th className="px-2 py-2 text-center">Temperatura</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOpportunities.map((opp) => {
+                    const temp = getTemperatureFromStage(opp.stage);
+                    return (
+                      <tr key={opp.id} className="border-b border-[#74b9f322] transition-colors hover:bg-[#0b2243]/50">
+                        <td className="px-2 py-2 font-medium text-[#eaf4ff]">{opp.title}</td>
+                        <td className="px-2 py-2 text-[#aac6e4]">{opp.company?.name || '-'}</td>
+                        <td className="px-2 py-2 text-[#aac6e4]">{opp.owner?.name || '-'}</td>
+                        <td className="px-2 py-2 text-right font-semibold text-[#5eb0ff]">
+                          {formatCurrencyNoCents(opp.value)}
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <span className="inline-block rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[9px]">
+                            {opp.stage}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium"
+                            style={{
+                              backgroundColor: temp === 'FRIA' ? 'rgba(59,130,246,0.2)' :
+                                temp === 'MORNA' ? 'rgba(251,191,36,0.2)' :
+                                temp === 'QUENTE' ? 'rgba(239,68,68,0.2)' :
+                                temp === 'GANHA' ? 'rgba(34,197,94,0.2)' :
+                                'rgba(107,114,128,0.2)',
+                              color: temp === 'FRIA' ? '#93c5fd' :
+                                temp === 'MORNA' ? '#fcd34d' :
+                                temp === 'QUENTE' ? '#fca5a5' :
+                                temp === 'GANHA' ? '#86efac' :
+                                '#d1d5db'
+                            }}
+                          >
+                            {getTemperatureLabel(temp)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-[#aac6e4]">
+              <Search className="mb-2 h-8 w-8 text-[#74b9f353]" />
+              <p className="text-sm font-medium">Nenhuma oportunidade encontrada</p>
+              <p className="mt-1 text-[10px]">Tente alterar os filtros selecionados</p>
+            </div>
+          )}
         </section>
 
         <PresentationControls

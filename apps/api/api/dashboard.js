@@ -150,6 +150,138 @@ export default async function handler(req) {
         });
       }
 
+      if (type === 'b2b') {
+        // Dashboard B2B com filtros
+        const { ownerId, temperature } = req.query || {};
+
+        const whereClause = { clientType: 'B2B' };
+        if (ownerId) whereClause.ownerId = ownerId;
+
+        // Mapear temperatura para stages
+        const stageMap = {
+          FRIA: ['LEAD', 'QUALIFICATION'],
+          MORNA: ['DIAGNOSIS', 'PROPOSAL'],
+          QUENTE: ['NEGOTIATION'],
+          GANHA: ['WON'],
+          PERDIDA: ['LOST']
+        };
+
+        if (temperature && stageMap[temperature]) {
+          whereClause.stage = { in: stageMap[temperature] };
+        }
+
+        const [
+          totalCompanies,
+          totalOpportunities,
+          wonOpportunities,
+          lostOpportunities,
+          pipelineAgg,
+          wonAgg,
+          avgTicketAgg,
+          funnelData,
+          leadSources,
+          sellerPerformance,
+          opportunities
+        ] = await Promise.all([
+          prisma.company.count({ where: { clientType: 'B2B' } }),
+          prisma.opportunity.count({ where: { ...whereClause, stage: { notIn: ['WON', 'LOST'] } } }),
+          prisma.opportunity.count({ where: { ...whereClause, stage: 'WON' } }),
+          prisma.opportunity.count({ where: { ...whereClause, stage: 'LOST' } }),
+          prisma.opportunity.aggregate({
+            where: { ...whereClause, stage: { notIn: ['WON', 'LOST'] } },
+            _sum: { value: true }
+          }),
+          prisma.opportunity.aggregate({
+            where: { ...whereClause, stage: 'WON' },
+            _sum: { value: true }
+          }),
+          prisma.opportunity.aggregate({
+            where: { ...whereClause, stage: 'WON' },
+            _avg: { value: true }
+          }),
+          prisma.opportunity.groupBy({
+            by: ['stage'],
+            where: { clientType: 'B2B', ...(ownerId ? { ownerId } : {}) },
+            _count: { stage: true },
+            _sum: { value: true },
+            orderBy: { stage: 'asc' }
+          }),
+          prisma.opportunity.groupBy({
+            by: ['source'],
+            where: { clientType: 'B2B', source: { not: null }, ...(ownerId ? { ownerId } : {}) },
+            _count: { source: true }
+          }),
+          prisma.opportunity.groupBy({
+            by: ['ownerId'],
+            where: { clientType: 'B2B', stage: 'WON', ...(ownerId ? { ownerId } : {}) },
+            _count: { ownerId: true },
+            _sum: { value: true }
+          }),
+          prisma.opportunity.findMany({
+            where: whereClause,
+            include: { company: true, owner: true },
+            orderBy: { updatedAt: 'desc' },
+            take: 200
+          })
+        ]);
+
+        // Contagens por temperatura
+        const allStages = await prisma.opportunity.groupBy({
+          by: ['stage'],
+          where: { clientType: 'B2B', ...(ownerId ? { ownerId } : {}) },
+          _count: { stage: true }
+        });
+
+        const temperatureCounts = {
+          fria: allStages.filter(s => ['LEAD', 'QUALIFICATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
+          morna: allStages.filter(s => ['DIAGNOSIS', 'PROPOSAL'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
+          quente: allStages.filter(s => ['NEGOTIATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
+          ganha: allStages.filter(s => s.stage === 'WON').reduce((sum, s) => sum + s._count.stage, 0),
+          perdida: allStages.filter(s => s.stage === 'LOST').reduce((sum, s) => sum + s._count.stage, 0)
+        };
+
+        // Nomes dos vendedores
+        const sellerIds = sellerPerformance.map(s => s.ownerId);
+        const sellers = await prisma.user.findMany({
+          where: { id: { in: sellerIds } },
+          select: { id: true, name: true }
+        });
+
+        const sellerData = sellerPerformance.map(perf => {
+          const seller = sellers.find(s => s.id === perf.ownerId);
+          return {
+            sellerId: perf.ownerId,
+            sellerName: seller?.name || 'Desconhecido',
+            deals: perf._count.ownerId,
+            revenue: perf._sum.value || 0
+          };
+        });
+
+        const conversion = (wonOpportunities + lostOpportunities) > 0
+          ? (wonOpportunities / (wonOpportunities + lostOpportunities)) * 100
+          : 0;
+
+        return Response.json({
+          kpis: {
+            pipelineValue: pipelineAgg._sum.value || 0,
+            wonValue: wonAgg._sum.value || 0,
+            conversionRate: Math.round(conversion * 100) / 100,
+            avgTicket: avgTicketAgg._avg.value || 0,
+            totalOpportunities,
+            wonOpportunities,
+            lostOpportunities,
+            totalCompanies
+          },
+          charts: {
+            funnel: funnelData,
+            leadSources,
+            sellerPerformance: sellerData
+          },
+          temperatureCounts,
+          opportunities
+        });
+      }
+
       if (type === 'seller' && userId) {
         // Dashboard do Vendedor
         const [
