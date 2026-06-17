@@ -53,11 +53,15 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+const isMaster = (user) => String(user?.role || '').toUpperCase() === 'MASTER';
+
 const requireRole = (roles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Usuário não autenticado' });
     }
+
+    if (isMaster(req.user)) return next();
 
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Acesso negado' });
