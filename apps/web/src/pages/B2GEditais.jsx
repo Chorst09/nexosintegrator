@@ -1144,6 +1144,7 @@ const buildSavedSummaryNotice = (savedRecord) => {
     id: `saved-${savedRecord.id}`,
     __savedRecordId: savedRecord.id,
     __savedOriginalFileDataUri: savedRecord.originalFileDataUri || null,
+    __savedSummaryPdfDataUri: savedRecord.summaryPdfDataUri || null,
     title,
     type: isTr ? 'TERMO_REFERENCIA' : 'EDITAL',
     status: 'ANALISE_CONCLUIDA',
@@ -2988,6 +2989,17 @@ export default function B2GEditais() {
 
   const handleDownloadSummary = (notice) => {
     if (!notice?.id) return;
+
+    const pdfDataUri = notice.__savedSummaryPdfDataUri;
+    if (pdfDataUri && pdfDataUri.startsWith('data:application/pdf')) {
+      const anchor = document.createElement('a');
+      anchor.href = pdfDataUri;
+      anchor.download = `${toSafeFileName(notice.title)}-resumo.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      return;
+    }
 
     const analysisView = buildNoticeAnalysisView(notice);
     const analysis = notice.aiAnalysis || {};
