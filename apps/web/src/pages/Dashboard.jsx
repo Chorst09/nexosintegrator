@@ -677,7 +677,7 @@ export default function Dashboard() {
             <TrendingUp className="h-3.5 w-3.5 text-[#8fd0ff]" />
           </div>
           <div className="mt-1 flex flex-col items-center">
-            <TemperatureGauge value={kpis.forecastAccuracy || 65} size={130} thickness={12} />
+            <TemperatureGauge value={kpis.forecastAccuracy || 65} size={140} />
           </div>
           <div className="mt-1 text-center text-[10px] text-[#a9c5df]">Precisão média do forecast</div>
         </div>
