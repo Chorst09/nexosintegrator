@@ -34,6 +34,7 @@ import { Line, Doughnut, Bar } from 'react-chartjs-2';
 
 import PresentationControls from '../components/PresentationControls';
 import SalesFunnel from '../components/SalesFunnel';
+import TemperatureGauge from '../components/TemperatureGauge';
 
 ChartJS.register(
   CategoryScale,
@@ -672,11 +673,13 @@ export default function Dashboard() {
 
         <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-[#cde3fb]">Forecast</div>
+            <div className="text-xs font-semibold text-[#cde3fb]">Previsão de Sucesso (Forecast)</div>
             <TrendingUp className="h-3.5 w-3.5 text-[#8fd0ff]" />
           </div>
-          <div className="mt-2 text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatPercent(kpis.forecastAccuracy)}</div>
-          <div className="mt-1.5 text-[10px] text-[#a9c5df]">Precisao media</div>
+          <div className="mt-1 flex flex-col items-center">
+            <TemperatureGauge value={kpis.forecastAccuracy || 65} size={130} thickness={12} />
+          </div>
+          <div className="mt-1 text-center text-[10px] text-[#a9c5df]">Precisão média do forecast</div>
         </div>
         </section>
 
