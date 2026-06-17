@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+const { authenticateToken } = require('./lib/auth');
+
 // Importar apenas as rotas CommonJS (novas)
 const authRoutes = require('./api/auth');
 const contractsRoutes = require('./api/contracts');
@@ -107,7 +109,7 @@ app.use('/api/clients', handleLegacyAPI('./api/clients.js'));
 app.use('/api/companies', handleLegacyAPI('./api/companies.js'));
 app.use('/api/opportunities', handleLegacyAPI('./api/opportunities.js'));
 app.use('/api/activities', handleLegacyAPI('./api/activities.js'));
-app.use('/api/activities-simple', require('./api/activities-simple.cjs'));
+app.use('/api/activities-simple', authenticateToken, require('./api/activities-simple.cjs'));
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
 // app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
 app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));
