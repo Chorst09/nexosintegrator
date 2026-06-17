@@ -36,6 +36,46 @@ const runOptionalCleanup = async (operation) => {
 
 export default async function handler(req) {
   if (req.method === 'GET') {
+    const id = resolveCompanyId(req, {});
+    
+    if (id) {
+      const company = await prisma.company.findUnique({
+        where: { id },
+        include: {
+          contacts: true,
+          opportunities: {
+            include: {
+              owner: {
+                select: { id: true, name: true, email: true }
+              }
+            },
+            orderBy: { createdAt: 'desc' }
+          },
+          activities: {
+            include: {
+              assignedTo: {
+                select: { id: true, name: true, email: true }
+              }
+            },
+            orderBy: { createdAt: 'desc' }
+          },
+          _count: {
+            select: {
+              opportunities: true,
+              activities: true,
+              contracts: true
+            }
+          }
+        }
+      });
+      
+      if (!company) {
+        return new Response('Empresa não encontrada', { status: 404 });
+      }
+      
+      return Response.json(company);
+    }
+    
     const companies = await prisma.company.findMany({
       include: {
         contacts: true,
