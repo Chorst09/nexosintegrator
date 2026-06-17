@@ -43,6 +43,7 @@ services:
         condition: service_healthy
     networks:
       - nexoscrm-net
+      - icontainer-network
 
   frontend:
     build:
@@ -64,3 +65,6 @@ volumes:
 networks:
   nexoscrm-net:
     driver: bridge
+
+  icontainer-network:
+    external: true
