@@ -146,6 +146,12 @@ app.use('/api/licensing', handleLegacyAPI('./api/licensing.js'));
 app.use('/api/b2g-search', require('./api/b2g-search'));
 app.use('/api/bll-proxy', require('./api/bll-proxy'));
 
+// Novas rotas CommonJS - migradas do apps/api
+app.use('/api/b2g', authenticateToken, require('./api/b2g.cjs'));
+app.use('/api/pre-vendas', authenticateToken, require('./api/pre-vendas.cjs'));
+app.use('/api/analyses', authenticateToken, require('./api/saved-analyses.cjs'));
+app.use('/api/ai-analysis', authenticateToken, require('./api/ai-analysis.cjs'));
+
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {
   console.error('Error:', error);
@@ -198,6 +204,10 @@ app.listen(PORT, () => {
   console.log(`   🎯 /api/sales-targets - Metas de Vendas (NEW)`);
   console.log(`   👥 /api/team-commissions - Comissões por Equipe (NEW)`);
   console.log(`   🔄 /api/advanced-workflows - Workflows Avançados (NEW)`);
+  console.log(`   🏛️ /api/b2g - B2G Licitações (NEW)`);
+  console.log(`   📋 /api/pre-vendas - Pré-Vendas (NEW)`);
+  console.log(`   📊 /api/analyses - Análises Salvas (NEW)`);
+  console.log(`   🤖 /api/ai-analysis - Análise IA (NEW)`);
 });
 
 module.exports = app;
