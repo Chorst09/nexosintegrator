@@ -65,19 +65,29 @@ export default async function handler(req) {
         });
 
         // Receita mensal (últimos X meses)
-        const monthsBack = parseInt(period);
-        const monthlyRevenue = await prisma.$queryRaw`
-          SELECT 
-            DATE_TRUNC('month', "actualCloseDate") as month,
-            SUM(value) as revenue,
-            COUNT(*) as deals
-          FROM "Opportunity" 
-          WHERE stage = 'WON' 
-            AND "actualCloseDate" >= NOW() - INTERVAL '${monthsBack} months'
-            AND "actualCloseDate" IS NOT NULL
-          GROUP BY DATE_TRUNC('month', "actualCloseDate")
-          ORDER BY month ASC
-        `;
+        const execMonthsBack = parseInt(period) || 6;
+        const execStartDate = new Date(Date.now() - execMonthsBack * 30 * 24 * 60 * 60 * 1000);
+        const execRevenueRows = await prisma.opportunity.findMany({
+          where: {
+            stage: 'WON',
+            actualCloseDate: { gte: execStartDate, not: null }
+          },
+          select: {
+            actualCloseDate: true,
+            value: true
+          }
+        });
+        const execByMonth = new Map();
+        for (const opp of execRevenueRows) {
+          if (!opp.actualCloseDate) continue;
+          const d = new Date(opp.actualCloseDate);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const prev = execByMonth.get(key) || { month: new Date(d.getFullYear(), d.getMonth(), 1), revenue: 0, deals: 0 };
+          prev.revenue += opp.value || 0;
+          prev.deals += 1;
+          execByMonth.set(key, prev);
+        }
+        const monthlyRevenue = [...execByMonth.values()].sort((a, b) => a.month - b.month);
 
         // Performance por vendedor
         const sellerPerformance = await prisma.opportunity.groupBy({
@@ -138,11 +148,7 @@ export default async function handler(req) {
           },
           charts: {
             funnel: funnelData,
-            monthlyRevenue: monthlyRevenue.map(m => ({
-              month: m.month,
-              revenue: parseFloat(m.revenue) || 0,
-              deals: parseInt(m.deals) || 0
-            })),
+            monthlyRevenue,
             sellerPerformance: sellerData,
             leadSources,
             lossReasons
@@ -152,10 +158,32 @@ export default async function handler(req) {
 
       if (type === 'b2b') {
         // Dashboard B2B com filtros
-        const { ownerId, temperature } = req.query || {};
+        const { ownerId, temperature, period = '6' } = req.query || {};
 
-        const whereClause = { clientType: 'B2B' };
-        if (ownerId) whereClause.ownerId = ownerId;
+        // Parse do periodo: '30d' -> 1 mes, 'month' -> 1 mes, 'quarter' -> 3, etc.
+        const parsePeriod = (p) => {
+          if (!p) return 6;
+          const num = parseInt(p);
+          if (p.endsWith('d')) {
+            const days = Number.isFinite(num) ? num : 30;
+            return Math.max(1, Math.round(days / 30));
+          }
+          if (p === 'month') return 1;
+          if (p === 'quarter') return 3;
+          if (p === 'year') return 12;
+          if (p === 'custom') return 6;
+          return Number.isFinite(num) ? num : 6;
+        };
+        const periodMonths = parsePeriod(period);
+        const dateFilter = periodMonths
+          ? { createdAt: { gte: new Date(Date.now() - periodMonths * 30 * 24 * 60 * 60 * 1000) } }
+          : {};
+
+        const monthsBack = periodMonths || 6;
+        const revenueStartDate = new Date(Date.now() - monthsBack * 30 * 24 * 60 * 60 * 1000);
+
+        const baseWhere = { company: { clientType: 'B2B' }, ...dateFilter };
+        if (ownerId) baseWhere.ownerId = ownerId;
 
         // Mapear temperatura para stages
         const stageMap = {
@@ -166,9 +194,18 @@ export default async function handler(req) {
           '100': ['LOST']
         };
 
+        // whereClause inclui temperatura (para KPIs e lista de oportunidades)
+        const whereClause = { ...baseWhere };
         if (temperature && stageMap[temperature]) {
           whereClause.stage = { in: stageMap[temperature] };
         }
+
+        // chartsWhere nao inclui temperatura (para funnel, fontes, performance)
+        const chartsWhere = { ...baseWhere };
+
+        // Where sem dateFilter para contagens de temperatura (mostra tudo)
+        const whereNoDate = { company: { clientType: 'B2B' } };
+        if (ownerId) whereNoDate.ownerId = ownerId;
 
         const [
           totalCompanies,
@@ -181,7 +218,8 @@ export default async function handler(req) {
           funnelData,
           leadSources,
           sellerPerformance,
-          opportunities
+          opportunities,
+          monthlyRevenue
         ] = await Promise.all([
           prisma.company.count({ where: { clientType: 'B2B' } }),
           prisma.opportunity.count({ where: { ...whereClause, stage: { notIn: ['WON', 'LOST'] } } }),
@@ -201,19 +239,19 @@ export default async function handler(req) {
           }),
           prisma.opportunity.groupBy({
             by: ['stage'],
-            where: { clientType: 'B2B', ...(ownerId ? { ownerId } : {}) },
+            where: { ...chartsWhere },
             _count: { stage: true },
             _sum: { value: true },
             orderBy: { stage: 'asc' }
           }),
           prisma.opportunity.groupBy({
             by: ['source'],
-            where: { clientType: 'B2B', source: { not: null }, ...(ownerId ? { ownerId } : {}) },
+            where: { ...chartsWhere, source: { not: null } },
             _count: { source: true }
           }),
           prisma.opportunity.groupBy({
             by: ['ownerId'],
-            where: { clientType: 'B2B', stage: 'WON', ...(ownerId ? { ownerId } : {}) },
+            where: { ...chartsWhere, stage: 'WON' },
             _count: { ownerId: true },
             _sum: { value: true }
           }),
@@ -222,13 +260,24 @@ export default async function handler(req) {
             include: { company: true, owner: true },
             orderBy: { updatedAt: 'desc' },
             take: 200
+          }),
+          prisma.opportunity.findMany({
+            where: {
+              stage: 'WON',
+              company: { clientType: 'B2B' },
+              updatedAt: { gte: revenueStartDate }
+            },
+            select: {
+              updatedAt: true,
+              value: true
+            }
           })
         ]);
 
-        // Contagens por temperatura
+        // Contagens por temperatura (sempre do total, sem filtro de data)
         const allStages = await prisma.opportunity.groupBy({
           by: ['stage'],
-          where: { clientType: 'B2B', ...(ownerId ? { ownerId } : {}) },
+          where: { ...whereNoDate },
           _count: { stage: true }
         });
 
@@ -261,6 +310,22 @@ export default async function handler(req) {
           ? (wonOpportunities / (wonOpportunities + lostOpportunities)) * 100
           : 0;
 
+        // Forecast: projecao baseada no pipeline mensalizado
+        const avgMonthlyWon = Array.isArray(monthlyRevenue) && monthlyRevenue.length > 0
+          ? monthlyRevenue.reduce((s, m) => s + parseFloat(m.revenue || 0), 0) / monthlyRevenue.length
+          : 0;
+        const forecastMonths = [];
+        const today = new Date();
+        for (let i = 0; i < 6; i += 1) {
+          const m = new Date(today.getFullYear(), today.getMonth() + i, 1);
+          const target = Math.round(avgMonthlyWon * 1.1 * (1 + i * 0.02));
+          forecastMonths.push({
+            month: m.toISOString().slice(0, 10),
+            forecast: Math.round((pipelineAgg._sum.value || 0) / Math.max(6 - i, 1)),
+            target: Math.max(target, 1)
+          });
+        }
+
         return Response.json({
           kpis: {
             pipelineValue: pipelineAgg._sum.value || 0,
@@ -274,8 +339,21 @@ export default async function handler(req) {
           },
           charts: {
             funnel: funnelData,
+            monthlyRevenue: (() => {
+              const byMonth = new Map();
+              for (const opp of monthlyRevenue) {
+                const d = new Date(opp.updatedAt);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const prev = byMonth.get(key) || { month: new Date(d.getFullYear(), d.getMonth(), 1), revenue: 0, deals: 0 };
+                prev.revenue += opp.value || 0;
+                prev.deals += 1;
+                byMonth.set(key, prev);
+              }
+              return [...byMonth.values()].sort((a, b) => a.month - b.month);
+            })(),
             leadSources,
-            sellerPerformance: sellerData
+            sellerPerformance: sellerData,
+            forecast: forecastMonths
           },
           temperatureCounts,
           opportunities

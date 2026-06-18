@@ -36,11 +36,14 @@ const runOptionalCleanup = async (operation) => {
 
 export default async function handler(req) {
   if (req.method === "GET") {
-    const { stage, ownerId } = req.query || {};
+    const { stage, ownerId, clientType } = req.query || {};
 
     const where = {};
     if (stage) where.stage = stage;
     if (ownerId) where.ownerId = ownerId;
+    if (clientType) {
+      where.company = { clientType: String(clientType).toUpperCase() };
+    }
     if (req.user?.role === 'SELLER') where.ownerId = req.user.userId;
 
     const opportunities = await prisma.opportunity.findMany({

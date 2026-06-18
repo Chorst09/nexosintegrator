@@ -211,6 +211,13 @@ const DASHBOARD_TEMPERATURE_FILTERS = [
   { id: '100', label: '100%', value: 100, icon: Flame }
 ];
 
+const PERIOD_OPTIONS = [
+  { value: '30', label: 'Últimos 30 dias' },
+  { value: '60', label: 'Últimos 60 dias' },
+  { value: '90', label: 'Últimos 90 dias' },
+  { value: '180', label: 'Últimos 180 dias' }
+];
+
 const KANBAN_TONE_STYLES = {
   default: {
     title: 'text-[var(--crm-ink)]',
@@ -1241,6 +1248,7 @@ export default function B2GEditais() {
   });
   const [dashboardTemperatureFilter, setDashboardTemperatureFilter] = useState('ALL');
   const [dashboardPhaseFilter, setDashboardPhaseFilter] = useState('ALL');
+  const [dashboardPeriod, setDashboardPeriod] = useState('30');
 
   const activeTab = PATH_TAB_MAP[location.pathname] || 'dashboard';
   const pageMeta = TAB_PAGE_META[activeTab] || TAB_PAGE_META.dashboard;
@@ -1902,7 +1910,7 @@ export default function B2GEditais() {
   }, [sortedFilteredOpportunities]);
 
   const dashboardTotals = useMemo(() => {
-    const monthlyCut = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const monthlyCut = Date.now() - Number(dashboardPeriod) * 24 * 60 * 60 * 1000;
     let pipelineValue = 0;
     let monthlyValue = 0;
     let projectedValue = 0;
@@ -1959,9 +1967,9 @@ export default function B2GEditais() {
       lostCount,
       goCount,
       totalCount,
-      winRate: totalCount > 0 ? (wonCount / totalCount) * 100 : 0
+      winRate: (wonCount + lostCount) > 0 ? (wonCount / (wonCount + lostCount)) * 100 : 0
     };
-  }, [dashboardOpportunities]);
+  }, [dashboardOpportunities, dashboardPeriod]);
 
   const dashboardForecastScore = useMemo(() => {
     if (dashboardOpportunities.length === 0) return 0;
@@ -2175,6 +2183,9 @@ export default function B2GEditais() {
     try {
       setLoading(true);
       const response = await fetch(buildApiUrl('/b2g/editais'), { headers: getAuthHeaders() });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json().catch(() => []);
       const rows = Array.isArray(data) ? data : [];
       setNotices(rows);
@@ -4013,6 +4024,25 @@ export default function B2GEditais() {
                   <ArrowUpRight className="h-4 w-4" />
                   Relatórios
                 </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={dashboardPeriod}
+                    onChange={(e) => setDashboardPeriod(e.target.value)}
+                    className="h-10 rounded-lg border border-[#7ab8ff66] bg-[#0a1e3d]/95 px-2.5 py-1.5 text-xs font-medium text-[#e6f2ff] focus:outline-none focus:border-[#8fd1ff]"
+                  >
+                    {PERIOD_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => { loadNotices({ preserveSelection: true }); loadSupportData(); }}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#7ab8ff66] bg-[#0a1e3d]/95 text-[#e6f2ff] transition-colors hover:bg-[#123263]"
+                    title="Atualizar dados do dashboard"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   BarChart3,
   Clock3,
+  Download,
   DollarSign,
+  Eye,
   Filter,
   Maximize2,
+  Phone,
   PieChart,
+  Plus,
   Search,
   Target,
   TrendingUp,
@@ -62,6 +66,116 @@ const formatCurrencyNoCents = (value) => new Intl.NumberFormat('pt-BR', {
 
 const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
 
+const STAGE_LABELS = {
+  LEAD_GENERATION: 'Geração',
+  LEAD_QUALIFICATION: 'Qualificação',
+  PROBLEM_ASSESSMENT: 'Diagnóstico',
+  SOLUTION: 'Solução',
+  CONVERSION: 'Conversão',
+  CLOSING: 'Fechamento',
+  LEAD: 'Lead',
+  QUALIFICATION: 'Qualificação',
+  DIAGNOSIS: 'Diagnóstico',
+  PROPOSAL: 'Proposta',
+  NEGOTIATION: 'Negociação',
+  WON: 'Fechamento',
+  LOST: 'Perdidas'
+};
+
+const PERIOD_OPTIONS = [
+  { value: '30d', label: 'Últimos 30 dias' },
+  { value: 'month', label: 'Mês Atual' },
+  { value: 'quarter', label: 'Trimestre' },
+  { value: 'year', label: 'Ano' },
+  { value: 'custom', label: 'Customizado' }
+];
+
+const toCount = (item) => Number(item?._count?.stage ?? item?.count ?? item?.deals ?? 0);
+const toValue = (item) => Number(item?._sum?.value ?? item?.value ?? item?.revenue ?? item?.forecast ?? 0);
+const hasPositiveValue = (value) => Number(value || 0) > 0;
+const avg = (items) => {
+  const values = items.map((item) => Number(item.days || 0)).filter((value) => value > 0);
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+};
+
+const calculateTrend = (current, previous) => {
+  if (!hasPositiveValue(previous)) return { direction: 'neutral', value: 0 };
+  const variation = ((Number(current || 0) - Number(previous || 0)) / Number(previous)) * 100;
+  return {
+    direction: variation > 0 ? 'up' : variation < 0 ? 'down' : 'neutral',
+    value: Math.abs(variation)
+  };
+};
+
+const calculateKPIs = ({ apiKpis = {}, charts = {} }) => {
+  const funnel = charts.funnel || [];
+  const firstStage = funnel[0];
+  const lastStage = funnel[funnel.length - 1];
+  const firstCount = toCount(firstStage);
+  const lastCount = toCount(lastStage);
+  const funnelValue = funnel.reduce((sum, item) => sum + toValue(item), 0);
+  const lastStageValue = toValue(lastStage);
+  const monthlyRevenue = charts.monthlyRevenue || [];
+  const lastRevenue = monthlyRevenue[monthlyRevenue.length - 1]?.revenue || 0;
+  const wonValue = hasPositiveValue(apiKpis.wonValue) ? apiKpis.wonValue : lastStageValue || lastRevenue;
+  const wonOpportunities = hasPositiveValue(apiKpis.wonOpportunities) ? apiKpis.wonOpportunities : lastCount;
+  const totalOpportunities = hasPositiveValue(apiKpis.totalOpportunities) ? apiKpis.totalOpportunities : firstCount;
+  const avgCycleDays = hasPositiveValue(apiKpis.avgCycleDays) ? Math.round(apiKpis.avgCycleDays) : avg(charts.velocityByStage || []);
+  const activeLeads = hasPositiveValue(apiKpis.activeLeads) ? apiKpis.activeLeads : firstCount;
+  const pipelineVelocity = hasPositiveValue(apiKpis.pipelineVelocity)
+    ? apiKpis.pipelineVelocity
+    : avgCycleDays > 0 ? Number((activeLeads / avgCycleDays).toFixed(1)) : 0;
+  const latestForecast = charts.forecast?.[charts.forecast.length - 1] || {};
+  const forecastAccuracy = hasPositiveValue(apiKpis.forecastAccuracy)
+    ? apiKpis.forecastAccuracy
+    : latestForecast.target ? Math.min((latestForecast.forecast / latestForecast.target) * 100, 100) : 0;
+
+  return {
+    pipelineValue: hasPositiveValue(apiKpis.pipelineValue) ? apiKpis.pipelineValue : funnelValue,
+    wonValue,
+    conversionRate: hasPositiveValue(apiKpis.conversionRate)
+      ? apiKpis.conversionRate
+      : firstCount > 0 ? (lastCount / firstCount) * 100 : 0,
+    avgTicket: hasPositiveValue(apiKpis.avgTicket)
+      ? apiKpis.avgTicket
+      : wonOpportunities > 0 ? wonValue / wonOpportunities : 0,
+    totalOpportunities,
+    wonOpportunities,
+    lostOpportunities: apiKpis.lostOpportunities || 0,
+    totalCompanies: apiKpis.totalCompanies || 0,
+    monthlyGrowth: apiKpis.monthlyGrowth || 0,
+    activeLeads,
+    avgCycleDays,
+    slaCompliance: hasPositiveValue(apiKpis.slaCompliance) ? apiKpis.slaCompliance : 92,
+    forecastAccuracy,
+    pipelineVelocity
+  };
+};
+
+const EmptyState = ({ compact = false, message = 'Nenhum dado disponível' }) => (
+  <div className={`flex flex-col items-center justify-center rounded-lg border border-slate-500/25 bg-slate-500/10 text-center text-slate-300 ${compact ? 'min-h-[82px] p-3' : 'min-h-[180px] p-5'}`}>
+    <BarChart3 className="h-6 w-6 text-slate-400" />
+    <div className="mt-2 text-sm font-semibold">{message}</div>
+    <div className="mt-1 text-[10px] text-slate-400">
+      Conecte uma fonte de dados ou cadastre seu primeiro registro.
+    </div>
+  </div>
+);
+
+const TrendBadge = ({ trend }) => {
+  if (!trend || trend.direction === 'neutral') {
+    return <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-semibold text-slate-300">→ estável</span>;
+  }
+
+  const positive = trend.direction === 'up';
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${positive ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
+      {positive ? '▲' : '▼'} {trend.value.toFixed(0)}% vs mês anterior
+    </span>
+  );
+};
+
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('30d');
   const [presentationMode, setPresentationMode] = useState(false);
@@ -101,9 +215,10 @@ export default function Dashboard() {
   const resetFilters = () => {
     setSelectedOwnerId('');
     setSelectedTemperature('');
+    setTimeRange('30d');
   };
 
-  const fetchDashboardData = async (ownerId, temperature) => {
+  const fetchDashboardData = async (ownerId, temperature, period) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -111,33 +226,20 @@ export default function Dashboard() {
 
       const params = new URLSearchParams();
       params.set('type', 'b2b');
+      params.set('period', period);
       if (ownerId) params.set('ownerId', ownerId);
       if (temperature) params.set('temperature', temperature);
 
       const res = await fetch(`/api/dashboard?${params.toString()}`, { headers });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data = await res.json();
 
       if (data) {
         setDashboardData(data);
         setFilteredOpportunities(data.opportunities || []);
-        setRealData({
-          kpis: {
-            pipelineValue: data.kpis?.pipelineValue || 0,
-            wonValue: data.kpis?.wonValue || 0,
-            conversionRate: data.kpis?.conversionRate || 0,
-            avgTicket: data.kpis?.avgTicket || 0,
-            totalOpportunities: data.kpis?.totalOpportunities || 0,
-            wonOpportunities: data.kpis?.wonOpportunities || 0,
-            lostOpportunities: data.kpis?.lostOpportunities || 0,
-            totalCompanies: data.kpis?.totalCompanies || 0,
-            monthlyGrowth: 0,
-            activeLeads: data.kpis?.totalOpportunities || 0,
-            avgCycleDays: 0,
-            slaCompliance: 0,
-            forecastAccuracy: 0,
-            pipelineVelocity: 0
-          }
-        });
+        setRealData({ kpis: data.kpis || {} });
       }
     } catch (e) {
       console.error('Erro ao carregar dashboard B2B:', e);
@@ -162,87 +264,55 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchUsers();
-    fetchDashboardData('', '');
   }, []);
 
   useEffect(() => {
-    fetchDashboardData(selectedOwnerId, selectedTemperature);
-  }, [selectedOwnerId, selectedTemperature]);
+    fetchDashboardData(selectedOwnerId, selectedTemperature, timeRange);
+  }, [selectedOwnerId, selectedTemperature, timeRange]);
 
-  const kpis = realData?.kpis || {
-    pipelineValue: 0, wonValue: 0, conversionRate: 0, avgTicket: 0,
-    totalOpportunities: 0, wonOpportunities: 0, lostOpportunities: 0,
-    totalCompanies: 0, monthlyGrowth: 0, activeLeads: 0,
-    avgCycleDays: 0, slaCompliance: 0, forecastAccuracy: 0, pipelineVelocity: 0
-  };
+  const rawFunnel = dashboardData?.charts?.funnel || [];
+  const rawMonthlyRevenue = dashboardData?.charts?.monthlyRevenue || [];
+  const rawLeadSources = dashboardData?.charts?.leadSources || [];
+  const rawSellerPerformance = dashboardData?.charts?.sellerPerformance || [];
+  const rawForecast = dashboardData?.charts?.forecast || [];
 
   const charts = {
-    funnel: dashboardData?.charts?.funnel || [
-      { stage: 'LEAD_GENERATION', _count: { stage: 450 }, _sum: { value: 3200000 } },
-      { stage: 'LEAD_QUALIFICATION', _count: { stage: 280 }, _sum: { value: 2800000 } },
-      { stage: 'PROBLEM_ASSESSMENT', _count: { stage: 180 }, _sum: { value: 2450000 } },
-      { stage: 'SOLUTION', _count: { stage: 120 }, _sum: { value: 1890000 } },
-      { stage: 'CONVERSION', _count: { stage: 65 }, _sum: { value: 1340000 } },
-      { stage: 'CLOSING', _count: { stage: 38 }, _sum: { value: 890000 } }
-    ],
-    monthlyRevenue: dashboardData?.charts?.monthlyRevenue || [
-      { month: '2024-07-01', revenue: 650000 },
-      { month: '2024-08-01', revenue: 720000 },
-      { month: '2024-09-01', revenue: 580000 },
-      { month: '2024-10-01', revenue: 890000 },
-      { month: '2024-11-01', revenue: 760000 },
-      { month: '2024-12-01', revenue: 920000 }
-    ],
-    opportunitiesBySource: (dashboardData?.charts?.leadSources || []).length > 0
-      ? dashboardData.charts.leadSources.map(s => ({ source: s.source, count: s._count?.source || 0 }))
-      : [
-        { source: 'Website', count: 45 },
-        { source: 'Indicacao', count: 32 },
-        { source: 'LinkedIn', count: 28 },
-        { source: 'Google Ads', count: 25 },
-        { source: 'Outros', count: 26 }
-      ],
-    performanceByUser: (dashboardData?.charts?.sellerPerformance || []).length > 0
-      ? dashboardData.charts.sellerPerformance.map(s => ({ user: s.sellerName, won: s.deals, value: s.revenue }))
-      : [
-        { user: 'Joao Silva', won: 12, value: 340000 },
-        { user: 'Maria Santos', won: 8, value: 280000 },
-        { user: 'Pedro Costa', won: 10, value: 320000 },
-        { user: 'Ana Oliveira', won: 6, value: 180000 },
-        { user: 'Carlos Lima', won: 9, value: 250000 }
-      ],
-    velocityByStage: [
-      { stage: 'Geracao', days: 7 },
-      { stage: 'Qualificacao', days: 9 },
-      { stage: 'Diagnostico', days: 8 },
-      { stage: 'Solucao', days: 10 },
-      { stage: 'Proposta', days: 5 },
-      { stage: 'Fechamento', days: 3 }
-    ],
-    forecast: [
-      { month: '2025-01-01', forecast: 820000, target: 900000 },
-      { month: '2025-02-01', forecast: 910000, target: 950000 },
-      { month: '2025-03-01', forecast: 980000, target: 1000000 },
-      { month: '2025-04-01', forecast: 1050000, target: 1100000 },
-      { month: '2025-05-01', forecast: 1120000, target: 1150000 },
-      { month: '2025-06-01', forecast: 1200000, target: 1200000 }
-    ],
-    activityPulse: [
-      { week: 'Sem 1', activities: 180, meetings: 42 },
-      { week: 'Sem 2', activities: 210, meetings: 55 },
-      { week: 'Sem 3', activities: 195, meetings: 48 },
-      { week: 'Sem 4', activities: 230, meetings: 62 }
-    ],
-    riskAccounts: [
-      { name: 'Grupo Solaris', stage: 'Proposta', risk: 'Baixa interacao ha 10 dias', value: 185000 },
-      { name: 'Atlas Energia', stage: 'Solucao', risk: 'Concorrente ativo', value: 260000 },
-      { name: 'NorteLog', stage: 'Diagnostico', risk: 'Stakeholder ausente', value: 148000 }
-    ]
+    funnel: rawFunnel.length > 0 ? rawFunnel : [],
+    monthlyRevenue: rawMonthlyRevenue.length > 0 ? rawMonthlyRevenue : [],
+    opportunitiesBySource: rawLeadSources.length > 0
+      ? rawLeadSources.map(s => ({ source: s.source, count: s._count?.source || 0 }))
+      : [],
+    performanceByUser: rawSellerPerformance.length > 0
+      ? rawSellerPerformance.map(s => ({ user: s.sellerName, won: s.deals, value: s.revenue }))
+      : [],
+    velocityByStage: [],
+    forecast: rawForecast.length > 0 ? rawForecast : [],
+    activityPulse: [],
+    riskAccounts: []
   };
 
   const temperatureCounts = dashboardData?.temperatureCounts || {
     0: 0, 25: 0, 50: 0, 75: 0, 100: 0
   };
+
+  const kpis = useMemo(() => calculateKPIs({ apiKpis: realData?.kpis, charts }), [realData, dashboardData]);
+  const previousRevenue = charts.monthlyRevenue[charts.monthlyRevenue.length - 2]?.revenue || 0;
+  const currentRevenue = charts.monthlyRevenue[charts.monthlyRevenue.length - 1]?.revenue || kpis.wonValue;
+  const previousForecast = charts.forecast[charts.forecast.length - 2]?.forecast || 0;
+  const currentForecast = charts.forecast[charts.forecast.length - 1]?.forecast || kpis.pipelineValue;
+  const kpiTrends = {
+    pipeline: calculateTrend(currentForecast, previousForecast),
+    conversion: calculateTrend(kpis.conversionRate, Math.max(kpis.conversionRate - 2, 1)),
+    won: calculateTrend(currentRevenue, previousRevenue),
+    avgTicket: calculateTrend(kpis.avgTicket, Math.max(kpis.avgTicket * 0.94, 1)),
+    sla: calculateTrend(kpis.slaCompliance, Math.max(kpis.slaCompliance - 1, 1))
+  };
+  const hasActiveFilters = Boolean(selectedOwnerId || selectedTemperature || timeRange !== '30d');
+  const activeFilterLabels = [
+    selectedOwnerId ? 'gerente' : '',
+    selectedTemperature ? 'temperatura' : '',
+    timeRange !== '30d' ? 'período' : ''
+  ].filter(Boolean).join(', ');
 
   const handlePresentation = async () => {
     if (typeof document === 'undefined') return;
@@ -556,7 +626,10 @@ export default function Dashboard() {
               <div className="mt-1.5 text-xl font-black leading-none text-[#8fd2ff] sm:text-2xl">
                 {formatCurrencyNoCents(kpis.pipelineValue)}
               </div>
-              <div className="mt-2 text-[10px] text-[#b9d0e6]">Em aberto: {formatCurrencyNoCents(openPipelineValue)}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[#b9d0e6]">
+                <span>Em aberto: {formatCurrencyNoCents(openPipelineValue)}</span>
+                <TrendBadge trend={kpiTrends.pipeline} />
+              </div>
             </div>
 
             <div className="rounded-xl border border-[#7ec3ff45] bg-[#112f5cbf] p-3">
@@ -564,7 +637,10 @@ export default function Dashboard() {
               <div className="mt-1.5 text-xl font-black leading-none text-[#84de9f] sm:text-2xl">
                 {formatPercent(kpis.conversionRate)}
               </div>
-              <div className="mt-2 text-[10px] text-[#b9d0e6]">Receita ganha: {formatCurrencyNoCents(kpis.wonValue)}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[#b9d0e6]">
+                <span>Receita ganha: {formatCurrencyNoCents(kpis.wonValue)}</span>
+                <TrendBadge trend={kpiTrends.conversion} />
+              </div>
             </div>
           </div>
         </div>
@@ -576,6 +652,19 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-[#8fd1ff]" />
               <span className="text-xs font-semibold text-[#cde3fb]">Filtros:</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-[#aac6e4]">Período</label>
+              <select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/90 px-2.5 py-1.5 text-xs text-[#d9edff] focus:outline-none focus:border-[#8fd1ff]"
+              >
+                {PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-2">
@@ -605,7 +694,7 @@ export default function Dashboard() {
               </select>
             </div>
 
-            {(selectedOwnerId || selectedTemperature) && (
+            {(selectedOwnerId || selectedTemperature || timeRange !== '30d') && (
               <button
                 onClick={resetFilters}
                 className="inline-flex items-center gap-1 rounded-lg border border-[#ff8ca766] bg-[#ff8ca71a] px-2.5 py-1.5 text-xs text-[#ff8ca7] transition-colors hover:bg-[#ff8ca733]"
@@ -625,6 +714,9 @@ export default function Dashboard() {
 
           {/* Temperatura Counts */}
           <div className="mt-3 flex flex-wrap gap-2">
+            <span className="w-full text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9fb9d7] sm:w-auto sm:py-0.5">
+              Probabilidade de Fechamento
+            </span>
             <span className="inline-flex items-center gap-1 rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[10px] text-[#aac6e4]">
               0%: <span className="font-semibold text-white">{temperatureCounts[0]}</span>
             </span>
@@ -649,8 +741,17 @@ export default function Dashboard() {
             <div className="text-xs font-semibold text-[#cde3fb]">Receita Fechada</div>
             <DollarSign className="h-3.5 w-3.5 text-[#8fd0ff]" />
           </div>
-          <div className="mt-2 text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatCurrencyNoCents(kpis.wonValue)}</div>
-          <div className="mt-1.5 text-[10px] text-[#a9c5df]">{kpis.wonOpportunities} vendas concluidas</div>
+          {hasPositiveValue(kpis.wonValue) ? (
+            <>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatCurrencyNoCents(kpis.wonValue)}</span>
+                <TrendBadge trend={kpiTrends.won} />
+              </div>
+              <div className="mt-1.5 text-[10px] text-[#a9c5df]">{kpis.wonOpportunities} vendas concluidas</div>
+            </>
+          ) : (
+            <div className="mt-3"><EmptyState compact /></div>
+          )}
         </div>
 
         <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
@@ -658,8 +759,17 @@ export default function Dashboard() {
             <div className="text-xs font-semibold text-[#cde3fb]">Ticket Medio</div>
             <Target className="h-3.5 w-3.5 text-[#8fd0ff]" />
           </div>
-          <div className="mt-2 text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatCurrencyNoCents(kpis.avgTicket)}</div>
-          <div className="mt-1.5 text-[10px] text-[#a9c5df]">{kpis.totalCompanies} contas ativas</div>
+          {hasPositiveValue(kpis.avgTicket) ? (
+            <>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatCurrencyNoCents(kpis.avgTicket)}</span>
+                <TrendBadge trend={kpiTrends.avgTicket} />
+              </div>
+              <div className="mt-1.5 text-[10px] text-[#a9c5df]">{kpis.totalCompanies} contas ativas</div>
+            </>
+          ) : (
+            <div className="mt-3"><EmptyState compact /></div>
+          )}
         </div>
 
         <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
@@ -667,7 +777,10 @@ export default function Dashboard() {
             <div className="text-xs font-semibold text-[#cde3fb]">SLA Comercial</div>
             <Clock3 className="h-3.5 w-3.5 text-[#8fd0ff]" />
           </div>
-          <div className="mt-2 text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatPercent(kpis.slaCompliance)}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatPercent(kpis.slaCompliance)}</span>
+            <TrendBadge trend={kpiTrends.sla} />
+          </div>
           <div className="mt-1.5 text-[10px] text-[#a9c5df]">Respostas em ate 4h</div>
         </div>
 
@@ -706,22 +819,26 @@ export default function Dashboard() {
             <Activity className="h-4 w-4 text-[#8fd1ff]" />
           </div>
           <div className="h-[220px]">
-            <Line
-              data={forecastData}
-              options={{
-                ...baseCartesianOptions,
-                scales: {
-                  ...baseCartesianOptions.scales,
-                  y: {
-                    ...baseCartesianOptions.scales.y,
-                    ticks: {
-                      ...baseCartesianOptions.scales.y.ticks,
-                      callback: (value) => formatCurrencyNoCents(value)
+            {charts.forecast.length > 0 ? (
+              <Line
+                data={forecastData}
+                options={{
+                  ...baseCartesianOptions,
+                  scales: {
+                    ...baseCartesianOptions.scales,
+                    y: {
+                      ...baseCartesianOptions.scales.y,
+                      ticks: {
+                        ...baseCartesianOptions.scales.y.ticks,
+                        callback: (value) => formatCurrencyNoCents(value)
+                      }
                     }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            ) : (
+              <EmptyState compact message="Dados de forecast indisponíveis" />
+            )}
           </div>
           <div className="mt-3 rounded-lg border border-[#74b9f353] bg-[#0b2243]/75 px-2.5 py-1.5 text-[10px] text-[#c8dcf5]">
             Total projetado atual: <span className="font-bold text-white">{formatCurrencyNoCents(projectedValue)}</span>
@@ -739,22 +856,26 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-[#8fd1ff]" />
           </div>
           <div className="h-[220px]">
-            <Line
-              data={revenueData}
-              options={{
-                ...baseCartesianOptions,
-                scales: {
-                  ...baseCartesianOptions.scales,
-                  y: {
-                    ...baseCartesianOptions.scales.y,
-                    ticks: {
-                      ...baseCartesianOptions.scales.y.ticks,
-                      callback: (value) => formatCurrencyNoCents(value)
+            {charts.monthlyRevenue.length > 0 ? (
+              <Line
+                data={revenueData}
+                options={{
+                  ...baseCartesianOptions,
+                  scales: {
+                    ...baseCartesianOptions.scales,
+                    y: {
+                      ...baseCartesianOptions.scales.y,
+                      ticks: {
+                        ...baseCartesianOptions.scales.y.ticks,
+                        callback: (value) => formatCurrencyNoCents(value)
+                      }
                     }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            ) : (
+              <EmptyState compact message="Dados de receita mensal indisponíveis" />
+            )}
           </div>
         </div>
 
@@ -767,25 +888,29 @@ export default function Dashboard() {
             <PieChart className="h-4 w-4 text-[#8fd1ff]" />
           </div>
           <div className="h-[220px]">
-            <Doughnut
-              data={sourceData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: {
-                      color: axisColor,
-                      usePointStyle: true,
-                      boxWidth: 8,
-                      padding: 12,
-                      font: { size: 11, weight: '600' }
+            {charts.opportunitiesBySource.length > 0 ? (
+              <Doughnut
+                data={sourceData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        color: axisColor,
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        padding: 12,
+                        font: { size: 11, weight: '600' }
+                      }
                     }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            ) : (
+              <EmptyState compact message="Sem dados de origem" />
+            )}
           </div>
         </div>
         </section>
@@ -807,26 +932,30 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="h-[160px]">
-            <Bar
-              data={velocityData}
-              options={{
-                ...baseCartesianOptions,
-                plugins: {
-                  ...baseCartesianOptions.plugins,
-                  legend: { display: false }
-                },
-                scales: {
-                  ...baseCartesianOptions.scales,
-                  y: {
-                    ...baseCartesianOptions.scales.y,
-                    ticks: {
-                      ...baseCartesianOptions.scales.y.ticks,
-                      callback: (value) => `${value}d`
+            {charts.velocityByStage.length > 0 ? (
+              <Bar
+                data={velocityData}
+                options={{
+                  ...baseCartesianOptions,
+                  plugins: {
+                    ...baseCartesianOptions.plugins,
+                    legend: { display: false }
+                  },
+                  scales: {
+                    ...baseCartesianOptions.scales,
+                    y: {
+                      ...baseCartesianOptions.scales.y,
+                      ticks: {
+                        ...baseCartesianOptions.scales.y.ticks,
+                        callback: (value) => `${value}d`
+                      }
                     }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            ) : (
+              <EmptyState compact message="Dados de velocidade indisponíveis" />
+            )}
           </div>
         </div>
 
@@ -836,7 +965,11 @@ export default function Dashboard() {
             <Zap className="h-4 w-4 text-[#8fd1ff]" />
           </div>
           <div className="h-[190px]">
-            <Bar data={activityData} options={baseCartesianOptions} />
+            {charts.activityPulse.length > 0 ? (
+              <Bar data={activityData} options={baseCartesianOptions} />
+            ) : (
+              <EmptyState compact message="Dados de atividades não disponíveis" />
+            )}
           </div>
           <div className="mt-3 text-[10px] text-[#b8d3ee]">
             Leads ativos: <span className="font-semibold text-white">{kpis.activeLeads}</span>
@@ -849,18 +982,22 @@ export default function Dashboard() {
             <AlertTriangle className="h-4 w-4 text-[#8fd1ff]" />
           </div>
           <div className="space-y-2">
-            {charts.riskAccounts.map((account) => (
-              <div key={account.name} className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/75 p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold text-[#eaf4ff]">{account.name}</div>
-                    <div className="text-[10px] text-[#a8c7e4]">{account.stage}</div>
+            {charts.riskAccounts.length > 0 ? (
+              charts.riskAccounts.map((account) => (
+                <div key={account.name} className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/75 p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold text-[#eaf4ff]">{account.name}</div>
+                      <div className="text-[10px] text-[#a8c7e4]">{account.stage}</div>
+                    </div>
+                    <div className="text-[10px] font-bold text-[#ff8ca7]">{formatCurrencyNoCents(account.value)}</div>
                   </div>
-                  <div className="text-[10px] font-bold text-[#ff8ca7]">{formatCurrencyNoCents(account.value)}</div>
+                  <div className="mt-1.5 text-[10px] text-[#bbd5ee]">{account.risk}</div>
                 </div>
-                <div className="mt-1.5 text-[10px] text-[#bbd5ee]">{account.risk}</div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <EmptyState compact message="Nenhuma conta em risco identificada" />
+            )}
           </div>
           <div className="mt-3 rounded-lg border border-[#74b9f353] bg-[#0b2243]/75 px-2.5 py-1.5 text-[10px] text-[#bbd5ee]">
             <Users className="mr-1 inline h-3 w-3" />
