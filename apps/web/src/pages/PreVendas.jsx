@@ -473,6 +473,24 @@ export default function PreVendas() {
     return { total, abertas, ganhas, valorPotencial, b2g };
   }, [registroOportunidades]);
 
+  const registroExpiring = useMemo(() => {
+    const now = new Date();
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const expiring = [];
+    const expired = [];
+    registroOportunidades.forEach((item) => {
+      if (!item.dataValidade) return;
+      const val = new Date(item.dataValidade);
+      if (!Number.isFinite(val.getTime())) return;
+      if (val < now) {
+        expired.push(item);
+      } else if (val <= in7Days) {
+        expiring.push(item);
+      }
+    });
+    return { expiring, expired };
+  }, [registroOportunidades]);
+
   const registroStatusChartData = useMemo(() => {
     const statusOrder = ['ABERTA', 'EM_ANALISE', 'EM_COTACAO', 'PRECIFICADA', 'DEVOLVIDA', 'GANHA', 'PERDIDA'];
     const statusLabels = {
@@ -872,6 +890,30 @@ export default function PreVendas() {
               <AnimatedStats title="Ganhas" value={registroStats.ganhas} subtitle="Oportunidades convertidas" icon={CheckCircle} color="green" />
               <AnimatedStats title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} color="purple" />
             </div>
+
+            {(registroExpiring.expiring.length > 0 || registroExpiring.expired.length > 0) && (
+              <div
+                onClick={() => navigate('/prevendas-registro-oportunidades')}
+                className="crm-card rounded-lg p-4 border-l-4 border-l-rose-500 cursor-pointer hover:bg-gray-700/30 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-rose-200">Alertas de Vencimento</p>
+                    {registroExpiring.expiring.length > 0 && (
+                      <p className="text-xs text-amber-300 mt-1">
+                        {registroExpiring.expiring.length} oportunidade(es) vence(m) nos próximos 7 dias.
+                      </p>
+                    )}
+                    {registroExpiring.expired.length > 0 && (
+                      <p className="text-xs text-rose-300 mt-0.5">
+                        {registroExpiring.expired.length} oportunidade(es) vencida(s). Renove ou arquive.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="crm-card rounded-lg p-5">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">

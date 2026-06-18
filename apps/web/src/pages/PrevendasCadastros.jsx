@@ -593,6 +593,19 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                   <p className="mt-1 text-xs text-slate-400">
                     {item.dataAbertura ? `Abertura: ${toDateBr(item.dataAbertura)}` : ''}
                     {item.dataValidade ? ` • Validade: ${toDateBr(item.dataValidade)}` : ''}
+                    {item.dataValidade && (() => {
+                      const val = new Date(item.dataValidade);
+                      const now = new Date();
+                      if (!Number.isFinite(val.getTime())) return null;
+                      if (val < now) {
+                        return <span className="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-300 border border-red-500/30">Vencida</span>;
+                      }
+                      const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                      if (val <= in7) {
+                        return <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300 border border-amber-500/30">Vence em breve</span>;
+                      }
+                      return null;
+                    })()}
                   </p>
 
                   {item.oportunidadeId && (

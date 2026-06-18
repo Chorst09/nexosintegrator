@@ -297,6 +297,7 @@ export default function DashboardGeral() {
       { key: 'companiesB2B', label: 'Empresas B2B', endpoint: '/companies?clientType=B2B', enabled: access.accessB2B, normalize: parseRows, emptyValue: [] },
       { key: 'companiesB2G', label: 'Empresas B2G', endpoint: '/companies?clientType=B2G', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
       { key: 'b2g', label: 'Editais B2G', endpoint: '/b2g', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
+      { key: 'prevendasOportunidades', label: 'Registro Pré-Vendas', endpoint: '/prevendas-cadastros/oportunidades', enabled: (access.accessPreSales || adminLike), normalize: parseRows, emptyValue: [] },
       { key: 'preSales', label: 'Pré-vendas', endpoint: '/pre-vendas?limit=200', enabled: access.accessPreSales || adminLike, normalize: parsePreSales, emptyValue: { rows: [], total: 0 }, count: (payload) => payload.total },
       { key: 'activities', label: 'Atividades', endpoint: '/activities', enabled: access.accessB2B || access.accessB2G || access.accessPreSales, normalize: parseRows, emptyValue: [] },
       { key: 'products', label: 'Produtos', endpoint: '/products', enabled: access.accessB2B || adminLike, normalize: parseRows, emptyValue: [] },
@@ -378,6 +379,7 @@ export default function DashboardGeral() {
     const companiesB2G = toArray(data.companiesB2G);
     const b2gNotices = toArray(data.b2g);
     const preSales = toArray(data.preSales?.rows);
+    const prevendasOportunidades = toArray(data.prevendasOportunidades);
     const activities = toArray(data.activities);
     const products = toArray(data.products);
     const sellers = toArray(data.sellers);
@@ -437,6 +439,21 @@ export default function DashboardGeral() {
       const status = String(item.status || '').toUpperCase();
       if (status === 'COMPLETED' || status === 'DONE' || status === 'CANCELLED') return false;
       return dueDate < new Date();
+    });
+
+    const nowDash = new Date();
+    const in7DaysDash = new Date(nowDash.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const expiringOportunidades = prevendasOportunidades.filter((item) => {
+      if (!item.dataValidade) return false;
+      const val = toDate(item.dataValidade);
+      if (!val) return false;
+      return val > nowDash && val <= in7DaysDash;
+    });
+    const expiredOportunidades = prevendasOportunidades.filter((item) => {
+      if (!item.dataValidade) return false;
+      const val = toDate(item.dataValidade);
+      if (!val) return false;
+      return val < nowDash;
     });
 
     const activeProducts = products.filter((item) => item?.active !== false);
@@ -606,7 +623,9 @@ export default function DashboardGeral() {
       stageOrder,
       stageLabels,
       b2bStageCounts,
-      b2gOppStageCounts
+      b2gOppStageCounts,
+      expiringOportunidades,
+      expiredOportunidades
     };
   }, [data, timeRange]);
 
@@ -907,10 +926,12 @@ export default function DashboardGeral() {
     preSalesApproval,
     hotLeads,
     warmLeads,
-    teamPerformance
+    teamPerformance,
+    expiringOportunidades,
+    expiredOportunidades
   } = computed;
 
-  const alertCount = overdueActivities.length + pendingPreSales.length + inAnalysisB2G.length;
+  const alertCount = overdueActivities.length + pendingPreSales.length + inAnalysisB2G.length + expiringOportunidades.length + expiredOportunidades.length;
 
   const moduleCardItems = [
     access.accessB2B && {
@@ -1327,6 +1348,23 @@ export default function DashboardGeral() {
                 <div>
                   <p className="text-sm font-medium text-indigo-200">{formatNumber(inAnalysisB2G.length)} edital(is) em análise</p>
                   <p className="text-xs text-indigo-300/80">Pendência de decisão GO / NO-GO.</p>
+                </div>
+              </div>
+            )}
+
+            {(expiredOportunidades.length > 0 || expiringOportunidades.length > 0) && (
+              <div
+                onClick={() => navigate('/pre-vendas')}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 transition-colors hover:bg-rose-500/15"
+              >
+                <Package className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+                <div>
+                  {expiredOportunidades.length > 0 && (
+                    <p className="text-sm font-medium text-rose-200">{formatNumber(expiredOportunidades.length)} oportunidade(s) de pré-vendas vencida(s)</p>
+                  )}
+                  {expiringOportunidades.length > 0 && (
+                    <p className="text-xs text-amber-300/80">{formatNumber(expiringOportunidades.length)} oportunidade(s) vence(m) nos próximos 7 dias</p>
+                  )}
                 </div>
               </div>
             )}
