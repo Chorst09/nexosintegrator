@@ -95,6 +95,21 @@ const defaultPartnerForm = {
   ecommerceSenha: '',
   produtosPrincipaisText: '',
   vendedoresResponsaveis: [],
+  portalPartnerUrl: '',
+  portalPartnerLogin: '',
+  portalPartnerSenha: '',
+  treinamentoUrl: '',
+  treinamentoLogin: '',
+  treinamentoSenha: '',
+  contatoPrincipal: '',
+  emailContatoPrincipal: '',
+  telefoneContatoPrincipal: '',
+  contatoCotacoes: '',
+  emailContatoCotacoes: '',
+  telefoneContatoCotacoes: '',
+  produtosServicosText: '',
+  templateRoUrl: '',
+  procedimentoRo: '',
   observacoes: ''
 };
 
@@ -305,12 +320,25 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         item.portalLogin,
         item.ecommerceUrl,
         item.ecommerceLogin,
+        item.portalPartnerUrl,
+        item.portalPartnerLogin,
+        item.treinamentoUrl,
+        item.treinamentoLogin,
+        item.contatoPrincipal,
+        item.emailContatoPrincipal,
+        item.telefoneContatoPrincipal,
+        item.contatoCotacoes,
+        item.emailContatoCotacoes,
+        item.telefoneContatoCotacoes,
+        item.templateRoUrl,
+        item.procedimentoRo,
         item.cidade,
         item.estado,
         item.status,
         Array.isArray(item.categorias) ? item.categorias.join(' ') : '',
         Array.isArray(item.marcas) ? item.marcas.join(' ') : '',
         Array.isArray(item.produtosPrincipais) ? item.produtosPrincipais.join(' ') : '',
+        Array.isArray(item.produtosServicos) ? item.produtosServicos.join(' ') : '',
         item.observacoes
       ]
         .filter(Boolean)
@@ -381,6 +409,25 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         ecommerceSenha: item.ecommerceSenha || '',
         produtosPrincipaisText: Array.isArray(item.produtosPrincipais) ? item.produtosPrincipais.join(', ') : '',
         vendedoresResponsaveis: Array.isArray(item.vendedoresResponsaveis) ? item.vendedoresResponsaveis : [],
+        portalPartnerUrl: item.portalPartnerUrl || '',
+        portalPartnerLogin: item.portalPartnerLogin || '',
+        portalPartnerSenha: item.portalPartnerSenha || '',
+        treinamentoUrl: item.treinamentoUrl || '',
+        treinamentoLogin: item.treinamentoLogin || '',
+        treinamentoSenha: item.treinamentoSenha || '',
+        contatoPrincipal: item.contatoPrincipal || item.contato || '',
+        emailContatoPrincipal: item.emailContatoPrincipal || item.email || '',
+        telefoneContatoPrincipal: item.telefoneContatoPrincipal || item.telefone || '',
+        contatoCotacoes: item.contatoCotacoes || '',
+        emailContatoCotacoes: item.emailContatoCotacoes || '',
+        telefoneContatoCotacoes: item.telefoneContatoCotacoes || '',
+        produtosServicosText: Array.isArray(item.produtosServicos)
+          ? item.produtosServicos.join(', ')
+          : Array.isArray(item.categorias)
+            ? item.categorias.join(', ')
+            : '',
+        templateRoUrl: item.templateRoUrl || '',
+        procedimentoRo: item.procedimentoRo || '',
         observacoes: item.observacoes || ''
       });
     }
@@ -414,6 +461,10 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         .split(',')
         .map((entry) => entry.trim())
         .filter(Boolean),
+      produtosServicos: asString(partnerForm.produtosServicosText)
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
       vendedoresResponsaveis: Array.isArray(partnerForm.vendedoresResponsaveis)
         ? partnerForm.vendedoresResponsaveis
           .map((seller) => ({
@@ -425,6 +476,13 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           .filter((seller) => seller.nome || seller.email || seller.telefone || seller.marca)
         : []
     };
+
+    if (modalType === TAB_KEYS.FORNECEDORES) {
+      payload.contato = asString(partnerForm.contatoPrincipal);
+      payload.email = asString(partnerForm.emailContatoPrincipal);
+      payload.telefone = asString(partnerForm.telefoneContatoPrincipal);
+      payload.categorias = payload.produtosServicos;
+    }
 
     try {
       setSaving(true);
@@ -813,6 +871,230 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-60"
         >
           {saving ? 'Salvando...' : 'Salvar cadastro'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderSupplierForm = () => (
+    <div className="relative space-y-6">
+      <button
+        type="button"
+        onClick={closeModal}
+        className="absolute -right-2 -top-2 rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+        aria-label="Fechar modal"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      <div>
+        <h2 className="text-3xl font-semibold text-white">{editingItem ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h2>
+        <p className="mt-1 text-slate-400">Cadastre os dados principais, informações de portal e procedimentos de RO.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Nome</span>
+          <input
+            type="text"
+            value={partnerForm.nome}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, nome: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Status</span>
+          <select
+            value={partnerForm.status}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, status: event.target.value }))}
+            className={inputClassName}
+          >
+            <option value="ATIVO">Ativo</option>
+            <option value="EM_HOMOLOGACAO">Em homologação</option>
+            <option value="INATIVO">Inativo</option>
+            <option value="BLOQUEADO">Bloqueado</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Portal / Partner</span>
+          <input
+            type="text"
+            value={partnerForm.portalPartnerUrl}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, portalPartnerUrl: event.target.value }))}
+            className={inputClassName}
+            placeholder="https://partner..."
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Login Portal / Partner</span>
+          <input
+            type="text"
+            value={partnerForm.portalPartnerLogin}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, portalPartnerLogin: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Senha Portal / Partner</span>
+          <input
+            type="text"
+            value={partnerForm.portalPartnerSenha}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, portalPartnerSenha: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Portal de Treinamentos</span>
+          <input
+            type="text"
+            value={partnerForm.treinamentoUrl}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, treinamentoUrl: event.target.value }))}
+            className={inputClassName}
+            placeholder="https://academy..."
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Login Portal de Treinamentos</span>
+          <input
+            type="text"
+            value={partnerForm.treinamentoLogin}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, treinamentoLogin: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Senha Portal de Treinamentos</span>
+          <input
+            type="text"
+            value={partnerForm.treinamentoSenha}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, treinamentoSenha: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Contato Principal</span>
+          <input
+            type="text"
+            value={partnerForm.contatoPrincipal}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, contatoPrincipal: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">E-mail Contato Principal</span>
+          <input
+            type="email"
+            value={partnerForm.emailContatoPrincipal}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, emailContatoPrincipal: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Telefone Contato Principal</span>
+          <input
+            type="text"
+            value={partnerForm.telefoneContatoPrincipal}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, telefoneContatoPrincipal: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Contato Cotações</span>
+          <input
+            type="text"
+            value={partnerForm.contatoCotacoes}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, contatoCotacoes: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">E-mail Contato Cotações</span>
+          <input
+            type="email"
+            value={partnerForm.emailContatoCotacoes}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, emailContatoCotacoes: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Telefone Contato Cotações</span>
+          <input
+            type="text"
+            value={partnerForm.telefoneContatoCotacoes}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, telefoneContatoCotacoes: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-slate-300">Produtos/Serviços Oferecidos (vírgula)</span>
+        <input
+          type="text"
+          value={partnerForm.produtosServicosText}
+          onChange={(event) => setPartnerForm((prev) => ({ ...prev, produtosServicosText: event.target.value }))}
+          className={inputClassName}
+          placeholder="Servidores, Storages, Workstation..."
+        />
+      </label>
+
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Documentos e Procedimentos</h3>
+
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Template RO (URL)</span>
+          <input
+            type="text"
+            value={partnerForm.templateRoUrl}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, templateRoUrl: event.target.value }))}
+            className={inputClassName}
+            placeholder="https://..."
+          />
+        </label>
+
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Procedimento para RO</span>
+          <textarea
+            value={partnerForm.procedimentoRo}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, procedimentoRo: event.target.value }))}
+            className="min-h-[150px] w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+            placeholder="Descreva o passo a passo..."
+          />
+        </label>
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-slate-300">Notas</span>
+        <textarea
+          value={partnerForm.observacoes}
+          onChange={(event) => setPartnerForm((prev) => ({ ...prev, observacoes: event.target.value }))}
+          className="min-h-[120px] w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+        />
+      </label>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={submitPartner}
+          disabled={saving}
+          className="rounded-lg bg-sky-400 px-8 py-3 text-base font-medium text-slate-950 hover:bg-sky-300 disabled:opacity-60"
+        >
+          {saving ? 'Salvando...' : 'Salvar Fornecedor'}
         </button>
       </div>
     </div>
@@ -1314,15 +1596,15 @@ export default function PrevendasCadastros({ forcedTab = null }) {
       <Modal
         isOpen={modalOpen}
         onClose={closeModal}
-        title={modalType === TAB_KEYS.DISTRIBUIDORES ? '' : `${editingItem ? 'Editar' : 'Novo'} ${
-          modalType === TAB_KEYS.FORNECEDORES ? 'Fornecedor' : 'Registro de Oportunidade'
+        title={[TAB_KEYS.DISTRIBUIDORES, TAB_KEYS.FORNECEDORES].includes(modalType) ? '' : `${editingItem ? 'Editar' : 'Novo'} ${
+          'Registro de Oportunidade'
         }`}
-        showCloseButton={modalType !== TAB_KEYS.DISTRIBUIDORES}
+        showCloseButton={![TAB_KEYS.DISTRIBUIDORES, TAB_KEYS.FORNECEDORES].includes(modalType)}
         size="large"
-        panelClassName={modalType === TAB_KEYS.DISTRIBUIDORES ? 'max-w-[calc(100vw-2rem)] xl:max-w-7xl' : ''}
-        contentClassName={modalType === TAB_KEYS.DISTRIBUIDORES ? 'p-6 sm:p-8' : ''}
+        panelClassName={[TAB_KEYS.DISTRIBUIDORES, TAB_KEYS.FORNECEDORES].includes(modalType) ? 'max-w-[calc(100vw-2rem)] xl:max-w-7xl' : ''}
+        contentClassName={[TAB_KEYS.DISTRIBUIDORES, TAB_KEYS.FORNECEDORES].includes(modalType) ? 'p-6 sm:p-8' : ''}
       >
-        {modalType === TAB_KEYS.DISTRIBUIDORES ? renderDistributorForm() : modalType !== TAB_KEYS.OPORTUNIDADES ? (
+        {modalType === TAB_KEYS.DISTRIBUIDORES ? renderDistributorForm() : modalType === TAB_KEYS.FORNECEDORES ? renderSupplierForm() : modalType !== TAB_KEYS.OPORTUNIDADES ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="space-y-1">
