@@ -111,7 +111,8 @@ const persistStore = async (tx, store, user) => {
 };
 
 export default async function handler(req) {
-  const pathParts = req.originalUrl.replace('/api/prevendas-cadastros', '').replace(/^\/+/, '').split('/').filter(Boolean);
+  const urlPath = req.originalUrl || req.url || '';
+  const pathParts = urlPath.replace('/api/prevendas-cadastros', '').replace(/^\/+/, '').split('/').filter(Boolean);
   const entity = pathParts[0] || null;
   const entityId = pathParts[1] || null;
 
@@ -129,6 +130,9 @@ export default async function handler(req) {
     }
 
     const list = store[entity] || [];
+    const userId = req.user?.userId || req.user?.id || '';
+    const userName = req.user?.name || '';
+    const updater = { name: userName, email: userId };
 
     if (req.method === 'GET' && entityId) {
       const item = list.find((entry) => entry.id === entityId);
@@ -140,12 +144,12 @@ export default async function handler(req) {
       const body = await req.json();
       let created;
       if (entity === 'oportunidades') {
-        created = normalizeOpportunityRegistry({ ...body, createdById: req.user?.userId || '', createdByName: req.user?.name || '' });
+        created = normalizeOpportunityRegistry({ ...body, createdById: userId, createdByName: userName });
       } else {
         created = normalizeBasePartner(body);
       }
       store[entity] = [created, ...list];
-      await persistStore(prisma, store, req.user);
+      await persistStore(prisma, store, updater);
       return Response.json(created, { status: 201 });
     }
 
@@ -157,7 +161,7 @@ export default async function handler(req) {
       const updated = entity === 'oportunidades' ? normalizeOpportunityRegistry(body, existing) : normalizeBasePartner(body, existing);
       list[index] = updated;
       store[entity] = list;
-      await persistStore(prisma, store, req.user);
+      await persistStore(prisma, store, updater);
       return Response.json(updated);
     }
 
@@ -166,7 +170,7 @@ export default async function handler(req) {
       if (index === -1) return Response.json({ error: 'Registro não encontrado' }, { status: 404 });
       list.splice(index, 1);
       store[entity] = list;
-      await persistStore(prisma, store, req.user);
+      await persistStore(prisma, store, updater);
       return new Response(null, { status: 204 });
     }
 
