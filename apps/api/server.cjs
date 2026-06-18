@@ -324,6 +324,9 @@ app.use('/api/advanced-workflows', handleLegacyAPI('./api/advanced-workflows.js'
 // API de Solicitações de Orçamento
 app.use('/api/solicitacoes', handleLegacyAPI('./api/solicitacoes.js'));
 
+// API de Cadastros Pré-Vendas (distribuidores, fornecedores, registro de oportunidades)
+app.use('/api/prevendas-cadastros', handleLegacyAPI('./api/prevendas-cadastros.js'));
+
 // API de Atividades Simples (CommonJS)
 app.use('/api/activities-simple', require('./api/activities-simple.cjs'));
 
