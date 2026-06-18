@@ -475,20 +475,18 @@ export default function PreVendas() {
 
   const registroExpiring = useMemo(() => {
     const now = new Date();
-    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const expiring = [];
-    const expired = [];
+    const days = (n) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
+    const buckets = { expired: [], within7: [], within15: [], within30: [] };
     registroOportunidades.forEach((item) => {
       if (!item.dataValidade) return;
       const val = new Date(item.dataValidade);
       if (!Number.isFinite(val.getTime())) return;
-      if (val < now) {
-        expired.push(item);
-      } else if (val <= in7Days) {
-        expiring.push(item);
-      }
+      if (val < now) { buckets.expired.push(item); return; }
+      if (val <= days(7)) { buckets.within7.push(item); return; }
+      if (val <= days(15)) { buckets.within15.push(item); return; }
+      if (val <= days(30)) { buckets.within30.push(item); return; }
     });
-    return { expiring, expired };
+    return buckets;
   }, [registroOportunidades]);
 
   const registroStatusChartData = useMemo(() => {
@@ -891,7 +889,7 @@ export default function PreVendas() {
               <AnimatedStats title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} color="purple" />
             </div>
 
-            {(registroExpiring.expiring.length > 0 || registroExpiring.expired.length > 0) && (
+            {(registroExpiring.within7.length > 0 || registroExpiring.within15.length > 0 || registroExpiring.within30.length > 0 || registroExpiring.expired.length > 0) && (
               <div
                 onClick={() => navigate('/prevendas-registro-oportunidades')}
                 className="crm-card rounded-lg p-4 border-l-4 border-l-rose-500 cursor-pointer hover:bg-gray-700/30 transition-colors"
@@ -900,9 +898,19 @@ export default function PreVendas() {
                   <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-rose-200">Alertas de Vencimento</p>
-                    {registroExpiring.expiring.length > 0 && (
-                      <p className="text-xs text-amber-300 mt-1">
-                        {registroExpiring.expiring.length} oportunidade(es) vence(m) nos próximos 7 dias.
+                    {registroExpiring.within7.length > 0 && (
+                      <p className="text-xs text-rose-300 mt-1">
+                        {registroExpiring.within7.length} oportunidade(es) vence(m) em até 7 dias.
+                      </p>
+                    )}
+                    {registroExpiring.within15.length > 0 && (
+                      <p className="text-xs text-amber-300 mt-0.5">
+                        {registroExpiring.within15.length} oportunidade(es) vence(m) em até 15 dias.
+                      </p>
+                    )}
+                    {registroExpiring.within30.length > 0 && (
+                      <p className="text-xs text-yellow-300 mt-0.5">
+                        {registroExpiring.within30.length} oportunidade(es) vence(m) em até 30 dias.
                       </p>
                     )}
                     {registroExpiring.expired.length > 0 && (

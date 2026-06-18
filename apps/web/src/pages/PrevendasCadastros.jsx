@@ -597,14 +597,20 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                       const val = new Date(item.dataValidade);
                       const now = new Date();
                       if (!Number.isFinite(val.getTime())) return null;
+                      const days = (n) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
                       if (val < now) {
                         return <span className="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-300 border border-red-500/30">Vencida</span>;
                       }
-                      const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-                      if (val <= in7) {
-                        return <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300 border border-amber-500/30">Vence em breve</span>;
+                      if (val <= days(7)) {
+                        return <span className="ml-2 rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300 border border-rose-500/30">Vence em 7 dias</span>;
                       }
-                      return null;
+                      if (val <= days(15)) {
+                        return <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300 border border-amber-500/30">Vence em 15 dias</span>;
+                      }
+                      if (val <= days(30)) {
+                        return <span className="ml-2 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] text-yellow-300 border border-yellow-500/30">Vence em 30 dias</span>;
+                      }
+                      return <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300 border border-emerald-500/30">Válida</span>;
                     })()}
                   </p>
 

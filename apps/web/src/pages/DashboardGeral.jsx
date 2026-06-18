@@ -442,18 +442,27 @@ export default function DashboardGeral() {
     });
 
     const nowDash = new Date();
-    const in7DaysDash = new Date(nowDash.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const daysDash = (n) => new Date(nowDash.getTime() + n * 24 * 60 * 60 * 1000);
     const expiringOportunidades = prevendasOportunidades.filter((item) => {
       if (!item.dataValidade) return false;
       const val = toDate(item.dataValidade);
       if (!val) return false;
-      return val > nowDash && val <= in7DaysDash;
+      return val <= daysDash(30) && val > nowDash;
     });
     const expiredOportunidades = prevendasOportunidades.filter((item) => {
       if (!item.dataValidade) return false;
       const val = toDate(item.dataValidade);
       if (!val) return false;
       return val < nowDash;
+    });
+    const expiring7 = expiringOportunidades.filter((item) => toDate(item.dataValidade) <= daysDash(7));
+    const expiring15 = expiringOportunidades.filter((item) => {
+      const v = toDate(item.dataValidade);
+      return v > daysDash(7) && v <= daysDash(15);
+    });
+    const expiring30 = expiringOportunidades.filter((item) => {
+      const v = toDate(item.dataValidade);
+      return v > daysDash(15) && v <= daysDash(30);
     });
 
     const activeProducts = products.filter((item) => item?.active !== false);
@@ -625,7 +634,10 @@ export default function DashboardGeral() {
       b2bStageCounts,
       b2gOppStageCounts,
       expiringOportunidades,
-      expiredOportunidades
+      expiredOportunidades,
+      expiring7,
+      expiring15,
+      expiring30
     };
   }, [data, timeRange]);
 
@@ -928,7 +940,10 @@ export default function DashboardGeral() {
     warmLeads,
     teamPerformance,
     expiringOportunidades,
-    expiredOportunidades
+    expiredOportunidades,
+    expiring7,
+    expiring15,
+    expiring30
   } = computed;
 
   const alertCount = overdueActivities.length + pendingPreSales.length + inAnalysisB2G.length + expiringOportunidades.length + expiredOportunidades.length;
@@ -1362,8 +1377,14 @@ export default function DashboardGeral() {
                   {expiredOportunidades.length > 0 && (
                     <p className="text-sm font-medium text-rose-200">{formatNumber(expiredOportunidades.length)} oportunidade(s) de pré-vendas vencida(s)</p>
                   )}
-                  {expiringOportunidades.length > 0 && (
-                    <p className="text-xs text-amber-300/80">{formatNumber(expiringOportunidades.length)} oportunidade(s) vence(m) nos próximos 7 dias</p>
+                  {expiring7.length > 0 && (
+                    <p className="text-xs text-rose-300/80">{formatNumber(expiring7.length)} oportunidade(s) vence(m) em até 7 dias</p>
+                  )}
+                  {expiring15.length > 0 && (
+                    <p className="text-xs text-amber-300/80">{formatNumber(expiring15.length)} oportunidade(s) vence(m) em até 15 dias</p>
+                  )}
+                  {expiring30.length > 0 && (
+                    <p className="text-xs text-yellow-300/80">{formatNumber(expiring30.length)} oportunidade(s) vence(m) em até 30 dias</p>
                   )}
                 </div>
               </div>
