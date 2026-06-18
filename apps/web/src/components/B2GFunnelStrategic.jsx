@@ -1,5 +1,6 @@
 import React from 'react';
 
+// Funil B2G 3D Estratégico - Versão 3.0 - 18 Junho 2026 18:25:00
 const B2GFunnelStrategic = ({ funnelRows = [] }) => {
   // Mapear as etapas para cores
   const stageColorMap = {
