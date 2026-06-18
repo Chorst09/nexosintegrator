@@ -5,13 +5,23 @@ import {
   CalendarDays,
   ClipboardList,
   DollarSign,
+  Eye,
+  ExternalLink,
+  FileDown,
+  Globe2,
   Link2,
+  Mail,
   Package,
+  Phone,
   Plus,
   RefreshCcw,
   Search,
+  ShoppingCart,
   Target,
-  Trash2
+  Trash2,
+  User,
+  Users,
+  X
 } from 'lucide-react';
 
 import { buildApiUrl, getAuthHeaders } from '../config/api';
@@ -75,6 +85,16 @@ const defaultPartnerForm = {
   site: '',
   status: 'ATIVO',
   categoriasText: '',
+  marcasText: '',
+  accountManager: '',
+  portalUrl: '',
+  portalLogin: '',
+  portalSenha: '',
+  ecommerceUrl: '',
+  ecommerceLogin: '',
+  ecommerceSenha: '',
+  produtosPrincipaisText: '',
+  vendedoresResponsaveis: [],
   observacoes: ''
 };
 
@@ -163,6 +183,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState(forcedTabKey || TAB_KEYS.DISTRIBUIDORES);
   const [editingItem, setEditingItem] = useState(null);
+  const [viewingDistributor, setViewingDistributor] = useState(null);
 
   const [partnerForm, setPartnerForm] = useState(defaultPartnerForm);
   const [opportunityForm, setOpportunityForm] = useState(defaultOpportunityForm);
@@ -279,10 +300,17 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         item.contato,
         item.email,
         item.telefone,
+        item.accountManager,
+        item.portalUrl,
+        item.portalLogin,
+        item.ecommerceUrl,
+        item.ecommerceLogin,
         item.cidade,
         item.estado,
         item.status,
         Array.isArray(item.categorias) ? item.categorias.join(' ') : '',
+        Array.isArray(item.marcas) ? item.marcas.join(' ') : '',
+        Array.isArray(item.produtosPrincipais) ? item.produtosPrincipais.join(' ') : '',
         item.observacoes
       ]
         .filter(Boolean)
@@ -343,11 +371,25 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         site: item.site || '',
         status: item.status || 'ATIVO',
         categoriasText: Array.isArray(item.categorias) ? item.categorias.join(', ') : '',
+        marcasText: Array.isArray(item.marcas) ? item.marcas.join(', ') : '',
+        accountManager: item.accountManager || '',
+        portalUrl: item.portalUrl || '',
+        portalLogin: item.portalLogin || '',
+        portalSenha: item.portalSenha || '',
+        ecommerceUrl: item.ecommerceUrl || '',
+        ecommerceLogin: item.ecommerceLogin || '',
+        ecommerceSenha: item.ecommerceSenha || '',
+        produtosPrincipaisText: Array.isArray(item.produtosPrincipais) ? item.produtosPrincipais.join(', ') : '',
+        vendedoresResponsaveis: Array.isArray(item.vendedoresResponsaveis) ? item.vendedoresResponsaveis : [],
         observacoes: item.observacoes || ''
       });
     }
 
     setModalOpen(true);
+  };
+
+  const closeDistributorView = () => {
+    setViewingDistributor(null);
   };
 
   const submitPartner = async () => {
@@ -363,7 +405,25 @@ export default function PrevendasCadastros({ forcedTab = null }) {
       categorias: asString(partnerForm.categoriasText)
         .split(',')
         .map((entry) => entry.trim())
-        .filter(Boolean)
+        .filter(Boolean),
+      marcas: asString(partnerForm.marcasText)
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+      produtosPrincipais: asString(partnerForm.produtosPrincipaisText)
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+      vendedoresResponsaveis: Array.isArray(partnerForm.vendedoresResponsaveis)
+        ? partnerForm.vendedoresResponsaveis
+          .map((seller) => ({
+            nome: asString(seller.nome),
+            email: asString(seller.email),
+            telefone: asString(seller.telefone),
+            marca: asString(seller.marca)
+          }))
+          .filter((seller) => seller.nome || seller.email || seller.telefone || seller.marca)
+        : []
     };
 
     try {
@@ -481,6 +541,490 @@ export default function PrevendasCadastros({ forcedTab = null }) {
     }));
   };
 
+  const addSeller = () => {
+    setPartnerForm((prev) => ({
+      ...prev,
+      vendedoresResponsaveis: [
+        ...(Array.isArray(prev.vendedoresResponsaveis) ? prev.vendedoresResponsaveis : []),
+        { marca: '', nome: '', email: '', telefone: '' }
+      ]
+    }));
+  };
+
+  const updateSeller = (index, field, value) => {
+    setPartnerForm((prev) => ({
+      ...prev,
+      vendedoresResponsaveis: (Array.isArray(prev.vendedoresResponsaveis) ? prev.vendedoresResponsaveis : []).map((seller, sellerIndex) => (
+        sellerIndex === index ? { ...seller, [field]: value } : seller
+      ))
+    }));
+  };
+
+  const removeSeller = (index) => {
+    setPartnerForm((prev) => ({
+      ...prev,
+      vendedoresResponsaveis: (Array.isArray(prev.vendedoresResponsaveis) ? prev.vendedoresResponsaveis : []).filter((_, sellerIndex) => sellerIndex !== index)
+    }));
+  };
+
+  const inputClassName = 'w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50';
+
+  const renderDistributorForm = () => (
+    <div className="relative space-y-5">
+      <button
+        type="button"
+        onClick={closeModal}
+        className="absolute -right-2 -top-2 rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+        aria-label="Fechar modal"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      <div>
+        <h2 className="text-3xl font-semibold text-white">{editingItem ? 'Editar Distribuidor' : 'Novo Distribuidor'}</h2>
+        <p className="mt-1 text-slate-400">Cadastre dados de contato, acessos e marcas atendidas.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Nome</span>
+          <input
+            type="text"
+            value={partnerForm.nome}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, nome: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Marcas (separe por vírgula)</span>
+          <input
+            type="text"
+            value={partnerForm.marcasText}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, marcasText: event.target.value }))}
+            className={inputClassName}
+            placeholder="Dell, Lenovo, HP"
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Account Manager</span>
+          <input
+            type="text"
+            value={partnerForm.accountManager}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, accountManager: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">E-mail</span>
+          <input
+            type="email"
+            value={partnerForm.email}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, email: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Telefone</span>
+          <input
+            type="text"
+            value={partnerForm.telefone}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, telefone: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Status</span>
+          <select
+            value={partnerForm.status}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, status: event.target.value }))}
+            className={inputClassName}
+          >
+            <option value="ATIVO">Ativo</option>
+            <option value="EM_HOMOLOGACAO">Em homologação</option>
+            <option value="INATIVO">Inativo</option>
+            <option value="BLOQUEADO">Bloqueado</option>
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Portal (URL)</span>
+          <input
+            type="text"
+            value={partnerForm.portalUrl}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, portalUrl: event.target.value }))}
+            className={inputClassName}
+            placeholder="https://portal.distribuidor.com"
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Login Portal</span>
+          <input
+            type="text"
+            value={partnerForm.portalLogin}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, portalLogin: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Senha Portal</span>
+          <input
+            type="text"
+            value={partnerForm.portalSenha}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, portalSenha: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">E-commerce (URL)</span>
+          <input
+            type="text"
+            value={partnerForm.ecommerceUrl}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, ecommerceUrl: event.target.value }))}
+            className={inputClassName}
+            placeholder="https://ecommerce..."
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Login E-commerce</span>
+          <input
+            type="text"
+            value={partnerForm.ecommerceLogin}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, ecommerceLogin: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Senha E-commerce</span>
+          <input
+            type="text"
+            value={partnerForm.ecommerceSenha}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, ecommerceSenha: event.target.value }))}
+            className={inputClassName}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-sm font-medium text-slate-300">Produtos Principais (vírgula)</span>
+          <input
+            type="text"
+            value={partnerForm.produtosPrincipaisText}
+            onChange={(event) => setPartnerForm((prev) => ({ ...prev, produtosPrincipaisText: event.target.value }))}
+            className={inputClassName}
+            placeholder="Lenovo, Dell"
+          />
+        </label>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-base font-semibold text-white">Vendedores Responsáveis</h3>
+          <button
+            type="button"
+            onClick={addSeller}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-600/40 bg-slate-700/60 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-700"
+          >
+            <Plus className="h-4 w-4" /> Adicionar Vendedor
+          </button>
+        </div>
+
+        {partnerForm.vendedoresResponsaveis.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhum vendedor adicionado.</p>
+        ) : (
+          <div className="space-y-3">
+            {partnerForm.vendedoresResponsaveis.map((seller, index) => (
+              <div key={`seller-${index}`} className="grid grid-cols-1 gap-3 rounded-lg border border-slate-700/60 bg-slate-950/30 p-3 lg:grid-cols-[0.8fr_1fr_1fr_1fr_auto]">
+                <input
+                  type="text"
+                  value={seller.marca || ''}
+                  onChange={(event) => updateSeller(index, 'marca', event.target.value)}
+                  className={inputClassName}
+                  placeholder="Marca/linha"
+                />
+                <input
+                  type="text"
+                  value={seller.nome || ''}
+                  onChange={(event) => updateSeller(index, 'nome', event.target.value)}
+                  className={inputClassName}
+                  placeholder="Nome"
+                />
+                <input
+                  type="email"
+                  value={seller.email || ''}
+                  onChange={(event) => updateSeller(index, 'email', event.target.value)}
+                  className={inputClassName}
+                  placeholder="E-mail"
+                />
+                <input
+                  type="text"
+                  value={seller.telefone || ''}
+                  onChange={(event) => updateSeller(index, 'telefone', event.target.value)}
+                  className={inputClassName}
+                  placeholder="Telefone"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSeller(index)}
+                  className="inline-flex items-center justify-center rounded-lg border border-rose-500/40 px-3 py-2 text-rose-100 hover:bg-rose-500/20"
+                  aria-label="Remover vendedor"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-slate-300">Notas</span>
+        <textarea
+          value={partnerForm.observacoes}
+          onChange={(event) => setPartnerForm((prev) => ({ ...prev, observacoes: event.target.value }))}
+          className="min-h-[120px] w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+        />
+      </label>
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={closeModal}
+          className="rounded-lg border border-slate-500/40 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/40"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={submitPartner}
+          disabled={saving}
+          className="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-60"
+        >
+          {saving ? 'Salvando...' : 'Salvar cadastro'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderPillList = (items, emptyText, className = 'from-blue-500 to-violet-600') => {
+    const values = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (values.length === 0) {
+      return <p className="text-base text-slate-400">{emptyText}</p>;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {values.map((item) => (
+          <span
+            key={item}
+            className={`rounded-full bg-gradient-to-r ${className} px-4 py-2 text-sm font-semibold text-white`}
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const renderPortalCard = ({ title, url, login, icon: Icon, accentClass }) => (
+    <div className="rounded-xl border border-slate-200/70 bg-slate-300/70 p-6 text-slate-100">
+      <div className={`mb-6 flex items-center gap-3 text-3xl font-bold ${accentClass}`}>
+        <Icon className="h-8 w-8" />
+        <span>{title}</span>
+      </div>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 break-all text-xl font-bold text-blue-700 hover:text-blue-500"
+        >
+          {url}
+          <ExternalLink className="h-4 w-4 shrink-0" />
+        </a>
+      ) : (
+        <p className="text-xl font-semibold text-slate-600">URL não informada.</p>
+      )}
+      <p className="mt-6 text-lg text-white">
+        <span className="font-bold">Usuário:</span> {login || '-'}
+      </p>
+    </div>
+  );
+
+  const renderDistributorView = () => {
+    const item = viewingDistributor;
+    if (!item) return null;
+
+    const statusLabel = item.status === 'ATIVO' ? 'Ativo' : item.status || 'Ativo';
+    const contactName = item.accountManager || item.contato || '-';
+    const brands = Array.isArray(item.marcas) && item.marcas.length > 0 ? item.marcas : item.categorias;
+    const sellers = Array.isArray(item.vendedoresResponsaveis) ? item.vendedoresResponsaveis : [];
+
+    return (
+      <div className="relative space-y-8 bg-slate-950 text-white">
+        <button
+          type="button"
+          onClick={closeDistributorView}
+          className="absolute -right-4 -top-4 rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+          aria-label="Fechar modal"
+        >
+          <X className="h-6 w-6" />
+        </button>
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <Eye className="h-8 w-8 text-sky-400" />
+            <h2 className="text-3xl font-semibold text-white">Visualizar Distribuidor: {item.nome || '-'}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center justify-center gap-3 rounded-lg border border-slate-600/70 px-5 py-3 text-lg text-slate-100 hover:bg-slate-800/70"
+          >
+            <FileDown className="h-5 w-5" /> Imprimir PDF
+          </button>
+        </div>
+
+        <section className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-8 py-10">
+          <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
+              <p className="mt-4 text-3xl text-blue-100">Distribuidor</p>
+            </div>
+            <span className="w-fit rounded-full bg-emerald-500 px-8 py-4 text-3xl font-semibold text-white">
+              {statusLabel}
+            </span>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+            <div className="mb-8 flex items-center gap-4">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                <User className="h-9 w-9" />
+              </span>
+              <h3 className="text-4xl font-semibold text-white">Informações de Contato</h3>
+            </div>
+            <div className="space-y-8">
+              <div>
+                <p className="text-lg text-slate-400">Contato Principal</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{contactName}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-lg text-slate-400">
+                  <Mail className="h-5 w-5" /> Email
+                </p>
+                <p className="mt-2 break-all text-2xl font-semibold text-white">{item.email || '-'}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-lg text-slate-400">
+                  <Phone className="h-5 w-5" /> Telefone
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">{item.telefone || '-'}</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+            <div className="mb-8 flex items-center gap-4">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                <Package className="h-9 w-9" />
+              </span>
+              <h3 className="text-4xl font-semibold text-white">Produtos/Serviços</h3>
+            </div>
+            <div className="space-y-8">
+              <div>
+                <p className="mb-4 text-lg text-slate-400">Marcas</p>
+                {renderPillList(brands, 'Sem marcas informadas.')}
+              </div>
+              <div>
+                <p className="mb-4 text-lg text-slate-400">Produtos Principais</p>
+                {renderPillList(item.produtosPrincipais, 'Sem produtos principais informados.')}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section>
+          <div className="mb-6 flex items-center gap-4">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
+              <Globe2 className="h-9 w-9" />
+            </span>
+            <h3 className="text-4xl font-semibold text-white">Informações do Portal</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {renderPortalCard({
+              title: 'Portal Principal',
+              url: item.portalUrl,
+              login: item.portalLogin,
+              icon: Link2,
+              accentClass: 'text-blue-800'
+            })}
+            {renderPortalCard({
+              title: 'E-commerce',
+              url: item.ecommerceUrl,
+              login: item.ecommerceLogin,
+              icon: ShoppingCart,
+              accentClass: 'text-violet-700'
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <div className="mb-6 flex items-center gap-4">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <Users className="h-9 w-9" />
+            </span>
+            <h3 className="text-4xl font-semibold text-white">Vendedores Responsáveis</h3>
+          </div>
+
+          {sellers.length === 0 ? (
+            <p className="text-lg text-slate-400">Nenhum vendedor adicionado.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              {sellers.map((seller, index) => {
+                const sellerTag = seller.marca || seller.area || seller.produto || seller.tipo || '';
+                return (
+                  <div key={`${seller.nome || 'seller'}-${index}`} className="rounded-xl border-l-4 border-blue-500 bg-[#1c2d43] p-7">
+                    {sellerTag && (
+                      <span className="mb-5 inline-flex rounded-full bg-sky-300 px-5 py-2 text-lg font-semibold text-slate-900">
+                        {sellerTag}
+                      </span>
+                    )}
+                    <h4 className="text-3xl font-semibold text-white">{seller.nome || '-'}</h4>
+                    <p className="mt-5 flex items-center gap-3 text-lg text-slate-200">
+                      <Phone className="h-5 w-5 text-emerald-500" /> {seller.telefone || '-'}
+                    </p>
+                    <p className="mt-5 flex items-center gap-3 break-all text-lg text-slate-200">
+                      <Mail className="h-5 w-5 shrink-0 text-violet-500" /> {seller.email || '-'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <h3 className="text-3xl font-semibold text-white">Observações</h3>
+          <p className="mt-5 whitespace-pre-wrap text-xl text-slate-400">{item.observacoes || 'Sem observações.'}</p>
+        </section>
+      </div>
+    );
+  };
+
   const renderPartnerCards = (type) => {
     if (activeRows.length === 0) {
       return <div className="py-12 text-center text-slate-400">Nenhum cadastro encontrado.</div>;
@@ -528,6 +1072,15 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               </div>
 
               <div className="flex items-center gap-2">
+                {type === TAB_KEYS.DISTRIBUIDORES && (
+                  <button
+                    type="button"
+                    onClick={() => setViewingDistributor(item)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-sky-500/50 px-3 py-2 text-xs text-sky-100 hover:bg-sky-500/20"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Visualizar
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => openEditModal(type, item)}
@@ -761,16 +1314,15 @@ export default function PrevendasCadastros({ forcedTab = null }) {
       <Modal
         isOpen={modalOpen}
         onClose={closeModal}
-        title={`${editingItem ? 'Editar' : 'Novo'} ${
-          modalType === TAB_KEYS.DISTRIBUIDORES
-            ? 'Distribuidor'
-            : modalType === TAB_KEYS.FORNECEDORES
-              ? 'Fornecedor'
-              : 'Registro de Oportunidade'
+        title={modalType === TAB_KEYS.DISTRIBUIDORES ? '' : `${editingItem ? 'Editar' : 'Novo'} ${
+          modalType === TAB_KEYS.FORNECEDORES ? 'Fornecedor' : 'Registro de Oportunidade'
         }`}
+        showCloseButton={modalType !== TAB_KEYS.DISTRIBUIDORES}
         size="large"
+        panelClassName={modalType === TAB_KEYS.DISTRIBUIDORES ? 'max-w-[calc(100vw-2rem)] xl:max-w-7xl' : ''}
+        contentClassName={modalType === TAB_KEYS.DISTRIBUIDORES ? 'p-6 sm:p-8' : ''}
       >
-        {modalType !== TAB_KEYS.OPORTUNIDADES ? (
+        {modalType === TAB_KEYS.DISTRIBUIDORES ? renderDistributorForm() : modalType !== TAB_KEYS.OPORTUNIDADES ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="space-y-1">
@@ -1181,6 +1733,18 @@ export default function PrevendasCadastros({ forcedTab = null }) {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={!!viewingDistributor}
+        onClose={closeDistributorView}
+        title=""
+        showCloseButton={false}
+        size="large"
+        panelClassName="max-w-[calc(100vw-1rem)] xl:max-w-7xl bg-slate-950"
+        contentClassName="p-4 sm:p-6"
+      >
+        {renderDistributorView()}
       </Modal>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

@@ -26,6 +26,18 @@ const toStringArray = (value) => {
   return value.map((entry) => String(entry || '').trim()).filter(Boolean);
 };
 
+const toSellerArray = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => ({
+      nome: toString(entry?.nome),
+      email: toString(entry?.email),
+      telefone: toString(entry?.telefone),
+      marca: toString(entry?.marca || entry?.area || entry?.produto || entry?.tipo)
+    }))
+    .filter((entry) => entry.nome || entry.email || entry.telefone || entry.marca);
+};
+
 const ensureStoreShape = (raw) => {
   const base = {
     version: 1,
@@ -59,6 +71,16 @@ const normalizeBasePartner = (input = {}, preserve = {}) => {
     estado: toString(input.estado, preserve.estado || ''),
     site: toString(input.site, preserve.site || ''),
     categorias: toStringArray(input.categorias ?? preserve.categorias),
+    marcas: toStringArray(input.marcas ?? preserve.marcas),
+    accountManager: toString(input.accountManager, preserve.accountManager || ''),
+    portalUrl: toString(input.portalUrl, preserve.portalUrl || ''),
+    portalLogin: toString(input.portalLogin, preserve.portalLogin || ''),
+    portalSenha: toString(input.portalSenha, preserve.portalSenha || ''),
+    ecommerceUrl: toString(input.ecommerceUrl, preserve.ecommerceUrl || ''),
+    ecommerceLogin: toString(input.ecommerceLogin, preserve.ecommerceLogin || ''),
+    ecommerceSenha: toString(input.ecommerceSenha, preserve.ecommerceSenha || ''),
+    produtosPrincipais: toStringArray(input.produtosPrincipais ?? preserve.produtosPrincipais),
+    vendedoresResponsaveis: toSellerArray(input.vendedoresResponsaveis ?? preserve.vendedoresResponsaveis),
     status: toString(input.status, preserve.status || 'ATIVO').toUpperCase() || 'ATIVO',
     observacoes: toString(input.observacoes, preserve.observacoes || ''),
     createdAt: toDateOrNull(input.createdAt || preserve.createdAt) || now,
