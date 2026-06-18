@@ -90,7 +90,11 @@ const defaultOpportunityForm = {
   prioridade: 'MEDIUM',
   distribuidorIds: [],
   fornecedorIds: [],
-  observacoes: ''
+  observacoes: '',
+  numeroOportunidade: '',
+  produto: '',
+  dataAbertura: '',
+  dataValidade: ''
 };
 
 const toCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -258,7 +262,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           item.status,
           item.modalidade,
           item.origem,
-          item.observacoes
+          item.observacoes,
+          item.numeroOportunidade,
+          item.produto
         ]
           .filter(Boolean)
           .join(' ')
@@ -318,7 +324,11 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         prioridade: item.prioridade || 'MEDIUM',
         distribuidorIds: Array.isArray(item.distribuidorIds) ? item.distribuidorIds : [],
         fornecedorIds: Array.isArray(item.fornecedorIds) ? item.fornecedorIds : [],
-        observacoes: item.observacoes || ''
+        observacoes: item.observacoes || '',
+        numeroOportunidade: item.numeroOportunidade || '',
+        produto: item.produto || '',
+        dataAbertura: item.dataAbertura ? String(item.dataAbertura).slice(0, 10) : '',
+        dataValidade: item.dataValidade ? String(item.dataValidade).slice(0, 10) : ''
       });
     } else {
       setPartnerForm({
@@ -396,6 +406,8 @@ export default function PrevendasCadastros({ forcedTab = null }) {
       cliente: asString(opportunityForm.cliente),
       valorEstimado: opportunityForm.valorEstimado === '' ? null : Number(opportunityForm.valorEstimado),
       prazo: opportunityForm.prazo || null,
+      dataAbertura: opportunityForm.dataAbertura || null,
+      dataValidade: opportunityForm.dataValidade || null,
       distribuidorIds: Array.isArray(opportunityForm.distribuidorIds) ? opportunityForm.distribuidorIds : [],
       fornecedorIds: Array.isArray(opportunityForm.fornecedorIds) ? opportunityForm.fornecedorIds : []
     };
@@ -570,6 +582,17 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
                   <p className="mt-1 text-sm text-slate-300">
                     Valor estimado: {toCurrency(item.valorEstimado)} • Prazo: {toDateBr(item.prazo)}
+                  </p>
+
+                  {item.numeroOportunidade && (
+                    <p className="mt-1 text-sm text-slate-300">
+                      Fornecedor: {item.numeroOportunidade}{item.produto ? ` • ${item.produto}` : ''}
+                    </p>
+                  )}
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    {item.dataAbertura ? `Abertura: ${toDateBr(item.dataAbertura)}` : ''}
+                    {item.dataValidade ? ` • Validade: ${toDateBr(item.dataValidade)}` : ''}
                   </p>
 
                   {item.oportunidadeId && (
@@ -1005,6 +1028,53 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                   <option value="URGENT">Urgente</option>
                 </select>
               </label>
+            </div>
+
+            <div className="mt-2 rounded-lg border border-sky-600/30 bg-sky-900/20 p-3">
+              <p className="mb-3 text-sm font-medium text-sky-200">Registro no Fornecedor</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="space-y-1">
+                  <span className="text-sm text-slate-300">Número da oportunidade</span>
+                  <input
+                    type="text"
+                    value={opportunityForm.numeroOportunidade}
+                    onChange={(event) => setOpportunityForm((prev) => ({ ...prev, numeroOportunidade: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white"
+                    placeholder="Ex.: DELL-2026-001234"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-sm text-slate-300">Produto</span>
+                  <input
+                    type="text"
+                    value={opportunityForm.produto}
+                    onChange={(event) => setOpportunityForm((prev) => ({ ...prev, produto: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white"
+                    placeholder="Ex.: PowerEdge R750"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-sm text-slate-300">Data de abertura</span>
+                  <input
+                    type="date"
+                    value={opportunityForm.dataAbertura}
+                    onChange={(event) => setOpportunityForm((prev) => ({ ...prev, dataAbertura: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white"
+                  />
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-sm text-slate-300">Data de validade</span>
+                  <input
+                    type="date"
+                    value={opportunityForm.dataValidade}
+                    onChange={(event) => setOpportunityForm((prev) => ({ ...prev, dataValidade: event.target.value }))}
+                    className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white"
+                  />
+                </label>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
