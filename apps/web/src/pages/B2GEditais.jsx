@@ -1226,6 +1226,7 @@ export default function B2GEditais() {
   const [selectedSavedSummaryId, setSelectedSavedSummaryId] = useState('');
   const [savedSummaryModalOpen, setSavedSummaryModalOpen] = useState(false);
   const [savingSavedSummaryId, setSavingSavedSummaryId] = useState('');
+  const [showAtaModal, setShowAtaModal] = useState(false);
   const [convertingSavedSummaryId, setConvertingSavedSummaryId] = useState('');
   const [dashboardPresentationMode, setDashboardPresentationMode] = useState(false);
   const [dashboardPresentationProgress, setDashboardPresentationProgress] = useState({ current: 1, total: 1 });
@@ -2637,7 +2638,8 @@ export default function B2GEditais() {
       }
 
       setForm(INITIAL_FORM);
-      setFeedback({ type: 'success', message: 'Edital/TR cadastrado com sucesso.' });
+      setFeedback({ type: 'success', message: form.type === 'ATA_REGISTRO_PRECOS' ? 'ATA cadastrada com sucesso.' : 'Edital/TR cadastrado com sucesso.' });
+      if (form.type === 'ATA_REGISTRO_PRECOS') setShowAtaModal(false);
 
       await loadNotices({ preserveSelection: false });
       if (data?.id) setSelectedNoticeId(data.id);
@@ -6007,36 +6009,50 @@ export default function B2GEditais() {
           )}
         </div>
       ) : activeTab === 'atas' ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <AnimatedStats
-              title="Atas RP"
-              value={atasStats.total}
-              subtitle="Total filtrado"
-              icon={Landmark}
-              color="blue"
-            />
-            <AnimatedStats
-              title="Ativas"
-              value={atasStats.active}
-              subtitle="Não encerradas"
-              icon={CheckCircle2}
-              color="green"
-            />
-            <AnimatedStats
-              title="Em análise"
-              value={atasStats.inProgress}
-              subtitle="Status em andamento"
-              icon={Brain}
-              color="purple"
-            />
-            <AnimatedStats
-              title="Enviadas"
-              value={atasStats.sent}
-              subtitle="Fase final"
-              icon={BadgeCheck}
-              color="orange"
-            />
+        <><div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 flex-1">
+              <AnimatedStats
+                title="Atas RP"
+                value={atasStats.total}
+                subtitle="Total filtrado"
+                icon={Landmark}
+                color="blue"
+              />
+              <AnimatedStats
+                title="Ativas"
+                value={atasStats.active}
+                subtitle="Não encerradas"
+                icon={CheckCircle2}
+                color="green"
+              />
+              <AnimatedStats
+                title="Em análise"
+                value={atasStats.inProgress}
+                subtitle="Status em andamento"
+                icon={Brain}
+                color="purple"
+              />
+              <AnimatedStats
+                title="Enviadas"
+                value={atasStats.sent}
+                subtitle="Fase final"
+                icon={BadgeCheck}
+                color="orange"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setForm({ ...INITIAL_FORM, type: 'ATA_REGISTRO_PRECOS' });
+                setFeedback({ type: '', message: '' });
+                setShowAtaModal(true);
+              }}
+              className="crm-btn crm-btn-primary h-10 px-4 shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              Adicionar ATA
+            </button>
           </div>
 
           {renderAdvancedFilters({ title: 'Filtros para Atas de Registro de Preços', showModality: true })}
@@ -6088,6 +6104,175 @@ export default function B2GEditais() {
             </div>
           )}
         </div>
+
+        <Modal
+          isOpen={showAtaModal}
+          onClose={() => {
+            setForm(INITIAL_FORM);
+            setFeedback({ type: '', message: '' });
+            setShowAtaModal(false);
+          }}
+          title="Adicionar Ata de Registro de Preços"
+        >
+          <form onSubmit={handleCreateNotice} className="space-y-4">
+            {feedback.type && (
+              <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${
+                feedback.type === 'error'
+                  ? 'bg-red-500/14 text-red-600 dark:text-red-400'
+                  : 'bg-emerald-500/14 text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {feedback.message}
+              </div>
+            )}
+
+            <input type="hidden" name="type" value="ATA_REGISTRO_PRECOS" />
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Título *</label>
+                <input
+                  className="crm-input mt-1"
+                  value={form.title}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Ex.: Ata de Registro de Preços - Material Hospitalar"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Número da Ata</label>
+                <input
+                  className="crm-input mt-1"
+                  value={form.referenceCode}
+                  onChange={(e) => setForm((prev) => ({ ...prev, referenceCode: e.target.value }))}
+                  placeholder="Ex.: Ata 001/2026"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Órgão *</label>
+                <input
+                  className="crm-input mt-1"
+                  value={form.organization}
+                  onChange={(e) => setForm((prev) => ({ ...prev, organization: e.target.value }))}
+                  placeholder="Ex.: Secretaria Municipal de Saúde"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">UF</label>
+                <select
+                  className="crm-input mt-1"
+                  value={form.stateCode}
+                  onChange={(e) => setForm((prev) => ({ ...prev, stateCode: e.target.value }))}
+                >
+                  <option value="">Selecione</option>
+                  {UF_OPTIONS.map((uf) => (
+                    <option key={uf} value={uf}>{uf}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Modalidade</label>
+                <input
+                  className="crm-input mt-1"
+                  value={form.modality}
+                  onChange={(e) => setForm((prev) => ({ ...prev, modality: e.target.value }))}
+                  placeholder="Ex.: Pregão Eletrônico"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Valor estimado</label>
+                <input
+                  className="crm-input mt-1"
+                  type="number"
+                  step="0.01"
+                  value={form.estimatedValue}
+                  onChange={(e) => setForm((prev) => ({ ...prev, estimatedValue: e.target.value }))}
+                  placeholder="Ex.: 150000.00"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Data de abertura</label>
+                <input
+                  className="crm-input mt-1"
+                  type="date"
+                  value={form.openingDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, openingDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[var(--crm-muted)]">Data de vigência</label>
+                <input
+                  className="crm-input mt-1"
+                  type="date"
+                  value={form.proposalDueDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, proposalDueDate: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[var(--crm-muted)]">Objeto</label>
+              <textarea
+                className="crm-input mt-1 min-h-[80px]"
+                value={form.objectDescription}
+                onChange={(e) => setForm((prev) => ({ ...prev, objectDescription: e.target.value }))}
+                placeholder="Descrição do objeto da ata..."
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[var(--crm-muted)]">Link do PNCP / ComprasNet</label>
+              <input
+                className="crm-input mt-1"
+                value={form.sourceUrl}
+                onChange={(e) => setForm((prev) => ({ ...prev, sourceUrl: e.target.value }))}
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-[var(--crm-muted)]">Tags (separadas por vírgula)</label>
+              <input
+                className="crm-input mt-1"
+                value={form.tags}
+                onChange={(e) => setForm((prev) => ({ ...prev, tags: e.target.value }))}
+                placeholder="Ex.: saúde, emergencial, federal"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(INITIAL_FORM);
+                  setFeedback({ type: '', message: '' });
+                  setShowAtaModal(false);
+                }}
+                className="crm-btn crm-btn-secondary h-10 px-4"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="crm-btn crm-btn-primary h-10 px-4"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {saving ? 'Salvando...' : 'Cadastrar ATA'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+        </>
       ) : activeTab === 'atividades' ? (
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
