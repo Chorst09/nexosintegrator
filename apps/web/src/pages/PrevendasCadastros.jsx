@@ -199,6 +199,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
   const [modalType, setModalType] = useState(forcedTabKey || TAB_KEYS.DISTRIBUIDORES);
   const [editingItem, setEditingItem] = useState(null);
   const [viewingDistributor, setViewingDistributor] = useState(null);
+  const [viewingSupplier, setViewingSupplier] = useState(null);
 
   const [partnerForm, setPartnerForm] = useState(defaultPartnerForm);
   const [opportunityForm, setOpportunityForm] = useState(defaultOpportunityForm);
@@ -437,6 +438,10 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
   const closeDistributorView = () => {
     setViewingDistributor(null);
+  };
+
+  const closeSupplierView = () => {
+    setViewingSupplier(null);
   };
 
   const submitPartner = async () => {
@@ -1307,6 +1312,184 @@ export default function PrevendasCadastros({ forcedTab = null }) {
     );
   };
 
+  const renderSupplierView = () => {
+    const item = viewingSupplier;
+    if (!item) return null;
+
+    const statusLabel = item.status === 'ATIVO' ? 'Ativo' : item.status || 'Ativo';
+    const products = Array.isArray(item.produtosServicos) && item.produtosServicos.length > 0
+      ? item.produtosServicos
+      : item.categorias;
+
+    return (
+      <div className="relative space-y-8 bg-slate-950 text-white">
+        <button
+          type="button"
+          onClick={closeSupplierView}
+          className="absolute -right-4 -top-4 rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+          aria-label="Fechar modal"
+        >
+          <X className="h-6 w-6" />
+        </button>
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <Eye className="h-8 w-8 text-sky-400" />
+            <h2 className="text-3xl font-semibold text-white">Visualizar Fornecedor: {item.nome || '-'}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center justify-center gap-3 rounded-lg border border-slate-600/70 px-5 py-3 text-lg text-slate-100 hover:bg-slate-800/70"
+          >
+            <FileDown className="h-5 w-5" /> Imprimir PDF
+          </button>
+        </div>
+
+        <section className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-8 py-10">
+          <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
+              <p className="mt-4 text-3xl text-sky-100">Fornecedor</p>
+            </div>
+            <span className="w-fit rounded-full bg-emerald-500 px-8 py-4 text-3xl font-semibold text-white">
+              {statusLabel}
+            </span>
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-6 flex items-center gap-4">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
+              <Globe2 className="h-9 w-9" />
+            </span>
+            <h3 className="text-4xl font-semibold text-white">Informações de Portal</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {renderPortalCard({
+              title: 'Portal / Partner',
+              url: item.portalPartnerUrl,
+              login: item.portalPartnerLogin,
+              icon: Link2,
+              accentClass: 'text-blue-800'
+            })}
+            {renderPortalCard({
+              title: 'Portal de Treinamentos',
+              url: item.treinamentoUrl,
+              login: item.treinamentoLogin,
+              icon: Globe2,
+              accentClass: 'text-cyan-800'
+            })}
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+            <div className="mb-8 flex items-center gap-4">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                <User className="h-9 w-9" />
+              </span>
+              <h3 className="text-4xl font-semibold text-white">Contato Principal</h3>
+            </div>
+            <div className="space-y-8">
+              <div>
+                <p className="text-lg text-slate-400">Nome</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{item.contatoPrincipal || item.contato || '-'}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-lg text-slate-400">
+                  <Mail className="h-5 w-5" /> Email
+                </p>
+                <p className="mt-2 break-all text-2xl font-semibold text-white">{item.emailContatoPrincipal || item.email || '-'}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-lg text-slate-400">
+                  <Phone className="h-5 w-5" /> Telefone
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">{item.telefoneContatoPrincipal || item.telefone || '-'}</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+            <div className="mb-8 flex items-center gap-4">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                <Users className="h-9 w-9" />
+              </span>
+              <h3 className="text-4xl font-semibold text-white">Contato Cotações</h3>
+            </div>
+            <div className="space-y-8">
+              <div>
+                <p className="text-lg text-slate-400">Nome</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{item.contatoCotacoes || '-'}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-lg text-slate-400">
+                  <Mail className="h-5 w-5" /> Email
+                </p>
+                <p className="mt-2 break-all text-2xl font-semibold text-white">{item.emailContatoCotacoes || '-'}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-lg text-slate-400">
+                  <Phone className="h-5 w-5" /> Telefone
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">{item.telefoneContatoCotacoes || '-'}</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <div className="mb-8 flex items-center gap-4">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+              <Package className="h-9 w-9" />
+            </span>
+            <h3 className="text-4xl font-semibold text-white">Produtos/Serviços Oferecidos</h3>
+          </div>
+          {renderPillList(products, 'Sem produtos/serviços informados.', 'from-sky-500 to-cyan-500')}
+        </section>
+
+        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <div className="mb-8 flex items-center gap-4">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <ClipboardList className="h-9 w-9" />
+            </span>
+            <h3 className="text-4xl font-semibold text-white">Documentos e Procedimentos</h3>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <p className="mb-2 text-lg text-slate-400">Template RO</p>
+              {item.templateRoUrl ? (
+                <a
+                  href={item.templateRoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 break-all text-xl font-bold text-sky-300 hover:text-sky-200"
+                >
+                  {item.templateRoUrl}
+                  <ExternalLink className="h-4 w-4 shrink-0" />
+                </a>
+              ) : (
+                <p className="text-xl text-slate-400">Template RO não informado.</p>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-2 text-lg text-slate-400">Procedimento para RO</p>
+              <p className="whitespace-pre-wrap text-xl text-slate-100">{item.procedimentoRo || 'Procedimento não informado.'}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <h3 className="text-3xl font-semibold text-white">Observações</h3>
+          <p className="mt-5 whitespace-pre-wrap text-xl text-slate-400">{item.observacoes || 'Sem observações.'}</p>
+        </section>
+      </div>
+    );
+  };
+
   const renderPartnerCards = (type) => {
     if (activeRows.length === 0) {
       return <div className="py-12 text-center text-slate-400">Nenhum cadastro encontrado.</div>;
@@ -1358,6 +1541,15 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                   <button
                     type="button"
                     onClick={() => setViewingDistributor(item)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-sky-500/50 px-3 py-2 text-xs text-sky-100 hover:bg-sky-500/20"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Visualizar
+                  </button>
+                )}
+                {type === TAB_KEYS.FORNECEDORES && (
+                  <button
+                    type="button"
+                    onClick={() => setViewingSupplier(item)}
                     className="inline-flex items-center gap-1 rounded-lg border border-sky-500/50 px-3 py-2 text-xs text-sky-100 hover:bg-sky-500/20"
                   >
                     <Eye className="h-3.5 w-3.5" /> Visualizar
@@ -2027,6 +2219,18 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         contentClassName="p-4 sm:p-6"
       >
         {renderDistributorView()}
+      </Modal>
+
+      <Modal
+        isOpen={!!viewingSupplier}
+        onClose={closeSupplierView}
+        title=""
+        showCloseButton={false}
+        size="large"
+        panelClassName="max-w-[calc(100vw-1rem)] xl:max-w-7xl bg-slate-950"
+        contentClassName="p-4 sm:p-6"
+      >
+        {renderSupplierView()}
       </Modal>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
