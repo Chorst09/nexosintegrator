@@ -140,6 +140,10 @@ export default async function handler(req) {
       return Response.json(item);
     }
 
+    if (req.method === 'GET') {
+      return Response.json(list);
+    }
+
     if (req.method === 'POST') {
       const body = await req.json();
       let created;
