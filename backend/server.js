@@ -149,6 +149,7 @@ app.use('/api/bll-proxy', require('./api/bll-proxy'));
 // Novas rotas CommonJS - migradas do apps/api
 app.use('/api/b2g', authenticateToken, require('./api/b2g.cjs'));
 app.use('/api/pre-vendas', authenticateToken, require('./api/pre-vendas.cjs'));
+app.use('/api/prevendas-cadastros', authenticateToken, handleLegacyAPI('./api/prevendas-cadastros.js'));
 app.use('/api/analyses', authenticateToken, require('./api/saved-analyses.cjs'));
 app.use('/api/ai-analysis', authenticateToken, require('./api/ai-analysis.cjs'));
 
