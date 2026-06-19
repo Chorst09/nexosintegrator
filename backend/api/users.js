@@ -62,6 +62,12 @@ export default async function handler(req) {
         role: true,
         region: true,
         quota: true,
+        commissionSalePercentage: true,
+        commissionProject12: true,
+        commissionProject24: true,
+        commissionProject36: true,
+        commissionProject48: true,
+        commissionProject60: true,
         createdAt: true,
         _count: {
           select: {
@@ -99,7 +105,13 @@ export default async function handler(req) {
         password: body.password,
         role: body.role || 'SELLER',
         region: body.region,
-        quota: body.quota
+        quota: body.quota,
+        commissionSalePercentage: body.commissionSalePercentage ?? null,
+        commissionProject12: body.commissionProject12 ?? null,
+        commissionProject24: body.commissionProject24 ?? null,
+        commissionProject36: body.commissionProject36 ?? null,
+        commissionProject48: body.commissionProject48 ?? null,
+        commissionProject60: body.commissionProject60 ?? null
       },
       select: {
         id: true,
@@ -108,6 +120,12 @@ export default async function handler(req) {
         role: true,
         region: true,
         quota: true,
+        commissionSalePercentage: true,
+        commissionProject12: true,
+        commissionProject24: true,
+        commissionProject36: true,
+        commissionProject48: true,
+        commissionProject60: true,
         createdAt: true
       }
     });
@@ -149,7 +167,13 @@ export default async function handler(req) {
         email: body.email,
         role: body.role,
         region: body.region,
-        quota: body.quota
+        quota: body.quota,
+        commissionSalePercentage: body.commissionSalePercentage ?? null,
+        commissionProject12: body.commissionProject12 ?? null,
+        commissionProject24: body.commissionProject24 ?? null,
+        commissionProject36: body.commissionProject36 ?? null,
+        commissionProject48: body.commissionProject48 ?? null,
+        commissionProject60: body.commissionProject60 ?? null
       },
       select: {
         id: true,
@@ -158,6 +182,12 @@ export default async function handler(req) {
         role: true,
         region: true,
         quota: true,
+        commissionSalePercentage: true,
+        commissionProject12: true,
+        commissionProject24: true,
+        commissionProject36: true,
+        commissionProject48: true,
+        commissionProject60: true,
         createdAt: true
       }
     });
