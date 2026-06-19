@@ -612,6 +612,32 @@ export default function Oportunidades() {
         />
       </div>
 
+      {/* Alternador Pipeline / Histórico */}
+      <div className="flex rounded-xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] p-1 w-fit">
+        <button
+          onClick={() => setViewMode('pipeline')}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+            viewMode === 'pipeline'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          Pipeline
+        </button>
+        <button
+          onClick={() => setViewMode('historico')}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+            viewMode === 'historico'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Histórico
+        </button>
+      </div>
+
       {/* Filtros */}
       <GradientCard gradient="gray" className="p-6">
         <div className="flex flex-col md:flex-row gap-4 items-center">
@@ -657,32 +683,6 @@ export default function Oportunidades() {
           </div>
         </div>
       </GradientCard>
-
-      {/* Alternador Pipeline / Histórico */}
-      <div className="flex items-center gap-4">
-        <div className="flex rounded-xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] p-1">
-          <button
-            onClick={() => setViewMode('pipeline')}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-              viewMode === 'pipeline'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
-            }`}
-          >
-            Pipeline
-          </button>
-          <button
-            onClick={() => setViewMode('historico')}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-              viewMode === 'historico'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
-            }`}
-          >
-            Histórico
-          </button>
-        </div>
-      </div>
 
       {viewMode === 'historico' ? (
         /* ── Histórico (Ganhas / Perdidas) ── */
