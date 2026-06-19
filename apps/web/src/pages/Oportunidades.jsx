@@ -75,7 +75,24 @@ export default function Oportunidades() {
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [sellerFilter, setSellerFilter] = useState('');
+  const [viewMode, setViewMode] = useState('pipeline'); // 'pipeline' | 'historico'
+  const [showLossModal, setShowLossModal] = useState(false);
+  const [lossReason, setLossReason] = useState('');
+  const [pendingLossId, setPendingLossId] = useState(null);
   const [searchParams] = useSearchParams();
+
+  const LOSS_REASONS = [
+    'Preço acima do esperado',
+    'Concorrência venceu',
+    'Prazo de entrega inviável',
+    'Cliente optou por não investir',
+    'Problemas com suporte/pós-venda',
+    'Produto não atende aos requisitos',
+    'Orçamento insuficiente do cliente',
+    'Relacionamento com concorrente',
+    'Decisão interna do cliente',
+    'Outro'
+  ];
   const requestedClientType = normalizeClientType(searchParams.get('clientType'));
   const pipelineClientType = requestedClientType || 'B2B';
   const pipelineLabel = pipelineClientType === 'B2G' ? 'B2G Governo' : 'B2B Privado';
@@ -316,12 +333,14 @@ export default function Oportunidades() {
       .catch(() => {});
   }, [searchParams, opportunities, loading]);
 
-  const moveOpportunity = async (id, stage) => {
+  const moveOpportunity = async (id, stage, lossReasonParam = null) => {
     try {
+      const body = { id, stage };
+      if (lossReasonParam) body.lossReason = lossReasonParam;
       const response = await fetch(buildScopedOpportunityByIdUrl(id), {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ id, stage })
+        body: JSON.stringify(body)
       });
       
       if (response.ok) {
@@ -639,8 +658,97 @@ export default function Oportunidades() {
         </div>
       </GradientCard>
 
+      {/* Alternador Pipeline / Histórico */}
+      <div className="flex items-center gap-4">
+        <div className="flex rounded-xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] p-1">
+          <button
+            onClick={() => setViewMode('pipeline')}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+              viewMode === 'pipeline'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+            }`}
+          >
+            Pipeline
+          </button>
+          <button
+            onClick={() => setViewMode('historico')}
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+              viewMode === 'historico'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+            }`}
+          >
+            Histórico
+          </button>
+        </div>
+      </div>
 
-
+      {viewMode === 'historico' ? (
+        /* ── Histórico (Ganhas / Perdidas) ── */
+        <div className="rounded-2xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.06)]">
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Empresa</th>
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Projeto</th>
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Valor</th>
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Status</th>
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Data Fechamento</th>
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Motivo</th>
+                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Responsável</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOpportunities.filter(o => o.stage === 'WON' || o.stage === 'LOST').length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-[var(--crm-muted)]">
+                      <Target className="w-12 h-12 mx-auto mb-2 opacity-40" />
+                      <p>Nenhuma oportunidade ganha ou perdida ainda.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOpportunities
+                    .filter(o => o.stage === 'WON' || o.stage === 'LOST')
+                    .sort((a, b) => new Date(b.actualCloseDate || b.expectedCloseDate || 0) - new Date(a.actualCloseDate || a.expectedCloseDate || 0))
+                    .map(opp => (
+                      <tr
+                        key={opp.id}
+                        onClick={() => handleViewDetails(opp)}
+                        className="border-b border-[color:var(--crm-border)] hover:bg-[rgb(var(--crm-accent-rgb)_/_0.04)] cursor-pointer transition-colors"
+                      >
+                        <td className="p-4 font-medium text-[var(--crm-ink)]">{opp.company?.name || 'N/I'}</td>
+                        <td className="p-4 text-[var(--crm-ink)]">{opp.projectName || opp.title}</td>
+                        <td className="p-4 font-semibold text-emerald-400">{formatCurrency(opp.value)}</td>
+                        <td className="p-4">
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                            style={{
+                              backgroundColor: opp.stage === 'WON' ? 'rgba(16,185,129,0.2)' : 'rgba(107,114,128,0.2)',
+                              color: opp.stage === 'WON' ? '#10b981' : '#6b7280'
+                            }}
+                          >
+                            {opp.stage === 'WON' ? 'Ganha' : 'Perdida'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-[var(--crm-muted)]">
+                          {opp.actualCloseDate
+                            ? new Date(opp.actualCloseDate).toLocaleDateString('pt-BR')
+                            : new Date(opp.expectedCloseDate).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="p-4 text-[var(--crm-muted)] max-w-[200px] truncate" title={opp.lossReason || ''}>
+                          {opp.stage === 'LOST' ? (opp.lossReason || '—') : '—'}
+                        </td>
+                        <td className="p-4 text-[var(--crm-muted)]">{opp.owner?.name || 'N/I'}</td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
       {/* Pipeline Kanban */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map(stage => (
@@ -795,7 +903,7 @@ export default function Oportunidades() {
                             <Check className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); moveOpportunity(opp.id, 'LOST'); }}
+                            onClick={(e) => { e.stopPropagation(); setPendingLossId(opp.id); setLossReason(''); setShowLossModal(true); }}
                             className="flex items-center justify-center rounded-xl bg-red-600 p-1.5 text-white hover:bg-red-500 transition-colors"
                             title="Marcar como Perdida"
                           >
@@ -820,6 +928,7 @@ export default function Oportunidades() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Modal de Formulário */}
       {showModal && (
@@ -1023,6 +1132,76 @@ export default function Oportunidades() {
               >
                 <Edit className="w-4 h-4" />
                 Editar Oportunidade
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de Motivo da Perda */}
+      {showLossModal && (
+        <Modal
+          isOpen={showLossModal}
+          onClose={() => { setShowLossModal(false); setPendingLossId(null); }}
+          title="Motivo da Perda"
+          size="default"
+        >
+          <div className="space-y-5 p-2">
+            <p className="text-sm text-[var(--crm-muted)]">
+              Informe o motivo pelo qual esta oportunidade foi perdida:
+            </p>
+
+            <div className="space-y-2">
+              {LOSS_REASONS.map(reason => (
+                <label
+                  key={reason}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    lossReason === reason
+                      ? 'border-red-400/60 bg-red-500/10'
+                      : 'border-[color:var(--crm-border)] hover:border-red-300/30'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="lossReason"
+                    value={reason}
+                    checked={lossReason === reason}
+                    onChange={e => setLossReason(e.target.value)}
+                    className="accent-red-500"
+                  />
+                  <span className="text-sm font-medium text-[var(--crm-ink)]">{reason}</span>
+                </label>
+              ))}
+            </div>
+
+            {lossReason === 'Outro' && (
+              <textarea
+                value={lossReason === 'Outro' ? lossReason : ''}
+                onChange={e => setLossReason(e.target.value)}
+                placeholder="Descreva o motivo da perda..."
+                className="crm-input !px-4 !py-3 text-base w-full"
+                rows={3}
+              />
+            )}
+
+            <div className={modalActionsClass}>
+              <button
+                onClick={() => { setShowLossModal(false); setPendingLossId(null); }}
+                className={modalCancelButtonClass}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (pendingLossId) {
+                    moveOpportunity(pendingLossId, 'LOST', lossReason || 'Não informado');
+                  }
+                  setShowLossModal(false);
+                  setPendingLossId(null);
+                }}
+                className="crm-btn min-w-[160px] text-white border border-red-400/45 bg-[linear-gradient(135deg,#dc2626_0%,#b91c1c_100%)] hover:brightness-110 shadow-[0_14px_30px_rgba(220,38,38,0.35)]"
+              >
+                Confirmar Perda
               </button>
             </div>
           </div>

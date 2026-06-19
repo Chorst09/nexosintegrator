@@ -281,8 +281,8 @@ export default async function handler(req) {
     if (body.lossReason) updateData.lossReason = body.lossReason;
     if (body.notes !== undefined) updateData.notes = body.notes;
     
-    // Se mudou para WON, definir data de fechamento
-    if (body.stage === 'WON') {
+    // Se mudou para WON ou LOST, definir data de fechamento
+    if (body.stage === 'WON' || body.stage === 'LOST') {
       updateData.actualCloseDate = new Date();
     }
     
