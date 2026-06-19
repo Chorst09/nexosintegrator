@@ -194,9 +194,9 @@ const DASHBOARD_FUNNEL_META = [
   { id: 'SUSPENSO', label: 'Suspenso', width: 65, gradient: 'from-[#a0aec0] to-[#8b9bb0]' },
   { id: 'HOMOLOGADO', label: 'Homologado', width: 60, gradient: 'from-[#4b87f3] to-[#3b79e8]' },
   { id: 'CONCLUIDO', label: 'Concluído', width: 50, gradient: 'from-[#8b61ff] to-[#7b53ef]' },
-  { id: 'GANHO', label: 'Ganho', width: 65, gradient: 'from-[#36d483] to-[#2bc47a]' },
-  { id: 'NO_GO', label: 'No Go', width: 40, gradient: 'from-[#f3ab1c] to-[#e89c15]' },
-  { id: 'PERDIDO', label: 'Perdido', width: 35, gradient: 'from-[#e53e3e] to-[#c53030]' }
+  { id: 'GANHO', label: 'Ganho', width: 44, gradient: 'from-[#36d483] to-[#2bc47a]' },
+  { id: 'NO_GO', label: 'No Go', width: 36, gradient: 'from-[#f3ab1c] to-[#e89c15]' },
+  { id: 'PERDIDO', label: 'Perdido', width: 32, gradient: 'from-[#e53e3e] to-[#c53030]' }
 ];
 
 const DASHBOARD_PROBABILITY_LEVELS = [
@@ -4198,7 +4198,7 @@ export default function B2GEditais() {
               </span>
             </div>
 
-            <div className="mt-6 h-96">
+            <div className="mt-5 h-[420px]">
               <B2GFunnelStrategic funnelRows={dashboardFunnelRows} />
             </div>
           </div>

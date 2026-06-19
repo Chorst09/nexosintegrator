@@ -805,7 +805,7 @@ export default function Dashboard() {
             </div>
             <Target className="h-4 w-4 text-[#8fd1ff]" />
           </div>
-          <div className="h-[280px]">
+          <div className="h-[340px]">
             <SalesFunnel data={charts.funnel} />
           </div>
         </div>
