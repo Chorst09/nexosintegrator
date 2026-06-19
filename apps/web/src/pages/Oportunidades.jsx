@@ -749,7 +749,6 @@ export default function Oportunidades() {
           </div>
         </div>
       ) : (
-      {/* Pipeline Kanban */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map(stage => (
           <div
