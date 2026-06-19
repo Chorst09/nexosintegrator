@@ -19,6 +19,12 @@ model User {
   regionId  String?
   region    Region?  @relation(fields: [regionId], references: [id])
   quota     Float?
+  commissionSalePercentage Float?
+  commissionProject12 Float?
+  commissionProject24 Float?
+  commissionProject36 Float?
+  commissionProject48 Float?
+  commissionProject60 Float?
   accessB2B Boolean  @default(true)
   accessB2G Boolean  @default(true)
   accessPreSales Boolean @default(false)

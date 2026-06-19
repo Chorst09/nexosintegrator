@@ -108,7 +108,13 @@ export default function Vendedores() {
         email: item.email,
         role: item.role,
         region: item.region,
-        quota: item.quota
+        quota: item.quota,
+        commissionSalePercentage: item.commissionSalePercentage ?? '',
+        commissionProject12: item.commissionProject12 ?? '',
+        commissionProject24: item.commissionProject24 ?? '',
+        commissionProject36: item.commissionProject36 ?? '',
+        commissionProject48: item.commissionProject48 ?? '',
+        commissionProject60: item.commissionProject60 ?? ''
       });
     } else if (type === 'target') {
       setFormData({
@@ -210,6 +216,26 @@ export default function Vendedores() {
       key: 'quota',
       label: 'Cota',
       render: (item) => formatCurrency(item.quota)
+    },
+    {
+      key: 'commissionSalePercentage',
+      label: 'Comissão',
+      render: (item) => {
+        const parts = [];
+        if (item.commissionSalePercentage != null) parts.push(`Venda: ${item.commissionSalePercentage}%`);
+        if (item.commissionProject12 != null) parts.push(`12m: ${item.commissionProject12}%`);
+        if (item.commissionProject24 != null) parts.push(`24m: ${item.commissionProject24}%`);
+        if (item.commissionProject36 != null) parts.push(`36m: ${item.commissionProject36}%`);
+        if (item.commissionProject48 != null) parts.push(`48m: ${item.commissionProject48}%`);
+        if (item.commissionProject60 != null) parts.push(`60m: ${item.commissionProject60}%`);
+        return parts.length > 0 ? (
+          <div className="text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+            {parts.map((p, i) => <div key={i}>{p}</div>)}
+          </div>
+        ) : (
+          <span className="text-xs text-gray-400">Não configurada</span>
+        );
+      }
     },
     {
       key: '_count.opportunities',
@@ -566,6 +592,57 @@ export default function Vendedores() {
                     onChange={(e) => setFormData({...formData, quota: parseFloat(e.target.value) || 0})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-blue-500/20 pt-4">
+                  <h4 className="text-sm font-bold text-gray-800 dark:text-slate-100 mb-3">Comissões</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">
+                        Venda Pontual (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={formData.commissionSalePercentage ?? ''}
+                        onChange={(e) => setFormData({...formData, commissionSalePercentage: e.target.value === '' ? null : parseFloat(e.target.value)})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Ex: 3.0"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-2">
+                      Projetos Mensais (% por duração)
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { key: 'commissionProject12', label: '12 meses' },
+                        { key: 'commissionProject24', label: '24 meses' },
+                        { key: 'commissionProject36', label: '36 meses' },
+                        { key: 'commissionProject48', label: '48 meses' },
+                        { key: 'commissionProject60', label: '60 meses' }
+                      ].map((field) => (
+                        <div key={field.key}>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-slate-300 mb-1">
+                            {field.label}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={formData[field.key] ?? ''}
+                            onChange={(e) => setFormData({...formData, [field.key]: e.target.value === '' ? null : parseFloat(e.target.value)})}
+                            className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            placeholder="%"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 
                 <div className="flex justify-end gap-2 pt-4">

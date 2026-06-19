@@ -17,6 +17,12 @@ model User {
   regionId  String?
   region    Region?  @relation(fields: [regionId], references: [id])
   quota     Float?
+  commissionSalePercentage Float?
+  commissionProject12 Float?
+  commissionProject24 Float?
+  commissionProject36 Float?
+  commissionProject48 Float?
+  commissionProject60 Float?
   createdAt DateTime @default(now())
   
   // Relacionamentos

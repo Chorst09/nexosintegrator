@@ -749,6 +749,12 @@ export default function Administracao() {
       role: 'USER',
       regionId: '',
       quota: '',
+      commissionSalePercentage: '',
+      commissionProject12: '',
+      commissionProject24: '',
+      commissionProject36: '',
+      commissionProject48: '',
+      commissionProject60: '',
       accessB2B: true,
       accessB2G: true,
       accessPreSales: false,
@@ -773,6 +779,12 @@ export default function Administracao() {
       role: normalizedRole,
       regionId: user?.region?.id || user?.regionId || '',
       quota: typeof user?.quota === 'number' ? String(user.quota) : '',
+      commissionSalePercentage: user?.commissionSalePercentage != null ? String(user.commissionSalePercentage) : '',
+      commissionProject12: user?.commissionProject12 != null ? String(user.commissionProject12) : '',
+      commissionProject24: user?.commissionProject24 != null ? String(user.commissionProject24) : '',
+      commissionProject36: user?.commissionProject36 != null ? String(user.commissionProject36) : '',
+      commissionProject48: user?.commissionProject48 != null ? String(user.commissionProject48) : '',
+      commissionProject60: user?.commissionProject60 != null ? String(user.commissionProject60) : '',
       accessB2B: resolvedAccess.accessB2B,
       accessB2G: resolvedAccess.accessB2G,
       accessPreSales: resolvedAccess.accessPreSales,
@@ -794,6 +806,12 @@ export default function Administracao() {
         role: normalizeRole(userForm.role),
         regionId: userForm.regionId || null,
         quota: userForm.quota === '' ? null : Number(userForm.quota),
+        commissionSalePercentage: userForm.commissionSalePercentage === '' ? null : Number(userForm.commissionSalePercentage),
+        commissionProject12: userForm.commissionProject12 === '' ? null : Number(userForm.commissionProject12),
+        commissionProject24: userForm.commissionProject24 === '' ? null : Number(userForm.commissionProject24),
+        commissionProject36: userForm.commissionProject36 === '' ? null : Number(userForm.commissionProject36),
+        commissionProject48: userForm.commissionProject48 === '' ? null : Number(userForm.commissionProject48),
+        commissionProject60: userForm.commissionProject60 === '' ? null : Number(userForm.commissionProject60),
         accessB2B: Boolean(userForm.accessB2B),
         accessB2G: Boolean(userForm.accessB2G),
         accessPreSales: Boolean(userForm.accessPreSales),
@@ -1919,6 +1937,26 @@ export default function Administracao() {
               : '-'}
           </div>
         )
+      },
+      {
+        key: 'commissionSalePercentage',
+        label: 'Comissões',
+        render: (u) => {
+          const parts = [];
+          if (u.commissionSalePercentage != null) parts.push(`Venda: ${u.commissionSalePercentage}%`);
+          if (u.commissionProject12 != null) parts.push(`12m: ${u.commissionProject12}%`);
+          if (u.commissionProject24 != null) parts.push(`24m: ${u.commissionProject24}%`);
+          if (u.commissionProject36 != null) parts.push(`36m: ${u.commissionProject36}%`);
+          if (u.commissionProject48 != null) parts.push(`48m: ${u.commissionProject48}%`);
+          if (u.commissionProject60 != null) parts.push(`60m: ${u.commissionProject60}%`);
+          return parts.length > 0 ? (
+            <div className="text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+              {parts.map((p, i) => <div key={i}>{p}</div>)}
+            </div>
+          ) : (
+            <span className="text-xs text-gray-400">-</span>
+          );
+        }
       },
       {
         key: 'createdAt',
@@ -3206,6 +3244,49 @@ export default function Administracao() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="50000.00"
             />
+          </div>
+
+          <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-3 space-y-3">
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Comissões</div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">Venda Pontual (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={userForm.commissionSalePercentage}
+                onChange={(e) => setUserForm((f) => ({ ...f, commissionSalePercentage: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Ex: 3.0"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">Projetos Mensais (% por duração)</label>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { key: 'commissionProject12', label: '12m' },
+                  { key: 'commissionProject24', label: '24m' },
+                  { key: 'commissionProject36', label: '36m' },
+                  { key: 'commissionProject48', label: '48m' },
+                  { key: 'commissionProject60', label: '60m' }
+                ].map((field) => (
+                  <div key={field.key}>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-slate-300 mb-1">{field.label}</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={userForm[field.key]}
+                      onChange={(e) => setUserForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                      className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      placeholder="%"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-3 space-y-2">

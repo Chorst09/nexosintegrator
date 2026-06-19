@@ -16,6 +16,12 @@ model User {
   name      String
   password  String
   role      Role     @default(SELLER)
+  commissionSalePercentage Float?
+  commissionProject12 Float?
+  commissionProject24 Float?
+  commissionProject36 Float?
+  commissionProject48 Float?
+  commissionProject60 Float?
   active    Boolean  @default(true)
   lastLogin DateTime?
   createdAt DateTime @default(now())
