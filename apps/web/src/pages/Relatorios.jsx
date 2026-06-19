@@ -43,9 +43,15 @@ export default function Relatorios() {
   const loadReports = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(
-        buildApiUrl(`/dashboard?type=${reportType}&period=${period}`)
-      );
+      const params = new URLSearchParams({ type: reportType, period });
+      if (reportType === 'seller') {
+        const userRaw = localStorage.getItem('user');
+        if (userRaw) {
+          const user = JSON.parse(userRaw);
+          if (user.id) params.set('userId', user.id);
+        }
+      }
+      const response = await axios.get(buildApiUrl(`/dashboard?${params.toString()}`));
       setDashboardData(response.data);
     } catch (error) {
       console.error('Erro ao carregar relatórios:', error);
