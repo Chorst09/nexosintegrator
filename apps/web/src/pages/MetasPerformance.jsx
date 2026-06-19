@@ -61,7 +61,7 @@ export default function MetasPerformance() {
       const [sellersResult, targetsResult, commissionsResult, workflowsResult] = await Promise.allSettled([
         fetchArray(`${API_ENDPOINTS.users}?role=SELLER`),
         fetchArray(API_ENDPOINTS.salesTargets),
-        fetchArray(`${API_ENDPOINTS.teamCommissions}?type=by_region`),
+        fetchArray(`${API_ENDPOINTS.teamCommissions}?type=by_seller`),
         fetchArray(API_ENDPOINTS.advancedWorkflows)
       ]);
 
@@ -247,39 +247,44 @@ export default function MetasPerformance() {
 
   const commissionsColumns = [
     {
-      key: 'region.name',
-      label: 'Regiao',
+      key: 'seller.name',
+      label: 'Vendedor',
       render: (item) => (
         <div>
-          <div className="font-medium text-gray-900 dark:text-gray-100">{item.region?.name || '-'}</div>
-          <div className="text-sm text-gray-500 dark:text-slate-200">{item.region?.code || '-'}</div>
+          <div className="font-medium text-gray-900 dark:text-gray-100">{item.seller?.name || '-'}</div>
+          <div className="text-sm text-gray-500 dark:text-slate-200">{item.seller?.region?.name || 'Sem regiao'}</div>
         </div>
       )
     },
     {
-      key: 'sellersCount',
-      label: 'Vendedores',
-      render: (item) => item.sellersCount
+      key: 'opportunitiesWon',
+      label: 'Projetos Ganhos',
+      render: (item) => item.opportunitiesWon || 0
     },
     {
       key: 'totalCommissions',
-      label: 'Total Comissoes',
+      label: 'Comissao Acumulada',
       render: (item) => formatCurrency(item.totalCommissions)
     },
     {
-      key: 'paidCommissions',
-      label: 'Pagas',
-      render: (item) => formatCurrency(item.paidCommissions)
-    },
-    {
       key: 'pendingCommissions',
-      label: 'Pendentes',
+      label: 'Pendente',
       render: (item) => formatCurrency(item.pendingCommissions)
     },
     {
-      key: 'averagePerSeller',
-      label: 'Media/Vendedor',
-      render: (item) => formatCurrency(item.averagePerSeller)
+      key: 'approvedCommissions',
+      label: 'Aprovada',
+      render: (item) => formatCurrency(item.approvedCommissions)
+    },
+    {
+      key: 'paidCommissions',
+      label: 'Paga',
+      render: (item) => formatCurrency(item.paidCommissions)
+    },
+    {
+      key: 'averageCommission',
+      label: 'Ticket Medio',
+      render: (item) => formatCurrency(item.averageCommission)
     }
   ];
 
@@ -360,12 +365,11 @@ export default function MetasPerformance() {
     ? teamCommissions.reduce((sum, region) => sum + (region.totalCommissions || 0), 0)
     : 0;
   const totalPaidCommissions = Array.isArray(teamCommissions)
-    ? teamCommissions.reduce((sum, region) => sum + (region.paidCommissions || 0), 0)
+    ? teamCommissions.reduce((sum, item) => sum + (item.paidCommissions || 0), 0)
     : 0;
-  const activeWorkflows = Array.isArray(advancedWorkflows)
-    ? advancedWorkflows.filter((workflow) => workflow.isActive).length
+  const totalPendingCommissions = Array.isArray(teamCommissions)
+    ? teamCommissions.reduce((sum, item) => sum + (item.pendingCommissions || 0), 0)
     : 0;
-
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -428,10 +432,10 @@ export default function MetasPerformance() {
           color="yellow"
         />
         <AnimatedStats
-          title="Workflows Ativos"
-          value={activeWorkflows}
-          subtitle={`${advancedWorkflows.length} total`}
-          icon="⚡"
+          title="Comissões Ganhas"
+          value={formatCurrency(totalCommissions)}
+          subtitle={`${formatCurrency(totalPendingCommissions)} pendente`}
+          icon="💵"
           color="purple"
         />
       </div>
@@ -440,7 +444,7 @@ export default function MetasPerformance() {
         <nav className="-mb-px flex space-x-8">
           {[
             { id: 'metas', label: 'Metas de Vendas', icon: '🎯' },
-            { id: 'comissoes', label: 'Comissoes por Equipe', icon: '👥' },
+            { id: 'comissoes', label: 'Comissao por Vendedor', icon: '👥' },
             { id: 'workflows', label: 'Workflows Avancados', icon: '⚡' }
           ].map((tab) => (
             <button
@@ -479,9 +483,9 @@ export default function MetasPerformance() {
         {activeTab === 'comissoes' && (
           <div className="p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Comissoes por Equipe</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Comissao por Vendedor</h2>
               <div className="text-sm text-gray-500 dark:text-slate-200">
-                Total: {formatCurrency(totalCommissions)} | Pagas: {formatCurrency(totalPaidCommissions)}
+                Total ganho: {formatCurrency(totalCommissions)} | Pendentes: {formatCurrency(totalPendingCommissions)} | Pagas: {formatCurrency(totalPaidCommissions)}
               </div>
             </div>
             <ModernTable

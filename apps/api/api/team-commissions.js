@@ -28,6 +28,12 @@ export default async function handler(req) {
       }
     }
 
+    const commissionWhere = {
+      ...dateFilter,
+      status: { not: 'CANCELLED' },
+      opportunity: { stage: 'WON' }
+    };
+
     if (type === 'by_region') {
       // Comissões agrupadas por região
       const regions = await prisma.region.findMany({
@@ -36,7 +42,7 @@ export default async function handler(req) {
           users: {
             include: {
               commissions: {
-                where: dateFilter,
+                where: commissionWhere,
                 include: {
                   opportunity: {
                     include: {
@@ -95,6 +101,72 @@ export default async function handler(req) {
       return Response.json(regionCommissions);
     }
 
+    if (type === 'by_seller') {
+      const sellers = await prisma.user.findMany({
+        where: {
+          role: 'SELLER',
+          ...(regionId ? { regionId } : {})
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          region: {
+            select: { id: true, name: true, code: true }
+          },
+          commissions: {
+            where: commissionWhere,
+            include: {
+              opportunity: {
+                select: {
+                  id: true,
+                  title: true,
+                  value: true,
+                  projectType: true,
+                  projectMonths: true,
+                  actualCloseDate: true,
+                  company: { select: { id: true, name: true } }
+                }
+              }
+            },
+            orderBy: { createdAt: 'desc' }
+          }
+        },
+        orderBy: { name: 'asc' }
+      });
+
+      return Response.json(sellers.map((seller) => {
+        const commissions = seller.commissions || [];
+        const totalCommissions = commissions.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const paidCommissions = commissions
+          .filter((item) => item.status === 'PAID')
+          .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const pendingCommissions = commissions
+          .filter((item) => item.status === 'PENDING')
+          .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const approvedCommissions = commissions
+          .filter((item) => item.status === 'APPROVED')
+          .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+        return {
+          seller: {
+            id: seller.id,
+            name: seller.name,
+            email: seller.email,
+            region: seller.region
+          },
+          totalCommissions,
+          paidCommissions,
+          pendingCommissions,
+          approvedCommissions,
+          commissionsCount: commissions.length,
+          opportunitiesWon: commissions.length,
+          averageCommission: commissions.length > 0 ? totalCommissions / commissions.length : 0,
+          commissions
+        };
+      }));
+    }
+
     if (type === 'team_bonuses') {
       // Bonificações por equipe baseadas em metas coletivas
       const teamBonuses = await prisma.teamBonus.findMany({
@@ -124,7 +196,7 @@ export default async function handler(req) {
     const teamReport = await prisma.commission.groupBy({
       by: ['sellerId'],
       where: {
-        ...dateFilter,
+        ...commissionWhere,
         seller: regionId ? { regionId } : undefined
       },
       _sum: {

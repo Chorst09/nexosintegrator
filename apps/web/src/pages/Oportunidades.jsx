@@ -59,6 +59,11 @@ const projectClientTypeLabels = {
   RENEWAL: "Renovação"
 };
 
+const projectTypeLabels = {
+  SINGLE: "Projeto pontual",
+  MONTHLY: "Projeto mensal"
+};
+
 export default function Oportunidades() {
   const [opportunities, setOpportunities] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -163,6 +168,8 @@ export default function Oportunidades() {
     title: '',
     projectName: '',
     projectClientType: 'NEW_CLIENT',
+    projectType: 'SINGLE',
+    projectMonths: '12',
     description: '',
     value: '',
     probability: 50,
@@ -263,6 +270,8 @@ export default function Oportunidades() {
           title: opp.title,
           projectName: opp.projectName || opp.title || '',
           projectClientType: opp.projectClientType || 'NEW_CLIENT',
+          projectType: opp.projectType || 'SINGLE',
+          projectMonths: opp.projectMonths ? String(opp.projectMonths) : '12',
           description: opp.description || '',
           value: opp.value?.toString() || '',
           probability: opp.probability || 50,
@@ -351,6 +360,8 @@ export default function Oportunidades() {
         title: payloadFormData.title || '',
         projectName: payloadFormData.projectName || payloadFormData.title || '',
         projectClientType: payloadFormData.projectClientType || null,
+        projectType: payloadFormData.projectType || 'SINGLE',
+        projectMonths: payloadFormData.projectType === 'MONTHLY' ? Number(payloadFormData.projectMonths || 12) : null,
         description: typeof payloadFormData.description === 'string'
           ? payloadFormData.description
           : (payloadFormData.description ? JSON.stringify(payloadFormData.description) : null),
@@ -402,6 +413,8 @@ export default function Oportunidades() {
       title: '',
       projectName: '',
       projectClientType: 'NEW_CLIENT',
+      projectType: 'SINGLE',
+      projectMonths: '12',
       description: '',
       value: '',
       probability: 50,
@@ -420,6 +433,8 @@ export default function Oportunidades() {
       title: opportunity.title,
       projectName: opportunity.projectName || opportunity.title || '',
       projectClientType: opportunity.projectClientType || 'NEW_CLIENT',
+      projectType: opportunity.projectType || 'SINGLE',
+      projectMonths: opportunity.projectMonths ? String(opportunity.projectMonths) : '12',
       description: opportunity.description || '',
       value: opportunity.value?.toString() || '',
       probability: opportunity.probability || 50,
@@ -734,6 +749,13 @@ export default function Oportunidades() {
                             <span>{projectClientTypeLabels[opp.projectClientType] || opp.projectClientType}</span>
                           </div>
                         )}
+                        <div className="flex items-center gap-1.5 text-xs text-[var(--crm-muted)]">
+                          <DollarSign className="w-3 h-3 shrink-0" />
+                          <span>
+                            {projectTypeLabels[opp.projectType] || 'Projeto pontual'}
+                            {opp.projectType === 'MONTHLY' && opp.projectMonths ? ` - ${opp.projectMonths} meses` : ''}
+                          </span>
+                        </div>
                         {opp.owner && (
                           <div className="flex items-center gap-1.5 text-xs text-[var(--crm-muted)]">
                             <User className="w-3 h-3 shrink-0" />
@@ -874,6 +896,16 @@ export default function Oportunidades() {
                   <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[rgb(var(--crm-muted-rgb)_/_0.9)] mb-2">Tipo de Projeto</h3>
                   <span className="text-[var(--crm-ink)] font-medium">
                     {projectClientTypeLabels[selectedOpportunity.projectClientType] || selectedOpportunity.projectClientType || 'Não informado'}
+                  </span>
+                </div>
+
+                <div className="crm-panel-muted rounded-xl p-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[rgb(var(--crm-muted-rgb)_/_0.9)] mb-2">Modelo Comercial</h3>
+                  <span className="text-[var(--crm-ink)] font-medium">
+                    {projectTypeLabels[selectedOpportunity.projectType] || 'Projeto pontual'}
+                    {selectedOpportunity.projectType === 'MONTHLY' && selectedOpportunity.projectMonths
+                      ? ` - ${selectedOpportunity.projectMonths} meses`
+                      : ''}
                   </span>
                 </div>
 

@@ -32,4 +32,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget -qO- http://localhost:3001/health || exit 1
 
 # Iniciar aplicação
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "node prisma/ensure-schema.cjs && node server.js"]

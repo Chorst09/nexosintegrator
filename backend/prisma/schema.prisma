@@ -115,6 +115,8 @@ model Product {
 model Opportunity {
   id              String   @id @default(uuid())
   title           String
+  projectType     String   @default("SINGLE")
+  projectMonths   Int?
   description     String?
   value           Float
   probability     Int      @default(50)
@@ -272,6 +274,9 @@ model Commission {
   id            String   @id @default(uuid())
   percentage    Float
   amount        Float
+  calculationBase Float?
+  projectType   String   @default("SINGLE")
+  projectMonths Int?
   status        CommissionStatus @default(PENDING)
   paidAt        DateTime?
   

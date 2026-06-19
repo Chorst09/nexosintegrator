@@ -29,6 +29,8 @@ const FASE_OPTIONS = [
   { value: 'encerrada',             label: 'Encerrada' },
 ];
 
+const PROJECT_MONTH_OPTIONS = [12, 24, 36, 48, 60];
+
 const DEFAULT_B2G = {
   numeroEdital: '', uasgId: '', orgaoEntidade: '', esfera: 'Municipal',
   ufCidade: '', modalidade: '', tipo: 'Eletrônico', portal: '',
@@ -303,6 +305,36 @@ export default function OpportunityForm({
             </select>
           </div>
 
+          <div>
+            <label className={labelCls}>Modelo de Comissão</label>
+            <select
+              className={inputCls}
+              value={formData.projectType || 'SINGLE'}
+              onChange={e => setFormData(p => ({
+                ...p,
+                projectType: e.target.value,
+                projectMonths: e.target.value === 'MONTHLY' ? (p.projectMonths || '12') : ''
+              }))}
+            >
+              <option value="SINGLE">Projeto pontual</option>
+              <option value="MONTHLY">Projeto mensal</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={labelCls}>Prazo do Projeto Mensal</label>
+            <select
+              className={inputCls}
+              value={formData.projectMonths || '12'}
+              disabled={(formData.projectType || 'SINGLE') !== 'MONTHLY'}
+              onChange={e => setFormData(p => ({ ...p, projectMonths: e.target.value }))}
+            >
+              {PROJECT_MONTH_OPTIONS.map((months) => (
+                <option key={months} value={String(months)}>{months} meses</option>
+              ))}
+            </select>
+          </div>
+
           <div className="sm:col-span-2">
             <label className={labelCls}>Descrição</label>
             <textarea className={inputCls} rows={3} value={formData.description || ''} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} />
@@ -429,6 +461,34 @@ export default function OpportunityForm({
                   <option value="Cliente Novo">Cliente Novo</option>
                   <option value="Cliente da Base">Cliente da Base</option>
                   <option value="Renovação">Renovação</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Modelo de Comissão</label>
+                <select
+                  className={inputCls}
+                  value={formData.projectType || 'SINGLE'}
+                  onChange={e => setFormData(p => ({
+                    ...p,
+                    projectType: e.target.value,
+                    projectMonths: e.target.value === 'MONTHLY' ? (p.projectMonths || '12') : ''
+                  }))}
+                >
+                  <option value="SINGLE">Projeto pontual</option>
+                  <option value="MONTHLY">Projeto mensal</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Prazo do Projeto Mensal</label>
+                <select
+                  className={inputCls}
+                  value={formData.projectMonths || '12'}
+                  disabled={(formData.projectType || 'SINGLE') !== 'MONTHLY'}
+                  onChange={e => setFormData(p => ({ ...p, projectMonths: e.target.value }))}
+                >
+                  {PROJECT_MONTH_OPTIONS.map((months) => (
+                    <option key={months} value={String(months)}>{months} meses</option>
+                  ))}
                 </select>
               </div>
               <div>

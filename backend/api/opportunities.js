@@ -33,6 +33,88 @@ const runOptionalCleanup = async (operation) => {
   }
 };
 
+const MONTHLY_PROJECT_MONTHS = [12, 24, 36, 48, 60];
+
+const normalizeProjectType = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  return raw === 'MONTHLY' ? 'MONTHLY' : 'SINGLE';
+};
+
+const normalizeProjectMonths = (projectType, value) => {
+  if (projectType !== 'MONTHLY') return null;
+  const parsed = Number(value);
+  return MONTHLY_PROJECT_MONTHS.includes(parsed) ? parsed : 12;
+};
+
+const resolveCommissionPercentage = (seller, projectType, projectMonths) => {
+  if (!seller) return 0;
+  if (projectType === 'MONTHLY') {
+    return Number(seller[`commissionProject${projectMonths}`] || 0);
+  }
+  return Number(seller.commissionSalePercentage || 0);
+};
+
+const syncWonOpportunityCommission = async (tx, opportunity) => {
+  if (!opportunity?.id || opportunity.stage !== 'WON') return null;
+
+  const seller = await tx.user.findUnique({
+    where: { id: opportunity.ownerId },
+    select: {
+      commissionSalePercentage: true,
+      commissionProject12: true,
+      commissionProject24: true,
+      commissionProject36: true,
+      commissionProject48: true,
+      commissionProject60: true
+    }
+  });
+
+  const projectType = normalizeProjectType(opportunity.projectType);
+  const projectMonths = normalizeProjectMonths(projectType, opportunity.projectMonths);
+  const percentage = resolveCommissionPercentage(seller, projectType, projectMonths);
+  const calculationBase = Number(opportunity.value || 0);
+  const amount = Number(((calculationBase * percentage) / 100).toFixed(2));
+  const existingCommission = await tx.commission.findUnique({
+    where: { opportunityId: opportunity.id },
+    select: { status: true }
+  });
+  const nextStatus = existingCommission?.status === 'PAID' ? 'PAID' : 'PENDING';
+
+  return tx.commission.upsert({
+    where: { opportunityId: opportunity.id },
+    create: {
+      opportunityId: opportunity.id,
+      sellerId: opportunity.ownerId,
+      percentage,
+      amount,
+      calculationBase,
+      projectType,
+      projectMonths,
+      status: nextStatus
+    },
+    update: {
+      sellerId: opportunity.ownerId,
+      percentage,
+      amount,
+      calculationBase,
+      projectType,
+      projectMonths,
+      status: nextStatus
+    }
+  });
+};
+
+const cancelOpenOpportunityCommission = async (tx, opportunityId) => {
+  if (!opportunityId) return;
+  await tx.commission.updateMany({
+    where: {
+      opportunityId,
+      status: { not: 'PAID' }
+    },
+    data: { status: 'CANCELLED' }
+  });
+};
+
 export default async function handler(req) {
   if (req.method === "GET") {
     const { stage, ownerId } = req.query || {};
@@ -82,39 +164,51 @@ export default async function handler(req) {
 
   if (req.method === "POST") {
     const body = await req.json();
+    const projectType = normalizeProjectType(body.projectType);
+    const projectMonths = normalizeProjectMonths(projectType, body.projectMonths);
     
-    const opportunity = await prisma.opportunity.create({
-      data: {
-        title: body.title,
-        description: body.description,
-        value: body.value,
-        probability: body.probability || 50,
-        stage: body.stage || 'LEAD',
-        source: body.source,
-        expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
-        notes: body.notes,
-        companyId: body.companyId,
-        ownerId: body.ownerId,
-        products: body.products ? {
-          create: body.products.map(p => ({
-            productId: p.productId,
-            quantity: p.quantity || 1,
-            unitPrice: p.unitPrice,
-            discount: p.discount || 0
-          }))
-        } : undefined
-      },
-      include: {
-        company: true,
-        owner: {
-          select: { id: true, name: true, email: true }
+    const opportunity = await prisma.$transaction(async (tx) => {
+      const created = await tx.opportunity.create({
+        data: {
+          title: body.title,
+          projectType,
+          projectMonths,
+          description: body.description,
+          value: body.value,
+          probability: body.probability || 50,
+          stage: body.stage || 'LEAD',
+          source: body.source,
+          expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
+          notes: body.notes,
+          companyId: body.companyId,
+          ownerId: body.ownerId,
+          products: body.products ? {
+            create: body.products.map(p => ({
+              productId: p.productId,
+              quantity: p.quantity || 1,
+              unitPrice: p.unitPrice,
+              discount: p.discount || 0
+            }))
+          } : undefined
         },
-        products: {
-          include: {
-            product: true
+        include: {
+          company: true,
+          owner: {
+            select: { id: true, name: true, email: true }
+          },
+          products: {
+            include: {
+              product: true
+            }
           }
         }
+      });
+
+      if (created.stage === 'WON') {
+        await syncWonOpportunityCommission(tx, created);
       }
+
+      return created;
     });
     
     // Atualizar lead score da empresa
@@ -138,6 +232,12 @@ export default async function handler(req) {
     const updateData = {};
     if (body.stage) updateData.stage = body.stage;
     if (body.title) updateData.title = body.title;
+    if (body.projectType !== undefined) {
+      updateData.projectType = normalizeProjectType(body.projectType);
+      updateData.projectMonths = normalizeProjectMonths(updateData.projectType, body.projectMonths);
+    } else if (body.projectMonths !== undefined) {
+      updateData.projectMonths = normalizeProjectMonths(body.projectType || 'MONTHLY', body.projectMonths);
+    }
     if (body.description !== undefined) updateData.description = body.description;
     if (body.value) updateData.value = body.value;
     if (body.probability !== undefined) updateData.probability = body.probability;
@@ -150,20 +250,30 @@ export default async function handler(req) {
       updateData.actualCloseDate = new Date();
     }
     
-    const opportunity = await prisma.opportunity.update({
-      where: { id: opportunityId },
-      data: updateData,
-      include: {
-        company: true,
-        owner: {
-          select: { id: true, name: true, email: true }
-        },
-        products: {
-          include: {
-            product: true
+    const opportunity = await prisma.$transaction(async (tx) => {
+      const updated = await tx.opportunity.update({
+        where: { id: opportunityId },
+        data: updateData,
+        include: {
+          company: true,
+          owner: {
+            select: { id: true, name: true, email: true }
+          },
+          products: {
+            include: {
+              product: true
+            }
           }
         }
+      });
+
+      if (updated.stage === 'WON') {
+        await syncWonOpportunityCommission(tx, updated);
+      } else if (body.stage && body.stage !== 'WON') {
+        await cancelOpenOpportunityCommission(tx, updated.id);
       }
+
+      return updated;
     });
     
     // Atualizar lead score da empresa

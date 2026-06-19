@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
+  CalendarClock,
   DollarSign,
   Plus,
   Receipt,
+  Save,
+  SlidersHorizontal,
   User,
   X
 } from 'lucide-react';
@@ -24,6 +27,35 @@ const STATUS_META = {
   CANCELLED: { label: 'Cancelada', cls: 'bg-red-500/10 text-red-900 dark:text-red-200' }
 };
 
+const MONTHLY_COMMISSION_FIELDS = [
+  { key: 'commissionProject12', months: 12, label: '12 meses' },
+  { key: 'commissionProject24', months: 24, label: '24 meses' },
+  { key: 'commissionProject36', months: 36, label: '36 meses' },
+  { key: 'commissionProject48', months: 48, label: '48 meses' },
+  { key: 'commissionProject60', months: 60, label: '60 meses' }
+];
+
+const EMPTY_COMMISSION_RULES = {
+  commissionSalePercentage: '',
+  commissionProject12: '',
+  commissionProject24: '',
+  commissionProject36: '',
+  commissionProject48: '',
+  commissionProject60: ''
+};
+
+const normalizePercentInput = (value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatPercentValue = (value) => {
+  if (value === null || value === undefined || value === '') return 'nao definido';
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? `${parsed.toFixed(2).replace('.', ',')}%` : 'nao definido';
+};
+
 export default function Comissoes() {
   const [comissoes, setComissoes] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -38,9 +70,14 @@ export default function Comissoes() {
 
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingRules, setSavingRules] = useState(false);
+  const [selectedRuleSellerId, setSelectedRuleSellerId] = useState('');
+  const [commissionRules, setCommissionRules] = useState(EMPTY_COMMISSION_RULES);
   const [formData, setFormData] = useState({
     opportunityId: '',
     sellerId: '',
+    projectType: 'SINGLE',
+    projectMonths: '12',
     percentage: 5,
     amount: 0
   });
@@ -84,6 +121,64 @@ export default function Comissoes() {
   useEffect(() => {
     loadComissoes();
   }, [filtros]);
+
+  useEffect(() => {
+    if (!selectedRuleSellerId && usuarios.length > 0) {
+      setSelectedRuleSellerId(usuarios[0].id);
+    }
+  }, [selectedRuleSellerId, usuarios]);
+
+  const selectedRuleSeller = useMemo(
+    () => usuarios.find((u) => u.id === selectedRuleSellerId) || null,
+    [selectedRuleSellerId, usuarios]
+  );
+
+  useEffect(() => {
+    if (!selectedRuleSeller) {
+      setCommissionRules(EMPTY_COMMISSION_RULES);
+      return;
+    }
+
+    setCommissionRules({
+      commissionSalePercentage: selectedRuleSeller.commissionSalePercentage ?? '',
+      commissionProject12: selectedRuleSeller.commissionProject12 ?? '',
+      commissionProject24: selectedRuleSeller.commissionProject24 ?? '',
+      commissionProject36: selectedRuleSeller.commissionProject36 ?? '',
+      commissionProject48: selectedRuleSeller.commissionProject48 ?? '',
+      commissionProject60: selectedRuleSeller.commissionProject60 ?? ''
+    });
+  }, [selectedRuleSeller]);
+
+  const getConfiguredRate = (sellerId, projectType, projectMonths) => {
+    const seller = usuarios.find((u) => u.id === sellerId);
+    if (!seller) return null;
+    if (projectType === 'MONTHLY') {
+      return seller[`commissionProject${projectMonths}`] ?? null;
+    }
+    return seller.commissionSalePercentage ?? null;
+  };
+
+  const applyConfiguredRate = (nextValues) => {
+    const next = { ...formData, ...nextValues };
+    const rate = getConfiguredRate(next.sellerId, next.projectType, next.projectMonths);
+    return {
+      ...next,
+      percentage: rate !== null && rate !== undefined ? Number(rate) : next.percentage
+    };
+  };
+
+  const commissionRuleRows = useMemo(() => (
+    usuarios.map((seller) => ({
+      id: seller.id,
+      name: seller.name,
+      email: seller.email,
+      single: seller.commissionSalePercentage,
+      monthly: MONTHLY_COMMISSION_FIELDS.map((field) => ({
+        ...field,
+        value: seller[field.key]
+      }))
+    }))
+  ), [usuarios]);
 
   const totals = useMemo(() => {
     const items = Array.isArray(comissoes) ? comissoes : [];
@@ -138,7 +233,51 @@ export default function Comissoes() {
   const closeModal = () => {
     setShowForm(false);
     setSaving(false);
-    setFormData({ opportunityId: '', sellerId: '', percentage: 5, amount: 0 });
+    setFormData({ opportunityId: '', sellerId: '', projectType: 'SINGLE', projectMonths: '12', percentage: 5, amount: 0 });
+  };
+
+  const handleSaveCommissionRules = async () => {
+    if (!selectedRuleSeller) return;
+
+    try {
+      setSavingRules(true);
+
+      const payload = {
+        id: selectedRuleSeller.id,
+        name: selectedRuleSeller.name,
+        email: selectedRuleSeller.email,
+        role: selectedRuleSeller.role,
+        regionId: selectedRuleSeller.regionId ?? null,
+        quota: selectedRuleSeller.quota ?? null,
+        accessB2B: selectedRuleSeller.accessB2B,
+        accessB2G: selectedRuleSeller.accessB2G,
+        accessPreSales: selectedRuleSeller.accessPreSales,
+        permissionOverrides: selectedRuleSeller.permissionOverrides || {},
+        isCompanyOwner: selectedRuleSeller.isCompanyOwner,
+        commissionSalePercentage: normalizePercentInput(commissionRules.commissionSalePercentage),
+        commissionProject12: normalizePercentInput(commissionRules.commissionProject12),
+        commissionProject24: normalizePercentInput(commissionRules.commissionProject24),
+        commissionProject36: normalizePercentInput(commissionRules.commissionProject36),
+        commissionProject48: normalizePercentInput(commissionRules.commissionProject48),
+        commissionProject60: normalizePercentInput(commissionRules.commissionProject60)
+      };
+
+      const res = await fetch(API_ENDPOINTS.users, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error('Falha ao salvar regras de comissao');
+
+      const updated = await res.json();
+      setUsuarios((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      setSelectedRuleSellerId(updated.id);
+    } catch (error) {
+      console.error('Erro ao salvar regras de comissao:', error);
+    } finally {
+      setSavingRules(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -148,7 +287,12 @@ export default function Comissoes() {
       await fetch(API_ENDPOINTS.commissions, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          opportunityId: formData.opportunityId,
+          sellerId: formData.sellerId,
+          percentage: Number(formData.percentage) || 0,
+          amount: Number(formData.amount) || 0
+        })
       });
       closeModal();
       loadComissoes();
@@ -254,6 +398,153 @@ export default function Comissoes() {
         <AnimatedStats title="Pendentes" value={Math.round(totals.pending)} prefix="R$ " subtitle="Para revisar" icon={X} color="orange" />
       </div>
 
+      <section className="mb-8 overflow-hidden rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-[var(--crm-border)] bg-[linear-gradient(135deg,rgba(22,78,99,0.16),rgba(37,99,235,0.08))] p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-500/10 text-cyan-200">
+              <SlidersHorizontal className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-[var(--crm-ink)]">Regras de Comissionamento</h2>
+              <p className="mt-1 max-w-3xl text-sm text-[var(--crm-muted)]">
+                Configure o percentual de comissão por vendedor para projetos pontuais e contratos mensais.
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full lg:max-w-sm">
+            <label className="mb-1 block text-xs font-bold uppercase tracking-[0.12em] text-[var(--crm-muted)]">Vendedor</label>
+            <select
+              value={selectedRuleSellerId}
+              onChange={(e) => setSelectedRuleSellerId(e.target.value)}
+              className="crm-input"
+            >
+              <option value="">Selecione</option>
+              {usuarios.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 p-5 xl:grid-cols-[minmax(220px,0.8fr)_minmax(0,2fr)_auto] xl:items-end">
+          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-4">
+            <div className="flex items-center gap-2 text-sm font-black text-[var(--crm-ink)]">
+              <DollarSign className="h-4 w-4 text-emerald-300" />
+              Projeto pontual
+            </div>
+            <p className="mt-1 text-xs text-[var(--crm-muted)]">Percentual aplicado em vendas avulsas.</p>
+            <div className="mt-4">
+              <label className="mb-1 block text-xs font-bold text-[var(--crm-muted)]">Comissão (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={commissionRules.commissionSalePercentage}
+                onChange={(e) => setCommissionRules((p) => ({ ...p, commissionSalePercentage: e.target.value }))}
+                className="crm-input text-lg font-black"
+                placeholder="Ex: 5"
+                disabled={!selectedRuleSeller}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-4">
+            <div className="flex items-center gap-2 text-sm font-black text-[var(--crm-ink)]">
+              <CalendarClock className="h-4 w-4 text-sky-300" />
+              Projetos mensais
+            </div>
+            <p className="mt-1 text-xs text-[var(--crm-muted)]">Defina uma comissão diferente conforme o prazo contratado.</p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+              {MONTHLY_COMMISSION_FIELDS.map((field) => (
+                <div key={field.key}>
+                  <label className="mb-1 block text-xs font-bold text-[var(--crm-muted)]">{field.label}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={commissionRules[field.key]}
+                    onChange={(e) => setCommissionRules((p) => ({ ...p, [field.key]: e.target.value }))}
+                    className="crm-input text-sm font-black"
+                    placeholder="%"
+                    disabled={!selectedRuleSeller}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveCommissionRules}
+            disabled={!selectedRuleSeller || savingRules}
+            className="crm-btn crm-btn-primary h-12 justify-center px-5"
+          >
+            <Save className="h-4 w-4" />
+            {savingRules ? 'Salvando...' : 'Salvar Regras'}
+          </button>
+        </div>
+
+        <div className="border-t border-[var(--crm-border)] bg-[rgba(7,20,38,0.24)] p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-[0.12em] text-[var(--crm-ink)]">Regras salvas por vendedor</h3>
+              <p className="text-xs text-[var(--crm-muted)]">Resumo persistido para consulta rapida e edicao.</p>
+            </div>
+            <span className="text-xs font-bold text-[var(--crm-muted)]">{commissionRuleRows.length} vendedor(es)</span>
+          </div>
+
+          {commissionRuleRows.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3">
+              {commissionRuleRows.map((seller) => (
+                <button
+                  key={seller.id}
+                  type="button"
+                  onClick={() => setSelectedRuleSellerId(seller.id)}
+                  className={[
+                    'w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/60 hover:bg-cyan-500/10',
+                    selectedRuleSellerId === seller.id
+                      ? 'border-cyan-300/70 bg-cyan-500/12 shadow-[0_18px_34px_-28px_rgba(34,211,238,0.85)]'
+                      : 'border-[var(--crm-border)] bg-[var(--crm-bg)]'
+                  ].join(' ')}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--crm-border)] bg-[var(--crm-surface)] text-cyan-200">
+                        <User className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-black text-[var(--crm-ink)]">{seller.name}</div>
+                        <div className="truncate text-xs text-[var(--crm-muted)]">{seller.email || 'sem email'}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-right">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-200">Pontual</div>
+                      <div className="text-sm font-black text-[var(--crm-ink)]">{formatPercentValue(seller.single)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-5 gap-2">
+                    {seller.monthly.map((rule) => (
+                      <div key={rule.key} className="rounded-xl border border-[var(--crm-border)] bg-[rgba(11,34,67,0.58)] px-2 py-2 text-center">
+                        <div className="text-[10px] font-bold text-[var(--crm-muted)]">{rule.months}m</div>
+                        <div className="mt-0.5 text-xs font-black text-[var(--crm-ink)]">{formatPercentValue(rule.value)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[var(--crm-border)] bg-[var(--crm-bg)] p-5 text-sm text-[var(--crm-muted)]">
+              Nenhum vendedor encontrado para exibir regras de comissionamento.
+            </div>
+          )}
+        </div>
+      </section>
+
       <ModernTable
         title="Lista de Comissoes"
         data={filteredComissoes}
@@ -339,12 +630,39 @@ export default function Comissoes() {
               <select
                 required
                 value={formData.sellerId}
-                onChange={(e) => setFormData((p) => ({ ...p, sellerId: e.target.value }))}
+                onChange={(e) => setFormData(applyConfiguredRate({ sellerId: e.target.value }))}
                 className="crm-input"
               >
                 <option value="">Selecione</option>
                 {usuarios.map((u) => (
                   <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Tipo de projeto *</label>
+              <select
+                required
+                value={formData.projectType}
+                onChange={(e) => setFormData(applyConfiguredRate({ projectType: e.target.value }))}
+                className="crm-input"
+              >
+                <option value="SINGLE">Projeto pontual</option>
+                <option value="MONTHLY">Projeto mensal</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Prazo mensal</label>
+              <select
+                value={formData.projectMonths}
+                onChange={(e) => setFormData(applyConfiguredRate({ projectMonths: e.target.value }))}
+                className="crm-input"
+                disabled={formData.projectType !== 'MONTHLY'}
+              >
+                {MONTHLY_COMMISSION_FIELDS.map((field) => (
+                  <option key={field.months} value={String(field.months)}>{field.label}</option>
                 ))}
               </select>
             </div>
@@ -361,6 +679,9 @@ export default function Comissoes() {
                 onChange={(e) => setFormData((p) => ({ ...p, percentage: Number(e.target.value) }))}
                 className="crm-input"
               />
+              <p className="mt-2 text-xs text-[var(--crm-muted)]">
+                Regra configurada: {formatPercentValue(getConfiguredRate(formData.sellerId, formData.projectType, formData.projectMonths))}
+              </p>
             </div>
 
             <div>
@@ -405,4 +726,3 @@ export default function Comissoes() {
     </div>
   );
 }
-

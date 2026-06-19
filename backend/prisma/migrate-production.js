@@ -7,6 +7,19 @@ async function main() {
   console.log('🗄️  Executando setup inicial do banco...');
 
   try {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Opportunity"
+        ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
+        ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER;
+    `);
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Commission"
+        ADD COLUMN IF NOT EXISTS "calculationBase" DOUBLE PRECISION,
+        ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
+        ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER;
+    `);
+    console.log('✅ Colunas de comissionamento por projeto verificadas');
+
     // Verificar se já existe usuário admin
     const existingAdmin = await prisma.user.findUnique({
       where: { email: 'admin@nexoscrm.com' }
