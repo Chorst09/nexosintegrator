@@ -29,6 +29,8 @@ const ROUTE_META = {
   '/prevendas-registro-oportunidades': { title: 'Registro de Oportunidades', subtitle: 'Registro técnico de oportunidades do Pré-Vendas' },
   '/prevendas-cadastros': { title: 'Cadastros Pré-Vendas', subtitle: 'Distribuidores, fornecedores e registro de oportunidades' },
   '/calculadoras': { title: 'Calculadoras', subtitle: 'Simulacoes e precos' },
+  '/ratear-produtos': { title: 'Ratear Produtos', subtitle: 'Rateio de despesas por produto' },
+  '/rateios-salvos': { title: 'Rateios Salvos', subtitle: 'Historico de rateios de Pre-Vendas' },
   '/leads': { title: 'Lead Management', subtitle: 'Qualificacao e distribuicao' },
   '/b2g-editais': { title: 'B2G GOVERNO', subtitle: 'Operação comercial B2G' },
   '/b2g-dashboard': { title: 'B2G Dashboard', subtitle: 'Visao executiva dos editais e pipeline público' },

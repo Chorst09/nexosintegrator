@@ -18,7 +18,8 @@ import Automacoes from './pages/Automacoes';
 import LeadManagement from './pages/LeadManagement';
 import PreVendas from './pages/PreVendas';
 import Calculadoras from './pages/Calculadoras';
-import RateioProdutos from './pages/RateioProdutos';
+import RatearProdutos from './pages/RatearProdutos';
+import RateiosSalvos from './pages/RateiosSalvos';
 import OrcamentosPrevendas from './pages/OrcamentosPrevendas';
 import PrevendasCadastros from './pages/PrevendasCadastros';
 import Relatorios from './pages/Relatorios';
@@ -287,10 +288,19 @@ export default function App() {
             }
           />
           <Route
-            path="rateio-produtos"
+            path="ratear-produtos"
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
-                <RateioProdutos />
+                <RatearProdutos />
+              </RoleGuard>
+            }
+          />
+          <Route path="rateio-produtos" element={<Navigate to="/ratear-produtos" replace />} />
+          <Route
+            path="rateios-salvos"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
+                <RateiosSalvos />
               </RoleGuard>
             }
           />

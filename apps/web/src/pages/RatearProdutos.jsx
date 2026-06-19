@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
   Boxes,
@@ -19,248 +17,58 @@ import {
   X
 } from 'lucide-react';
 
-type TabId = 'nf' | 'rateio' | 'cenarios' | 'resultado' | 'config';
-type DataSource = 'nfe' | 'api' | 'manual';
-type RateioMode = 'custo' | 'venda' | 'qty' | 'peso';
-type ScopeMode = 'todos' | 'alvo';
-
-interface RateioItem {
-  sku: string;
-  desc: string;
-  ncm: string;
-  custo: number;
-  preco: number;
-  qty: number;
-  un: string;
-  margemProposta?: number;
-  importedFromProposal?: boolean;
-}
-
-interface Expense {
-  tipo: string;
-  desc: string;
-  valor: number;
-  metodo: RateioMode;
-  pagador: string;
-  conta: string;
-}
-
-interface ResultItem {
-  prod: RateioItem;
-  rat: number;
-  expenseRat: number;
-  ratUnit: number;
-  novoCusto: number;
-  mgAnt: number;
-  mgNova: number;
-  totC: number;
-  totV: number;
-  part: number;
-  delta: number;
-  sourceCostTotal?: number;
-  composedSourceSkus?: string[];
-  compositionRole?: 'target' | 'source';
-  composedTargetSkus?: string[];
-}
-
-interface RateioResult {
-  results: ResultItem[];
-  avgMgAnt: number;
-  avgMgNova: number;
-  somaCheck: number;
-  totalExp: number;
-  diff: number;
-  ok: boolean;
-}
-
-interface AuditEntry {
-  ts: string;
-  user: string;
-  just: string;
-  nfNum: string;
-  mode: RateioMode;
-  totalExp: number;
-  avgAnt: number;
-  avgNova: number;
-  itens: number;
-  ok: boolean;
-  checksum: string;
-  scopeLabel: string;
-}
-
-interface CompositionConfig {
-  targetSkus: string[];
-  sourceSkus: string[];
-}
-
-const DEMO_ITEMS: RateioItem[] = [
+const DEMO_ITEMS = [
   { sku: 'NB-001', desc: 'Notebook Dell Latitude i7 16GB', ncm: '8471.30.12', custo: 3200, preco: 4800, qty: 3, un: 'UN' },
   { sku: 'MN-002', desc: 'Monitor LG UltraWide 34"', ncm: '8528.52.20', custo: 850, preco: 1350, qty: 8, un: 'UN' },
   { sku: 'TC-003', desc: 'Teclado Mecanico Corsair K70', ncm: '8471.60.52', custo: 320, preco: 580, qty: 15, un: 'UN' },
 ];
 
-const DEMO_EXPENSES: Expense[] = [
+const DEMO_EXPENSES = [
   { tipo: 'Frete', desc: 'CIF - Transportadora Rapida', valor: 500, metodo: 'custo', pagador: 'Proprio', conta: '3.1.01.01' },
   { tipo: 'Seguro', desc: 'Seguro de carga NF #004521', valor: 120, metodo: 'venda', pagador: 'Proprio', conta: '3.1.01.02' },
 ];
 
-const CALCULATOR_PROPOSALS_STORAGE_KEY = 'crm-calculadoras-propostas-v1';
-const CALCULATOR_PROPOSALS_SESSION_KEY = 'crm-calculadoras-propostas-session-v1';
-const LEGACY_PROPOSALS_STORAGE_KEY = 'savedProposals';
-
 const expenseTypes = ['Frete', 'Seguro', 'Imposto', 'Armazenagem', 'Desembaraco', 'Comissao', 'Outros'];
-const rateioModes: RateioMode[] = ['custo', 'venda', 'qty', 'peso'];
-const modeLabels: Record<RateioMode, string> = {
+const rateioModes = ['custo', 'venda', 'qty', 'peso'];
+const modeLabels = {
   custo: 'Por custo',
   venda: 'Por venda',
   qty: 'Por quantidade',
   peso: 'Peso manual',
 };
 
-const D = (value: number, decimals = 4) => Number((Number(value) || 0).toFixed(decimals));
-const fmt = (value: number) => new Intl.NumberFormat('pt-BR', {
+const D = (value, decimals = 4) => Number((Number(value) || 0).toFixed(decimals));
+const fmt = (value) => new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 }).format(Number(value) || 0);
-const fmtRound = (value: number) => new Intl.NumberFormat('pt-BR', {
+const fmtRound = (value) => new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
 }).format(Number(value) || 0);
-const pct = (value: number) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
+const pct = (value) => `${((Number(value) || 0) * 100).toFixed(2)}%`;
 const cloneItems = () => DEMO_ITEMS.map(item => ({ ...item }));
 const cloneExpenses = () => DEMO_EXPENSES.map(expense => ({ ...expense }));
-const proposalNumberOf = (proposal: any) => proposal?.proposalNumber || proposal?.number || '-';
-const proposalClientOf = (proposal: any) => (
-  proposal?.clientInfo?.company ||
-  proposal?.clientInfo?.name ||
-  proposal?.client?.companyName ||
-  proposal?.client?.contactName ||
-  'Cliente nao informado'
-);
-const proposalOperationOf = (proposal: any) => proposal?.operationType || proposal?.pricing?.operationType || proposal?.calculatorType || 'venda';
-const proposalTotalOf = (proposal: any) => proposal?.totalValue ?? proposal?.result?.finalPrice ?? proposal?.result?.monthlyPrice ?? 0;
-const proposalItemsCountOf = (proposal: any) => {
-  if (Array.isArray(proposal?.quoteItems)) return proposal.quoteItems.length;
-  const snapshot = proposal?.snapshot || {};
-  return (snapshot.saleItems?.length || 0) + (snapshot.rentalItems?.length || 0) + (snapshot.serviceItems?.length || 0);
-};
-const proposalMarginOf = (proposal: any) => {
-  const raw = proposal?.desiredMargin ?? proposal?.pricing?.desiredMargin;
-  return typeof raw === 'number' ? D(raw / 100, 4) : undefined;
-};
-const parseStoredProposals = (storage: Storage, key: string) => {
-  try {
-    const parsed = JSON.parse(storage.getItem(key) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-const loadCalculatorProposals = () => {
-  const byId = new Map<string, any>();
-  [
-    ...parseStoredProposals(localStorage, CALCULATOR_PROPOSALS_STORAGE_KEY),
-    ...parseStoredProposals(sessionStorage, CALCULATOR_PROPOSALS_SESSION_KEY),
-    ...parseStoredProposals(localStorage, LEGACY_PROPOSALS_STORAGE_KEY),
-  ].forEach((proposal) => {
-    const key = String(proposal?.id || proposalNumberOf(proposal));
-    if (key && key !== '-') byId.set(key, proposal);
-  });
-  return Array.from(byId.values()).sort((a, b) =>
-    new Date(b?.updatedAt || b?.createdAt || 0).getTime() - new Date(a?.updatedAt || a?.createdAt || 0).getTime()
-  );
-};
-const buildRateioItemsFromProposal = (proposal: any): RateioItem[] => {
-  const number = proposalNumberOf(proposal);
-  const margin = proposalMarginOf(proposal);
+const PRICING_SIMULATIONS_STORAGE_KEY = 'pre_sales_pricing_simulations_v1';
+const CALCULATOR_PROPOSALS_STORAGE_KEY = 'crm-calculadoras-propostas-v1';
+const CALCULATOR_PROPOSALS_LEGACY_KEY = 'crm-calculadoras-proposals';
 
-  if (Array.isArray(proposal?.quoteItems)) {
-    const isLocacao = proposalOperationOf(proposal) === 'locacao';
-    return proposal.quoteItems.map((item: any, i: number) => {
-      const precoUnit = D(item.price, 2);
-      const custoUnit = isLocacao ? precoUnit : D(item.baseCost || precoUnit, 2);
-      return {
-        sku: `PROP-${number}-${i + 1}`,
-        desc: item.description,
-        ncm: item.ncm || '8471.30.19',
-        custo: custoUnit,
-        preco: precoUnit,
-        qty: Number(item.quantity) || 1,
-        un: isLocacao ? '/mes' : 'UN',
-        margemProposta: margin,
-        importedFromProposal: true,
-      };
-    });
-  }
-
-  const snapshot = proposal?.snapshot || {};
-  const saleItems = (snapshot.saleItems || []).map((item: any, i: number) => ({
-    sku: `PROP-${number}-V${i + 1}`,
-    desc: item.description || `Item de venda ${i + 1}`,
-    ncm: item.ncm || '8471.30.19',
-    custo: D(item.unitCost || item.baseCost || 0, 2),
-    preco: D(item.calculation?.rbUnitario || item.price || item.unitPrice || item.unitCost || 0, 2),
-    qty: Number(item.quantity) || 1,
-    un: 'UN',
-    margemProposta: margin,
-    importedFromProposal: true,
-  }));
-  const rentalItems = (snapshot.rentalItems || []).map((item: any, i: number) => {
-    const price = D(item.calculation?.rbUnitario || item.monthlyPrice || item.price || 0, 2);
-    return {
-      sku: `PROP-${number}-L${i + 1}`,
-      desc: item.description || `Item de locacao ${i + 1}`,
-      ncm: item.ncm || '8471.30.19',
-      custo: D(item.calculation?.monthlyCost || price, 2),
-      preco: price,
-      qty: Number(item.quantity) || 1,
-      un: '/mes',
-      margemProposta: margin,
-      importedFromProposal: true,
-    };
-  });
-  const serviceItems = (snapshot.serviceItems || []).map((item: any, i: number) => {
-    const hours = Number(item.estimatedHours) || 1;
-    const totalCost = D(item.calculation?.totalCost || 0, 2);
-    const totalSell = D(item.calculation?.totalSellPrice || 0, 2);
-    return {
-      sku: `PROP-${number}-S${i + 1}`,
-      desc: item.description || `Servico ${i + 1}`,
-      ncm: item.ncm || 'SERV',
-      custo: D(item.calculation?.hourlyCost || (hours > 0 ? totalCost / hours : 0), 2),
-      preco: D(item.calculation?.sellPricePerHour || (hours > 0 ? totalSell / hours : 0), 2),
-      qty: hours,
-      un: 'H',
-      margemProposta: margin,
-      importedFromProposal: true,
-    };
-  });
-
-  return [...saleItems, ...rentalItems, ...serviceItems].filter(item => item.preco > 0 || item.custo > 0);
-};
-
-function calcRateio(
-  items: RateioItem[],
-  expenses: Expense[],
-  manualWeights: Record<string, number>,
-  scope: RateioItem[],
-  composition?: CompositionConfig
-): RateioResult {
+function calcRateio(items, expenses, manualWeights, scope, composition) {
   const merged = Object.fromEntries(items.map(item => [item.sku, {
     prod: item,
     totalRateado: 0,
-    expenseRateado: undefined as number | undefined,
+    expenseRateado: undefined,
     sourceCostTotal: 0,
-    composedSourceSkus: [] as string[],
-    compositionRole: undefined as ResultItem['compositionRole'],
-    composedTargetSkus: undefined as string[] | undefined,
+    composedSourceSkus: [],
+    compositionRole: undefined,
+    composedTargetSkus: undefined,
   }]));
   const totalExp = D(expenses.reduce((sum, expense) => sum + D(expense.valor, 4), 0), 4);
 
   expenses.forEach(expense => {
-    const baseFor = (item: RateioItem) => {
+    const baseFor = (item) => {
       if (expense.metodo === 'custo') return D(item.custo * item.qty, 4);
       if (expense.metodo === 'venda') return D(item.preco * item.qty, 4);
       if (expense.metodo === 'qty') return D(item.qty, 4);
@@ -285,18 +93,9 @@ function calcRateio(
     const sourceBuckets = composition.sourceSkus.map(sku => merged[sku]).filter(Boolean);
 
     if (targetBuckets.length > 0) {
-      // ── MÉDIA PONDERADA ──────────────────────────────────────────────────
-      // Custo total dos componentes (itens fonte) — compartilhado entre TODOS os alvos
       const sourceCostTotal = D(sourceBuckets.reduce((sum, b) => sum + D(b.prod.custo * b.prod.qty, 4), 0), 4);
-
-      // Despesas acessórias já rateadas nos itens do escopo
       const composedExpenseTotal = D(scope.reduce((sum, item) => sum + (merged[item.sku]?.totalRateado || 0), 0), 4);
-
-      // Total a distribuir entre os alvos = custo componentes + despesas
       const composedTotal = D(sourceCostTotal + composedExpenseTotal, 4);
-
-      // Base de ponderação: custo total de cada alvo (custo × qtd)
-      // Se custo = 0, usa quantidade como fallback
       const targetCosts = targetBuckets.map(b => D(b.prod.custo * b.prod.qty, 4));
       const totalCostBase = targetCosts.reduce((s, v) => s + v, 0);
       const targetQtys = targetBuckets.map(b => b.prod.qty);
@@ -304,7 +103,6 @@ function calcRateio(
       const useQty = totalCostBase === 0;
       const totalBase = useQty ? totalQtyBase : totalCostBase;
 
-      // Zerar rateio dos itens fonte (eles compõem os alvos, não têm custo próprio no resultado)
       scope.forEach(item => {
         if (!composition.targetSkus.includes(item.sku) && merged[item.sku]) {
           merged[item.sku].totalRateado = 0;
@@ -314,7 +112,6 @@ function calcRateio(
         }
       });
 
-      // Distribuir proporcionalmente entre os alvos (média ponderada)
       let accTotal = 0, accExpense = 0, accSource = 0;
       targetBuckets.forEach((bucket, index) => {
         const base = useQty ? bucket.prod.qty : D(bucket.prod.custo * bucket.prod.qty, 4);
@@ -342,9 +139,7 @@ function calcRateio(
   const results = Object.values(merged).map(({ prod, totalRateado, expenseRateado, sourceCostTotal, composedSourceSkus, compositionRole, composedTargetSkus }) => {
     const rat = D(totalRateado, 4);
     const expenseRat = D(expenseRateado ?? totalRateado, 4);
-    // ratUnit = adicional rateado por unidade. Em composição inclui componentes + despesas.
     const ratUnit = prod.qty > 0 ? D(rat / prod.qty, 4) : 0;
-    // novoCusto é sempre custo unitário final: custo original + adicional unitário.
     const novoCusto = D(prod.custo + ratUnit, 4);
     const importedMargin = typeof prod.margemProposta === 'number' ? D(prod.margemProposta, 4) : undefined;
     const mgAnt = importedMargin ?? (prod.preco > 0 ? D((prod.preco - prod.custo) / prod.preco, 4) : 0);
@@ -383,16 +178,16 @@ function calcRateio(
   return { results, avgMgAnt, avgMgNova, somaCheck, totalExp, diff, ok: Math.abs(diff) < 0.02 };
 }
 
-export default function RateioPrecificacaoV2() {
-  const [tab, setTab] = useState<TabId>('nf');
-  const [source, setSource] = useState<DataSource>('nfe');
-  const [items, setItems] = useState<RateioItem[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [rateioMode, setRateioMode] = useState<RateioMode>('custo');
-  const [manualWeights, setManualWeights] = useState<Record<string, number>>({});
-  const [scopeMode, setScopeMode] = useState<ScopeMode>('todos');
-  const [targetIndexes, setTargetIndexes] = useState<string[]>(['0']);
-  const [sourceIndexes, setSourceIndexes] = useState<string[]>(['1', '2']);
+export default function RatearProdutos() {
+  const [tab, setTab] = useState('nf');
+  const [source, setSource] = useState('nfe');
+  const [items, setItems] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [rateioMode, setRateioMode] = useState('custo');
+  const [manualWeights, setManualWeights] = useState({});
+  const [scopeMode, setScopeMode] = useState('todos');
+  const [targetIndexes, setTargetIndexes] = useState(['0']);
+  const [sourceIndexes, setSourceIndexes] = useState(['1', '2']);
   const [responsavel, setResponsavel] = useState('Joao Silva');
   const [justificativa, setJustificativa] = useState('Rateio de frete e seguro NF #004521 - Fornecedor: Tech Distribuidora Ltda');
   const [nf, setNf] = useState({
@@ -404,19 +199,19 @@ export default function RateioPrecificacaoV2() {
     natureza: 'Venda de Mercadorias',
     centroCusto: 'CC-03 - TI / Suprimentos',
   });
-  const [newItem, setNewItem] = useState<RateioItem>({ sku: '', desc: '', ncm: '', custo: 0, preco: 0, qty: 1, un: 'UN' });
+  const [newItem, setNewItem] = useState({ sku: '', desc: '', ncm: '', custo: 0, preco: 0, qty: 1, un: 'UN' });
   const [showItemForm, setShowItemForm] = useState(false);
-  const [message, setMessage] = useState<{ type: 'ok' | 'warn' | 'err'; text: string } | null>(null);
-  const [preview, setPreview] = useState<RateioResult | null>(null);
-  const [lastResult, setLastResult] = useState<RateioResult | null>(null);
-  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [message, setMessage] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [lastResult, setLastResult] = useState(null);
+  const [auditLog, setAuditLog] = useState([]);
   const [auditUser, setAuditUser] = useState('');
   const [auditMode, setAuditMode] = useState('');
-  const [configSubTab, setConfigSubTab] = useState<'geral' | 'auditoria' | 'arquitetura'>('geral');
+  const [configSubTab, setConfigSubTab] = useState('geral');
   const [showImportModal, setShowImportModal] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
-  const [viewingRateio, setViewingRateio] = useState<any>(null);
-  const [savedRateios, setSavedRateios] = useState<any[]>(() => {
+  const [viewingRateio, setViewingRateio] = useState(null);
+  const [savedRateios, setSavedRateios] = useState(() => {
     try { return JSON.parse(localStorage.getItem('precifica_rateios_v2') || '[]'); } catch { return []; }
   });
   const [rateioName, setRateioName] = useState('Novo Rateio');
@@ -434,10 +229,10 @@ export default function RateioPrecificacaoV2() {
 
   const targetItems = targetIndexes
     .map(index => items[Number(index)])
-    .filter((item): item is RateioItem => Boolean(item));
+    .filter(Boolean);
   const sourceItems = sourceIndexes
     .map(index => items[Number(index)])
-    .filter((item): item is RateioItem => Boolean(item && !targetItems.some(target => target.sku === item.sku)));
+    .filter(Boolean);
   const scopedItems = useMemo(() => {
     if (scopeMode === 'todos') return items;
     if (targetItems.length === 0) return items;
@@ -457,7 +252,7 @@ export default function RateioPrecificacaoV2() {
     (!auditMode || entry.mode === auditMode)
   );
 
-  const setGlobalMode = (mode: RateioMode) => {
+  const setGlobalMode = (mode) => {
     setRateioMode(mode);
     setExpenses(current => current.map(expense => ({ ...expense, metodo: mode })));
   };
@@ -509,15 +304,15 @@ export default function RateioPrecificacaoV2() {
       : null);
   };
 
-  const updateExpense = (index: number, patch: Partial<Expense>) => {
+  const updateExpense = (index, patch) => {
     setExpenses(current => current.map((expense, currentIndex) =>
       currentIndex === index ? { ...expense, ...patch } : expense
     ));
   };
 
-  const removeItem = (index: number) => {
+  const removeItem = (index) => {
     setItems(current => current.filter((_, itemIndex) => itemIndex !== index));
-    const reindex = (values: string[]) => values
+    const reindex = (values) => values
       .map(value => Number(value))
       .filter(value => Number.isInteger(value) && value !== index)
       .map(value => String(value > index ? value - 1 : value));
@@ -565,7 +360,7 @@ export default function RateioPrecificacaoV2() {
     }));
   }, [items, expenses, manualWeights]);
 
-  const downloadFile = (filename: string, content: string, type: string) => {
+  const downloadFile = (filename, content, type) => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([content], { type }));
     link.download = filename;
@@ -634,30 +429,46 @@ export default function RateioPrecificacaoV2() {
   };
 
   // ── IMPORTAR PROPOSTA ──
-  const importarProposta = (proposal: any) => {
-    const operation = proposalOperationOf(proposal);
-    const isLocacao = operation === 'locacao';
-    const number = proposalNumberOf(proposal);
-    const client = proposalClientOf(proposal);
-    const novosItens = buildRateioItemsFromProposal(proposal);
+  const importarProposta = (proposal) => {
+    const isLocacao = proposal.operationType === 'locacao';
+    const proposalPeriod = Number(proposal.rentalPeriod || proposal.contractTermMonths || proposal.period || 0);
 
-    if (!novosItens.length) {
-      window.alert('A proposta selecionada nao possui itens precificados para importar.');
-      return;
-    }
+    const novosItens = proposal.quoteItems.map((item, i) => {
+      const precoUnit = D(item.price, 2);
+      const custoUnit = isLocacao
+        ? precoUnit
+        : D(item.baseCost || precoUnit, 2);
+      const margemProposta = typeof proposal.desiredMargin === 'number'
+        ? D(proposal.desiredMargin / 100, 4)
+        : undefined;
+
+      return {
+        sku: `PROP-${proposal.proposalNumber}-${i + 1}`,
+        desc: item.description,
+        ncm: '8471.30.19',
+        custo: custoUnit,
+        preco: precoUnit,
+        qty: item.quantity,
+        un: isLocacao ? '/mês' : 'UN',
+        margemProposta,
+        importedFromProposal: true,
+        operationType: proposal.operationType,
+        period: Number(item.period || proposalPeriod || 0),
+      };
+    });
 
     setItems(novosItens);
     setManualWeights({});
     setScopeMode('todos');
     setTargetIndexes(novosItens[0] ? ['0'] : []);
     setSourceIndexes(novosItens.length > 1 ? novosItens.slice(1).map((_, index) => String(index + 1)) : []);
-    setRateioName(`Proposta #${number} - ${client}${isLocacao ? ` (locacao)` : ''}`);
+    setRateioName(`Proposta #${proposal.proposalNumber} - ${proposal.clientInfo?.company || proposal.clientInfo?.name}${isLocacao ? ` (locação)` : ''}`);
     setNf(prev => ({
       ...prev,
-      numero: number,
-      emitente: client,
+      numero: proposal.proposalNumber,
+      emitente: proposal.clientInfo?.company || proposal.clientInfo?.name || '',
       data: proposal.createdAt?.slice(0, 10) || prev.data,
-      natureza: isLocacao ? 'Locacao de Equipamentos' : operation === 'servicos' ? 'Prestacao de Servicos' : prev.natureza,
+      natureza: isLocacao ? 'Locacao de Equipamentos' : prev.natureza,
     }));
     setShowImportModal(false);
     setTab('nf');
@@ -670,7 +481,22 @@ export default function RateioPrecificacaoV2() {
       id: Date.now(),
       nome: rateioName,
       data: new Date().toLocaleString('pt-BR'),
-      snapshot: { items, expenses, rateioMode, manualWeights, scopeMode, targetIndexes, sourceIndexes, nf, responsavel, justificativa },
+      snapshot: {
+        items,
+        expenses,
+        rateioMode,
+        manualWeights,
+        scopeMode,
+        targetIndexes,
+        sourceIndexes,
+        nf,
+        responsavel,
+        justificativa,
+        proposal: {
+          operationType: items.find(item => item.operationType)?.operationType,
+          period: items.reduce((max, item) => Math.max(max, Number(item.period) || 0), 0),
+        },
+      },
       resultado: lastResult,
       resumo: {
         totalItens: items.length,
@@ -687,7 +513,7 @@ export default function RateioPrecificacaoV2() {
   };
 
   // ── CARREGAR RATEIO SALVO ──
-  const carregarRateio = (r: any) => {
+  const carregarRateio = (r) => {
     setItems(r.snapshot.items);
     setExpenses(r.snapshot.expenses);
     setRateioMode(r.snapshot.rateioMode);
@@ -704,26 +530,55 @@ export default function RateioPrecificacaoV2() {
     setTab('resultado');
   };
 
+  useEffect(() => {
+    const pendingId = sessionStorage.getItem('precifica_rateio_to_load');
+    if (!pendingId) return;
+
+    const selected = savedRateios.find((rateio) => String(rateio.id) === pendingId);
+    if (!selected) return;
+
+    sessionStorage.removeItem('precifica_rateio_to_load');
+    carregarRateio(selected);
+  }, []);
+
   // ── EXCLUIR RATEIO SALVO ──
-  const excluirRateio = (id: number) => {
-    const updated = savedRateios.filter((r: any) => r.id !== id);
+  const excluirRateio = (id) => {
+    const updated = savedRateios.filter((r) => r.id !== id);
     setSavedRateios(updated);
     localStorage.setItem('precifica_rateios_v2', JSON.stringify(updated));
   };
 
   // ── IMPRIMIR PDF ──
-  const imprimirPDF = (r: any) => {
-    const res: RateioResult = r.resultado;
-    const linhas = res.results.map((item: ResultItem) => `
+  const imprimirPDF = (r) => {
+    const res = r.resultado;
+    const visibleResults = res.results.some((item) => item.compositionRole === 'target')
+      ? res.results.filter((item) => item.compositionRole === 'target')
+      : res.results;
+    const isLocacao = r.snapshot?.proposal?.operationType === 'locacao'
+      || r.snapshot?.items?.some((item) => item.operationType === 'locacao' || item.un === '/mês')
+      || String(r.nome || '').toLowerCase().includes('loca');
+    const periodMonths = Math.max(
+      Number(r.snapshot?.proposal?.period) || 0,
+      ...(r.snapshot?.items || []).map((item) => Number(item.period) || 0),
+      ...visibleResults.map((item) => Number(item.prod.period) || 0),
+      0,
+    );
+    const monthlyTotal = visibleResults.reduce((sum, item) => sum + D(item.novoCusto * item.prod.qty, 4), 0);
+    const contractTotal = isLocacao && periodMonths > 0 ? monthlyTotal * periodMonths : 0;
+    const linhas = visibleResults.map((item) => {
+      const totalRateado = D(item.novoCusto * item.prod.qty, 4);
+      return `
       <tr>
         <td>${item.prod.sku}</td>
         <td>${item.prod.desc}</td>
         <td style="text-align:center">${item.prod.qty}</td>
         <td style="text-align:right;font-family:monospace">R$ ${item.prod.preco.toFixed(2)}</td>
         <td style="text-align:right;font-family:monospace;color:#dc2626">R$ ${item.expenseRat.toFixed(2)}</td>
-        <td style="text-align:right;font-family:monospace;color:#d97706">R$ ${item.novoCusto.toFixed(2)}</td>
+        <td style="text-align:right;font-family:monospace;color:#d97706">R$ ${totalRateado.toFixed(2)}<br/><small>R$ ${item.novoCusto.toFixed(2)} x ${item.prod.qty}</small></td>
+        <td style="text-align:right;font-family:monospace;color:#059669">R$ ${item.novoCusto.toFixed(2)}</td>
         <td style="text-align:center;color:#059669">${(item.mgNova * 100).toFixed(2)}%</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
 <title>Rateio — ${r.nome}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1e293b;}
@@ -756,9 +611,21 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
     <thead><tr>
       <th>SKU</th><th>Descrição</th><th style="text-align:center">Qtd</th>
         <th style="text-align:right">Valor Orig. Unit.</th><th style="text-align:right">Despesa Rat.</th>
-        <th style="text-align:right">Valor Rateado Unit.</th><th style="text-align:center">Margem Proposta</th>
+        <th style="text-align:right">Valor Rateado Total</th><th style="text-align:right">Valor Unit.</th><th style="text-align:center">Margem Proposta</th>
     </tr></thead>
     <tbody>${linhas}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5" style="text-align:right;font-weight:800;text-transform:uppercase;">${isLocacao ? 'Cálculo mensal' : 'Total rateado'}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:800;color:#d97706">R$ ${monthlyTotal.toFixed(2)}</td>
+        <td colspan="2"></td>
+      </tr>
+      ${isLocacao ? `<tr>
+        <td colspan="5" style="text-align:right;font-weight:800;text-transform:uppercase;">Contrato${periodMonths > 0 ? ` (${periodMonths} meses)` : ''}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:800;color:#059669">${periodMonths > 0 ? `R$ ${contractTotal.toFixed(2)}` : '-'}</td>
+        <td colspan="2"></td>
+      </tr>` : ''}
+    </tfoot>
   </table>
   <div class="footer"><p><strong>Precifica</strong> · Sistema de Precificação TI · precifica.chorstconsult.com.br</p></div>
 </div>
@@ -796,8 +663,8 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
           ['resultado', 'Resultado', BarChart3],
           ['config', 'Config', Settings],
         ].map(([id, label, Icon]) => (
-          <button key={id as string} className={`rp-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id as TabId)}>
-            {React.createElement(Icon as typeof Boxes, { size: 15 })} {label as string}
+          <button key={id} className={`rp-tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+            {React.createElement(Icon, { size: 15 })} {label}
           </button>
         ))}
       </nav>
@@ -810,7 +677,7 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
               <div className="rp-card-head">
                 <h3>Fonte de dados</h3>
                 <div className="rp-segment">
-                  {(['nfe', 'api', 'manual'] as DataSource[]).map(option => (
+                  {(['nfe', 'api', 'manual']).map(option => (
                     <button key={option} className={source === option ? 'active' : ''} onClick={() => setSource(option)}>
                       {option === 'nfe' ? 'XML NF-e' : option === 'api' ? 'API ERP' : 'Manual'}
                     </button>
@@ -1071,11 +938,11 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
                 ['auditoria','Auditoria',History],
                 ['arquitetura','Arquitetura',ShieldCheck],
               ].map(([id,label,Icon]) => (
-                <button key={id as string}
+                <button key={id}
                   className={`rp-tab ${configSubTab === id ? 'active' : ''}`}
                   style={{fontSize:'12px',padding:'6px 14px'}}
-                  onClick={() => setConfigSubTab(id as any)}>
-                  {React.createElement(Icon as typeof Settings, {size:13})} {label as string}
+                  onClick={() => setConfigSubTab(id)}>
+                  {React.createElement(Icon, {size:13})} {label}
                 </button>
               ))}
             </div>
@@ -1137,7 +1004,7 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
   );
 }
 
-function CompositionEstimate({ targets, sources, expenses }: { targets: RateioItem[]; sources: RateioItem[]; expenses: Expense[] }) {
+function CompositionEstimate({ targets, sources, expenses }) {
   const sourceTotal = D(sources.reduce((sum, item) => sum + D(item.custo * item.qty, 4), 0), 4);
   const expenseTotal = D(expenses.reduce((sum, expense) => sum + D(expense.valor, 4), 0), 4);
   const compositionTotal = D(sourceTotal + expenseTotal, 4);
@@ -1179,13 +1046,7 @@ function CompositionEstimate({ targets, sources, expenses }: { targets: RateioIt
   );
 }
 
-function Field({ label, value, onChange, type = 'text', wide = false }: {
-  label: string;
-  value: string | number;
-  onChange: (value: string) => void;
-  type?: string;
-  wide?: boolean;
-}) {
+function Field({ label, value, onChange, type = 'text', wide = false }) {
   return (
     <label className={`rp-field ${wide ? 'wide' : ''}`}>
       {label}
@@ -1194,7 +1055,7 @@ function Field({ label, value, onChange, type = 'text', wide = false }: {
   );
 }
 
-function Wizard({ step }: { step: number }) {
+function Wizard({ step }) {
   return (
     <div className="rp-wizard">
       {['NF-e / Itens', 'Despesas Acessorias', 'Rateio', 'Resultado'].map((label, index) => (
@@ -1209,7 +1070,7 @@ function Wizard({ step }: { step: number }) {
   );
 }
 
-function KpiGrid({ totals, itemCount }: { totals: { totalCost: number; totalSale: number; totalExpenses: number; margin: number; profit: number }; itemCount: number }) {
+function KpiGrid({ totals, itemCount }) {
   return (
     <div className="rp-kpi-grid">
       <Kpi label="Itens" value={String(itemCount)} />
@@ -1222,11 +1083,11 @@ function KpiGrid({ totals, itemCount }: { totals: { totalCost: number; totalSale
   );
 }
 
-function Kpi({ label, value, highlight, tone }: { label: string; value: string; highlight?: boolean; tone?: 'ok' | 'warn' | 'err' }) {
+function Kpi({ label, value, highlight, tone }) {
   return <div className={`rp-kpi ${highlight ? 'hi' : ''} ${tone || ''}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function ItemsTable({ items, totals, onRemove }: { items: RateioItem[]; totals: { totalCost: number; totalSale: number; margin: number }; onRemove: (index: number) => void }) {
+function ItemsTable({ items, totals, onRemove }) {
   return (
     <div className="rp-table-wrap">
       <table className="rp-table">
@@ -1264,7 +1125,7 @@ function ItemsTable({ items, totals, onRemove }: { items: RateioItem[]; totals: 
   );
 }
 
-function ExpensesTable({ expenses, onChange, onRemove }: { expenses: Expense[]; onChange: (index: number, patch: Partial<Expense>) => void; onRemove: (index: number) => void }) {
+function ExpensesTable({ expenses, onChange, onRemove }) {
   const total = expenses.reduce((sum, expense) => sum + D(expense.valor, 4), 0);
   return (
     <div className="rp-table-wrap">
@@ -1277,7 +1138,7 @@ function ExpensesTable({ expenses, onChange, onRemove }: { expenses: Expense[]; 
               <td><select value={expense.tipo} onChange={event => onChange(index, { tipo: event.target.value })}>{expenseTypes.map(type => <option key={type}>{type}</option>)}</select></td>
               <td><input value={expense.desc} onChange={event => onChange(index, { desc: event.target.value })} /></td>
               <td><input className="num-input" type="number" min="0" step="0.01" value={expense.valor} onChange={event => onChange(index, { valor: D(Number(event.target.value), 4) })} /></td>
-              <td><select value={expense.metodo} onChange={event => onChange(index, { metodo: event.target.value as RateioMode })}>{rateioModes.map(mode => <option key={mode} value={mode}>{modeLabels[mode]}</option>)}</select></td>
+              <td><select value={expense.metodo} onChange={event => onChange(index, { metodo: event.target.value })}>{rateioModes.map(mode => <option key={mode} value={mode}>{modeLabels[mode]}</option>)}</select></td>
               <td><select value={expense.pagador} onChange={event => onChange(index, { pagador: event.target.value })}>{['Proprio', 'Terceiro', 'Fornecedor'].map(payer => <option key={payer}>{payer}</option>)}</select></td>
               <td><input value={expense.conta} onChange={event => onChange(index, { conta: event.target.value })} /></td>
               <td><button className="rp-icon-btn danger" onClick={() => onRemove(index)}><X size={14} /></button></td>
@@ -1290,7 +1151,7 @@ function ExpensesTable({ expenses, onChange, onRemove }: { expenses: Expense[]; 
   );
 }
 
-function ModeCard({ mode, active, title, text, onClick }: { mode: RateioMode; active: boolean; title: string; text: string; onClick: () => void }) {
+function ModeCard({ mode, active, title, text, onClick }) {
   return (
     <button className={`rp-mode-card ${active ? 'active' : ''}`} onClick={onClick}>
       <strong>{title}</strong>
@@ -1300,7 +1161,7 @@ function ModeCard({ mode, active, title, text, onClick }: { mode: RateioMode; ac
   );
 }
 
-function ResultKpis({ result }: { result: RateioResult }) {
+function ResultKpis({ result }) {
   const effectiveResults = result.results.some(item => item.compositionRole === 'target')
     ? result.results.filter(item => item.compositionRole === 'target')
     : result.results;
@@ -1320,9 +1181,8 @@ function ResultKpis({ result }: { result: RateioResult }) {
   );
 }
 
-function ResultTable({ result, compact = false, title }: { result: RateioResult; compact?: boolean; title: string }) {
+function ResultTable({ result, compact = false, title }) {
   const hasComposition = result.results.some(item => item.compositionRole === 'target');
-  // Mostrar apenas produtos alvo no resultado principal
   const displayItems = hasComposition
     ? result.results.filter(item => item.compositionRole === 'target')
     : result.results;
@@ -1400,7 +1260,8 @@ function ResultTable({ result, compact = false, title }: { result: RateioResult;
                 </td>
                 <td className="num" style={{background:'#f0fdf4',fontWeight:800,color:'#2d7a4f',fontSize:'14px'}}>
                   {fmt(displayItems.reduce((s, i) => s + D(i.novoCusto * i.prod.qty, 4), 0))}
-                </td>                {!compact && <td />}
+                </td>
+                {!compact && <td />}
                 <td />
               </tr>
               <tr>
@@ -1421,7 +1282,7 @@ function ResultTable({ result, compact = false, title }: { result: RateioResult;
   );
 }
 
-function ScenarioTable({ items, scenarios }: { items: RateioItem[]; scenarios: { mode: RateioMode; label: string; result: RateioResult }[] }) {
+function ScenarioTable({ items, scenarios }) {
   return (
     <div className="rp-table-wrap">
       <table className="rp-table">
@@ -1451,7 +1312,7 @@ function ScenarioTable({ items, scenarios }: { items: RateioItem[]; scenarios: {
   );
 }
 
-function Integrity({ result, expenses, items, auditLog }: { result: RateioResult; expenses: Expense[]; items: RateioItem[]; auditLog: AuditEntry[] }) {
+function Integrity({ result, expenses, items, auditLog }) {
   const checks = [
     { ok: result.ok, label: 'Invariante de conservacao', detail: `Rateado ${fmtRound(result.somaCheck)} | Despesas ${fmtRound(result.totalExp)} | Delta ${fmtRound(result.diff)}` },
     { ok: true, label: 'Margem preservada da proposta', detail: pct(result.avgMgNova) },
@@ -1516,25 +1377,83 @@ function ConfigPanel() {
 }
 
 // ── MODAL IMPORTAR PROPOSTA ──────────────────────────────────────────────────
-function ImportPropostaModal({ onImport, onClose }: { onImport: (p: any) => void; onClose: () => void }) {
-  const [proposals, setProposals] = React.useState<any[]>([]);
+function ImportPropostaModal({ onImport, onClose }) {
+  const [proposals, setProposals] = React.useState([]);
   const [search, setSearch] = React.useState('');
+
+  const mapFromCalculadora = (p) => {
+    const allItems = [
+      ...(p.snapshot?.saleItems || []).map(item => ({
+        description: item.description,
+        price: Number(item.calculation?.rbUnitario || item.pricing?.sellPricePerUnit || 0),
+        baseCost: Number(item.unitCost || 0),
+        quantity: Number(item.quantity || 1),
+        period: Number(item.pricing?.rentalPeriod || p.pricing?.rentalPeriod || 0),
+      })),
+      ...(p.snapshot?.rentalItems || []).map(item => ({
+        description: item.description,
+        price: Number(item.calculation?.rbUnitario || item.assetValueBRL || 0),
+        baseCost: Number(item.assetValueBRL || 0),
+        quantity: Number(item.quantity || 1),
+        period: Number(item.pricing?.rentalPeriod || p.pricing?.rentalPeriod || 0),
+      })),
+      ...(p.snapshot?.serviceItems || []).map(item => ({
+        description: item.description,
+        price: Number(item.calculation?.sellPricePerHour || 0),
+        baseCost: Number(item.estimatedHours > 0 ? (item.baseSalary / item.estimatedHours) : 0),
+        quantity: Number(item.estimatedHours || 1),
+        period: 0,
+      })),
+    ];
+    return {
+      id: p.id || p.number,
+      proposalNumber: p.number || p.proposalNumber,
+      clientInfo: {
+        name: p.client?.contactName || p.clientInfo?.name || '',
+        company: p.client?.companyName || p.clientInfo?.company || '',
+        document: p.client?.document || p.clientInfo?.document || '',
+      },
+      totalValue: Number(p.result?.finalPrice || p.result?.monthlyPrice || p.totalValue || 0),
+      quoteItems: allItems.length > 0 ? allItems : (p.quoteItems || []).map(item => ({
+        description: item.description,
+        price: Number(item.price || 0),
+        baseCost: Number(item.baseCost || 0),
+        quantity: Number(item.quantity || 1),
+        period: Number(item.period || p.pricing?.rentalPeriod || 0),
+      })),
+      operationType: p.calculatorType === 'locacao' ? 'locacao' : p.pricing?.operationType || p.operationType || 'venda',
+      desiredMargin: Number(p.pricing?.desiredMargin ?? p.desiredMargin ?? 0),
+      createdAt: p.createdAt || p.savedAt || new Date().toISOString(),
+      rentalPeriod: Number(p.pricing?.rentalPeriod || p.rentalPeriod || 0),
+    };
+  };
+
   React.useEffect(() => {
-    setProposals(loadCalculatorProposals());
+    try {
+      const fromCalculadora = JSON.parse(localStorage.getItem(CALCULATOR_PROPOSALS_STORAGE_KEY) || '[]');
+      const fromLegacy = JSON.parse(localStorage.getItem(CALCULATOR_PROPOSALS_LEGACY_KEY) || '[]');
+      const all = [
+        ...(Array.isArray(fromCalculadora) ? fromCalculadora : []),
+        ...(Array.isArray(fromLegacy) ? fromLegacy : []),
+      ];
+      setProposals(all.filter(Boolean).map(mapFromCalculadora));
+    } catch {
+      setProposals([]);
+    }
   }, []);
-  const normalizedSearch = search.toLowerCase();
   const filtered = proposals.filter(p =>
-    String(proposalNumberOf(p)).toLowerCase().includes(normalizedSearch) ||
-    proposalClientOf(p).toLowerCase().includes(normalizedSearch)
+    p.proposalNumber?.includes(search) ||
+    p.clientInfo?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.clientInfo?.company?.toLowerCase().includes(search.toLowerCase())
   );
-  const typeLabel = (t: string) => ({ venda: 'Venda', vendas: 'Venda', locacao: 'Locação', servicos: 'Serviços', mixed: 'Proposta Mista' }[t] || t);
+  const typeLabel = (t) => ({ venda: 'Venda', locacao: 'Locação', servicos: 'Serviços' }[t] || t);
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:'16px'}}>
       <div style={{background:'#fff',borderRadius:'12px',width:'100%',maxWidth:'700px',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
         <div style={{background:'linear-gradient(135deg,#1a4f8a,#0f766e)',color:'#fff',padding:'20px 24px',borderRadius:'12px 12px 0 0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div>
             <div style={{fontSize:'16px',fontWeight:800}}>📋 Importar Proposta</div>
-            <div style={{fontSize:'11px',opacity:0.8,marginTop:'2px'}}>Selecione uma proposta salva na Calculadora para usar como base do rateio</div>
+            <div style={{fontSize:'11px',opacity:0.8,marginTop:'2px'}}>Selecione uma proposta da Calculadora para usar como base do rateio</div>
           </div>
           <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'#fff',borderRadius:'6px',padding:'6px 10px',cursor:'pointer',fontSize:'16px'}}>✕</button>
         </div>
@@ -1545,7 +1464,7 @@ function ImportPropostaModal({ onImport, onClose }: { onImport: (p: any) => void
         <div style={{flex:1,overflowY:'auto',padding:'12px 24px'}}>
           {filtered.length === 0 ? (
             <div style={{textAlign:'center',padding:'32px',color:'#6b7280'}}>
-              {proposals.length === 0 ? 'Nenhuma proposta salva. Crie propostas na Calculadora.' : 'Nenhuma proposta encontrada.'}
+              {proposals.length === 0 ? 'Nenhuma proposta salva na Calculadora. Crie e salve uma proposta em Calculadora primeiro.' : 'Nenhuma proposta encontrada.'}
             </div>
           ) : filtered.map(p => (
             <div key={p.id} onClick={() => onImport(p)}
@@ -1554,14 +1473,14 @@ function ImportPropostaModal({ onImport, onClose }: { onImport: (p: any) => void
               onMouseLeave={e => (e.currentTarget.style.borderColor = '#e2e6ed', e.currentTarget.style.background = '#fff')}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div>
-                  <div style={{fontWeight:800,fontSize:'14px',color:'#1a1f2e'}}>#{proposalNumberOf(p)}</div>
-                  <div style={{fontSize:'12px',color:'#6b7280',marginTop:'2px'}}>{proposalClientOf(p)}</div>
+                  <div style={{fontWeight:800,fontSize:'14px',color:'#1a1f2e'}}>#{p.proposalNumber}</div>
+                  <div style={{fontSize:'12px',color:'#6b7280',marginTop:'2px'}}>{p.clientInfo?.company || p.clientInfo?.name}</div>
                 </div>
                 <div style={{textAlign:'right'}}>
                   <div style={{fontWeight:800,color:'#1a4f8a',fontFamily:'monospace'}}>
-                    {proposalTotalOf(p).toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}
+                    {p.totalValue?.toLocaleString('pt-BR', {style:'currency',currency:'BRL'})}
                   </div>
-                  <div style={{fontSize:'11px',color:'#6b7280'}}>{typeLabel(proposalOperationOf(p))} · {proposalItemsCountOf(p)} itens</div>
+                  <div style={{fontSize:'11px',color:'#6b7280'}}>{typeLabel(p.operationType)} · {p.quoteItems?.length} itens</div>
                 </div>
               </div>
               <div style={{fontSize:'11px',color:'#9ca3af',marginTop:'6px'}}>
@@ -1579,9 +1498,7 @@ function ImportPropostaModal({ onImport, onClose }: { onImport: (p: any) => void
 }
 
 // ── MODAL RATEIOS SALVOS ─────────────────────────────────────────────────────
-function SavedRateiosModal({ savedRateios, onLoad, onDelete, onPrint, onClose }: {
-  savedRateios: any[]; onLoad: (r: any) => void; onDelete: (id: number) => void; onPrint: (r: any) => void; onClose: () => void;
-}) {
+function SavedRateiosModal({ savedRateios, onLoad, onDelete, onPrint, onClose }) {
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:'16px'}}>
       <div style={{background:'#fff',borderRadius:'12px',width:'100%',maxWidth:'800px',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
@@ -1595,7 +1512,7 @@ function SavedRateiosModal({ savedRateios, onLoad, onDelete, onPrint, onClose }:
         <div style={{flex:1,overflowY:'auto',padding:'16px 24px'}}>
           {savedRateios.length === 0 ? (
             <div style={{textAlign:'center',padding:'40px',color:'#6b7280'}}>Nenhum rateio salvo ainda. Execute um rateio e clique em "Salvar".</div>
-          ) : savedRateios.map((r: any) => (
+          ) : savedRateios.map((r) => (
             <div key={r.id} style={{border:'1px solid #e2e6ed',borderRadius:'10px',padding:'16px',marginBottom:'12px'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px'}}>
                 <div>

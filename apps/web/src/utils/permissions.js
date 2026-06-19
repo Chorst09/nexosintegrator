@@ -182,7 +182,10 @@ export const moduleFromPath = (pathname = '') => {
     path.startsWith('/prevendas-fornecedores') ||
     path.startsWith('/prevendas-registro-oportunidades') ||
     path.startsWith('/prevendas-cadastros') ||
-    path.startsWith('/calculadoras')
+    path.startsWith('/calculadoras') ||
+    path.startsWith('/ratear-produtos') ||
+    path.startsWith('/rateios-salvos') ||
+    path.startsWith('/rateio-produtos')
   ) {
     return 'PRE_SALES';
   }
