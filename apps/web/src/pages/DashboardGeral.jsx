@@ -1014,51 +1014,77 @@ export default function DashboardGeral() {
         />
       )}
 
-      <div data-section="header" className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--crm-ink)]">Dashboard Geral</h1>
-            <p className="text-sm text-[var(--crm-muted)]">
-              Consolidação B2B, B2G, Pré-Vendas, Atividades, Produtos, Equipe e Integrações
+      <div
+        data-section="header"
+        className="relative overflow-hidden rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-4 text-[#d9edff] shadow-[0_24px_60px_-44px_rgba(0,0,0,0.95)]"
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_86%_18%,rgba(102,215,234,0.16),transparent_28%)]" />
+        <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-black leading-tight text-[#dcecff] md:text-2xl">Dashboard Geral</h1>
+              <span className="rounded-full border border-[#78c5ff45] bg-[#10375e]/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8fd1ff]">
+                Visão executiva
+              </span>
+            </div>
+            <p className="mt-1 max-w-3xl text-sm font-medium leading-snug text-[#a9c5df]">
+              Consolidação B2B, B2G, Pré-Vendas, Atividades, Produtos, Equipe e Integrações.
             </p>
-            <p className="mt-1 text-xs text-[var(--crm-muted)]">
-              Última atualização: {updatedAt ? updatedAt.toLocaleString('pt-BR') : '-'}
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#9fb9d7]">
+              <span className="rounded-full border border-[#74b9f340] bg-[#0b2243]/75 px-2.5 py-1">
+                Atualizado: {updatedAt ? updatedAt.toLocaleString('pt-BR') : '-'}
+              </span>
+              <span className="rounded-full border border-[#74b9f340] bg-[#0b2243]/75 px-2.5 py-1">
+                {moduleCardItems.length} módulos ativos
+              </span>
+              <span className={[
+                'rounded-full border px-2.5 py-1',
+                alertCount > 0
+                  ? 'border-rose-300/35 bg-rose-500/12 text-rose-100'
+                  : 'border-emerald-300/35 bg-emerald-500/12 text-emerald-100'
+              ].join(' ')}>
+                {alertCount} alertas
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { value: '30', label: '30d' },
-              { value: '90', label: '90d' },
-              { value: '180', label: '180d' }
-            ].map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setTimeRange(option.value)}
-                className={[
-                  'rounded-xl border px-3 py-2 text-xs font-semibold transition-colors',
-                  timeRange === option.value
-                    ? 'border-[rgb(var(--crm-accent-rgb)_/_0.5)] bg-[rgb(var(--crm-accent-rgb)_/_0.2)] text-[var(--crm-ink)]'
-                    : 'border-[var(--crm-border)] bg-[var(--crm-bg)] text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
-                ].join(' ')}
-              >
-                Janela {option.label}
-              </button>
-            ))}
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
+            <div className="inline-flex rounded-2xl border border-[#74b9f353] bg-[#071b35]/78 p-1 shadow-[inset_0_0_22px_rgba(143,209,255,0.08)]">
+              {[
+                { value: '30', label: '30d' },
+                { value: '90', label: '90d' },
+                { value: '180', label: '180d' }
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setTimeRange(option.value)}
+                  className={[
+                    'min-w-[4.8rem] rounded-xl px-3 py-2 text-xs font-black transition-all',
+                    timeRange === option.value
+                      ? 'bg-[#1f6d93] text-white shadow-[0_12px_28px_-18px_rgba(61,202,255,0.95)]'
+                      : 'text-[#9fb9d7] hover:bg-[#14365b] hover:text-[#dcecff]'
+                  ].join(' ')}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
 
-            <button
-              onClick={loadData}
-              disabled={loading}
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2 text-sm text-[var(--crm-muted)] transition-colors hover:text-[var(--crm-ink)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
-            </button>
-            <button
-              onClick={handlePresentation}
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2 text-sm text-[var(--crm-muted)] transition-colors hover:text-[var(--crm-ink)]"
-            >
-              <Maximize2 className="h-4 w-4" /> Apresentação
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#74b9f353] bg-[#0b2243]/80 px-3.5 py-2 text-xs font-bold text-[#bcd4ee] transition hover:border-[#8fd1ff80] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+              </button>
+              <button
+                onClick={handlePresentation}
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#74b9f353] bg-[#0b2243]/80 px-3.5 py-2 text-xs font-bold text-[#bcd4ee] transition hover:border-[#8fd1ff80] hover:text-white"
+              >
+                <Maximize2 className="h-4 w-4" /> Apresentar
+              </button>
+            </div>
           </div>
         </div>
       </div>

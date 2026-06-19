@@ -191,20 +191,20 @@ export default function Dashboard() {
 
   const temperatureOptions = [
     { value: '', label: 'Todas as Temperaturas' },
-    { value: '0', label: '0%', stage: 'LEAD/QUALIFICATION' },
-    { value: '25', label: '25%', stage: 'DIAGNOSIS/PROPOSAL' },
-    { value: '50', label: '50%', stage: 'NEGOTIATION' },
-    { value: '75', label: '75%', stage: 'WON' },
-    { value: '100', label: '100%', stage: 'LOST' }
+    { value: '0', label: '0%' },
+    { value: '25', label: '25%' },
+    { value: '50', label: '50%' },
+    { value: '75', label: '75%' },
+    { value: '100', label: '100%' }
   ];
 
-  const getTemperatureFromStage = (stage) => {
-    if (['LEAD', 'QUALIFICATION'].includes(stage)) return '0';
-    if (['DIAGNOSIS', 'PROPOSAL'].includes(stage)) return '25';
-    if (['NEGOTIATION'].includes(stage)) return '50';
-    if (stage === 'WON') return '75';
-    if (stage === 'LOST') return '100';
-    return '0';
+  const getTemperatureFromProbability = (probability) => {
+    const n = Number(probability);
+    if (!Number.isFinite(n) || n <= 0) return '0';
+    if (n <= 25) return '25';
+    if (n <= 50) return '50';
+    if (n <= 75) return '75';
+    return '100';
   };
 
   const getTemperatureLabel = (temp) => {
@@ -1035,7 +1035,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {filteredOpportunities.map((opp) => {
-                    const temp = getTemperatureFromStage(opp.stage);
+                    const temp = getTemperatureFromProbability(opp.probability);
                     return (
                       <tr key={opp.id} className="border-b border-[#74b9f322] transition-colors hover:bg-[#0b2243]/50">
                         <td className="px-2 py-2 font-medium text-[#eaf4ff]">{opp.title}</td>

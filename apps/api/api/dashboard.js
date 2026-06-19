@@ -185,19 +185,22 @@ export default async function handler(req) {
         const baseWhere = { company: { clientType: 'B2B' }, ...dateFilter };
         if (ownerId) baseWhere.ownerId = ownerId;
 
-        // Mapear temperatura para stages
-        const stageMap = {
-          '0': ['LEAD', 'QUALIFICATION'],
-          '25': ['DIAGNOSIS', 'PROPOSAL'],
-          '50': ['NEGOTIATION'],
-          '75': ['WON'],
-          '100': ['LOST']
+        // Mapear temperatura para faixas de probabilidade
+        const temperatureRange = {
+          '0': { gte: 0, lte: 0 },
+          '25': { gte: 1, lte: 25 },
+          '50': { gte: 26, lte: 50 },
+          '75': { gte: 51, lte: 75 },
+          '100': { gte: 76, lte: 100 }
         };
 
         // whereClause inclui temperatura (para KPIs e lista de oportunidades)
         const whereClause = { ...baseWhere };
-        if (temperature && stageMap[temperature]) {
-          whereClause.stage = { in: stageMap[temperature] };
+        if (temperature && temperatureRange[temperature]) {
+          whereClause.probability = {
+            gte: temperatureRange[temperature].gte,
+            lte: temperatureRange[temperature].lte
+          };
         }
 
         // chartsWhere nao inclui temperatura (para funnel, fontes, performance)
@@ -275,18 +278,18 @@ export default async function handler(req) {
         ]);
 
         // Contagens por temperatura (sempre do total, sem filtro de data)
-        const allStages = await prisma.opportunity.groupBy({
-          by: ['stage'],
+        const allProbabilities = await prisma.opportunity.groupBy({
+          by: ['probability'],
           where: { ...whereNoDate },
-          _count: { stage: true }
+          _count: { probability: true }
         });
 
         const temperatureCounts = {
-          0: allStages.filter(s => ['LEAD', 'QUALIFICATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
-          25: allStages.filter(s => ['DIAGNOSIS', 'PROPOSAL'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
-          50: allStages.filter(s => ['NEGOTIATION'].includes(s.stage)).reduce((sum, s) => sum + s._count.stage, 0),
-          75: allStages.filter(s => s.stage === 'WON').reduce((sum, s) => sum + s._count.stage, 0),
-          100: allStages.filter(s => s.stage === 'LOST').reduce((sum, s) => sum + s._count.stage, 0)
+          0: allProbabilities.filter(s => s.probability === 0).reduce((sum, s) => sum + s._count.probability, 0),
+          25: allProbabilities.filter(s => s.probability >= 1 && s.probability <= 25).reduce((sum, s) => sum + s._count.probability, 0),
+          50: allProbabilities.filter(s => s.probability >= 26 && s.probability <= 50).reduce((sum, s) => sum + s._count.probability, 0),
+          75: allProbabilities.filter(s => s.probability >= 51 && s.probability <= 75).reduce((sum, s) => sum + s._count.probability, 0),
+          100: allProbabilities.filter(s => s.probability >= 76 && s.probability <= 100).reduce((sum, s) => sum + s._count.probability, 0)
         };
 
         // Nomes dos vendedores

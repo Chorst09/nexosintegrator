@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL, API_ENDPOINTS, getAuthHeaders } from '../config/api';
-import { getUserAccess, normalizeRole, roleLabel as formatRoleLabel, ROLES, isMaster } from '../utils/permissions';
+import { getUserAccess, normalizeRole, ROLES, isMaster } from '../utils/permissions';
 
 const SIDEBAR_SCROLL_KEY = 'crm-sidebar-scroll-top';
 
@@ -303,21 +303,12 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
     }));
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-  };
-
   const saveSidebarScroll = () => {
     const nav = navRef.current;
     if (nav) {
       sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(nav.scrollTop));
     }
   };
-
-  const userName = user?.name || 'Usuario';
-  const initial = (userName?.trim()?.[0] || 'U').toUpperCase();
 
   const NavItem = ({ item }) => {
     const Icon = item.icon;
@@ -371,23 +362,28 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
         <div className="absolute -right-24 -top-20 h-56 w-56 rounded-full bg-cyan-400/18 blur-2xl motion-safe:animate-float" />
         <div className="absolute -left-16 -bottom-24 h-60 w-60 rounded-full bg-blue-500/16 blur-2xl motion-safe:animate-float" />
 
-        <div className="relative flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl border border-white/[0.22] bg-white/[0.13] backdrop-blur-sm flex items-center justify-center overflow-hidden shadow-soft-xl">
-            {resolvePublicUrl(branding.logoUrl) ? (
-              <img
-                src={resolvePublicUrl(branding.logoUrl)}
-                alt="Logo"
-                className="h-7 w-7 object-contain"
-              />
-            ) : (
-              <span className="text-xs font-bold tracking-wide">CRM</span>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <div className="truncate text-base font-bold text-white">{branding.appName || 'CRM NEXOS'}</div>
-            <div className="truncate text-xs text-slate-300/90">Conexões que impulsionam negócios</div>
-          </div>
+        <div className="relative flex h-[4.6rem] items-center justify-center rounded-[22px] border border-[#2f8ebc9a] bg-[#103c5d]/80 shadow-[0_18px_42px_-32px_rgba(47,198,255,0.75)]">
+          {resolvePublicUrl(branding.logoUrl) ? (
+            <img
+              src={resolvePublicUrl(branding.logoUrl)}
+              alt="Logo"
+              className="max-h-12 max-w-[12rem] object-contain"
+            />
+          ) : (
+            <div className="relative flex items-center gap-1.5">
+              <div className="absolute -left-6 top-1/2 h-px w-12 -translate-y-1/2 bg-[linear-gradient(90deg,transparent,#f07a2a,#43d8ff)]" />
+              <div className="relative h-12 w-20">
+                <div className="absolute left-0 top-1 h-10 w-10 rounded-full border-[9px] border-[#1fb5d4]" />
+                <div className="absolute left-9 top-1 h-10 w-10 rounded-full border-[9px] border-[#ff9829]" />
+                <div className="absolute left-[1.6rem] top-[0.72rem] flex h-8 w-8 items-center justify-center rounded-full bg-[#143956] text-[9px] font-black text-[#dcecff] shadow-inner">
+                  AI
+                </div>
+              </div>
+              <div className="-ml-5 text-[13px] font-black tracking-tight text-white">
+                ChorstConsult
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -449,28 +445,7 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
       </nav>
 
       <div className="border-t border-white/12 px-3 py-3">
-        <div className="rounded-xl border border-white/[0.14] bg-white/[0.06] p-2.5 backdrop-blur-xl">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-cyan-200/30 bg-gradient-to-br from-cyan-300/40 to-blue-400/25 text-xs font-bold text-white">
-              {initial}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-white">{userName}</div>
-              <div className="truncate text-[10px] text-slate-300/85">{formatRoleLabel(role)}</div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="mt-2 w-full rounded-xl border border-red-300/25 bg-red-400/10 px-2.5 py-1.5 text-xs font-semibold text-red-100 transition-all duration-300 hover:border-red-300/40 hover:bg-red-400/[0.2]"
-          >
-            Sair
-          </button>
-        </div>
-
-        <div className="mt-2 text-center text-[10px] text-slate-300/65">
+        <div className="text-center text-[10px] text-slate-300/65">
           <div className="font-semibold">{branding.appName || 'CRM NEXOS'} v2</div>
           <div className="opacity-90">© 2026</div>
         </div>

@@ -200,11 +200,11 @@ const DASHBOARD_FUNNEL_META = [
 ];
 
 const DASHBOARD_PROBABILITY_LEVELS = [
-  { id: 100, label: '100%', min: 90, max: 100, width: 100, gradient: 'from-[#42dcf4] to-[#149ccd]' },
-  { id: 75, label: '75%', min: 70, max: 89, width: 88, gradient: 'from-[#a7afff] to-[#5b52ea]' },
-  { id: 50, label: '50%', min: 45, max: 69, width: 76, gradient: 'from-[#ffc321] to-[#ea8a03]' },
-  { id: 25, label: '25%', min: 1, max: 44, width: 64, gradient: 'from-[#ff88a6] to-[#dd205d]' },
-  { id: 0, label: '0%', min: -1, max: 0, width: 52, gradient: 'from-[#ffa654] to-[#ed5b02]' }
+  { id: 100, label: '100%', min: 90, max: 100, width: 100, gradient: 'from-[#42dcf4] to-[#149ccd]', palette: ['#4fe3f1', '#20a8d0', '#116580'], text: '#ffffff' },
+  { id: 75, label: '75%', min: 70, max: 89, width: 88, gradient: 'from-[#a7afff] to-[#5b52ea]', palette: ['#aab3ff', '#6258ea', '#302a91'], text: '#ffffff' },
+  { id: 50, label: '50%', min: 45, max: 69, width: 76, gradient: 'from-[#ffc321] to-[#ea8a03]', palette: ['#ffd260', '#ef9c08', '#8d5603'], text: '#ffffff' },
+  { id: 25, label: '25%', min: 1, max: 44, width: 64, gradient: 'from-[#ff88a6] to-[#dd205d]', palette: ['#ff8dad', '#df2661', '#8d163e'], text: '#ffffff' },
+  { id: 0, label: '0%', min: -1, max: 0, width: 52, gradient: 'from-[#ffa654] to-[#ed5b02]', palette: ['#ffad63', '#f45d09', '#963002'], text: '#ffffff' }
 ];
 
 const DASHBOARD_TEMPERATURE_FILTERS = [
@@ -4272,53 +4272,101 @@ export default function B2GEditais() {
           className="rounded-[22px] border border-[#78c5ff50] p-4 text-[#d9edff] lg:p-6"
           style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
         >
+          <style>
+            {`
+              .b2g-probability-shell {
+                background:
+                  radial-gradient(circle at 20% 12%, rgba(102, 215, 234, 0.18), transparent 28%),
+                  linear-gradient(125deg, rgba(8, 29, 58, 0.72), rgba(18, 58, 103, 0.74), rgba(9, 25, 54, 0.78));
+                background-size: 180% 180%;
+                animation: b2gProbabilityGradient 9s ease-in-out infinite;
+              }
+
+              .b2g-probability-shell::after {
+                position: absolute;
+                inset: 12px;
+                content: '';
+                border-radius: 18px;
+                background:
+                  linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent),
+                  repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 18px);
+                opacity: 0.64;
+                pointer-events: none;
+              }
+
+              @keyframes b2gProbabilityGradient {
+                0%, 100% { background-position: 0% 45%; }
+                50% { background-position: 100% 55%; }
+              }
+
+              @media (prefers-reduced-motion: reduce) {
+                .b2g-probability-shell { animation: none; }
+              }
+            `}
+          </style>
+
           <h3 className="text-xl md:text-2xl font-black leading-tight text-[#dcecff]">Probabilidade de Ganho (%)</h3>
           <p className="mt-1 text-sm md:text-base font-medium text-[#aac6e4]">
             Distribuição por faixas com participação e volume financeiro do pipeline.
           </p>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
+            <div className="rounded-2xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
               <div className="text-base font-semibold uppercase text-[#9fb9d7]">Total de opps</div>
               <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardProbabilitySummary.totalOpps}</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
+            <div className="rounded-2xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
               <div className="text-base font-semibold uppercase text-[#9fb9d7]">Média</div>
               <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardProbabilitySummary.avg.toFixed(1)}%</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
+            <div className="rounded-2xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
               <div className="text-base font-semibold uppercase text-[#9fb9d7]">Mediana</div>
               <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardProbabilitySummary.median.toFixed(1)}%</div>
             </div>
-            <div className="rounded-2xl border border-[#8adba77a] bg-[#a4bcc74f] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#328e71]">Alta confiança (75-100)</div>
-              <div className="mt-1 text-2xl font-black text-[#0c8c64] sm:text-3xl">{dashboardProbabilitySummary.highConfidence}</div>
+            <div className="rounded-2xl border border-[#8adba77a] bg-[linear-gradient(145deg,rgba(81,140,128,0.72),rgba(25,71,66,0.58))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-base font-semibold uppercase text-[#42c592]">Alta confiança (75-100)</div>
+              <div className="mt-1 text-2xl font-black text-[#13b981] sm:text-3xl">{dashboardProbabilitySummary.highConfidence}</div>
             </div>
-            <div className="rounded-2xl border border-[#f2db6b95] bg-[#bfc4cc63] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#d0742f]">Baixa confiança (0-25)</div>
-              <div className="mt-1 text-2xl font-black text-[#d56d1e] sm:text-3xl">{dashboardProbabilitySummary.lowConfidence}</div>
+            <div className="rounded-2xl border border-[#f2db6b95] bg-[linear-gradient(145deg,rgba(142,122,93,0.74),rgba(82,63,49,0.58))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-base font-semibold uppercase text-[#f18a36]">Baixa confiança (0-25)</div>
+              <div className="mt-1 text-2xl font-black text-[#f07819] sm:text-3xl">{dashboardProbabilitySummary.lowConfidence}</div>
           </div>
         </div>
 
-        <div className="mt-5 rounded-[20px] border border-[#74b9f353] bg-[#0b2344]/80 p-4 lg:p-6">
-          <div className="space-y-4">
+        <div className="b2g-probability-shell relative mt-5 overflow-hidden rounded-[20px] border border-[#74b9f353] p-4 lg:p-6">
+          <div className="relative z-10 space-y-5">
             {dashboardProbabilityLevels.map((level) => (
-                <div key={level.id} className="grid grid-cols-[44px_1fr_92px] items-center gap-2">
-                  <div className="text-base font-bold text-[#b5cee9] md:text-lg">{level.label}</div>
-                  <div className="relative h-14">
+                <div key={level.id} className="grid grid-cols-[52px_1fr_104px] items-center gap-3">
+                  <div className="text-lg font-black text-[#b5cee9] md:text-xl">{level.label}</div>
+                  <div className="relative h-[66px]">
                     <div
-                      className={`absolute inset-y-0 left-0 rounded-[14px] bg-gradient-to-r shadow-[0_20px_40px_-24px_rgba(0,0,0,0.9)] ${level.gradient}`}
+                      className="absolute left-0 top-1.5 h-[56px] min-w-[170px]"
                       style={{ width: `${level.width}%` }}
                     >
-                      <div className="flex h-full flex-col items-center justify-center text-white">
-                        <div className="text-sm md:text-base font-black leading-none">{level.label}</div>
-                        <div className="mt-0.5 text-[10px] md:text-xs font-semibold">{level.count} oportunidade(s)</div>
+                      <div
+                        className="absolute -right-4 top-2 h-[48px] w-8 skew-y-[8deg] rounded-r-xl opacity-75"
+                        style={{ background: level.palette[2] }}
+                      />
+                      <div
+                        className="absolute bottom-[-8px] left-4 right-[-10px] h-4 skew-x-[24deg] rounded-b-xl opacity-55"
+                        style={{ background: level.palette[2] }}
+                      />
+                      <div
+                        className="relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[18px] border border-white/25 px-4 text-center shadow-[0_24px_48px_-28px_rgba(0,0,0,0.95)]"
+                        style={{
+                          background: `linear-gradient(135deg, ${level.palette[0]} 0%, ${level.palette[1]} 55%, ${level.palette[2]} 100%)`,
+                          color: level.text
+                        }}
+                      >
+                        <div className="absolute left-4 right-4 top-3 h-1.5 rounded-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.42),transparent)] opacity-75" />
+                        <div className="text-base font-black leading-none md:text-lg">{level.label}</div>
+                        <div className="mt-1 text-xs font-bold md:text-sm">{level.count} oportunidade(s)</div>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-[#9fb9d7]">Pipeline</div>
-                    <div className="text-xs md:text-sm font-black text-[#dcecff]">{formatCurrencyNoCents(level.value)}</div>
+                    <div className="text-xs font-bold uppercase tracking-[0.08em] text-[#9fb9d7]">Pipeline</div>
+                    <div className="text-sm font-black text-[#dcecff] md:text-base">{formatCurrencyNoCents(level.value)}</div>
                   </div>
                 </div>
               ))}

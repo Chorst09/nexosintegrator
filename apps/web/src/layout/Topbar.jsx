@@ -1,6 +1,7 @@
-import { Menu, Monitor, Moon, Sparkles, Sun } from 'lucide-react';
+import { useState } from 'react';
+import { Bell, LogIn, LogOut, Menu, Monitor, Moon, Sun, User } from 'lucide-react';
 import { useTheme } from '../theme/ThemeProvider';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const ROUTE_META = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Visao geral e indicadores' },
@@ -45,57 +46,150 @@ const ROUTE_META = {
 export default function Topbar({ onMenuClick }) {
   const { theme, resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const meta = ROUTE_META[location.pathname] || { title: 'CRM NEXOS', subtitle: 'Conexões que impulsionam negócios' };
-  const modeLabel = theme === 'system' ? 'Sistema' : resolvedTheme === 'dark' ? 'Escuro' : 'Claro';
+  const userRaw = localStorage.getItem('user');
+  const user = userRaw ? JSON.parse(userRaw) : null;
+  const userName = user?.name || 'Chorstconsult Admin';
+  const userRole = user?.role || 'MASTER';
+  const headerTitle = location.pathname.startsWith('/b2g') ? 'GovFlow B2G' : meta.title;
+  const userInitials = userName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'CA';
+  const closeUserMenu = () => setUserMenuOpen(false);
+  const handleUserAccess = () => {
+    closeUserMenu();
+    navigate('/configuracoes');
+  };
+  const handleLogin = () => {
+    closeUserMenu();
+    navigate('/login');
+  };
+  const handleLogout = () => {
+    closeUserMenu();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
 
   return (
-    <header className="sticky top-0 z-30 px-3 pt-3 sm:px-5 lg:px-6 lg:pt-5">
-      <div className="relative overflow-hidden rounded-3xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.62)] shadow-soft-xl backdrop-blur-2xl dark:bg-[rgb(var(--crm-surface-rgb)_/_0.55)]">
-        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/[0.08] via-transparent to-sky-500/[0.10] dark:from-cyan-400/[0.14] dark:via-transparent dark:to-blue-500/[0.18]" />
-        <div className="absolute inset-0 crm-dotgrid opacity-15" />
+    <header className="sticky top-0 z-30 border-b border-[#2f5d8f7a] bg-[#071832]/95 px-4 py-3 shadow-[0_20px_45px_-35px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[5.65rem] w-full max-w-[1920px] items-center gap-5">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="lg:hidden inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#4d8fcc6b] bg-[#10345a] text-[#dcecff]"
+          aria-label="Abrir menu"
+          title="Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
 
-        <div className="relative mx-auto flex h-[4.5rem] max-w-[1400px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={onMenuClick}
-              className="lg:hidden crm-btn crm-btn-secondary h-10 w-10 rounded-2xl p-0"
-              aria-label="Abrir menu"
-              title="Menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-[rgb(var(--crm-accent-rgb))]" />
-                <div className="truncate text-sm font-bold text-[var(--crm-ink)] sm:text-base">{meta.title}</div>
-              </div>
-              <div className="truncate text-xs text-[var(--crm-muted)]">{meta.subtitle}</div>
-            </div>
+        <div
+          className="relative hidden h-[5.15rem] min-w-0 flex-1 overflow-hidden rounded-[24px] border border-[#3f91c47a] bg-cover bg-center shadow-[0_24px_54px_-34px_rgba(0,0,0,0.95)] md:block"
+          style={{ backgroundImage: "url('/b2g/govflow-header.png')" }}
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,18,39,0.72)_0%,rgba(5,18,39,0.38)_34%,rgba(8,31,56,0.16)_68%,rgba(0,169,190,0.22)_100%)]" />
+          <div className="absolute left-3 top-1/2 max-w-[min(30rem,56%)] -translate-y-1/2 rounded-[16px] bg-black/24 px-5 py-2.5 shadow-[0_22px_44px_-24px_rgba(0,0,0,0.95)] backdrop-blur-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[#d6ecff]/85">Sistema</div>
+            <div className="mt-0.5 truncate text-xl font-black leading-none text-white">{headerTitle}</div>
+            <div className="mt-1 max-w-full truncate text-[11px] font-semibold text-[#c6dcf2]/85">{meta.subtitle}</div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <span className="hidden md:inline-flex items-center rounded-full border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.55)] px-2.5 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
-              Tema {modeLabel}
-            </span>
+        <div className="flex min-w-0 flex-1 items-center md:hidden">
+          <div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.42em] text-[#8fd1ff]">Sistema</div>
+            <div className="max-w-[13rem] truncate text-xl font-black text-white">{headerTitle}</div>
+          </div>
+        </div>
 
+        <div className="ml-auto flex shrink-0 items-center gap-4 text-[#dcecff]">
+          <button
+            type="button"
+            className="hidden h-10 w-10 items-center justify-center rounded-full text-[#dcecff] transition hover:bg-[#1a4168] sm:inline-flex"
+            aria-label="Notificações"
+            title="Notificações"
+          >
+            <Bell className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="hidden h-10 w-10 items-center justify-center rounded-full text-[#dcecff] transition hover:bg-[#1a4168] sm:inline-flex"
+            title={`Tema: ${theme} (ativo: ${resolvedTheme})`}
+            aria-label="Alternar tema"
+          >
+            {theme === 'system' ? (
+              <Monitor className="h-5 w-5" />
+            ) : resolvedTheme === 'dark' ? (
+              <Moon className="h-5 w-5" />
+            ) : (
+              <Sun className="h-5 w-5" />
+            )}
+          </button>
+
+          <div className="hidden h-10 w-px bg-[#385f8b] lg:block" />
+
+          <div className="relative">
             <button
               type="button"
-              onClick={toggleTheme}
-              className="crm-btn crm-btn-secondary h-10 px-3"
-              title={`Tema: ${theme} (ativo: ${resolvedTheme})`}
-              aria-label="Alternar tema (claro/escuro/sistema)"
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              className="flex items-center gap-3 rounded-2xl px-1.5 py-1 transition hover:bg-[#1a4168]/70"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              title="Menu do usuário"
             >
-              {theme === 'system' ? (
-                <Monitor className="h-4 w-4" />
-              ) : resolvedTheme === 'dark' ? (
-                <Moon className="h-4 w-4" />
-              ) : (
-                <Sun className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">{modeLabel}</span>
+              <span className="hidden min-w-0 text-right lg:block">
+                <span className="block max-w-[170px] truncate text-xs font-black text-white">{userName}</span>
+                <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.15em] text-[#a8bed8]">{userRole}</span>
+              </span>
+
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#5f9ccc95] bg-[#234d73] text-sm font-black text-[#dcecff] shadow-[inset_0_0_24px_rgba(143,209,255,0.12)]">
+                {userInitials}
+              </span>
             </button>
+
+            {userMenuOpen && (
+              <div
+                className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-44 overflow-hidden rounded-2xl border border-[#5f9ccc70] bg-[#071832] p-1.5 shadow-[0_24px_58px_-28px_rgba(0,0,0,0.98)]"
+                role="menu"
+              >
+                <button
+                  type="button"
+                  onClick={handleUserAccess}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-[#dcecff] transition hover:bg-[#143b62]"
+                  role="menuitem"
+                >
+                  <User className="h-4 w-4" />
+                  Usuário
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-[#dcecff] transition hover:bg-[#143b62]"
+                  role="menuitem"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-[#ffb4b4] transition hover:bg-[#4d1d2a]"
+                  role="menuitem"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sair
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 
 export default async function handler(req) {
   if (req.method === 'GET') {
-    const { type = 'executive', userId, period = '6' } = req.query || {};
+    const { type = 'executive', userId, period = '6', ownerId, temperature: tempFilter } = req.query || {};
 
     try {
       if (type === 'executive') {
@@ -147,6 +147,205 @@ export default async function handler(req) {
             leadSources,
             lossReasons
           }
+        });
+      }
+
+      if (type === 'b2b') {
+        // Dashboard B2B com filtros
+        const parsePeriod = (p) => {
+          if (!p) return 6;
+          const num = parseInt(p);
+          if (p.endsWith('d')) {
+            const days = Number.isFinite(num) ? num : 30;
+            return Math.max(1, Math.round(days / 30));
+          }
+          if (p === 'month') return 1;
+          if (p === 'quarter') return 3;
+          if (p === 'year') return 12;
+          if (p === 'custom') return 6;
+          return Number.isFinite(num) ? num : 6;
+        };
+        const periodMonths = parsePeriod(period);
+        const dateFilter = periodMonths
+          ? { createdAt: { gte: new Date(Date.now() - periodMonths * 30 * 24 * 60 * 60 * 1000) } }
+          : {};
+
+        const monthsBack = periodMonths || 6;
+        const revenueStartDate = new Date(Date.now() - monthsBack * 30 * 24 * 60 * 60 * 1000);
+
+        const baseWhere = { company: { clientType: 'B2B' }, ...dateFilter };
+        if (ownerId) baseWhere.ownerId = ownerId;
+
+        // Mapear temperatura para faixas de probabilidade
+        const temperatureRange = {
+          '0': { gte: 0, lte: 0 },
+          '25': { gte: 1, lte: 25 },
+          '50': { gte: 26, lte: 50 },
+          '75': { gte: 51, lte: 75 },
+          '100': { gte: 76, lte: 100 }
+        };
+
+        const whereClause = { ...baseWhere };
+        if (tempFilter && temperatureRange[tempFilter]) {
+          whereClause.probability = {
+            gte: temperatureRange[tempFilter].gte,
+            lte: temperatureRange[tempFilter].lte
+          };
+        }
+
+        const chartsWhere = { ...baseWhere };
+
+        const whereNoDate = { company: { clientType: 'B2B' } };
+        if (ownerId) whereNoDate.ownerId = ownerId;
+
+        const [
+          totalCompanies,
+          totalOpportunities,
+          wonOpportunities,
+          lostOpportunities,
+          pipelineAgg,
+          wonAgg,
+          avgTicketAgg,
+          funnelData,
+          leadSources,
+          sellerPerformance,
+          opportunities,
+          monthlyRevenue
+        ] = await Promise.all([
+          prisma.company.count({ where: { clientType: 'B2B' } }),
+          prisma.opportunity.count({ where: { ...whereClause, stage: { notIn: ['WON', 'LOST'] } } }),
+          prisma.opportunity.count({ where: { ...whereClause, stage: 'WON' } }),
+          prisma.opportunity.count({ where: { ...whereClause, stage: 'LOST' } }),
+          prisma.opportunity.aggregate({
+            where: { ...whereClause, stage: { notIn: ['WON', 'LOST'] } },
+            _sum: { value: true }
+          }),
+          prisma.opportunity.aggregate({
+            where: { ...whereClause, stage: 'WON' },
+            _sum: { value: true }
+          }),
+          prisma.opportunity.aggregate({
+            where: { ...whereClause, stage: 'WON' },
+            _avg: { value: true }
+          }),
+          prisma.opportunity.groupBy({
+            by: ['stage'],
+            where: { ...chartsWhere },
+            _count: { stage: true },
+            _sum: { value: true },
+            orderBy: { stage: 'asc' }
+          }),
+          prisma.opportunity.groupBy({
+            by: ['source'],
+            where: { ...chartsWhere, source: { not: null } },
+            _count: { source: true }
+          }),
+          prisma.opportunity.groupBy({
+            by: ['ownerId'],
+            where: { ...chartsWhere, stage: 'WON' },
+            _count: { ownerId: true },
+            _sum: { value: true }
+          }),
+          prisma.opportunity.findMany({
+            where: whereClause,
+            include: { company: true, owner: true },
+            orderBy: { updatedAt: 'desc' },
+            take: 200
+          }),
+          prisma.opportunity.findMany({
+            where: {
+              stage: 'WON',
+              company: { clientType: 'B2B' },
+              updatedAt: { gte: revenueStartDate }
+            },
+            select: {
+              updatedAt: true,
+              value: true
+            }
+          })
+        ]);
+
+        // Contagens por temperatura
+        const allProbabilities = await prisma.opportunity.groupBy({
+          by: ['probability'],
+          where: { ...whereNoDate },
+          _count: { probability: true }
+        });
+
+        const temperatureCounts = {
+          0: allProbabilities.filter(s => s.probability === 0).reduce((sum, s) => sum + s._count.probability, 0),
+          25: allProbabilities.filter(s => s.probability >= 1 && s.probability <= 25).reduce((sum, s) => sum + s._count.probability, 0),
+          50: allProbabilities.filter(s => s.probability >= 26 && s.probability <= 50).reduce((sum, s) => sum + s._count.probability, 0),
+          75: allProbabilities.filter(s => s.probability >= 51 && s.probability <= 75).reduce((sum, s) => sum + s._count.probability, 0),
+          100: allProbabilities.filter(s => s.probability >= 76 && s.probability <= 100).reduce((sum, s) => sum + s._count.probability, 0)
+        };
+
+        const sellerIds = sellerPerformance.map(s => s.ownerId);
+        const sellers = await prisma.user.findMany({
+          where: { id: { in: sellerIds } },
+          select: { id: true, name: true }
+        });
+
+        const sellerData = sellerPerformance.map(perf => {
+          const seller = sellers.find(s => s.id === perf.ownerId);
+          return {
+            sellerId: perf.ownerId,
+            sellerName: seller?.name || 'Desconhecido',
+            deals: perf._count.ownerId,
+            revenue: perf._sum.value || 0
+          };
+        });
+
+        const conversion = (wonOpportunities + lostOpportunities) > 0
+          ? (wonOpportunities / (wonOpportunities + lostOpportunities)) * 100
+          : 0;
+
+        const avgMonthlyWon = Array.isArray(monthlyRevenue) && monthlyRevenue.length > 0
+          ? monthlyRevenue.reduce((s, m) => s + parseFloat(m.value || 0), 0) / monthlyRevenue.length
+          : 0;
+        const forecastMonths = [];
+        const today = new Date();
+        for (let i = 0; i < 6; i += 1) {
+          const m = new Date(today.getFullYear(), today.getMonth() + i, 1);
+          const target = Math.round(avgMonthlyWon * 1.1 * (1 + i * 0.02));
+          forecastMonths.push({
+            month: m.toISOString().slice(0, 10),
+            forecast: Math.round((pipelineAgg._sum.value || 0) / Math.max(6 - i, 1)),
+            target: Math.max(target, 1)
+          });
+        }
+
+        return Response.json({
+          kpis: {
+            pipelineValue: pipelineAgg._sum.value || 0,
+            wonValue: wonAgg._sum.value || 0,
+            conversionRate: Math.round(conversion * 100) / 100,
+            avgTicket: avgTicketAgg._avg.value || 0,
+            totalOpportunities,
+            wonOpportunities,
+            lostOpportunities,
+            totalCompanies
+          },
+          charts: {
+            funnel: funnelData,
+            monthlyRevenue: (() => {
+              const byMonth = new Map();
+              for (const opp of monthlyRevenue) {
+                const d = new Date(opp.updatedAt);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const prev = byMonth.get(key) || { month: new Date(d.getFullYear(), d.getMonth(), 1), revenue: 0, deals: 0 };
+                prev.revenue += opp.value || 0;
+                prev.deals += 1;
+                byMonth.set(key, prev);
+              }
+              return [...byMonth.values()].sort((a, b) => a.month - b.month);
+            })(),
+            leadSources,
+            sellerPerformance: sellerData,
+            forecast: forecastMonths
+          },
+          temperatureCounts,
+          opportunities
         });
       }
 
