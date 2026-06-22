@@ -50,6 +50,8 @@ const inferCompanyClientType = (company, fallback = 'B2B') => {
 const inferOpportunityClientType = (opportunity, fallback = 'B2B') => {
   const direct = normalizeClientType(opportunity?.clientType);
   if (direct) return direct;
+  if (String(opportunity?.number || '').toUpperCase().startsWith('B2G-')) return 'B2G';
+  if (normalizeClientType(opportunity?.projectClientType) === 'B2G') return 'B2G';
   if (opportunity?.b2gStage) return 'B2G';
   if (hasB2GSignal(opportunity?.source)) return 'B2G';
   if (hasB2GDescriptionShape(opportunity?.description)) return 'B2G';
@@ -65,7 +67,8 @@ const isOpportunityInClientType = (opportunity, targetClientType) => {
 const resolveRequestedClientType = (body = {}, query = {}) => {
   const explicit = normalizeClientType(body.clientType || query.clientType);
   if (explicit) return explicit;
-  if (body.b2gStage || hasB2GSignal(body.source) || hasB2GDescriptionShape(body.description)) return 'B2G';
+  if (body.b2gStage || normalizeClientType(body.projectClientType) === 'B2G') return 'B2G';
+  if (hasB2GSignal(body.source) || hasB2GDescriptionShape(body.description)) return 'B2G';
   return 'B2B';
 };
 
@@ -254,6 +257,7 @@ export default async function handler(req) {
           value: body.value,
           probability: body.probability || 50,
           stage: body.stage || 'LEAD',
+          b2gStage: clientType === 'B2G' ? (body.b2gStage || 'ANALISE') : (body.b2gStage || null),
           source: body.source,
           expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
           notes: body.notes,

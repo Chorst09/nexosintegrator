@@ -6,6 +6,7 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "Opportunity"
       ADD COLUMN IF NOT EXISTS "number" TEXT,
+      ADD COLUMN IF NOT EXISTS "b2gStage" TEXT,
       ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
       ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER;
   `);
@@ -13,6 +14,11 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     CREATE UNIQUE INDEX IF NOT EXISTS "Opportunity_number_key"
       ON "Opportunity"("number");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "Opportunity_b2gStage_idx"
+      ON "Opportunity"("b2gStage");
   `);
 
   await prisma.$executeRawUnsafe(`

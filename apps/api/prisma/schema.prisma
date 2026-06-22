@@ -126,6 +126,7 @@ model Product {
 // === FUNIL DE VENDAS ===
 model Opportunity {
   id              String   @id @default(uuid())
+  number          String?  @unique
   title           String
   projectName     String?
   projectClientType String?

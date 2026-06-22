@@ -55,6 +55,8 @@ const inferCompanyClientType = (company, fallback = 'B2B') => {
 const inferOpportunityClientType = (opportunity, fallback = 'B2B') => {
   const direct = normalizeClientType(opportunity?.clientType);
   if (direct) return direct;
+  if (String(opportunity?.number || '').toUpperCase().startsWith('B2G-')) return 'B2G';
+  if (normalizeClientType(opportunity?.projectClientType) === 'B2G') return 'B2G';
   if (opportunity?.b2gStage) return 'B2G';
   if (hasB2GSignal(opportunity?.source)) return 'B2G';
   if (hasB2GDescriptionShape(opportunity?.description)) return 'B2G';
@@ -65,6 +67,27 @@ const isOpportunityInClientType = (opportunity, targetClientType) => {
   const expected = normalizeClientType(targetClientType);
   if (!expected) return true;
   return inferOpportunityClientType(opportunity) === expected;
+};
+
+const resolveRequestedClientType = (body = {}, query = {}) => {
+  const explicit = normalizeClientType(body.clientType || query.clientType);
+  if (explicit) return explicit;
+  if (body.b2gStage || normalizeClientType(body.projectClientType) === 'B2G') return 'B2G';
+  if (hasB2GSignal(body.source) || hasB2GDescriptionShape(body.description)) return 'B2G';
+  return 'B2B';
+};
+
+const generateOpportunityNumber = async (tx, clientType = 'B2B') => {
+  const type = normalizeClientType(clientType) || 'B2B';
+  const year = new Date().getFullYear();
+  const prefix = `${type}-${year}-`;
+  const latest = await tx.opportunity.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: 'desc' },
+    select: { number: true }
+  });
+  const latestSequence = Number(String(latest?.number || '').slice(prefix.length)) || 0;
+  return `${prefix}${String(latestSequence + 1).padStart(5, '0')}`;
 };
 
 const isSchemaDriftError = (error) => {
@@ -228,10 +251,13 @@ export default async function handler(req) {
 
     const projectType = normalizeProjectType(body.projectType);
     const projectMonths = normalizeProjectMonths(projectType, body.projectMonths);
+    const clientType = resolveRequestedClientType(body, req.query || {});
     
     const opportunity = await prisma.$transaction(async (tx) => {
+      const number = body.number || await generateOpportunityNumber(tx, clientType);
       const created = await tx.opportunity.create({
         data: {
+          number,
           title: body.title || normalizeProjectName(body.projectName, 'Oportunidade sem titulo'),
           projectName: normalizeProjectName(body.projectName, body.title || 'Projeto sem nome'),
           projectClientType: normalizeProjectClientType(body.projectClientType),
@@ -241,7 +267,7 @@ export default async function handler(req) {
           value: body.value,
           probability: body.probability || 50,
           stage: body.stage || 'LEAD',
-          b2gStage: body.b2gStage || null,
+          b2gStage: clientType === 'B2G' ? (body.b2gStage || 'ANALISE') : (body.b2gStage || null),
           source: body.source,
           expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
           notes: body.notes,

@@ -117,6 +117,7 @@ model Opportunity {
   id              String   @id @default(uuid())
   number          String?  @unique
   title           String
+  b2gStage        String?
   projectType     String   @default("SINGLE")
   projectMonths   Int?
   description     String?
@@ -144,6 +145,8 @@ model Opportunity {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([b2gStage])
 }
 
 model OpportunityProduct {

@@ -53,6 +53,8 @@ export const inferOpportunityClientType = (opportunity, companyOrResolver, fallb
   const directType = normalizeClientType(opportunity?.clientType);
   if (directType) return directType;
 
+  if (String(opportunity?.number || '').toUpperCase().startsWith('B2G-')) return 'B2G';
+  if (normalizeClientType(opportunity?.projectClientType) === 'B2G') return 'B2G';
   if (opportunity?.b2gStage) return 'B2G';
 
   if (hasB2GSignal(opportunity?.source)) return 'B2G';
