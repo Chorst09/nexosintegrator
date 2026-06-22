@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
+import { buildApiUrl, getAuthHeaders } from '../config/api';
 
 const CALCULATOR_SETTINGS_STORAGE_KEY = 'crm-calculadoras-settings-v1';
 const CALCULATOR_PROPOSALS_STORAGE_KEY = 'crm-calculadoras-propostas-v1';
@@ -296,6 +297,9 @@ const getManagerDefaults = () => {
 
 const buildProposalForm = (proposalNumber, managerDefaults = {}) => ({
   number: proposalNumber || '',
+  opportunityId: '',
+  opportunityNumber: '',
+  opportunityTitle: '',
   clientCompany: '',
   clientContact: '',
   clientPhone: '',
@@ -1006,6 +1010,7 @@ export default function Calculadoras() {
   const [calculatorSettings, setCalculatorSettings] = useState(() => normalizeSettings(DEFAULT_CALCULATOR_SETTINGS));
   const [draftSettings, setDraftSettings] = useState(() => normalizeSettings(DEFAULT_CALCULATOR_SETTINGS));
   const [savedProposals, setSavedProposals] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
   const [activeProposalId, setActiveProposalId] = useState(null);
   const [proposalSearchNumber, setProposalSearchNumber] = useState('');
   const [proposalFeedback, setProposalFeedback] = useState(null);
@@ -1064,6 +1069,20 @@ export default function Calculadoras() {
     } catch (error) {
       console.error('Erro ao carregar propostas da calculadora:', error);
     }
+  }, []);
+
+  useEffect(() => {
+    const loadOpportunities = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/opportunities'), { headers: getAuthHeaders() });
+        if (!response.ok) return;
+        const data = await response.json();
+        setOpportunities(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Erro ao carregar oportunidades para calculadora:', error);
+      }
+    };
+    loadOpportunities();
   }, []);
 
   useEffect(() => {
@@ -1561,6 +1580,9 @@ export default function Calculadoras() {
 
     setProposalForm({
       number: proposal.number || '',
+      opportunityId: proposal?.opportunity?.id || proposal.opportunityId || '',
+      opportunityNumber: proposal?.opportunity?.number || proposal.opportunityNumber || '',
+      opportunityTitle: proposal?.opportunity?.title || proposal.opportunityTitle || '',
       clientCompany: proposal?.client?.companyName || '',
       clientContact: proposal?.client?.contactName || '',
       clientPhone: proposal?.client?.phone || '',
@@ -1585,12 +1607,18 @@ export default function Calculadoras() {
   const buildCurrentProposalPayload = (proposalId, createdAtBase = null) => {
     const nowIso = new Date().toISOString();
     const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(savedProposals);
+    const linkedOpportunity = opportunities.find((item) => item.id === proposalForm.opportunityId);
 
     return {
       id: proposalId || createItemId('proposal'),
       number: proposalNumber,
       calculatorType: currentTab,
       calculatorLabel: currentTab === 'vendas' ? 'Venda' : currentTab === 'locacao' ? 'Locação' : 'Serviços',
+      opportunity: {
+        id: proposalForm.opportunityId || '',
+        number: linkedOpportunity?.number || proposalForm.opportunityNumber || '',
+        title: linkedOpportunity?.title || proposalForm.opportunityTitle || ''
+      },
       client: {
         companyName: proposalForm.clientCompany.trim(),
         contactName: proposalForm.clientContact.trim(),
@@ -1789,6 +1817,7 @@ export default function Calculadoras() {
     
     const nowIso = new Date().toISOString();
     const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(savedProposals);
+    const linkedOpportunity = opportunities.find((item) => item.id === proposalForm.opportunityId);
 
     // Calcular totais consolidados
     let totalFinalPrice = 0;
@@ -1830,6 +1859,11 @@ export default function Calculadoras() {
       number: proposalNumber,
       calculatorType: 'mixed',
       calculatorLabel: 'Proposta Mista',
+      opportunity: {
+        id: proposalForm.opportunityId || '',
+        number: linkedOpportunity?.number || proposalForm.opportunityNumber || '',
+        title: linkedOpportunity?.title || proposalForm.opportunityTitle || ''
+      },
       client: {
         companyName: proposalForm.clientCompany.trim() || 'Cliente não informado',
         contactName: proposalForm.clientContact.trim() || 'Contato não informado',
@@ -2017,6 +2051,14 @@ export default function Calculadoras() {
   };
 
   const continueToCalculator = () => {
+    if (!proposalForm.opportunityId) {
+      setProposalFeedback({
+        type: 'error',
+        text: 'Selecione a oportunidade vinculada a esta proposta.'
+      });
+      return;
+    }
+
     if (!proposalForm.clientCompany.trim() || !proposalForm.clientContact.trim()) {
       setProposalFeedback({
         type: 'error',
@@ -2026,6 +2068,21 @@ export default function Calculadoras() {
     }
     setProposalFeedback(null);
     setCalculatorStep('calculation');
+  };
+
+  const handleProposalOpportunityChange = (opportunityId) => {
+    const opportunity = opportunities.find((item) => item.id === opportunityId);
+    const primaryContact = Array.isArray(opportunity?.company?.contacts) ? opportunity.company.contacts[0] : null;
+    setProposalForm((prev) => ({
+      ...prev,
+      opportunityId,
+      opportunityNumber: opportunity?.number || '',
+      opportunityTitle: opportunity?.title || '',
+      clientCompany: prev.clientCompany || opportunity?.company?.name || '',
+      clientContact: prev.clientContact || primaryContact?.name || '',
+      clientPhone: prev.clientPhone || primaryContact?.phone || '',
+      clientEmail: prev.clientEmail || primaryContact?.email || ''
+    }));
   };
 
   const abrirCalculadora = (tipo) => {
@@ -2893,6 +2950,23 @@ export default function Calculadoras() {
                 <h4 className="text-2xl font-bold text-white">Informações da Proposta</h4>
               </div>
               <div className="p-5 grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="xl:col-span-2">
+                  <label className="block text-sm text-slate-300 mb-1">Oportunidade</label>
+                  <select
+                    value={proposalForm.opportunityId}
+                    onChange={(event) => handleProposalOpportunityChange(event.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  >
+                    <option value="">Selecione a oportunidade vinculada</option>
+                    {opportunities.map((opportunity) => (
+                      <option key={opportunity.id} value={opportunity.id}>
+                        {[opportunity.number, opportunity.title || opportunity.projectName, opportunity.company?.name]
+                          .filter(Boolean)
+                          .join(' - ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="space-y-4">
                   <h5 className="text-2xl font-semibold text-blue-300">Dados do Cliente</h5>
                   <div>
@@ -2986,6 +3060,11 @@ export default function Calculadoras() {
                   <div className="text-lg font-semibold text-white">
                     {proposalForm.clientCompany || 'Sem empresa'} · {proposalForm.clientContact || 'Sem contato'}
                   </div>
+                  {(proposalForm.opportunityNumber || proposalForm.opportunityTitle) && (
+                    <div className="mt-1 text-xs font-semibold text-slate-400">
+                      Oportunidade: {[proposalForm.opportunityNumber, proposalForm.opportunityTitle].filter(Boolean).join(' - ')}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"

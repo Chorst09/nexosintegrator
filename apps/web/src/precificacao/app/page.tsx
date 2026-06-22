@@ -21,6 +21,7 @@ import { scenarioService, SavedScenario } from '@/services/scenario-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Toaster } from '@/components/ui/toaster';
 import { loadCalculatorPricingSettings } from '@/app/lib/calculator-settings';
+import { buildApiUrl, getAuthHeaders } from '../../config/api';
 
 const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
 
@@ -28,6 +29,9 @@ type SimulatorStep = 'start' | 'proposal' | 'calculation';
 
 interface PricingProposalForm {
   number: string;
+  opportunityId: string;
+  opportunityNumber: string;
+  opportunityTitle: string;
   clientCompany: string;
   clientContact: string;
   clientPhone: string;
@@ -35,6 +39,21 @@ interface PricingProposalForm {
   managerName: string;
   managerEmail: string;
   managerPhone: string;
+}
+
+interface OpportunitySummary {
+  id: string;
+  number?: string;
+  title?: string;
+  projectName?: string;
+  company?: {
+    name?: string;
+    contacts?: Array<{
+      name?: string;
+      phone?: string;
+      email?: string;
+    }>;
+  };
 }
 
 interface SavedPricingProposal {
@@ -86,6 +105,9 @@ const generateProposalNumber = (proposals: SavedPricingProposal[] = []) => {
 
 const buildProposalForm = (proposalNumber: string, managerDefaults = getManagerDefaults()): PricingProposalForm => ({
   number: proposalNumber || '',
+  opportunityId: '',
+  opportunityNumber: '',
+  opportunityTitle: '',
   clientCompany: '',
   clientContact: '',
   clientPhone: '',
@@ -121,6 +143,7 @@ export default function FinEdgeApp() {
   const [simulatorStep, setSimulatorStep] = useState<SimulatorStep>('start');
   const [savedPricingProposals, setSavedPricingProposals] = useState<SavedPricingProposal[]>([]);
   const [proposalSearchNumber, setProposalSearchNumber] = useState('');
+  const [opportunities, setOpportunities] = useState<OpportunitySummary[]>([]);
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [proposalFeedback, setProposalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
@@ -148,6 +171,20 @@ export default function FinEdgeApp() {
       console.error('Erro ao carregar precificações salvas:', error);
       setSavedPricingProposals([]);
     }
+  }, []);
+
+  useEffect(() => {
+    const loadOpportunities = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/opportunities'), { headers: getAuthHeaders() });
+        if (!response.ok) return;
+        const data = await response.json();
+        setOpportunities(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Erro ao carregar oportunidades para precificação:', error);
+      }
+    };
+    loadOpportunities();
   }, []);
 
   useEffect(() => {
@@ -269,6 +306,14 @@ export default function FinEdgeApp() {
   };
 
   const continueToItems = () => {
+    if (!proposalForm.opportunityId) {
+      setProposalFeedback({
+        type: 'error',
+        text: 'Selecione a oportunidade vinculada a esta precificação.'
+      });
+      return;
+    }
+
     if (!proposalForm.clientCompany.trim() || !proposalForm.clientContact.trim()) {
       setProposalFeedback({
         type: 'error',
@@ -279,6 +324,21 @@ export default function FinEdgeApp() {
 
     setProposalFeedback(null);
     setSimulatorStep('calculation');
+  };
+
+  const handleProposalOpportunityChange = (opportunityId: string) => {
+    const opportunity = opportunities.find((item) => item.id === opportunityId);
+    const primaryContact = Array.isArray(opportunity?.company?.contacts) ? opportunity.company.contacts[0] : null;
+    setProposalForm((prev) => ({
+      ...prev,
+      opportunityId,
+      opportunityNumber: opportunity?.number || '',
+      opportunityTitle: opportunity?.title || opportunity?.projectName || '',
+      clientCompany: prev.clientCompany || opportunity?.company?.name || '',
+      clientContact: prev.clientContact || primaryContact?.name || '',
+      clientPhone: prev.clientPhone || primaryContact?.phone || '',
+      clientEmail: prev.clientEmail || primaryContact?.email || ''
+    }));
   };
 
   const savePricingProposal = () => {
@@ -297,6 +357,9 @@ export default function FinEdgeApp() {
       proposalForm: {
         ...proposalForm,
         number: proposalNumber,
+        opportunityId: proposalForm.opportunityId,
+        opportunityNumber: proposalForm.opportunityNumber,
+        opportunityTitle: proposalForm.opportunityTitle,
         clientCompany: proposalForm.clientCompany.trim(),
         clientContact: proposalForm.clientContact.trim(),
         clientPhone: proposalForm.clientPhone.trim(),
@@ -492,6 +555,23 @@ export default function FinEdgeApp() {
                           <h2 className="text-2xl font-bold text-white font-headline">Informações da Proposta</h2>
                         </div>
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 p-6">
+                          <div className="xl:col-span-2">
+                            <label className="block text-sm font-semibold text-slate-500 mb-1.5">Oportunidade</label>
+                            <select
+                              value={proposalForm.opportunityId}
+                              onChange={(event) => handleProposalOpportunityChange(event.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                            >
+                              <option value="">Selecione a oportunidade vinculada</option>
+                              {opportunities.map((opportunity) => (
+                                <option key={opportunity.id} value={opportunity.id}>
+                                  {[opportunity.number, opportunity.title || opportunity.projectName, opportunity.company?.name]
+                                    .filter(Boolean)
+                                    .join(' - ')}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                           <div className="space-y-4">
                             <h3 className="text-2xl font-bold text-sky-600 font-headline">Dados do Cliente</h3>
                             <div>
@@ -547,6 +627,11 @@ export default function FinEdgeApp() {
                         <p className="text-lg font-bold text-slate-900">
                           {proposalForm.clientCompany || 'Sem empresa'} · {proposalForm.clientContact || 'Sem contato'}
                         </p>
+                        {proposalForm.opportunityNumber || proposalForm.opportunityTitle ? (
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Oportunidade: {[proposalForm.opportunityNumber, proposalForm.opportunityTitle].filter(Boolean).join(' - ')}
+                          </p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
