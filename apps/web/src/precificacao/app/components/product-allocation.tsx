@@ -222,6 +222,16 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
     showMessage('Rateio carregado para edição.');
   };
 
+  const handleViewAllocation = (allocation: SavedAllocation) => {
+    setAllocationName(allocation.name);
+    setMethod(allocation.method);
+    setTargetIds(new Set(allocation.targetIds));
+    setSourceIds(new Set(allocation.sourceIds));
+    setEditingId(null);
+    setViewingAllocation(allocation);
+    showMessage('Rateio carregado para visualização.');
+  };
+
   const handleDeleteAllocation = (id: string) => {
     const next = savedAllocations.filter(item => item.id !== id);
     persistAllocations(next);
@@ -291,6 +301,13 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
                     className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center justify-center gap-2"
                   >
                     <X className="w-3.5 h-3.5" /> Novo
+                  </button>
+                  <button
+                    onClick={handleSaveAllocation}
+                    className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-primary/20 bg-primary text-white shadow-sm hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {editingId ? 'Atualizar Rateio' : 'Salvar Rateio'}
                   </button>
                 </div>
               </div>
@@ -409,11 +426,12 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setViewingAllocation(allocation)}
+                        onClick={() => handleViewAllocation(allocation)}
                         title="Visualizar rateio"
-                        className="h-9 w-9 rounded-xl border border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center transition-colors"
+                        className="h-9 rounded-xl border border-slate-200 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <Eye className="w-4 h-4" />
+                        Visualizar
                       </button>
                       <button
                         onClick={() => handleEditAllocation(allocation)}
@@ -482,7 +500,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
               </CardTitle>
               <CardDescription>Custo mensal final por item após absorção.</CardDescription>
             </CardHeader>
-            <CardContent className="p-8">
+            <CardContent className="p-5">
               {allocationResults.length === 0 ? (
                 <div className="py-20 text-center space-y-4">
                   <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
@@ -496,61 +514,47 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-8">
-                  <div className="flex items-center justify-between p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
-                    <div>
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Total Mensal para Rateio</p>
-                      <p className="text-3xl font-bold text-emerald-700 font-headline">{formatCurrency(totalMonthlyAllocated)}</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Total Mensal para Rateio</p>
+                      <p className="text-xl font-bold text-emerald-700 font-headline truncate">{formatCurrency(totalMonthlyAllocated)}</p>
                     </div>
-                    <div className="p-3 bg-white rounded-2xl shadow-sm text-emerald-600">
-                      <ArrowDownRight size={24} />
+                    <div className="shrink-0 p-2 bg-white rounded-xl shadow-sm text-emerald-600">
+                      <ArrowDownRight size={18} />
                     </div>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {allocationResults.map((result) => (
-                      <div key={result.productId} className="group p-5 rounded-3xl border border-slate-100 bg-white hover:border-primary/20 hover:shadow-md transition-all space-y-4">
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-50 rounded-xl text-primary">
-                              <Target size={16} />
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-800 text-sm">{result.name}</p>
-                              <p className="text-[10px] text-slate-400">{result.percentageOfTotal.toFixed(1)}% do P&L Mensal</p>
-                            </div>
+                      <div key={result.productId} className="group grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_0.8fr_0.8fr_0.9fr_0.45fr] gap-3 md:items-center p-4 rounded-2xl border border-slate-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all">
+                        <div className="min-w-0 flex items-center gap-3">
+                          <div className="shrink-0 p-2 bg-indigo-50 rounded-xl text-primary">
+                            <Target size={16} />
                           </div>
-                          <div className="text-right">
-                             <p className="text-[10px] font-bold text-slate-400 uppercase">Original/mês</p>
-                             <p className="text-sm font-semibold text-slate-500">{formatCurrency(result.originalMonthlyCost)}</p>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 text-sm truncate">{result.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate">
+                              {result.breakdown.length} fonte(s) · {result.percentageOfTotal.toFixed(1)}% do P&L mensal
+                            </p>
                           </div>
                         </div>
-
-                        <div className="bg-slate-50/50 rounded-2xl p-4 space-y-2">
-                           {result.breakdown.map((b, idx) => (
-                             <div key={idx} className="flex justify-between items-center text-[10px]">
-                               <span className="text-slate-500 flex items-center">
-                                 <div className="w-1 h-1 rounded-full bg-slate-300 mr-2" />
-                                 Absorção de {b.sourceName}
-                               </span>
-                               <span className="font-bold text-slate-700">+{formatCurrency(b.amount)}</span>
-                             </div>
-                           ))}
+                        <div>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Original/mês</p>
+                          <p className="text-sm font-semibold text-slate-600 tabular-nums">{formatCurrency(result.originalMonthlyCost)}</p>
                         </div>
-                        
-                        <div className="pt-4 border-t border-slate-50 flex justify-between items-end">
-                           <div>
-                             <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Custo Mensal Carregado</p>
-                             <div className="flex items-baseline gap-2">
-                               <p className="text-2xl font-bold text-slate-900 font-headline">{formatCurrency(result.totalMonthlyCost)}</p>
-                               <span className="text-[10px] text-emerald-600 font-bold">
-                                 +{((result.allocatedMonthlyCost / result.originalMonthlyCost) * 100).toFixed(1)}%
-                               </span>
-                             </div>
-                           </div>
-                           <div className="h-10 w-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
-                              <ArrowRight size={18} />
-                           </div>
+                        <div>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Rateado/mês</p>
+                          <p className="text-sm font-semibold text-emerald-600 tabular-nums">+{formatCurrency(result.allocatedMonthlyCost)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Carregado/mês</p>
+                          <p className="text-base font-bold text-slate-900 font-headline tabular-nums">{formatCurrency(result.totalMonthlyCost)}</p>
+                        </div>
+                        <div className="md:text-right">
+                          <span className="inline-flex items-center justify-center rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600">
+                            +{(result.originalMonthlyCost > 0 ? (result.allocatedMonthlyCost / result.originalMonthlyCost) * 100 : 0).toFixed(1)}%
+                          </span>
                         </div>
                       </div>
                     ))}
