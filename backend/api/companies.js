@@ -36,6 +36,8 @@ const runOptionalCleanup = async (operation) => {
 
 export default async function handler(req) {
   if (req.method === 'GET') {
+    const clientType = String(req.query?.clientType || '').toUpperCase();
+    const where = clientType === 'B2B' || clientType === 'B2G' ? { clientType } : {};
     const id = resolveCompanyId(req, {});
     
     if (id) {
@@ -77,6 +79,7 @@ export default async function handler(req) {
     }
     
     const companies = await prisma.company.findMany({
+      where,
       include: {
         contacts: true,
         opportunities: {

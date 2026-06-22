@@ -82,6 +82,13 @@ const normalizeOpportunity = (item) => ({
   solution: item.produto || item.solution || item.solucao || ''
 });
 
+const normalizeClient = (item, fallbackType = 'B2B') => ({
+  id: item.id || item.document || item.name || '',
+  name: item.name || item.razaoSocial || item.cliente || '',
+  document: item.document || item.cnpj || '',
+  type: String(item.clientType || fallbackType || 'B2B').toUpperCase() === 'B2G' ? 'B2G' : 'B2B'
+});
+
 const StatCard = ({ label, value, icon: Icon, color }) => (
   <div className="flex min-h-[118px] items-center justify-between rounded-[8px] border border-[#294764] bg-[#16263a] px-6 py-5">
     <div>
@@ -110,6 +117,7 @@ export default function GestaoPocs() {
   const [pocs, setPocs] = useState([]);
   const [stats, setStats] = useState({ total: 0, andamento: 0, bloqueadas: 0, aprovadas: 0, atrasadas: 0 });
   const [opportunities, setOpportunities] = useState([]);
+  const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -156,6 +164,34 @@ export default function GestaoPocs() {
     }
   };
 
+  const loadClients = async () => {
+    try {
+      const [b2bResponse, b2gResponse] = await Promise.all([
+        fetch(buildApiUrl('/companies?clientType=B2B'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/companies?clientType=B2G'), { headers: getAuthHeaders() })
+      ]);
+
+      const [b2bPayload, b2gPayload] = await Promise.all([
+        b2bResponse.json().catch(() => []),
+        b2gResponse.json().catch(() => [])
+      ]);
+
+      const b2bList = Array.isArray(b2bPayload) ? b2bPayload : Array.isArray(b2bPayload.data) ? b2bPayload.data : [];
+      const b2gList = Array.isArray(b2gPayload) ? b2gPayload : Array.isArray(b2gPayload.data) ? b2gPayload.data : [];
+      const byId = new Map();
+
+      [...b2bList.map((item) => normalizeClient(item, 'B2B')), ...b2gList.map((item) => normalizeClient(item, 'B2G'))]
+        .filter((item) => item.id && item.name)
+        .forEach((item) => {
+          if (!byId.has(item.id)) byId.set(item.id, item);
+        });
+
+      setClients(Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+    } catch {
+      setClients([]);
+    }
+  };
+
   useEffect(() => {
     loadPocs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,6 +199,7 @@ export default function GestaoPocs() {
 
   useEffect(() => {
     loadOpportunities();
+    loadClients();
   }, []);
 
   const openNewModal = () => {
@@ -192,6 +229,11 @@ export default function GestaoPocs() {
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleClientChange = (value) => {
+    const client = clients.find((item) => item.id === value);
+    updateForm('client', client?.name || value);
   };
 
   const handleOpportunityChange = (value) => {
@@ -425,7 +467,19 @@ export default function GestaoPocs() {
                   <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} className={inputClass} />
                 </Field>
                 <Field label="Cliente" required>
-                  <input value={form.client} onChange={(event) => updateForm('client', event.target.value)} className={inputClass} />
+                  <SelectShell>
+                    <select value={clients.find((item) => item.name === form.client)?.id || form.client} onChange={(event) => handleClientChange(event.target.value)} className={selectClass}>
+                      <option value="">Selecione um cliente cadastrado</option>
+                      {form.client && !clients.some((item) => item.name === form.client) && (
+                        <option value={form.client}>{form.client}</option>
+                      )}
+                      {clients.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}{item.document ? ` - ${item.document}` : ''} ({item.type})
+                        </option>
+                      ))}
+                    </select>
+                  </SelectShell>
                 </Field>
                 <Field label="Solução / Produto" required>
                   <input value={form.solution} onChange={(event) => updateForm('solution', event.target.value)} className={inputClass} />
