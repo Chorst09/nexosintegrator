@@ -61,6 +61,12 @@ const prismaModelHasField = (modelName, fieldName) => {
   return fields.size === 0 || fields.has(fieldName);
 };
 
+const isB2GCompanyRecord = (company) => {
+  if (!company) return false;
+  if (String(company.clientType || '').toUpperCase() === 'B2G') return true;
+  return /\bB2G\b|GOVERNO|\bGOV\b|LICIT/i.test(String(company.segment || ''));
+};
+
 const USER_ALLOWED_ROLES = ['ADMIN', 'DIRECTOR', 'MANAGER', 'SELLER', 'PRE_SALES', 'USER'];
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const upload = multer({
@@ -1623,11 +1629,13 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
     }
 
     const organizationName = cleanText(notice.organization, 220) || `Órgão B2G ${notice.id.slice(0, 8)}`;
-    let company = await prisma.company.findFirst({
+    const matchingCompanies = await prisma.company.findMany({
       where: {
         name: { equals: organizationName, mode: 'insensitive' }
-      }
+      },
+      take: 10
     });
+    let company = matchingCompanies.find(isB2GCompanyRecord) || null;
 
     let createdCompany = false;
     if (!company) {

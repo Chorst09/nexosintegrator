@@ -1,4 +1,4 @@
-const B2G_SIGNAL_PATTERN = /(\bB2G\b|GOVERNO|\bGOV\b|LICIT)/i;
+const B2G_SIGNAL_PATTERN = /(\bB2G\b|GOVERNO|\bGOV\b|LICIT|EDITAL|TERMO DE REFER[ÊE]NCIA)/i;
 
 const B2G_COMPANY_SIGNAL_FILTERS = [
   { clientType: 'B2G' },
@@ -31,7 +31,9 @@ const hasB2GSignal = (value) => {
 
 const hasB2GDescriptionShape = (value) => {
   const text = toText(value);
-  if (!text || !text.startsWith('{')) return false;
+  if (!text) return false;
+  if (hasB2GSignal(text)) return true;
+  if (!text.startsWith('{')) return false;
   try {
     const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object') return false;

@@ -15,6 +15,53 @@ const parsePathIdFromUrl = (urlValue) => {
 const resolveOpportunityId = (req, body) =>
   body?.id || req.query?.id || parsePathIdFromUrl(req.url);
 
+const normalizeClientType = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  return normalized === 'B2B' || normalized === 'B2G' ? normalized : null;
+};
+
+const hasB2GSignal = (value) => /\bB2G\b|GOVERNO|\bGOV\b|LICIT|EDITAL|TERMO DE REFER[ÊE]NCIA/i.test(String(value || ''));
+
+const hasB2GDescriptionShape = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  if (hasB2GSignal(text)) return true;
+  if (!text.startsWith('{')) return false;
+  try {
+    const parsed = JSON.parse(text);
+    return Boolean(
+      parsed?.noticeId ||
+      parsed?.numeroEdital ||
+      parsed?.orgaoEntidade ||
+      parsed?.faseAtual ||
+      parsed?.modalidade
+    );
+  } catch {
+    return false;
+  }
+};
+
+const inferCompanyClientType = (company, fallback = 'B2B') => {
+  const direct = normalizeClientType(company?.clientType);
+  if (direct) return direct;
+  return hasB2GSignal(company?.segment) ? 'B2G' : fallback;
+};
+
+const inferOpportunityClientType = (opportunity, fallback = 'B2B') => {
+  const direct = normalizeClientType(opportunity?.clientType);
+  if (direct) return direct;
+  if (opportunity?.b2gStage) return 'B2G';
+  if (hasB2GSignal(opportunity?.source)) return 'B2G';
+  if (hasB2GDescriptionShape(opportunity?.description)) return 'B2G';
+  return inferCompanyClientType(opportunity?.company, fallback);
+};
+
+const isOpportunityInClientType = (opportunity, targetClientType) => {
+  const expected = normalizeClientType(targetClientType);
+  if (!expected) return true;
+  return inferOpportunityClientType(opportunity) === expected;
+};
+
 const isSchemaDriftError = (error) => {
   return error?.code === 'P2021' || error?.code === 'P2022';
 };
@@ -117,7 +164,7 @@ const cancelOpenOpportunityCommission = async (tx, opportunityId) => {
 
 export default async function handler(req) {
   if (req.method === "GET") {
-    const { stage, ownerId } = req.query || {};
+    const { stage, ownerId, clientType } = req.query || {};
     
     const where = {};
     if (stage) where.stage = stage;
@@ -159,7 +206,14 @@ export default async function handler(req) {
       ]
     });
     
-    return Response.json(opportunities);
+    const filtered = opportunities
+      .map((item) => ({
+        ...item,
+        clientType: inferOpportunityClientType(item)
+      }))
+      .filter((item) => isOpportunityInClientType(item, clientType));
+
+    return Response.json(filtered);
   }
 
   if (req.method === "POST") {
