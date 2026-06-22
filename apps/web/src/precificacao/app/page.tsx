@@ -5,7 +5,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { 
   Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2
 } from 'lucide-react';
-import { PricingSidebar } from '@/app/components/pricing-sidebar';
 import { PricingSimulator } from '@/app/components/pricing-simulator';
 import { DREGenerator } from '@/app/components/dre-generator';
 import { AIAnalysis } from '@/app/components/ai-analysis';
@@ -20,9 +19,11 @@ import { cn } from '@/lib/utils';
 import { scenarioService, SavedScenario } from '@/services/scenario-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Toaster } from '@/components/ui/toaster';
+import { loadCalculatorPricingSettings } from '@/app/lib/calculator-settings';
 
 export default function FinEdgeApp() {
   const { toast } = useToast();
+  const calculatorPricingSettings = loadCalculatorPricingSettings();
   const [params, setParams] = useState<PricingInput>({
     upfrontItems: [
       { id: 'u1', name: 'Implantação & Onboarding', description: 'Processo completo de configuração inicial.', quantity: 1, unitCost: 15000 },
@@ -34,8 +35,10 @@ export default function FinEdgeApp() {
     ],
     durationMonths: 36,
     markupPercentage: 40,
-    taxRatePercentage: 14.5,
-    commissionPercentage: 5,
+    taxRatePercentage: calculatorPricingSettings.taxRatePercentage,
+    commissionPercentage: calculatorPricingSettings.commissionPercentage,
+    operatingExpensePercentage: calculatorPricingSettings.operatingExpensePercentage,
+    taxRegimeName: calculatorPricingSettings.regimeName,
   });
 
   const [results, setResults] = useState<PricingOutput>(() => PricingEngine.calculate(params));
@@ -54,6 +57,23 @@ export default function FinEdgeApp() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    const refreshCalculatorSettings = () => {
+      const next = loadCalculatorPricingSettings();
+      setParams(prev => ({
+        ...prev,
+        taxRatePercentage: next.taxRatePercentage,
+        commissionPercentage: next.commissionPercentage,
+        operatingExpensePercentage: next.operatingExpensePercentage,
+        taxRegimeName: next.regimeName,
+      }));
+    };
+
+    refreshCalculatorSettings();
+    window.addEventListener('storage', refreshCalculatorSettings);
+    return () => window.removeEventListener('storage', refreshCalculatorSettings);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -176,20 +196,8 @@ export default function FinEdgeApp() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Side Pane: Global Settings (Left) */}
-          <aside className="lg:col-span-3 xl:col-span-3 sticky top-8">
-            <PricingSidebar 
-              params={params} 
-              onChange={handleInputChange} 
-              onCalculate={handleCalculate}
-              isCalculating={isCalculating}
-            />
-          </aside>
-
-          {/* Main Content Area (Right) */}
-          <main className="lg:col-span-9 xl:col-span-9 space-y-8">
+        <div className="grid grid-cols-1 gap-8 items-start">
+          <main className="space-y-8">
             <Tabs defaultValue="simulator" className="w-full">
               <div className="flex justify-between items-center mb-6 overflow-x-auto pb-2">
                 <TabsList className="bg-white border border-slate-200 p-1.5 h-auto rounded-2xl shadow-sm">
@@ -217,11 +225,15 @@ export default function FinEdgeApp() {
               <TabsContent value="simulator" className="focus-visible:outline-none space-y-8">
                 <PricingSimulator results={results} params={params} />
                 <ProductManager 
+                  params={params}
                   upfrontItems={params.upfrontItems}
                   recurringItems={params.recurringItems}
+                  onParamChange={handleInputChange}
                   onItemChange={handleItemChange}
                   onAddItem={handleAddItem}
                   onRemoveItem={handleRemoveItem}
+                  onCalculate={handleCalculate}
+                  isCalculating={isCalculating}
                 />
               </TabsContent>
 

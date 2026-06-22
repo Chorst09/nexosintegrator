@@ -14,6 +14,8 @@ export interface PricingInput {
   markupPercentage: number;  
   taxRatePercentage: number; 
   commissionPercentage: number; 
+  operatingExpensePercentage?: number;
+  taxRegimeName?: string;
 }
 
 export interface FinancialStatementLine {
@@ -54,8 +56,9 @@ export class PricingEngine {
   static calculate(input: PricingInput): PricingOutput {
     const { 
       upfrontItems, recurringItems, markupPercentage, 
-      durationMonths, taxRatePercentage, commissionPercentage 
+      durationMonths, taxRatePercentage, commissionPercentage
     } = input;
+    const operatingExpensePercentage = input.operatingExpensePercentage || 0;
 
     const safeDuration = durationMonths > 0 ? durationMonths : 1;
 
@@ -89,7 +92,8 @@ export class PricingEngine {
     const monthlyGrossProfit = monthlyNetRevenue - monthlyCogs;
     
     const monthlyCommissions = monthlyGrossRevenue * (commissionPercentage / 100);
-    const monthlyNetIncome = monthlyGrossProfit - monthlyCommissions;
+    const monthlyOperatingExpenses = monthlyGrossRevenue * (operatingExpensePercentage / 100);
+    const monthlyNetIncome = monthlyGrossProfit - monthlyCommissions - monthlyOperatingExpenses;
 
     // 3. Métricas
     const totalNetProfit = monthlyNetIncome * safeDuration;
@@ -124,7 +128,7 @@ export class PricingEngine {
         cogs: createLine("(-) Custos Operacionais / CPV", monthlyCogs),
         grossProfit: createLine("(=) Margem de Contribuição", monthlyGrossProfit, true),
         commissions: createLine(`(-) Comissões de Vendas (${commissionPercentage}%)`, monthlyCommissions),
-        operatingExpenses: createLine("(-) Despesas Fixas", 0), 
+        operatingExpenses: createLine(`(-) Encargos e Despesas Comerciais (${operatingExpensePercentage}%)`, monthlyOperatingExpenses),
         netIncome: createLine("(=) Lucro Líquido Operacional", monthlyNetIncome, true),
       }
     };

@@ -2,30 +2,38 @@
 'use client';
 
 import React from 'react';
-import { Plus, Trash2, Package, Layers, Info, AlignLeft } from 'lucide-react';
+import { Calculator, Loader2, Plus, Trash2, Package, Layers, Info } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ProductItem } from '@/app/lib/pricing-engine';
+import { PricingInput, ProductItem } from '@/app/lib/pricing-engine';
 import { formatCurrency } from '@/app/lib/formatters';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
 
 interface ProductManagerProps {
+  params: PricingInput;
   upfrontItems: ProductItem[];
   recurringItems: ProductItem[];
+  onParamChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onItemChange: (type: 'upfront' | 'recurring', id: string, field: keyof ProductItem, value: string | number) => void;
   onAddItem: (type: 'upfront' | 'recurring') => void;
   onRemoveItem: (type: 'upfront' | 'recurring', id: string) => void;
+  onCalculate: () => void;
+  isCalculating: boolean;
 }
 
 export function ProductManager({ 
+  params,
   upfrontItems, 
   recurringItems, 
+  onParamChange,
   onItemChange, 
   onAddItem, 
-  onRemoveItem 
+  onRemoveItem,
+  onCalculate,
+  isCalculating,
 }: ProductManagerProps) {
   
   const renderItemSection = (title: string, description: string, type: 'upfront' | 'recurring', items: ProductItem[], icon: React.ReactNode) => {
@@ -130,7 +138,7 @@ export function ProductManager({
   return (
     <Card className="rounded-[2.5rem] border-slate-200 shadow-sm overflow-hidden bg-white">
       <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <CardTitle className="text-xl font-bold font-headline flex items-center">
               <Layers className="w-5 h-5 mr-3 text-primary" />
@@ -138,19 +146,68 @@ export function ProductManager({
             </CardTitle>
             <CardDescription className="text-sm mt-1">Gerencie detalhadamente os itens de setup e os custos recorrentes do contrato.</CardDescription>
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="p-2 bg-slate-100 rounded-full cursor-help">
-                  <Info className="w-4 h-4 text-slate-400" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                O Setup é amortizado ao longo do contrato. O Custo Recorrente é somado mensalmente ao valor final.
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[160px_160px_auto] gap-3 xl:min-w-[520px]">
+            <div>
+              <Label className="text-[10px] text-slate-400 mb-1 block uppercase tracking-widest">Duração (Meses)</Label>
+              <Input
+                type="number"
+                name="durationMonths"
+                value={params.durationMonths}
+                onChange={onParamChange}
+                className="h-11 text-right bg-white rounded-xl border-slate-200 font-bold"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-slate-400 mb-1 block uppercase tracking-widest">Markup Desejado (%)</Label>
+              <Input
+                type="number"
+                name="markupPercentage"
+                value={params.markupPercentage}
+                onChange={onParamChange}
+                className="h-11 text-right bg-white rounded-xl border-slate-200 font-bold text-primary"
+              />
+            </div>
+            <Button
+              onClick={onCalculate}
+              disabled={isCalculating}
+              className="h-11 self-end rounded-xl bg-primary hover:bg-primary/90 text-white font-bold shadow-md"
+            >
+              {isCalculating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}
+              {isCalculating ? 'Processando...' : 'Recalcular'}
+            </Button>
+          </div>
         </div>
+        <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+          <div>
+            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Regime da Calculadora</p>
+            <p className="font-semibold text-slate-800">{params.taxRegimeName || 'Configurações Gerais'}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Impostos</p>
+            <p className="font-semibold text-slate-800">{params.taxRatePercentage}%</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Comissão Serviço</p>
+            <p className="font-semibold text-slate-800">{params.commissionPercentage}%</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Encargos Comerciais</p>
+            <p className="font-semibold text-slate-800">{params.operatingExpensePercentage || 0}%</p>
+          </div>
+        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="mt-3 inline-flex items-center gap-2 text-xs text-slate-400 cursor-help">
+                <Info className="w-3.5 h-3.5" />
+                Tributário & Comercial vem do ícone Configurações da Calculadora.
+              </p>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              Impostos, comissão e encargos comerciais são lidos de Configurações Gerais e Tributárias da Calculadora.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </CardHeader>
       <CardContent className="p-8 space-y-12">
         {renderItemSection(
