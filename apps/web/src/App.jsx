@@ -18,6 +18,7 @@ import Automacoes from './pages/Automacoes';
 import LeadManagement from './pages/LeadManagement';
 import PreVendas from './pages/PreVendas';
 import Calculadoras from './pages/Calculadoras';
+import Precificacao from './precificacao/app/page';
 import RatearProdutos from './pages/RatearProdutos';
 import RateiosSalvos from './pages/RateiosSalvos';
 import GestaoPocs from './pages/GestaoPocs';
@@ -285,6 +286,14 @@ export default function App() {
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
                 <Calculadoras />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="precificacao"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
+                <Precificacao />
               </RoleGuard>
             }
           />

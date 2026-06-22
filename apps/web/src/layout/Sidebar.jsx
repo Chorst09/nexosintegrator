@@ -155,6 +155,7 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
         { path: '/prevendas-fornecedores', label: 'Fornecedores', icon: Package, description: 'Base de fornecedores homologados' },
         { path: '/prevendas-registro-oportunidades', label: 'Registro de Oportunidades', icon: Target, description: 'Registro técnico para Pré-Vendas' },
         { path: '/calculadoras', label: 'Calculadoras', icon: Calculator, description: 'Venda, locacao e servicos' },
+        { path: '/precificacao', label: 'Precificação', icon: Calculator, description: 'DRE, simulador, analytics e rateio' },
         { path: '/ratear-produtos', label: 'Ratear Produtos', icon: Calculator, description: 'Rateio de despesas por produto' },
         { path: '/rateios-salvos', label: 'Rateios Salvos', icon: History, description: 'Historico de rateios executados' },
         { path: '/gestao-pocs', label: 'Gestão de POCs', icon: Beaker, description: 'Planejamento e validação de provas de conceito' }

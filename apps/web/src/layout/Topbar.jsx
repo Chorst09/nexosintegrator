@@ -29,6 +29,7 @@ const ROUTE_META = {
   '/prevendas-registro-oportunidades': { title: 'Registro de Oportunidades', subtitle: 'Registro técnico de oportunidades do Pré-Vendas' },
   '/prevendas-cadastros': { title: 'Cadastros Pré-Vendas', subtitle: 'Distribuidores, fornecedores e registro de oportunidades' },
   '/calculadoras': { title: 'Calculadoras', subtitle: 'Simulacoes e precos' },
+  '/precificacao': { title: 'Precificação', subtitle: 'DRE, rateio mensal e analytics' },
   '/ratear-produtos': { title: 'Ratear Produtos', subtitle: 'Rateio de despesas por produto' },
   '/rateios-salvos': { title: 'Rateios Salvos', subtitle: 'Historico de rateios de Pre-Vendas' },
   '/leads': { title: 'Lead Management', subtitle: 'Qualificacao e distribuicao' },

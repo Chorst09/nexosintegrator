@@ -1,0 +1,92 @@
+
+import { db } from "@/lib/firebase";
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  query, 
+  orderBy, 
+  limit, 
+  serverTimestamp,
+  Timestamp 
+} from "firebase/firestore";
+import { PricingInput, PricingOutput } from "@/app/lib/pricing-engine";
+
+export interface SavedScenario {
+  id: string;
+  inputs: PricingInput;
+  results: PricingOutput;
+  createdAt: Timestamp;
+}
+
+const SCENARIOS_COLLECTION = "pricingScenarios";
+const LOCAL_SCENARIOS_KEY = "precificacao_pricing_scenarios_v1";
+
+const readLocalScenarios = (): SavedScenario[] => {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_SCENARIOS_KEY) || "[]") as SavedScenario[];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalScenario = (inputs: PricingInput, results: PricingOutput) => {
+  const scenario = {
+    id: crypto.randomUUID?.() || `${Date.now()}`,
+    inputs,
+    results,
+    createdAt: {
+      toDate: () => new Date(),
+    },
+  } as SavedScenario;
+
+  const next = [scenario, ...readLocalScenarios()].slice(0, 10);
+  localStorage.setItem(LOCAL_SCENARIOS_KEY, JSON.stringify(next));
+  return scenario.id;
+};
+
+export const scenarioService = {
+  async saveScenario(inputs: PricingInput, results: PricingOutput) {
+    try {
+      // Verifica se o Firebase está inicializado (evita erro se as envs estiverem vazias)
+      if (!db) {
+        console.warn("Firebase não inicializado. O cenário não será salvo.");
+        return saveLocalScenario(inputs, results);
+      }
+
+      // Limpeza profunda para garantir que os dados são serializáveis para o Firestore
+      const cleanInputs = JSON.parse(JSON.stringify(inputs));
+      const cleanResults = JSON.parse(JSON.stringify(results));
+
+      const docRef = await addDoc(collection(db, SCENARIOS_COLLECTION), {
+        inputs: cleanInputs,
+        results: cleanResults,
+        createdAt: serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Erro ao salvar cenário no Firestore:", error);
+      throw error;
+    }
+  },
+
+  async getLatestScenarios(max = 10): Promise<SavedScenario[]> {
+    try {
+      if (!db) return readLocalScenarios().slice(0, max);
+      
+      const q = query(
+        collection(db, SCENARIOS_COLLECTION), 
+        orderBy("createdAt", "desc"), 
+        limit(max)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as SavedScenario[];
+    } catch (error) {
+      console.error("Erro ao buscar cenários:", error);
+      return [];
+    }
+  }
+};
