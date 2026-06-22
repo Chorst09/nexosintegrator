@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Share2, ArrowRight, Info, CheckCircle2, Circle, 
   BarChart3, Layers, Target, ArrowDownRight, ArrowUpRight,
-  Settings2, Clock, Eye, Pencil, Save, Trash2, X
+  Settings2, Clock, Eye, Pencil, Printer, Save, Trash2, X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,6 +47,20 @@ interface SavedAllocation {
 }
 
 const SAVED_ALLOCATIONS_KEY = 'precificacao_rateios_mensais_v1';
+
+const escapeHtml = (value: unknown) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const formatPercent = (value: number) => `${Number.isFinite(value) ? value.toFixed(1) : '0.0'}%`;
+
+const formatDateTime = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('pt-BR');
+};
 
 export function ProductAllocation({ params }: ProductAllocationProps) {
   const [method, setMethod] = useState<AllocationMethod>('proportional');
@@ -222,6 +236,361 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
     showMessage('Rateio carregado para edição.');
   };
 
+  const openAllocationPdf = (allocation: SavedAllocation) => {
+    const printWindow = window.open('', '_blank', 'width=1024,height=768');
+    if (!printWindow) {
+      showMessage('Não foi possível abrir o PDF. Libere pop-ups e tente novamente.');
+      return;
+    }
+
+    const totalOriginal = allocation.results.reduce((sum, item) => sum + item.originalMonthlyCost, 0);
+    const totalLoaded = allocation.results.reduce((sum, item) => sum + item.totalMonthlyCost, 0);
+    const totalSources = allocation.results.reduce((sum, item) => sum + item.breakdown.length, 0);
+    const methodLabel = allocation.method === 'proportional' ? 'Proporcional' : 'Igualitário';
+
+    const resultRows = allocation.results.map((result) => {
+      const variation = result.originalMonthlyCost > 0
+        ? (result.allocatedMonthlyCost / result.originalMonthlyCost) * 100
+        : 0;
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(result.name)}</strong>
+            <span>${formatPercent(result.percentageOfTotal)} do P&L mensal</span>
+          </td>
+          <td>${formatCurrency(result.originalMonthlyCost)}</td>
+          <td class="positive">+${formatCurrency(result.allocatedMonthlyCost)}</td>
+          <td class="strong">${formatCurrency(result.totalMonthlyCost)}</td>
+          <td>${formatPercent(variation)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const breakdownBlocks = allocation.results.map((result) => {
+      const rows = result.breakdown.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.sourceName)}</td>
+          <td class="positive">+${formatCurrency(item.amount)}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <section class="breakdown">
+          <h3>${escapeHtml(result.name)}</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Fonte Absorvida</th>
+                <th>Valor Mensal</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </section>
+      `;
+    }).join('');
+
+    const html = `
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(allocation.name)} - Rateio Mensal</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #e5e7eb;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      background: #fff;
+      padding: 18mm;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, .18);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      border-bottom: 3px solid #0f172a;
+      padding-bottom: 18px;
+      margin-bottom: 18px;
+    }
+    .brand {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: #0369a1;
+    }
+    h1 {
+      margin: 8px 0 4px;
+      font-size: 28px;
+      line-height: 1.08;
+      color: #0f172a;
+    }
+    .subtitle {
+      margin: 0;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-meta {
+      min-width: 170px;
+      text-align: right;
+      font-size: 11px;
+      color: #475569;
+      line-height: 1.7;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 18px 0;
+    }
+    .metric {
+      border: 1px solid #dbeafe;
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 76px;
+    }
+    .metric label {
+      display: block;
+      color: #64748b;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .metric strong {
+      display: block;
+      color: #0f172a;
+      font-size: 16px;
+      line-height: 1.15;
+    }
+    .metric.accent {
+      background: #ecfeff;
+      border-color: #67e8f9;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 24px 0 8px;
+      gap: 12px;
+    }
+    h2 {
+      margin: 0;
+      font-size: 15px;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .note {
+      margin: 0;
+      color: #64748b;
+      font-size: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+    th {
+      background: #0f172a;
+      color: #fff;
+      text-align: left;
+      font-size: 9px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 10px;
+    }
+    td {
+      border-top: 1px solid #e2e8f0;
+      padding: 10px;
+      vertical-align: top;
+      color: #334155;
+    }
+    td span {
+      display: block;
+      margin-top: 3px;
+      color: #64748b;
+      font-size: 9px;
+    }
+    .positive { color: #047857; font-weight: 700; }
+    .strong { color: #0f172a; font-weight: 800; }
+    .breakdown {
+      break-inside: avoid;
+      margin-top: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .breakdown h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: #0f172a;
+    }
+    .breakdown table {
+      border-radius: 8px;
+      font-size: 10px;
+    }
+    .footer {
+      margin-top: 24px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+      color: #64748b;
+      font-size: 9px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+      background: rgba(15, 23, 42, .92);
+      backdrop-filter: blur(8px);
+    }
+    .toolbar button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: #0ea5e9;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .page {
+        width: auto;
+        min-height: auto;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+      }
+      .breakdown { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Imprimir / Salvar PDF</button>
+  </div>
+  <main class="page">
+    <header class="header">
+      <div>
+        <div class="brand">ChorstConsult · Precificação</div>
+        <h1>Relatório de Rateio Mensal</h1>
+        <p class="subtitle">${escapeHtml(allocation.name)}<br />Valores mensalizados conforme prazo do contrato.</p>
+      </div>
+      <div class="doc-meta">
+        <strong>Documento para PDF</strong><br />
+        Criado em: ${escapeHtml(formatDateTime(allocation.createdAt))}<br />
+        Atualizado em: ${escapeHtml(formatDateTime(allocation.updatedAt))}<br />
+        Emitido em: ${escapeHtml(new Date().toLocaleString('pt-BR'))}
+      </div>
+    </header>
+
+    <section class="summary">
+      <div class="metric">
+        <label>Contrato</label>
+        <strong>${allocation.durationMonths} meses</strong>
+      </div>
+      <div class="metric">
+        <label>Método</label>
+        <strong>${escapeHtml(methodLabel)}</strong>
+      </div>
+      <div class="metric accent">
+        <label>Total Rateado / Mês</label>
+        <strong>${formatCurrency(allocation.totalMonthlyAllocated)}</strong>
+      </div>
+      <div class="metric">
+        <label>Produtos Alvo</label>
+        <strong>${allocation.results.length}</strong>
+      </div>
+    </section>
+
+    <section class="summary">
+      <div class="metric">
+        <label>Custo Original / Mês</label>
+        <strong>${formatCurrency(totalOriginal)}</strong>
+      </div>
+      <div class="metric">
+        <label>Custo Carregado / Mês</label>
+        <strong>${formatCurrency(totalLoaded)}</strong>
+      </div>
+      <div class="metric">
+        <label>Fontes Aplicadas</label>
+        <strong>${totalSources}</strong>
+      </div>
+      <div class="metric">
+        <label>Base do Cálculo</label>
+        <strong>Mensal</strong>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <h2>Resumo por Produto</h2>
+      <p class="note">Original + rateado = custo mensal carregado</p>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Produto / Serviço</th>
+          <th>Original / Mês</th>
+          <th>Rateado / Mês</th>
+          <th>Carregado / Mês</th>
+          <th>Variação</th>
+        </tr>
+      </thead>
+      <tbody>${resultRows}</tbody>
+    </table>
+
+    <div class="section-title">
+      <h2>Detalhamento das Fontes</h2>
+      <p class="note">Distribuição mensal absorvida por cada produto alvo</p>
+    </div>
+    ${breakdownBlocks}
+
+    <footer class="footer">
+      <span>Relatório gerado automaticamente pelo módulo Pre-vendas · Precificação.</span>
+      <span>Rateio mensal pronto para impressão ou salvamento em PDF.</span>
+    </footer>
+  </main>
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () { window.print(); }, 350);
+    }, { once: true });
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   const handleViewAllocation = (allocation: SavedAllocation) => {
     setAllocationName(allocation.name);
     setMethod(allocation.method);
@@ -229,7 +598,8 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
     setSourceIds(new Set(allocation.sourceIds));
     setEditingId(null);
     setViewingAllocation(allocation);
-    showMessage('Rateio carregado para visualização.');
+    openAllocationPdf(allocation);
+    showMessage('PDF do rateio aberto para impressão.');
   };
 
   const handleDeleteAllocation = (id: string) => {
@@ -427,11 +797,11 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleViewAllocation(allocation)}
-                        title="Visualizar rateio"
+                        title="Visualizar PDF para impressão"
                         className="h-9 rounded-xl border border-slate-200 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center gap-1.5 transition-colors"
                       >
-                        <Eye className="w-4 h-4" />
-                        Visualizar
+                        <Printer className="w-4 h-4" />
+                        PDF
                       </button>
                       <button
                         onClick={() => handleEditAllocation(allocation)}
