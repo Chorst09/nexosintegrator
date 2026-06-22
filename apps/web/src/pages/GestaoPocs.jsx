@@ -394,8 +394,8 @@ export default function GestaoPocs() {
       </section>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4">
-          <form onSubmit={savePoc} className="mx-auto my-2 w-full max-w-[1380px] rounded-[8px] border border-[#294764] bg-[#09182a] p-8 shadow-2xl">
+        <div className="fixed inset-y-0 left-0 right-0 z-50 overflow-y-auto bg-black/70 p-4 lg:left-[312px]">
+          <form onSubmit={savePoc} className="mx-auto my-2 w-full max-w-[1320px] rounded-[8px] border border-[#294764] bg-[#09182a] p-6 shadow-2xl sm:p-8">
             <div className="mb-8 flex items-start justify-between gap-6">
               <div>
                 <h2 className="text-[26px] font-semibold text-slate-50">{editingPoc ? 'Editar POC' : 'Nova POC'}</h2>
