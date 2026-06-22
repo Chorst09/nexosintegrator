@@ -5,8 +5,14 @@ const prisma = new PrismaClient();
 async function main() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "Opportunity"
+      ADD COLUMN IF NOT EXISTS "number" TEXT,
       ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
       ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "Opportunity_number_key"
+      ON "Opportunity"("number");
   `);
 
   await prisma.$executeRawUnsafe(`

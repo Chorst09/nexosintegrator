@@ -257,6 +257,19 @@ export async function distributeLeadToSeller(companyId, strategy = DISTRIBUTION_
 }
 
 // Criar oportunidade automaticamente para novo lead
+async function generateOpportunityNumber(tx, clientType = 'B2B') {
+  const type = String(clientType || 'B2B').toUpperCase() === 'B2G' ? 'B2G' : 'B2B';
+  const year = new Date().getFullYear();
+  const prefix = `${type}-${year}-`;
+  const latest = await tx.opportunity.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: 'desc' },
+    select: { number: true }
+  });
+  const latestSequence = Number(String(latest?.number || '').slice(prefix.length)) || 0;
+  return `${prefix}${String(latestSequence + 1).padStart(5, '0')}`;
+}
+
 export async function createOpportunityForLead(companyId, strategy = DISTRIBUTION_STRATEGIES.LOAD_BALANCE) {
   try {
     const company = await prisma.company.findUnique({
@@ -294,23 +307,28 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
     const assignedSeller = await distributeLeadToSeller(companyId, strategy);
 
     // Criar oportunidade
-    const opportunity = await prisma.opportunity.create({
-      data: {
-        title: `Lead - ${company.name}`,
-        description: `Lead automático gerado para ${company.name}`,
-        value: 0, // Será atualizado pelo vendedor
-        probability: 25, // Probabilidade inicial baixa
-        stage: 'LEAD',
-        source: 'MANUAL', // Pode ser ajustado conforme a origem
-        companyId,
-        ownerId: assignedSeller.id
-      },
-      include: {
-        company: true,
-        owner: {
-          select: { id: true, name: true, email: true }
+    const opportunity = await prisma.$transaction(async (tx) => {
+      const clientType = String(company.clientType || '').toUpperCase() === 'B2G' ? 'B2G' : 'B2B';
+      const number = await generateOpportunityNumber(tx, clientType);
+      return tx.opportunity.create({
+        data: {
+          number,
+          title: `Lead - ${company.name}`,
+          description: `Lead automático gerado para ${company.name}`,
+          value: 0, // Será atualizado pelo vendedor
+          probability: 25, // Probabilidade inicial baixa
+          stage: 'LEAD',
+          source: 'MANUAL', // Pode ser ajustado conforme a origem
+          companyId,
+          ownerId: assignedSeller.id
+        },
+        include: {
+          company: true,
+          owner: {
+            select: { id: true, name: true, email: true }
+          }
         }
-      }
+      });
     });
 
     // Criar atividade de follow-up automática

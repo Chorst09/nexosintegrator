@@ -62,6 +62,26 @@ const isOpportunityInClientType = (opportunity, targetClientType) => {
   return inferOpportunityClientType(opportunity) === expected;
 };
 
+const resolveRequestedClientType = (body = {}, query = {}) => {
+  const explicit = normalizeClientType(body.clientType || query.clientType);
+  if (explicit) return explicit;
+  if (body.b2gStage || hasB2GSignal(body.source) || hasB2GDescriptionShape(body.description)) return 'B2G';
+  return 'B2B';
+};
+
+const generateOpportunityNumber = async (tx, clientType = 'B2B') => {
+  const type = normalizeClientType(clientType) || 'B2B';
+  const year = new Date().getFullYear();
+  const prefix = `${type}-${year}-`;
+  const latest = await tx.opportunity.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: 'desc' },
+    select: { number: true }
+  });
+  const latestSequence = Number(String(latest?.number || '').slice(prefix.length)) || 0;
+  return `${prefix}${String(latestSequence + 1).padStart(5, '0')}`;
+};
+
 const isSchemaDriftError = (error) => {
   return error?.code === 'P2021' || error?.code === 'P2022';
 };
@@ -220,10 +240,13 @@ export default async function handler(req) {
     const body = await req.json();
     const projectType = normalizeProjectType(body.projectType);
     const projectMonths = normalizeProjectMonths(projectType, body.projectMonths);
+    const clientType = resolveRequestedClientType(body, req.query || {});
     
     const opportunity = await prisma.$transaction(async (tx) => {
+      const number = body.number || await generateOpportunityNumber(tx, clientType);
       const created = await tx.opportunity.create({
         data: {
+          number,
           title: body.title,
           projectType,
           projectMonths,

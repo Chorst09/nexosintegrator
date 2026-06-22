@@ -552,11 +552,11 @@ export default function LeadManagement() {
 
       {/* Header */}
       <PageHeader
-        title="Gestão de Leads"
+        title="Lead"
         subtitle="Sistema inteligente de pontuação e distribuição de leads"
         icon={Target}
         gradient="blue"
-        breadcrumbs={['CRM', 'Gestão de Leads']}
+        breadcrumbs={['CRM', 'Lead']}
         actions={[
           {
             label: 'Novo Lead',

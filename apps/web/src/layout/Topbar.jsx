@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 const ROUTE_META = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Visao geral e indicadores' },
   '/empresas': { title: 'Empresas', subtitle: 'Clientes, prospects e contatos' },
-  '/oportunidades': { title: 'Pipeline', subtitle: 'Kanban, negociacoes e previsao' },
+  '/oportunidades': { title: 'Oportunidades', subtitle: 'Kanban, negociacoes e previsao' },
   '/atividades': { title: 'Atividades', subtitle: 'Tarefas, follow-ups e agenda' },
   '/produtos': { title: 'Produtos', subtitle: 'Catalogo e precificacao' },
   '/propostas': { title: 'Propostas', subtitle: 'Cotas, templates e aprovacao' },
@@ -32,7 +32,7 @@ const ROUTE_META = {
   '/precificacao': { title: 'Precificação', subtitle: 'DRE, rateio mensal e analytics' },
   '/ratear-produtos': { title: 'Ratear Produtos', subtitle: 'Rateio de despesas por produto' },
   '/rateios-salvos': { title: 'Rateios Salvos', subtitle: 'Historico de rateios de Pre-Vendas' },
-  '/leads': { title: 'Lead Management', subtitle: 'Qualificacao e distribuicao' },
+  '/leads': { title: 'Lead', subtitle: 'Qualificacao e distribuicao' },
   '/b2g-editais': { title: 'B2G GOVERNO', subtitle: 'Operação comercial B2G' },
   '/b2g-dashboard': { title: 'B2G Dashboard', subtitle: 'Visao executiva dos editais e pipeline público' },
   '/b2g-leads': { title: 'B2G Leads', subtitle: 'Orgaos e contas priorizadas por potencial' },

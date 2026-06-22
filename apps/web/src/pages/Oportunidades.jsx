@@ -96,7 +96,7 @@ export default function Oportunidades() {
   const requestedClientType = normalizeClientType(searchParams.get('clientType'));
   const pipelineClientType = requestedClientType || 'B2B';
   const pipelineLabel = pipelineClientType === 'B2G' ? 'B2G Governo' : 'B2B Privado';
-  const pipelineTitle = pipelineClientType === 'B2G' ? 'Pipeline B2G' : 'Pipeline de Vendas';
+  const pipelineTitle = pipelineClientType === 'B2G' ? 'Oportunidades B2G' : 'Oportunidades';
   const pipelineSubtitle = pipelineClientType === 'B2G'
     ? 'Edição de oportunidades do funil público sem mistura com o pipeline B2B.'
     : 'Gerencie oportunidades e acompanhe o funil de vendas em tempo real';
@@ -376,6 +376,7 @@ export default function Oportunidades() {
       // Construir body explicitamente — nunca usar spread para evitar campos inválidos no Prisma
       const body = {
         id: selectedOpportunity?.id,
+        clientType: pipelineClientType,
         title: payloadFormData.title || '',
         projectName: payloadFormData.projectName || payloadFormData.title || '',
         projectClientType: payloadFormData.projectClientType || null,
@@ -587,7 +588,7 @@ export default function Oportunidades() {
         <AnimatedStats
           title="Valor Total"
           value={formatCurrency(filteredStats.totalValue)}
-          subtitle="Pipeline completo"
+          subtitle="Oportunidades abertas e históricas"
           icon={DollarSign}
           color="green"
           trend={{ direction: 'up', value: '+18% este mês' }}
@@ -612,7 +613,7 @@ export default function Oportunidades() {
         />
       </div>
 
-      {/* Abas: Pipeline / Histórico */}
+      {/* Abas: Oportunidades / Histórico */}
       <div className="flex gap-1 rounded-2xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] p-1.5 w-fit shadow-sm">
         <button
           onClick={() => setViewMode('pipeline')}
@@ -623,7 +624,7 @@ export default function Oportunidades() {
           }`}
         >
           <Target className="w-4.5 h-4.5" />
-          Pipeline
+          Oportunidades
         </button>
         <button
           onClick={() => setViewMode('historico')}
@@ -686,7 +687,7 @@ export default function Oportunidades() {
         </div>
       </div>
 
-      {/* Pipeline Kanban */}
+      {/* Kanban de oportunidades */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map(stage => (
           <div
@@ -762,6 +763,11 @@ export default function Oportunidades() {
                             <p className="text-sm font-bold text-[var(--crm-ink)] leading-snug line-clamp-2">
                               {opp.company?.name || 'Cliente não informado'}
                             </p>
+                            {opp.number && (
+                              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[rgb(var(--crm-accent-rgb))]">
+                                {opp.number}
+                              </p>
+                            )}
                             <p className="text-xs text-[var(--crm-muted)] mt-0.5 line-clamp-1">
                               Projeto: {opp.projectName || opp.title || 'Não informado'}
                             </p>
@@ -973,6 +979,11 @@ export default function Oportunidades() {
         >
           <div className="space-y-6">
             <div className="rounded-2xl border border-[color:var(--crm-border)] bg-[linear-gradient(155deg,rgb(var(--crm-surface-rgb)_/_0.95)_0%,rgb(var(--crm-surface-rgb)_/_0.86)_60%,rgb(var(--crm-accent-rgb)_/_0.1)_100%)] p-5 md:p-6 shadow-[0_24px_65px_rgba(2,8,23,0.35)]">
+              {selectedOpportunity.number && (
+                <div className="mb-4 inline-flex rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.35)] bg-[rgb(var(--crm-accent-rgb)_/_0.12)] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[rgb(var(--crm-accent-rgb))]">
+                  Nº {selectedOpportunity.number}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="rounded-2xl border border-emerald-300/35 bg-[linear-gradient(140deg,rgba(16,185,129,0.2),rgba(5,46,22,0.5))] p-5">
                   <h3 className="text-xs uppercase tracking-[0.08em] font-semibold text-emerald-100/90">Valor da Oportunidade</h3>

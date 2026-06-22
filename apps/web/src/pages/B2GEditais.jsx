@@ -3555,6 +3555,7 @@ export default function B2GEditais() {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
+            clientType: 'B2G',
             title: oppTitle,
             description: JSON.stringify(b2gData),
             value: 0,
@@ -5042,6 +5043,11 @@ export default function B2GEditais() {
                                         <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--crm-ink)]">
                                           {item.projectName || item.title || 'Oportunidade sem título'}
                                         </p>
+                                        {item.number && (
+                                          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--crm-accent)]">
+                                            {item.number}
+                                          </p>
+                                        )}
                                         {item.projectName && item.title && item.title !== item.projectName && (
                                           <p className="mt-0.5 line-clamp-1 text-xs text-[var(--crm-muted)]">
                                             Oportunidade: {item.title}
@@ -5204,6 +5210,11 @@ export default function B2GEditais() {
                     role="button"
                     tabIndex={0}
                   >
+                    {item.number && (
+                      <div className="mb-2 inline-flex rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.35)] bg-[rgb(var(--crm-accent-rgb)_/_0.1)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--crm-accent)]">
+                        {item.number}
+                      </div>
+                    )}
                     <div className="text-base font-bold text-[var(--crm-ink)] line-clamp-2">{item.title}</div>
                     <div className="mt-1 text-xs text-[var(--crm-muted)]">
                       {item.company?.name || 'Empresa não informada'}
@@ -7402,6 +7413,11 @@ export default function B2GEditais() {
       >
         {selectedOpportunity && (
           <div className="space-y-4">
+            {selectedOpportunity.number && (
+              <div className="inline-flex rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.35)] bg-[rgb(var(--crm-accent-rgb)_/_0.1)] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[var(--crm-accent)]">
+                Nº {selectedOpportunity.number}
+              </div>
+            )}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="crm-card p-4">
                 <div className="text-xs text-[var(--crm-muted)]">Valor</div>

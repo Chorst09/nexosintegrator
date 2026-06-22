@@ -117,9 +117,9 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
       items: [
         { path: '/dashboard', label: 'Dashboard B2B', icon: BarChart3, description: 'Visao geral do negocio' },
         { path: '/empresas', label: 'Empresas', icon: Building2, description: 'Clientes e prospects' },
-        { path: '/oportunidades', label: 'Pipeline', icon: Target, description: 'Funil e negociacoes' },
+        { path: '/oportunidades', label: 'Oportunidades', icon: Target, description: 'Funil e negociacoes' },
         { path: '/atividades', label: 'Atividades', icon: CalendarCheck2, description: 'Tarefas e agenda' },
-        { path: '/leads', label: 'Lead Management', icon: RefreshCcw, description: 'Gestao de leads' },
+        { path: '/leads', label: 'Lead', icon: RefreshCcw, description: 'Gestao de leads' },
         { path: '/propostas', label: 'Propostas', icon: FileText, description: 'Cotas e propostas' },
         { path: '/templates-propostas', label: 'Templates', icon: Palette, description: 'Templates de proposta' },
         { path: '/contratos', label: 'Contratos', icon: FileSignature, description: 'Contratos e SLA' }

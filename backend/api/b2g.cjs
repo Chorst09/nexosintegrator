@@ -61,6 +61,19 @@ const prismaModelHasField = (modelName, fieldName) => {
   return fields.size === 0 || fields.has(fieldName);
 };
 
+const generateOpportunityNumber = async (clientType = 'B2G') => {
+  const type = String(clientType || 'B2G').toUpperCase() === 'B2B' ? 'B2B' : 'B2G';
+  const year = new Date().getFullYear();
+  const prefix = `${type}-${year}-`;
+  const latest = await prisma.opportunity.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: 'desc' },
+    select: { number: true }
+  });
+  const latestSequence = Number(String(latest?.number || '').slice(prefix.length)) || 0;
+  return `${prefix}${String(latestSequence + 1).padStart(5, '0')}`;
+};
+
 const isB2GCompanyRecord = (company) => {
   if (!company) return false;
   if (String(company.clientType || '').toUpperCase() === 'B2G') return true;
@@ -1673,6 +1686,7 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
     ].filter(Boolean);
 
     const opportunityData = {
+      number: await generateOpportunityNumber('B2G'),
       title,
       description: descriptionParts.join(' '),
       value: Number.isFinite(Number(notice.estimatedValue)) ? Number(notice.estimatedValue) : 0,
