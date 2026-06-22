@@ -3,7 +3,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { 
-  Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2
+  ArrowRight, Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2,
+  FilePlus2, FileText, Search, Save
 } from 'lucide-react';
 import { PricingSimulator } from '@/app/components/pricing-simulator';
 import { DREGenerator } from '@/app/components/dre-generator';
@@ -20,6 +21,79 @@ import { scenarioService, SavedScenario } from '@/services/scenario-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Toaster } from '@/components/ui/toaster';
 import { loadCalculatorPricingSettings } from '@/app/lib/calculator-settings';
+
+const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
+
+type SimulatorStep = 'start' | 'proposal' | 'calculation';
+
+interface PricingProposalForm {
+  number: string;
+  clientCompany: string;
+  clientContact: string;
+  clientPhone: string;
+  clientEmail: string;
+  managerName: string;
+  managerEmail: string;
+  managerPhone: string;
+}
+
+interface SavedPricingProposal {
+  id: string;
+  number: string;
+  proposalForm: PricingProposalForm;
+  params: PricingInput;
+  results: PricingOutput;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const normalizeSavedPricingProposals = (source: unknown): SavedPricingProposal[] => {
+  if (Array.isArray(source)) return source as SavedPricingProposal[];
+  if (source && typeof source === 'object') return Object.values(source) as SavedPricingProposal[];
+  return [];
+};
+
+const getManagerDefaults = () => {
+  try {
+    const userRaw = localStorage.getItem('user');
+    const user = userRaw ? JSON.parse(userRaw) : {};
+    return {
+      managerName: user?.name || '',
+      managerEmail: user?.email || '',
+      managerPhone: user?.phone || ''
+    };
+  } catch {
+    return {
+      managerName: '',
+      managerEmail: '',
+      managerPhone: ''
+    };
+  }
+};
+
+const generateProposalNumber = (proposals: SavedPricingProposal[] = []) => {
+  const year = new Date().getFullYear();
+  const nextSequence = proposals.reduce((max, proposal) => {
+    const [sequence, sequenceYear] = String(proposal?.number || '').split('/');
+    if (Number(sequenceYear) !== year) return max;
+    const parsed = parseInt(sequence, 10);
+    if (!Number.isFinite(parsed)) return max;
+    return Math.max(max, parsed);
+  }, 0) + 1;
+
+  return `${String(nextSequence).padStart(4, '0')}/${year}`;
+};
+
+const buildProposalForm = (proposalNumber: string, managerDefaults = getManagerDefaults()): PricingProposalForm => ({
+  number: proposalNumber || '',
+  clientCompany: '',
+  clientContact: '',
+  clientPhone: '',
+  clientEmail: '',
+  managerName: managerDefaults.managerName || '',
+  managerEmail: managerDefaults.managerEmail || '',
+  managerPhone: managerDefaults.managerPhone || ''
+});
 
 export default function FinEdgeApp() {
   const { toast } = useToast();
@@ -44,6 +118,12 @@ export default function FinEdgeApp() {
   const [results, setResults] = useState<PricingOutput>(() => PricingEngine.calculate(params));
   const [isCalculating, setIsCalculating] = useState(false);
   const [history, setHistory] = useState<SavedScenario[]>([]);
+  const [simulatorStep, setSimulatorStep] = useState<SimulatorStep>('start');
+  const [savedPricingProposals, setSavedPricingProposals] = useState<SavedPricingProposal[]>([]);
+  const [proposalSearchNumber, setProposalSearchNumber] = useState('');
+  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
+  const [proposalFeedback, setProposalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
 
   const loadHistory = useCallback(async () => {
     try {
@@ -57,6 +137,24 @@ export default function FinEdgeApp() {
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PRICING_PROPOSALS_STORAGE_KEY);
+      const parsed = normalizeSavedPricingProposals(stored ? JSON.parse(stored) : []);
+      setSavedPricingProposals(parsed);
+      setProposalSearchNumber(parsed[0]?.number || '');
+    } catch (error) {
+      console.error('Erro ao carregar precificações salvas:', error);
+      setSavedPricingProposals([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!proposalFeedback) return undefined;
+    const timer = window.setTimeout(() => setProposalFeedback(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [proposalFeedback]);
 
   useEffect(() => {
     const refreshCalculatorSettings = () => {
@@ -154,6 +252,97 @@ export default function FinEdgeApp() {
     }
   }, [params, toast, loadHistory]);
 
+  const persistPricingProposals = (items: SavedPricingProposal[]) => {
+    const ordered = [...items].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    setSavedPricingProposals(ordered);
+    localStorage.setItem(PRICING_PROPOSALS_STORAGE_KEY, JSON.stringify(ordered));
+  };
+
+  const startNewPricing = () => {
+    const nextNumber = generateProposalNumber(savedPricingProposals);
+    const nextForm = buildProposalForm(nextNumber, getManagerDefaults());
+    setProposalForm(nextForm);
+    setProposalSearchNumber(nextNumber);
+    setActiveProposalId(null);
+    setProposalFeedback(null);
+    setSimulatorStep('proposal');
+  };
+
+  const continueToItems = () => {
+    if (!proposalForm.clientCompany.trim() || !proposalForm.clientContact.trim()) {
+      setProposalFeedback({
+        type: 'error',
+        text: 'Informe o nome da empresa cliente e o nome do contato antes de adicionar itens.'
+      });
+      return;
+    }
+
+    setProposalFeedback(null);
+    setSimulatorStep('calculation');
+  };
+
+  const savePricingProposal = () => {
+    const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(savedPricingProposals);
+    const now = new Date().toISOString();
+    const calculatedResults = PricingEngine.calculate(params);
+    setResults(calculatedResults);
+
+    const existing = activeProposalId
+      ? savedPricingProposals.find(item => item.id === activeProposalId)
+      : savedPricingProposals.find(item => item.number === proposalNumber);
+
+    const payload: SavedPricingProposal = {
+      id: existing?.id || crypto.randomUUID?.() || `prec_${Date.now()}`,
+      number: proposalNumber,
+      proposalForm: {
+        ...proposalForm,
+        number: proposalNumber,
+        clientCompany: proposalForm.clientCompany.trim(),
+        clientContact: proposalForm.clientContact.trim(),
+        clientPhone: proposalForm.clientPhone.trim(),
+        clientEmail: proposalForm.clientEmail.trim(),
+        managerName: proposalForm.managerName.trim(),
+        managerEmail: proposalForm.managerEmail.trim(),
+        managerPhone: proposalForm.managerPhone.trim(),
+      },
+      params,
+      results: calculatedResults,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+
+    const next = existing
+      ? savedPricingProposals.map(item => item.id === existing.id ? payload : item)
+      : [payload, ...savedPricingProposals];
+
+    persistPricingProposals(next);
+    setProposalForm(payload.proposalForm);
+    setProposalSearchNumber(proposalNumber);
+    setActiveProposalId(payload.id);
+    setProposalFeedback({ type: 'success', text: `Precificação ${proposalNumber} salva.` });
+  };
+
+  const searchPricingProposal = () => {
+    const numberTyped = proposalSearchNumber.trim();
+    if (!numberTyped) {
+      setProposalFeedback({ type: 'error', text: 'Informe o número da proposta para buscar.' });
+      return;
+    }
+
+    const found = savedPricingProposals.find(item => item.number === numberTyped);
+    if (!found) {
+      setProposalFeedback({ type: 'error', text: `Nenhuma precificação encontrada para ${numberTyped}.` });
+      return;
+    }
+
+    setProposalForm(found.proposalForm);
+    setParams(found.params);
+    setResults(found.results);
+    setActiveProposalId(found.id);
+    setSimulatorStep('calculation');
+    setProposalFeedback({ type: 'success', text: `Precificação ${found.number} carregada.` });
+  };
+
   return (
     <div className="precificacao-module min-h-screen bg-transparent font-body text-[var(--crm-ink)] pb-20">
       <Toaster />
@@ -223,18 +412,164 @@ export default function FinEdgeApp() {
               </div>
 
               <TabsContent value="simulator" className="focus-visible:outline-none space-y-8">
-                <PricingSimulator results={results} params={params} />
-                <ProductManager 
-                  params={params}
-                  upfrontItems={params.upfrontItems}
-                  recurringItems={params.recurringItems}
-                  onParamChange={handleInputChange}
-                  onItemChange={handleItemChange}
-                  onAddItem={handleAddItem}
-                  onRemoveItem={handleRemoveItem}
-                  onCalculate={handleCalculate}
-                  isCalculating={isCalculating}
-                />
+                {simulatorStep === 'start' && (
+                  <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                    <CardContent className="p-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Simulador</p>
+                        <h2 className="mt-2 text-2xl font-bold text-slate-900 font-headline">Inicie uma nova precificação</h2>
+                        <p className="mt-2 max-w-2xl text-sm text-slate-500">
+                          Cadastre os dados da proposta antes de adicionar produtos e serviços ao cálculo.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={startNewPricing}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-6 py-4 text-sm font-bold text-white shadow-md hover:bg-primary/90 transition-colors"
+                      >
+                        <FilePlus2 className="w-5 h-5" />
+                        Nova Precificação
+                      </button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {simulatorStep !== 'start' && (
+                  <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div className="grid grid-cols-1 gap-4 border-b border-slate-100 bg-slate-50/80 p-5 xl:grid-cols-[minmax(190px,260px)_minmax(190px,260px)_1fr] xl:items-end">
+                      <div className="min-w-0">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Nº Proposta</label>
+                        <input
+                          type="text"
+                          value={proposalForm.number}
+                          onChange={(event) => {
+                            const nextNumber = event.target.value;
+                            setProposalForm((prev) => ({ ...prev, number: nextNumber }));
+                            setProposalSearchNumber(nextNumber);
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Buscar Nº</label>
+                        <input
+                          type="text"
+                          value={proposalSearchNumber}
+                          onChange={(event) => setProposalSearchNumber(event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end">
+                        <button type="button" onClick={startNewPricing} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-700 transition hover:bg-cyan-500/20">
+                          <FilePlus2 className="w-4 h-4" /> Nova
+                        </button>
+                        <button type="button" onClick={searchPricingProposal} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-700 transition hover:bg-cyan-500/20">
+                          <Search className="w-4 h-4" /> Buscar
+                        </button>
+                        <button type="button" onClick={savePricingProposal} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-primary/90">
+                          <Save className="w-4 h-4" /> Salvar
+                        </button>
+                        <button type="button" onClick={handleCalculate} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-500/20">
+                          <FileText className="w-4 h-4" /> Gerar
+                        </button>
+                      </div>
+                    </div>
+
+                    {proposalFeedback && (
+                      <div className={cn(
+                        "mx-5 mt-5 rounded-2xl border px-4 py-3 text-xs font-bold",
+                        proposalFeedback.type === 'error'
+                          ? "border-red-100 bg-red-50 text-red-700"
+                          : "border-emerald-100 bg-emerald-50 text-emerald-700"
+                      )}>
+                        {proposalFeedback.text}
+                      </div>
+                    )}
+
+                    {simulatorStep === 'proposal' && (
+                      <>
+                        <div className="border-b border-slate-100 bg-cyan-600 px-6 py-5">
+                          <h2 className="text-2xl font-bold text-white font-headline">Informações da Proposta</h2>
+                        </div>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 p-6">
+                          <div className="space-y-4">
+                            <h3 className="text-2xl font-bold text-sky-600 font-headline">Dados do Cliente</h3>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nome da Empresa Cliente</label>
+                              <input value={proposalForm.clientCompany} onChange={(event) => setProposalForm(prev => ({ ...prev, clientCompany: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nome do Contato</label>
+                              <input value={proposalForm.clientContact} onChange={(event) => setProposalForm(prev => ({ ...prev, clientContact: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">Telefone</label>
+                              <input value={proposalForm.clientPhone} onChange={(event) => setProposalForm(prev => ({ ...prev, clientPhone: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">E-mail</label>
+                              <input type="email" value={proposalForm.clientEmail} onChange={(event) => setProposalForm(prev => ({ ...prev, clientEmail: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <h3 className="text-2xl font-bold text-sky-600 font-headline">Dados do Gerente de Contas</h3>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nome do Gerente</label>
+                              <input value={proposalForm.managerName} onChange={(event) => setProposalForm(prev => ({ ...prev, managerName: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">E-mail do Gerente</label>
+                              <input type="email" value={proposalForm.managerEmail} onChange={(event) => setProposalForm(prev => ({ ...prev, managerEmail: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-500 mb-1.5">Telefone do Gerente</label>
+                              <input value={proposalForm.managerPhone} onChange={(event) => setProposalForm(prev => ({ ...prev, managerPhone: event.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-end px-6 pb-6">
+                          <button type="button" onClick={continueToItems} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-primary/90 transition-colors">
+                            <ArrowRight className="w-4 h-4" />
+                            Continuar para Adicionar Itens
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {simulatorStep === 'calculation' && (
+                  <>
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between shadow-sm">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cliente</p>
+                        <p className="text-lg font-bold text-slate-900">
+                          {proposalForm.clientCompany || 'Sem empresa'} · {proposalForm.clientContact || 'Sem contato'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSimulatorStep('proposal')}
+                        className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:text-primary hover:border-primary/30"
+                      >
+                        Editar Dados da Proposta
+                      </button>
+                    </div>
+                    <PricingSimulator results={results} params={params} />
+                    <ProductManager
+                      params={params}
+                      upfrontItems={params.upfrontItems}
+                      recurringItems={params.recurringItems}
+                      onParamChange={handleInputChange}
+                      onItemChange={handleItemChange}
+                      onAddItem={handleAddItem}
+                      onRemoveItem={handleRemoveItem}
+                      onCalculate={handleCalculate}
+                      isCalculating={isCalculating}
+                    />
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="allocation" className="focus-visible:outline-none">
