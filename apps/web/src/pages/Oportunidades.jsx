@@ -612,34 +612,36 @@ export default function Oportunidades() {
         />
       </div>
 
-      {/* Alternador Pipeline / Histórico */}
-      <div className="flex rounded-xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] p-1 w-fit">
+      {/* Abas: Pipeline / Histórico */}
+      <div className="flex gap-1 rounded-2xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] p-1.5 w-fit shadow-sm">
         <button
           onClick={() => setViewMode('pipeline')}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
             viewMode === 'pipeline'
               ? 'bg-blue-600 text-white shadow-md'
-              : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+              : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)] hover:bg-[rgb(var(--crm-accent-rgb)_/_0.08)]'
           }`}
         >
-          <Target className="w-4 h-4" />
+          <Target className="w-4.5 h-4.5" />
           Pipeline
         </button>
         <button
           onClick={() => setViewMode('historico')}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
             viewMode === 'historico'
               ? 'bg-blue-600 text-white shadow-md'
-              : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+              : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)] hover:bg-[rgb(var(--crm-accent-rgb)_/_0.08)]'
           }`}
         >
-          <BarChart3 className="w-4 h-4" />
+          <BarChart3 className="w-4.5 h-4.5" />
           Histórico
         </button>
       </div>
 
-      {/* Filtros */}
-      <GradientCard gradient="gray" className="p-6">
+      {viewMode === 'pipeline' ? (
+      <>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="flex-1">
             <div className="relative">
@@ -682,73 +684,9 @@ export default function Oportunidades() {
             </select>
           </div>
         </div>
-      </GradientCard>
+      </div>
 
-      {viewMode === 'historico' ? (
-        /* ── Histórico (Ganhas / Perdidas) ── */
-        <div className="rounded-2xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.06)]">
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Empresa</th>
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Projeto</th>
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Valor</th>
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Status</th>
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Data Fechamento</th>
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Motivo</th>
-                  <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Responsável</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOpportunities.filter(o => o.stage === 'WON' || o.stage === 'LOST').length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-12 text-[var(--crm-muted)]">
-                      <Target className="w-12 h-12 mx-auto mb-2 opacity-40" />
-                      <p>Nenhuma oportunidade ganha ou perdida ainda.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOpportunities
-                    .filter(o => o.stage === 'WON' || o.stage === 'LOST')
-                    .sort((a, b) => new Date(b.actualCloseDate || b.expectedCloseDate || 0) - new Date(a.actualCloseDate || a.expectedCloseDate || 0))
-                    .map(opp => (
-                      <tr
-                        key={opp.id}
-                        onClick={() => handleViewDetails(opp)}
-                        className="border-b border-[color:var(--crm-border)] hover:bg-[rgb(var(--crm-accent-rgb)_/_0.04)] cursor-pointer transition-colors"
-                      >
-                        <td className="p-4 font-medium text-[var(--crm-ink)]">{opp.company?.name || 'N/I'}</td>
-                        <td className="p-4 text-[var(--crm-ink)]">{opp.projectName || opp.title}</td>
-                        <td className="p-4 font-semibold text-emerald-400">{formatCurrency(opp.value)}</td>
-                        <td className="p-4">
-                          <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
-                            style={{
-                              backgroundColor: opp.stage === 'WON' ? 'rgba(16,185,129,0.2)' : 'rgba(107,114,128,0.2)',
-                              color: opp.stage === 'WON' ? '#10b981' : '#6b7280'
-                            }}
-                          >
-                            {opp.stage === 'WON' ? 'Ganha' : 'Perdida'}
-                          </span>
-                        </td>
-                        <td className="p-4 text-[var(--crm-muted)]">
-                          {opp.actualCloseDate
-                            ? new Date(opp.actualCloseDate).toLocaleDateString('pt-BR')
-                            : new Date(opp.expectedCloseDate).toLocaleDateString('pt-BR')}
-                        </td>
-                        <td className="p-4 text-[var(--crm-muted)] max-w-[200px] truncate" title={opp.lossReason || ''}>
-                          {opp.stage === 'LOST' ? (opp.lossReason || '—') : '—'}
-                        </td>
-                        <td className="p-4 text-[var(--crm-muted)]">{opp.owner?.name || 'N/I'}</td>
-                      </tr>
-                    ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
+      {/* Pipeline Kanban */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map(stage => (
           <div
@@ -926,6 +864,71 @@ export default function Oportunidades() {
             </div>
           </div>
         ))}
+      </div>
+      </>
+      ) : (
+      /* ── Histórico (Ganhas / Perdidas) ── */
+      <div className="rounded-2xl border border-[color:var(--crm-border)] bg-[var(--crm-surface)] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.06)]">
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Empresa</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Projeto</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Valor</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Status</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Data Fechamento</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Motivo</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Responsável</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOpportunities.filter(o => o.stage === 'WON' || o.stage === 'LOST').length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-12 text-[var(--crm-muted)]">
+                    <Target className="w-12 h-12 mx-auto mb-2 opacity-40" />
+                    <p>Nenhuma oportunidade ganha ou perdida ainda.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredOpportunities
+                  .filter(o => o.stage === 'WON' || o.stage === 'LOST')
+                  .sort((a, b) => new Date(b.actualCloseDate || b.expectedCloseDate || 0) - new Date(a.actualCloseDate || a.expectedCloseDate || 0))
+                  .map(opp => (
+                    <tr
+                      key={opp.id}
+                      onClick={() => handleViewDetails(opp)}
+                      className="border-b border-[color:var(--crm-border)] hover:bg-[rgb(var(--crm-accent-rgb)_/_0.04)] cursor-pointer transition-colors"
+                    >
+                      <td className="p-4 font-medium text-[var(--crm-ink)]">{opp.company?.name || 'N/I'}</td>
+                      <td className="p-4 text-[var(--crm-ink)]">{opp.projectName || opp.title}</td>
+                      <td className="p-4 font-semibold text-emerald-400">{formatCurrency(opp.value)}</td>
+                      <td className="p-4">
+                        <span
+                          className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                          style={{
+                            backgroundColor: opp.stage === 'WON' ? 'rgba(16,185,129,0.2)' : 'rgba(107,114,128,0.2)',
+                            color: opp.stage === 'WON' ? '#10b981' : '#6b7280'
+                          }}
+                        >
+                          {opp.stage === 'WON' ? 'Ganha' : 'Perdida'}
+                        </span>
+                      </td>
+                      <td className="p-4 text-[var(--crm-muted)]">
+                        {opp.actualCloseDate
+                          ? new Date(opp.actualCloseDate).toLocaleDateString('pt-BR')
+                          : new Date(opp.expectedCloseDate).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="p-4 text-[var(--crm-muted)] max-w-[200px] truncate" title={opp.lossReason || ''}>
+                        {opp.stage === 'LOST' ? (opp.lossReason || '—') : '—'}
+                      </td>
+                      <td className="p-4 text-[var(--crm-muted)]">{opp.owner?.name || 'N/I'}</td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
       )}
 
