@@ -410,6 +410,11 @@ h4 {
 
 .precificacao-module {
   color: var(--crm-ink);
+  --prec-card-bg: rgb(var(--crm-surface-rgb) / 0.92);
+  --prec-card-muted: rgb(var(--crm-surface-2-rgb) / 0.74);
+  --prec-active-bg: var(--crm-accent);
+  --prec-active-text: #ffffff;
+  --prec-button-text: #ffffff;
 }
 
 .precificacao-module .bg-white,
@@ -419,11 +424,20 @@ h4 {
 .precificacao-module .bg-slate-50\/60,
 .precificacao-module .bg-slate-50\/80,
 .precificacao-module .bg-slate-100 {
-  background: rgb(var(--crm-surface-rgb) / 0.88);
+  background: var(--prec-card-bg);
+}
+
+.precificacao-module .bg-slate-50,
+.precificacao-module .bg-slate-50\/20,
+.precificacao-module .bg-slate-50\/50,
+.precificacao-module .bg-slate-50\/60,
+.precificacao-module .bg-slate-50\/80,
+.precificacao-module .bg-slate-100 {
+  background: var(--prec-card-muted);
 }
 
 .precificacao-module .bg-slate-900 {
-  background: linear-gradient(135deg, rgb(var(--crm-ink-rgb) / 0.94), rgb(var(--crm-surface-2-rgb) / 0.95));
+  background: linear-gradient(135deg, rgb(var(--crm-surface-rgb) / 0.96), rgb(var(--crm-surface-2-rgb) / 0.88));
 }
 
 .precificacao-module .bg-indigo-50,
@@ -481,11 +495,22 @@ h4 {
 
 .precificacao-module .bg-primary,
 .precificacao-module .data-\[state\=active\]\:bg-primary\/5[data-state='active'] {
-  background: rgb(var(--crm-accent-rgb) / 0.96);
+  background: var(--prec-active-bg);
+  color: var(--prec-active-text);
 }
 
 .precificacao-module .data-\[state\=active\]\:text-primary[data-state='active'] {
-  color: var(--crm-accent);
+  color: var(--prec-active-text);
+}
+
+.precificacao-module [data-state='active'],
+.precificacao-module [data-state='active'] svg {
+  color: var(--prec-active-text);
+}
+
+.precificacao-module button.bg-primary,
+.precificacao-module .bg-primary.text-white {
+  color: var(--prec-button-text);
 }
 
 .precificacao-module .from-primary {
@@ -500,7 +525,7 @@ h4 {
 
 .precificacao-module input,
 .precificacao-module textarea {
-  background: rgb(var(--crm-surface-rgb) / 0.88);
+  background: rgb(var(--crm-bg-base-2-rgb, var(--crm-surface-rgb)) / 0.36);
   color: var(--crm-ink);
   border-color: var(--crm-border);
 }
@@ -510,6 +535,48 @@ h4 {
   color: rgb(var(--crm-muted-rgb) / 0.72);
 }
 
+.precificacao-module .rounded-\[2\.5rem\],
+.precificacao-module .rounded-3xl {
+  border-radius: 18px;
+}
+
+.precificacao-module .rounded-2xl {
+  border-radius: 14px;
+}
+
+.precificacao-module .rounded-xl {
+  border-radius: 10px;
+}
+
+.precificacao-module .shadow-sm,
+.precificacao-module .shadow-md,
+.precificacao-module .shadow-lg,
+.precificacao-module .shadow-xl {
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.10);
+}
+
+.precificacao-module .p-8 {
+  padding: 1.25rem;
+}
+
+.precificacao-module .p-6 {
+  padding: 1rem;
+}
+
+.precificacao-module .py-20 {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.precificacao-module .text-white {
+  color: #ffffff;
+}
+
+.precificacao-module .tabular-nums,
+.precificacao-module input {
+  font-variant-numeric: tabular-nums;
+}
+
 .dark .precificacao-module .bg-white,
 .dark .precificacao-module .bg-slate-50,
 .dark .precificacao-module .bg-slate-50\/20,
@@ -517,12 +584,24 @@ h4 {
 .dark .precificacao-module .bg-slate-50\/60,
 .dark .precificacao-module .bg-slate-50\/80,
 .dark .precificacao-module .bg-slate-100 {
-  background: rgb(var(--crm-surface-rgb) / 0.78);
+  background: rgb(var(--crm-surface-rgb) / 0.96);
+}
+
+.dark .precificacao-module {
+  --prec-card-bg: rgb(var(--crm-surface-rgb) / 0.96);
+  --prec-card-muted: rgb(var(--crm-surface-2-rgb) / 0.78);
+  --prec-active-bg: #38bdf8;
+  --prec-active-text: #06111f;
+  --prec-button-text: #06111f;
 }
 
 .dark .precificacao-module .shadow-sm,
 .dark .precificacao-module .shadow-md,
 .dark .precificacao-module .shadow-lg,
 .dark .precificacao-module .shadow-xl {
-  box-shadow: 0 18px 48px rgba(1, 5, 14, 0.48);
+  box-shadow: 0 14px 36px rgba(1, 5, 14, 0.38);
+}
+
+.dark .precificacao-module .text-white {
+  color: #f8fafc;
 }

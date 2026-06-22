@@ -237,7 +237,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       {/* Alerta de Amortização */}
-      <div className="bg-slate-900 text-white p-4 rounded-3xl flex items-center justify-between shadow-lg">
+      <div className="bg-slate-900 text-white p-4 rounded-3xl flex flex-col gap-3 md:flex-row md:items-center md:justify-between shadow-lg">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-white/10 rounded-xl">
             <Clock className="w-5 h-5 text-primary" />
@@ -253,19 +253,19 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 space-y-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <div className="xl:col-span-7 space-y-6">
           <Card className="rounded-[2.5rem] border-slate-200 shadow-sm overflow-hidden bg-white">
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+              <div className="space-y-4">
+                <div className="max-w-2xl">
                   <CardTitle className="text-xl font-bold font-headline flex items-center">
                     <Settings2 className="w-5 h-5 mr-3 text-primary" />
                     Configuração de Rateio Mensal
                   </CardTitle>
-                  <CardDescription>Distribua custos amortizados e recorrentes entre produtos alvos.</CardDescription>
+                  <CardDescription className="mt-1">Distribua custos amortizados e recorrentes entre produtos alvos.</CardDescription>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                   <div className="bg-white p-1 rounded-xl border border-slate-200 flex gap-1">
                     <button 
                       onClick={() => setMethod('proportional')}
@@ -375,7 +375,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
           </Card>
         </div>
 
-        <div className="lg:col-span-5 space-y-6">
+        <div className="xl:col-span-5 space-y-6">
           <Card className="rounded-[2.5rem] border-slate-200 shadow-sm overflow-hidden bg-white">
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
               <CardTitle className="text-xl font-bold font-headline flex items-center">
