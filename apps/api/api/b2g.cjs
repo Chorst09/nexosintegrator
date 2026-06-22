@@ -46,6 +46,21 @@ const STATUS_LABELS = {
   ENCERRADA: 'Encerrada'
 };
 
+const getPrismaModelFields = (modelName) => {
+  const runtimeFields = prisma?._runtimeDataModel?.models?.[modelName]?.fields;
+  if (Array.isArray(runtimeFields)) return new Set(runtimeFields.map((field) => field.name));
+
+  const dmmfFields = prisma?._dmmf?.modelMap?.[modelName]?.fields;
+  if (Array.isArray(dmmfFields)) return new Set(dmmfFields.map((field) => field.name));
+
+  return new Set();
+};
+
+const prismaModelHasField = (modelName, fieldName) => {
+  const fields = getPrismaModelFields(modelName);
+  return fields.size === 0 || fields.has(fieldName);
+};
+
 const USER_ALLOWED_ROLES = ['ADMIN', 'DIRECTOR', 'MANAGER', 'SELLER', 'PRE_SALES', 'USER'];
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const upload = multer({
@@ -1616,13 +1631,18 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
 
     let createdCompany = false;
     if (!company) {
+      const companyData = {
+        name: organizationName,
+        segment: 'B2G GOVERNO',
+        status: 'PROSPECT',
+        state: notice.stateCode || null
+      };
+      if (prismaModelHasField('Company', 'clientType')) {
+        companyData.clientType = 'B2G';
+      }
+
       company = await prisma.company.create({
-        data: {
-          name: organizationName,
-          segment: 'B2G GOVERNO',
-          status: 'PROSPECT',
-          state: notice.stateCode || null
-        }
+        data: companyData
       });
       createdCompany = true;
     }
@@ -1644,20 +1664,29 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
       notice.summary ? `Resumo: ${notice.summary}` : null
     ].filter(Boolean);
 
+    const opportunityData = {
+      title,
+      description: descriptionParts.join(' '),
+      value: Number.isFinite(Number(notice.estimatedValue)) ? Number(notice.estimatedValue) : 0,
+      probability,
+      stage,
+      source: 'MANUAL',
+      expectedCloseDate: notice.proposalDueDate || null,
+      companyId: company.id,
+      ownerId
+    };
+    if (prismaModelHasField('Opportunity', 'projectName')) {
+      opportunityData.projectName = title;
+    }
+    if (prismaModelHasField('Opportunity', 'projectClientType')) {
+      opportunityData.projectClientType = 'B2G';
+    }
+    if (prismaModelHasField('Opportunity', 'b2gStage')) {
+      opportunityData.b2gStage = b2gStage;
+    }
+
     const opportunity = await prisma.opportunity.create({
-      data: {
-        title,
-        projectName: title,
-        description: descriptionParts.join(' '),
-        value: Number.isFinite(Number(notice.estimatedValue)) ? Number(notice.estimatedValue) : 0,
-        probability,
-        stage,
-        b2gStage,
-        source: 'MANUAL',
-        expectedCloseDate: notice.proposalDueDate || null,
-        companyId: company.id,
-        ownerId
-      },
+      data: opportunityData,
       include: {
         company: {
           include: {

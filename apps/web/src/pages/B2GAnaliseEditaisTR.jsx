@@ -14,6 +14,8 @@ const API_KEYS = {
   mistral: 'Vjx0JiXn3teksaferkwlKkyDYuiZ4Lne'
 };
 
+const GEMINI_MODEL = 'gemini-2.5-flash';
+
 const toText = (value) => {
   if (typeof value === 'string') return value.trim();
   if (value === null || value === undefined) return '';
@@ -326,7 +328,7 @@ const B2GAnaliseEditaisTR = () => {
 
     let response;
     if (provider === 'gemini') {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${key}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
       response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -357,15 +359,25 @@ const B2GAnaliseEditaisTR = () => {
       });
     }
 
-    if (!response.ok) throw new Error(`Status ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.error?.message || `Status ${response.status}`);
+    }
 
     const data = await response.json();
     const text = provider === 'gemini'
       ? data.candidates?.[0]?.content?.parts?.[0]?.text
       : data.choices?.[0]?.message?.content;
 
+    if (!text) {
+      throw new Error('A IA não retornou conteúdo para análise.');
+    }
+
     const startIdx = text.indexOf('{');
     const endIdx = text.lastIndexOf('}') + 1;
+    if (startIdx < 0 || endIdx <= startIdx) {
+      throw new Error('A IA não retornou JSON válido.');
+    }
     return JSON.parse(text.substring(startIdx, endIdx));
   };
 
