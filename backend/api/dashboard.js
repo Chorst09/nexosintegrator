@@ -173,7 +173,15 @@ export default async function handler(req) {
         const monthsBack = periodMonths || 6;
         const revenueStartDate = new Date(Date.now() - monthsBack * 30 * 24 * 60 * 60 * 1000);
 
-        const baseWhere = { company: { clientType: 'B2B' }, ...dateFilter };
+        const b2bOpportunityFilter = {
+          OR: [
+            { projectClientType: null },
+            { projectClientType: { not: 'B2G' } }
+          ],
+          b2gStage: null
+        };
+
+        const baseWhere = { ...b2bOpportunityFilter, company: { clientType: 'B2B' }, ...dateFilter };
         if (ownerId) baseWhere.ownerId = ownerId;
 
         // Mapear temperatura para faixas de probabilidade
@@ -195,7 +203,7 @@ export default async function handler(req) {
 
         const chartsWhere = { ...baseWhere };
 
-        const whereNoDate = { company: { clientType: 'B2B' } };
+        const whereNoDate = { ...b2bOpportunityFilter, company: { clientType: 'B2B' } };
         if (ownerId) whereNoDate.ownerId = ownerId;
 
         const [
@@ -254,6 +262,7 @@ export default async function handler(req) {
           }),
           prisma.opportunity.findMany({
             where: {
+              ...b2bOpportunityFilter,
               stage: 'WON',
               company: { clientType: 'B2B' },
               updatedAt: { gte: revenueStartDate }
