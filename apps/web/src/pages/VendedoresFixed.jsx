@@ -120,7 +120,8 @@ export default function VendedoresFixed() {
       const data = {
         ...basePayload,
         role,
-        ...(role === 'SELLER' ? { accessB2B: true, accessB2G: true } : {})
+        accessB2B: formData.accessB2B ?? true,
+        accessB2G: formData.accessB2G ?? false
       };
 
       const response = await fetch(url, {
@@ -276,6 +277,19 @@ export default function VendedoresFixed() {
       key: 'regionName',
       label: 'Região',
       render: (item) => item.region?.name || 'Não definida'
+    },
+    {
+      key: 'tipo',
+      label: 'Tipo',
+      render: (item) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          item.accessB2G
+            ? 'bg-purple-100 text-purple-800'
+            : 'bg-blue-100 text-blue-800'
+        }`}>
+          {item.accessB2G ? 'Governo' : 'Corporativo'}
+        </span>
+      )
     },
     {
       key: 'quota',
@@ -440,7 +454,7 @@ export default function VendedoresFixed() {
                 setFormData({
                   role: 'SELLER',
                   accessB2B: true,
-                  accessB2G: true
+                  accessB2G: false
                 });
                 setShowModal(true);
               }}
@@ -642,6 +656,27 @@ export default function VendedoresFixed() {
                         {region.name}
                       </option>
                     ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">
+                    Tipo
+                  </label>
+                  <select
+                    value={formData.accessB2B ? 'corporativo' : 'governo'}
+                    onChange={(e) => {
+                      const tipo = e.target.value;
+                      setFormData({
+                        ...formData,
+                        accessB2B: tipo === 'corporativo',
+                        accessB2G: tipo === 'governo'
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="corporativo">Corporativo</option>
+                    <option value="governo">Governo</option>
                   </select>
                 </div>
                 
