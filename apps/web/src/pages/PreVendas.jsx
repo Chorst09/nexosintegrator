@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import {
+  Beaker,
   Plus,
   Search,
   Eye,
@@ -158,6 +159,8 @@ export default function PreVendas() {
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [registroLoading, setRegistroLoading] = useState(false);
   const [registroOportunidades, setRegistroOportunidades] = useState([]);
+  const [pocs, setPocs] = useState([]);
+  const [pocsLoading, setPocsLoading] = useState(false);
   const [activitySearch, setActivitySearch] = useState('');
   const [activityStatusFilter, setActivityStatusFilter] = useState('all');
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -188,6 +191,7 @@ export default function PreVendas() {
     loadSolicitacoes();
     loadPreSalesActivities();
     loadRegistroOportunidades();
+    loadPocs();
   }, []);
 
   const loadSolicitacoes = async () => {
@@ -269,6 +273,26 @@ export default function PreVendas() {
       setRegistroOportunidades([]);
     } finally {
       setRegistroLoading(false);
+    }
+  };
+
+  const loadPocs = async () => {
+    try {
+      setPocsLoading(true);
+      const response = await axios.get(buildApiUrl('/pre-sales-pocs'), {
+        headers: getAuthHeaders()
+      });
+      const rows = Array.isArray(response?.data?.data)
+        ? response.data.data
+        : Array.isArray(response?.data?.pocs)
+          ? response.data.pocs
+          : [];
+      setPocs(rows);
+    } catch (error) {
+      console.error('Erro ao carregar POCs:', error);
+      setPocs([]);
+    } finally {
+      setPocsLoading(false);
     }
   };
 
@@ -488,6 +512,30 @@ export default function PreVendas() {
     });
     return buckets;
   }, [registroOportunidades]);
+
+  const pocStats = useMemo(() => {
+    const finalStatuses = new Set(['APROVADA', 'DESCARTADA']);
+    const inProgressStatuses = new Set(['PLANEJAMENTO', 'EM_ANDAMENTO', 'VALIDACAO']);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const andamento = pocs.filter((item) => inProgressStatuses.has(String(item.status || '').toUpperCase())).length;
+    const bloqueadas = pocs.filter((item) => String(item.status || '').toUpperCase() === 'BLOQUEADA').length;
+    const aprovadas = pocs.filter((item) => String(item.status || '').toUpperCase() === 'APROVADA').length;
+    const atrasadas = pocs.filter((item) => {
+      const dueDate = item.dueDate ? new Date(item.dueDate) : null;
+      if (!dueDate || Number.isNaN(dueDate.getTime())) return false;
+      return dueDate < today && !finalStatuses.has(String(item.status || '').toUpperCase());
+    }).length;
+
+    return { total: pocs.length, andamento, bloqueadas, aprovadas, atrasadas };
+  }, [pocs]);
+
+  const recentPocs = useMemo(() => (
+    [...pocs]
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime())
+      .slice(0, 5)
+  ), [pocs]);
 
   const registroStatusChartData = useMemo(() => {
     const statusOrder = ['ABERTA', 'EM_ANALISE', 'EM_COTACAO', 'PRECIFICADA', 'DEVOLVIDA', 'GANHA', 'PERDIDA'];
@@ -887,6 +935,66 @@ export default function PreVendas() {
               <AnimatedStats title="Em Aberto" value={registroStats.abertas} subtitle="Aguardando execução/comercial" icon={Clock} color="orange" />
               <AnimatedStats title="Ganhas" value={registroStats.ganhas} subtitle="Oportunidades convertidas" icon={CheckCircle} color="green" />
               <AnimatedStats title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} color="purple" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <AnimatedStats title="POCs Totais" value={pocStats.total} subtitle="Provas de conceito registradas" icon={Beaker} color="blue" />
+              <AnimatedStats title="POCs em Andamento" value={pocStats.andamento} subtitle="Planejamento, execução ou validação" icon={RefreshCcw} color="purple" />
+              <AnimatedStats title="POCs Bloqueadas" value={pocStats.bloqueadas} subtitle={`${pocStats.atrasadas} atrasada(s)`} icon={AlertCircle} color="orange" />
+              <AnimatedStats title="POCs Aprovadas" value={pocStats.aprovadas} subtitle="Validadas com decisão registrada" icon={CheckCircle} color="green" />
+            </div>
+
+            <div className="crm-card rounded-lg p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Gestão de POCs</h3>
+                  <p className="text-sm text-slate-300">Acompanhamento das provas de conceito vinculadas ao fluxo de Pré-Vendas.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={loadPocs}
+                    className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30"
+                  >
+                    <RefreshCcw className="w-3.5 h-3.5" />
+                    Atualizar POCs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/gestao-pocs')}
+                    className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100 hover:bg-cyan-500/30"
+                  >
+                    <Beaker className="w-3.5 h-3.5" />
+                    Abrir POCs
+                  </button>
+                </div>
+              </div>
+              {pocsLoading ? (
+                <p className="mt-4 text-sm text-slate-400">Carregando POCs...</p>
+              ) : recentPocs.length > 0 ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {recentPocs.map((poc) => (
+                    <button
+                      key={poc.id}
+                      type="button"
+                      onClick={() => navigate('/gestao-pocs')}
+                      className="rounded-lg border border-slate-600/40 bg-slate-800/45 p-4 text-left transition-colors hover:bg-slate-700/50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">{poc.title}</p>
+                          <p className="mt-1 truncate text-xs text-slate-300">{poc.client} · {poc.solution}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-200">
+                          {String(poc.status || 'PLANEJAMENTO').replaceAll('_', ' ')}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-slate-400">Nenhuma POC registrada ainda.</p>
+              )}
             </div>
 
             {(registroExpiring.within7.length > 0 || registroExpiring.within15.length > 0 || registroExpiring.within30.length > 0 || registroExpiring.expired.length > 0) && (

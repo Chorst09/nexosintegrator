@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  Beaker,
   Brain,
   Building2,
   Calculator,
@@ -299,6 +300,7 @@ export default function DashboardGeral() {
       { key: 'b2g', label: 'Editais B2G', endpoint: '/b2g', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
       { key: 'prevendasOportunidades', label: 'Registro Pré-Vendas', endpoint: '/prevendas-cadastros/oportunidades', enabled: (access.accessPreSales || adminLike), normalize: parseRows, emptyValue: [] },
       { key: 'preSales', label: 'Pré-vendas', endpoint: '/pre-vendas?limit=200', enabled: access.accessPreSales || adminLike, normalize: parsePreSales, emptyValue: { rows: [], total: 0 }, count: (payload) => payload.total },
+      { key: 'preSalesPocs', label: 'POCs Pré-Vendas', endpoint: '/pre-sales-pocs', enabled: access.accessPreSales || adminLike, normalize: parseRows, emptyValue: [] },
       { key: 'activities', label: 'Atividades', endpoint: '/activities', enabled: access.accessB2B || access.accessB2G || access.accessPreSales, normalize: parseRows, emptyValue: [] },
       { key: 'products', label: 'Produtos', endpoint: '/products', enabled: access.accessB2B || adminLike, normalize: parseRows, emptyValue: [] },
       { key: 'sellers', label: 'Equipe comercial', endpoint: '/users?role=SELLER', enabled: adminLike || access.accessB2B || access.accessB2G, normalize: parseRows, emptyValue: [] },
@@ -379,6 +381,7 @@ export default function DashboardGeral() {
     const companiesB2G = toArray(data.companiesB2G);
     const b2gNotices = toArray(data.b2g);
     const preSales = toArray(data.preSales?.rows);
+    const preSalesPocs = toArray(data.preSalesPocs);
     const prevendasOportunidades = toArray(data.prevendasOportunidades);
     const activities = toArray(data.activities);
     const products = toArray(data.products);
@@ -397,6 +400,7 @@ export default function DashboardGeral() {
     const opportunitiesB2GRange = opportunitiesB2G.filter((item) => inRange(item.createdAt || item.updatedAt));
     const b2gNoticesRange = b2gNotices.filter((item) => inRange(item.createdAt || item.updatedAt));
     const preSalesRange = preSales.filter((item) => inRange(item.createdAt || item.updatedAt));
+    const preSalesPocsRange = preSalesPocs.filter((item) => inRange(item.createdAt || item.updatedAt || item.dueDate));
     const activitiesRange = activities.filter((item) => inRange(item.createdAt || item.updatedAt || item.dueDate));
     const proposalsRange = proposals.filter((item) => inRange(item.createdAt || item.updatedAt || item.sentAt));
     const contractsRange = contracts.filter((item) => inRange(item.createdAt || item.updatedAt || item.startDate));
@@ -427,6 +431,16 @@ export default function DashboardGeral() {
     const donePreSalesStatuses = new Set(['FINALIZADA']);
     const pendingPreSales = preSalesRange.filter((item) => pendingPreSalesStatuses.has(String(item.status || '').toUpperCase()));
     const donePreSales = preSalesRange.filter((item) => donePreSalesStatuses.has(String(item.status || '').toUpperCase()));
+    const activePocStatuses = new Set(['PLANEJAMENTO', 'EM_ANDAMENTO', 'VALIDACAO']);
+    const finalPocStatuses = new Set(['APROVADA', 'DESCARTADA']);
+    const activePreSalesPocs = preSalesPocsRange.filter((item) => activePocStatuses.has(String(item.status || '').toUpperCase()));
+    const approvedPreSalesPocs = preSalesPocsRange.filter((item) => String(item.status || '').toUpperCase() === 'APROVADA');
+    const blockedPreSalesPocs = preSalesPocsRange.filter((item) => String(item.status || '').toUpperCase() === 'BLOQUEADA');
+    const overduePreSalesPocs = preSalesPocsRange.filter((item) => {
+      const dueDate = toDate(item.dueDate);
+      if (!dueDate) return false;
+      return dueDate < new Date() && !finalPocStatuses.has(String(item.status || '').toUpperCase());
+    });
 
     const pendingActivities = activitiesRange.filter((item) => {
       const status = String(item.status || '').toUpperCase();
@@ -596,6 +610,7 @@ export default function DashboardGeral() {
       companiesB2G,
       b2gNoticesRange,
       preSalesRange,
+      preSalesPocsRange,
       activitiesRange,
       proposalsRange,
       contractsRange,
@@ -613,6 +628,10 @@ export default function DashboardGeral() {
       inAnalysisB2G,
       pendingPreSales,
       donePreSales,
+      activePreSalesPocs,
+      approvedPreSalesPocs,
+      blockedPreSalesPocs,
+      overduePreSalesPocs,
       totalPipeline,
       totalWonValue,
       b2bPipelineValue,
@@ -661,6 +680,8 @@ export default function DashboardGeral() {
       pendingActivities,
       overdueActivities,
       pendingPreSales,
+      activePreSalesPocs,
+      blockedPreSalesPocs,
       inAnalysisB2G,
       activeB2GNotices,
       opportunitiesB2BRange,
@@ -747,13 +768,13 @@ export default function DashboardGeral() {
     const operationalLoadValues = [
       pendingActivities.length,
       overdueActivities.length,
-      pendingPreSales.length,
+      pendingPreSales.length + activePreSalesPocs.length,
       inAnalysisB2G.length,
-      monthlyActivities.reduce((sum, value) => sum + value, 0)
+      monthlyActivities.reduce((sum, value) => sum + value, 0) + blockedPreSalesPocs.length
     ];
     const hasOperationalData = operationalLoadValues.some((value) => value > 0);
     const operationalLoad = {
-      labels: ['Pendentes', 'Atrasadas', 'Pré-vendas', 'B2G análise', 'Atividades mês'],
+      labels: ['Pendentes', 'Atrasadas', 'Pré-vendas/POCs', 'B2G análise', 'Atividades + bloqueios'],
       datasets: [
         {
           data: hasOperationalData ? operationalLoadValues : [1, 0, 0, 0, 0],
@@ -912,6 +933,7 @@ export default function DashboardGeral() {
     companiesB2G,
     b2gNoticesRange,
     preSalesRange,
+    preSalesPocsRange,
     activitiesRange,
     proposalsRange,
     contractsRange,
@@ -929,6 +951,10 @@ export default function DashboardGeral() {
     inAnalysisB2G,
     pendingPreSales,
     donePreSales,
+    activePreSalesPocs,
+    approvedPreSalesPocs,
+    blockedPreSalesPocs,
+    overduePreSalesPocs,
     totalPipeline,
     totalWonValue,
     b2bPipelineValue,
@@ -946,7 +972,7 @@ export default function DashboardGeral() {
     expiring30
   } = computed;
 
-  const alertCount = overdueActivities.length + pendingPreSales.length + inAnalysisB2G.length + expiringOportunidades.length + expiredOportunidades.length;
+  const alertCount = overdueActivities.length + pendingPreSales.length + blockedPreSalesPocs.length + overduePreSalesPocs.length + inAnalysisB2G.length + expiringOportunidades.length + expiredOportunidades.length;
 
   const moduleCardItems = [
     access.accessB2B && {
@@ -987,8 +1013,8 @@ export default function DashboardGeral() {
       badge: `${pendingPreSales.length} pendentes`,
       kpis: [
         { label: 'Solicitações', value: formatNumber(preSalesRange.length) },
-        { label: 'Finalizadas', value: formatNumber(donePreSales.length) },
-        { label: 'Aprovação', value: formatPercent(preSalesApproval) }
+        { label: 'POCs', value: formatNumber(preSalesPocsRange.length) },
+        { label: 'Aprovadas', value: formatNumber(approvedPreSalesPocs.length) }
       ]
     }
   ].filter(Boolean);
@@ -1096,6 +1122,7 @@ export default function DashboardGeral() {
         <KpiCard icon={Building2} label="Empresas" value={formatNumber(companiesB2B.length + companiesB2G.length)} sub="Carteira total" tone="purple" onClick={() => navigate('/empresas')} />
         <KpiCard icon={Package} label="Produtos Ativos" value={formatNumber(activeProducts.length)} sub={`${formatNumber(regions.length)} regiões`} tone="amber" onClick={() => navigate('/produtos')} />
         <KpiCard icon={Activity} label="Atividades Pendentes" value={formatNumber(pendingActivities.length)} sub={`${formatNumber(overdueActivities.length)} atrasadas`} tone={overdueActivities.length > 0 ? 'rose' : 'cyan'} onClick={() => navigate('/atividades')} />
+        <KpiCard icon={Beaker} label="POCs Pré-Vendas" value={formatNumber(preSalesPocsRange.length)} sub={`${formatNumber(activePreSalesPocs.length)} em andamento`} tone={blockedPreSalesPocs.length > 0 || overduePreSalesPocs.length > 0 ? 'rose' : 'purple'} onClick={() => navigate('/gestao-pocs')} />
         <KpiCard icon={Brain} label="Leads Quentes" value={formatNumber(hotLeads)} sub={`${formatNumber(warmLeads)} warm`} tone="green" onClick={() => navigate('/leads')} />
         <KpiCard icon={Users} label="Equipe Comercial" value={formatNumber(teamPerformance.length)} sub={`${formatNumber(integrations.length)} integrações`} tone="blue" onClick={() => navigate('/vendedores')} />
       </div>
@@ -1393,6 +1420,23 @@ export default function DashboardGeral() {
               </div>
             )}
 
+            {(blockedPreSalesPocs.length > 0 || overduePreSalesPocs.length > 0) && (
+              <div
+                onClick={() => navigate('/gestao-pocs')}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 transition-colors hover:bg-rose-500/15"
+              >
+                <Beaker className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+                <div>
+                  {blockedPreSalesPocs.length > 0 && (
+                    <p className="text-sm font-medium text-rose-200">{formatNumber(blockedPreSalesPocs.length)} POC(s) bloqueada(s)</p>
+                  )}
+                  {overduePreSalesPocs.length > 0 && (
+                    <p className="text-xs text-rose-300/80">{formatNumber(overduePreSalesPocs.length)} POC(s) atrasada(s) no período</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {(expiredOportunidades.length > 0 || expiringOportunidades.length > 0) && (
               <div
                 onClick={() => navigate('/pre-vendas')}
@@ -1431,6 +1475,7 @@ export default function DashboardGeral() {
                 { label: 'Nova Oportunidade', icon: Target, route: '/oportunidades', color: 'text-blue-400' },
                 { label: 'Novo Edital', icon: Gavel, route: '/b2g-dashboard', color: 'text-indigo-400' },
                 (access.accessPreSales || adminLike) && { label: 'Nova Solicitação', icon: ClipboardList, route: '/pre-vendas', color: 'text-amber-400' },
+                (access.accessPreSales || adminLike) && { label: 'Gestão de POCs', icon: Beaker, route: '/gestao-pocs', color: 'text-sky-400' },
                 { label: 'Nova Atividade', icon: Zap, route: '/atividades', color: 'text-emerald-400' },
                 { label: 'Leads', icon: Layers, route: '/leads', color: 'text-cyan-400' },
                 adminLike && { label: 'Integrações', icon: UserCircle2, route: '/integracoes', color: 'text-purple-400' }
