@@ -1040,6 +1040,43 @@ model PreSalesApproval {
   updatedAt           DateTime @updatedAt
 }
 
+model PreSalesPoc {
+  id                       String   @id @default(uuid())
+  relatedOpportunityId     String?
+  relatedOpportunityNumber String?
+  relatedOpportunityTitle  String?
+  title                    String
+  client                   String
+  solution                 String
+  environment              String?
+  objective                String
+  scope                    String?
+  successCriteria          String
+  commercialOwner          String
+  technicalOwner           String
+  startDate                DateTime?
+  dueDate                  DateTime?
+  priority                 Priority @default(MEDIUM)
+  status                   String   @default("PLANEJAMENTO")
+  progress                 Int      @default(0)
+  nextStep                 String?
+  risks                    String?
+  resultSummary            String?
+  decisionReason           String?
+  notes                    String?
+  createdById              String?
+  createdByName            String?
+  approvedAt               DateTime?
+  discardedAt              DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([relatedOpportunityId])
+}
+
 // === B2G: EDITAIS, TR E ATAS ===
 model BidNotice {
   id                String          @id @default(uuid())

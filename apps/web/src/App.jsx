@@ -20,6 +20,7 @@ import PreVendas from './pages/PreVendas';
 import Calculadoras from './pages/Calculadoras';
 import RatearProdutos from './pages/RatearProdutos';
 import RateiosSalvos from './pages/RateiosSalvos';
+import GestaoPocs from './pages/GestaoPocs';
 import OrcamentosPrevendas from './pages/OrcamentosPrevendas';
 import PrevendasCadastros from './pages/PrevendasCadastros';
 import Relatorios from './pages/Relatorios';
@@ -301,6 +302,14 @@ export default function App() {
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
                 <RateiosSalvos />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="gestao-pocs"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
+                <GestaoPocs />
               </RoleGuard>
             }
           />

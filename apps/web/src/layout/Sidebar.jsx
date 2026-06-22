@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BarChart3,
+  Beaker,
   Building2,
   Calculator,
   CalendarCheck2,
@@ -155,7 +156,8 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
         { path: '/prevendas-registro-oportunidades', label: 'Registro de Oportunidades', icon: Target, description: 'Registro técnico para Pré-Vendas' },
         { path: '/calculadoras', label: 'Calculadoras', icon: Calculator, description: 'Venda, locacao e servicos' },
         { path: '/ratear-produtos', label: 'Ratear Produtos', icon: Calculator, description: 'Rateio de despesas por produto' },
-        { path: '/rateios-salvos', label: 'Rateios Salvos', icon: History, description: 'Historico de rateios executados' }
+        { path: '/rateios-salvos', label: 'Rateios Salvos', icon: History, description: 'Historico de rateios executados' },
+        { path: '/gestao-pocs', label: 'Gestão de POCs', icon: Beaker, description: 'Planejamento e validação de provas de conceito' }
       ]
     },
     {

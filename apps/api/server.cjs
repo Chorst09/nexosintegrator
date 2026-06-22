@@ -14,6 +14,7 @@ const workflowsRoutes = require('./api/workflows.cjs');
 const proposalsRoutes = require('./api/proposals.cjs');
 const productsRoutes = require('./api/products.cjs');
 const preVendasRoutes = require('./api/pre-vendas.cjs');
+const preSalesPocsRoutes = require('./api/pre-sales-pocs.cjs');
 const settingsRoutes = require('./api/settings.cjs');
 const companiesDocumentsRoutes = require('./api/company-documents.cjs');
 const b2gRoutes = require('./api/b2g.cjs');
@@ -117,6 +118,7 @@ const enforceRolePolicies = (req, res, next) => {
   const isPreSalesPath =
     p.startsWith('/pre-vendas') ||
     p.startsWith('/solicitacoes') ||
+    p.startsWith('/pre-sales-pocs') ||
     p.startsWith('/prevendas-cadastros');
   if (isPreSalesPath && !canAccessModule(req.user, 'PRE_SALES')) {
     return res.status(403).json({ error: 'Acesso negado' });
@@ -164,6 +166,7 @@ const enforceRolePolicies = (req, res, next) => {
   if (role === 'PRE_SALES') {
     const allowedPreSalesPrefixes = [
       '/pre-vendas',
+      '/pre-sales-pocs',
       '/solicitacoes',
       '/activities-simple',
       '/prevendas-cadastros',
@@ -212,6 +215,7 @@ app.use('/api/proposal-templates', (req, res, next) => {
 app.use('/api/products', productsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/pre-vendas', preVendasRoutes);
+app.use('/api/pre-sales-pocs', preSalesPocsRoutes);
 app.use('/api/b2g', b2gRoutes);
 app.use('/api/ai-analysis', aiAnalysisRoutes);
 app.use('/api/analyses', savedAnalysesRoutes);
