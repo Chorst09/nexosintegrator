@@ -395,7 +395,7 @@ export default function DashboardGeral() {
   const [data, setData] = useState({});
   const [moduleHealth, setModuleHealth] = useState([]);
 
-  const user = parseUserFromStorage();
+  const user = parseUserFromStorage() || {};
   const access = getUserAccess(user);
   const role = normalizeRole(user?.role);
   const adminLike = ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR'].includes(role);

@@ -6,9 +6,10 @@ const crypto = require('crypto');
 const router = express.Router();
 
 // Configuração do Mercado Pago (adicionar no .env)
-const MERCADO_PAGO_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || '';
-const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY || '';
-const MERCADO_PAGO_WEBHOOK_TOKEN = process.env.MERCADO_PAGO_WEBHOOK_TOKEN || '';
+// Suporta ambas as nomenclaturas: MERCADOPAGO_* (comum em deploy) e MERCADO_PAGO_* (original)
+const MERCADO_PAGO_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MERCADOPAGO_ACCESS_TOKEN || '';
+const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY || process.env.MERCADOPAGO_PUBLIC_KEY || '';
+const MERCADO_PAGO_WEBHOOK_TOKEN = process.env.MERCADO_PAGO_WEBHOOK_TOKEN || process.env.MERCADOPAGO_WEBHOOK_SECRET || '';
 const FORCE_SIMULATED_PAYMENT = process.env.FORCE_SIMULATED_PAYMENT === 'true';
 
 /**
@@ -32,17 +33,29 @@ router.post('/create-preference', async (req, res) => {
 
     // Definir planos
     const plans = {
-      starter: {
-        id: 'starter',
-        name: 'Starter',
-        price: 297.00,
-        description: 'Plano Starter - Até 3 usuários'
+      b2b: {
+        id: 'b2b',
+        name: 'B2B Privado',
+        price: 98.00,
+        description: 'Gestão de vendas B2B'
       },
-      professional: {
-        id: 'professional',
-        name: 'Professional',
-        price: 697.00,
-        description: 'Plano Professional - Até 10 usuários'
+      b2g: {
+        id: 'b2g',
+        name: 'B2G Governo',
+        price: 110.90,
+        description: 'Licitações e governo'
+      },
+      presales: {
+        id: 'presales',
+        name: 'Pré-Vendas',
+        price: 105.90,
+        description: 'Pré-vendas e POCs'
+      },
+      completo: {
+        id: 'completo',
+        name: 'Plano Completo',
+        price: 289.90,
+        description: 'Todos os módulos do CRM'
       }
     };
 
@@ -108,7 +121,8 @@ router.post('/create-preference', async (req, res) => {
     console.log('   Access Token:', MERCADO_PAGO_ACCESS_TOKEN.substring(0, 20) + '...');
 
     // Criar preferência no Mercado Pago
-    const checkoutBaseUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/checkout?plan=${encodeURIComponent(selectedPlan.id)}`;
+    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:5174';
+    const checkoutBaseUrl = `${frontendUrl}/checkout?plan=${encodeURIComponent(selectedPlan.id)}`;
 
     const isTestMode = String(MERCADO_PAGO_ACCESS_TOKEN || '').trim().toUpperCase().startsWith('TEST-');
 
@@ -135,7 +149,7 @@ router.post('/create-preference', async (req, res) => {
         pending: `${checkoutBaseUrl}&status=pending&subscription=${encodeURIComponent(pendingSubscription.id)}`
       },
       external_reference: pendingSubscription.id,
-      notification_url: `${process.env.API_URL || 'http://localhost:3002'}/api/checkout/webhook`
+      notification_url: `${process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://nexos.chorstconsult.com.br'}/api/checkout/webhook`
     };
 
     // Em credenciais de teste, reduzir opções que desviam para saldo/linha de
@@ -522,10 +536,11 @@ async function createCompanyAndAdmin(subscription) {
     });
 
     // TODO: Enviar email com link de setup
+    const feUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:5174';
     console.log(`
       ✉️  Email de setup:
       Para: ${subscription.responsibleEmail}
-      Link: ${process.env.FRONTEND_URL}/setup?token=${setupToken}
+      Link: ${feUrl}/setup?token=${setupToken}
     `);
 
     return {

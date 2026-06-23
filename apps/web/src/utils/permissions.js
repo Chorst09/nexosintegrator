@@ -147,7 +147,8 @@ export const getRolePolicy = (role) => {
   return ROLE_ACCESS_POLICY[canonical] || ROLE_ACCESS_POLICY[ROLES.USER];
 };
 
-export const getUserAccess = (user = {}) => {
+export const getUserAccess = (user) => {
+  if (!user) user = {};
   const role = toCanonicalRole(user.role);
   const policy = getRolePolicy(role);
 

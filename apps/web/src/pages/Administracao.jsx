@@ -70,7 +70,8 @@ const roleLabel = (value) => {
   return labels[role] || role;
 };
 
-const resolveAccessByRole = (role, currentAccess = {}) => {
+const resolveAccessByRole = (role, currentAccess) => {
+  if (!currentAccess) currentAccess = {};
   const normalizedRole = normalizeRole(role);
 
   if (['MASTER', 'ADMIN'].includes(normalizedRole)) {
@@ -94,7 +95,8 @@ const resolveAccessByRole = (role, currentAccess = {}) => {
   };
 };
 
-const normalizeCompanyModuleAccess = (company = {}) => {
+const normalizeCompanyModuleAccess = (company) => {
+  if (!company) company = {};
   const accessB2B = company.accessB2B !== undefined ? Boolean(company.accessB2B) : true;
   const accessB2G = company.accessB2G !== undefined ? Boolean(company.accessB2G) : false;
   const accessPreSales = company.accessPreSales !== undefined ? Boolean(company.accessPreSales) : false;
@@ -116,7 +118,9 @@ const companyModuleBadges = (company = {}) => {
   ].filter(Boolean);
 };
 
-const constrainAccessToCompanyModules = (access = {}, company = {}) => {
+const constrainAccessToCompanyModules = (access, company) => {
+  if (!access) access = {};
+  if (!company) company = {};
   const companyAccess = normalizeCompanyModuleAccess(company);
   return {
     accessB2B: Boolean(access.accessB2B && companyAccess.accessB2B),

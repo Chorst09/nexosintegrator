@@ -26,7 +26,7 @@ import {
   Rocket
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
-import { getUserAccess, normalizeRole } from '../utils/permissions';
+
 
 export default function DashboardHome() {
   const navigate = useNavigate();
@@ -151,59 +151,70 @@ export default function DashboardHome() {
 
   const plans = [
     {
-      id: 'starter',
-      name: 'Starter',
-      price: 'R$ 297',
+      id: 'b2b',
+      name: 'B2B Privado',
+      price: 'R$ 98',
       period: '/mês',
-      description: 'Ideal para pequenas equipes começando',
-      icon: Sparkles,
+      description: 'Gestão completa de vendas corporativas',
+      icon: Building2,
       features: [
-        'Até 3 usuários',
-        '1 produto (B2B ou B2G)',
-        'Suporte por email',
-        'Relatórios básicos'
+        'Pipeline visual de vendas',
+        'Gestão de oportunidades',
+        'Cadastro de empresas e contatos',
+        'Propostas e contratos',
+        'Relatórios e análise de performance'
       ],
       highlight: false
     },
     {
-      id: 'professional',
-      name: 'Professional',
-      price: 'R$ 697',
+      id: 'b2g',
+      name: 'B2G Governo',
+      price: 'R$ 110,90',
       period: '/mês',
-      description: 'Para equipes em crescimento',
-      icon: Target,
+      description: 'Licitações e oportunidades públicas',
+      icon: Landmark,
       features: [
-        'Até 10 usuários',
-        '2 produtos inclusos',
+        'Monitoramento de editais',
+        'Análise com IA',
+        'Gestão de documentação',
+        'Atas de registro de preços',
+        'Relatórios estratégicos'
+      ],
+      highlight: false
+    },
+    {
+      id: 'presales',
+      name: 'Pré-Vendas',
+      price: 'R$ 105,90',
+      period: '/mês',
+      description: 'Suporte técnico-comercial especializado',
+      icon: Calculator,
+      features: [
+        'Solicitações de orçamento',
+        'Calculadoras especializadas',
+        'Análise técnica',
+        'Dimensionamento de soluções',
+        'Registro de oportunidades'
+      ],
+      highlight: false
+    },
+    {
+      id: 'completo',
+      name: 'Plano Completo',
+      price: 'R$ 289,90',
+      period: '/mês',
+      description: 'Todos os módulos em um único plano',
+      icon: Crown,
+      features: [
+        'B2B Privado + B2G Governo + Pré-Vendas',
+        'Usuários ilimitados',
         'Suporte prioritário',
         'Relatórios avançados',
         'Integrações API'
       ],
       highlight: true
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 'Sob consulta',
-      period: '',
-      description: 'Solução completa para grandes operações',
-      icon: Crown,
-      features: [
-        'Usuários ilimitados',
-        'Todos os produtos',
-        'Suporte dedicado 24/7',
-        'Customizações',
-        'SLA garantido'
-      ],
-      highlight: false
     }
   ];
-
-  const handleProductClick = (product) => {
-    if (access[product.accessKey]) {
-      navigate(product.route);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-blue-950">
@@ -416,7 +427,7 @@ export default function DashboardHome() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {plans.map((plan) => {
             const Icon = plan.icon;
 
@@ -461,18 +472,18 @@ export default function DashboardHome() {
                   ))}
                 </ul>
 
-                <button
-                  onClick={() => plan.id === 'enterprise' ? navigate('/login') : navigate(`/checkout?plan=${plan.id}`)}
-                  className={`
-                    mt-8 w-full rounded-xl py-3 font-semibold transition-all
-                    ${plan.highlight
-                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:scale-105 hover:shadow-xl'
-                      : 'border-2 border-[var(--crm-border)] bg-white text-[var(--crm-ink)] hover:border-blue-500 hover:text-blue-500 dark:bg-slate-900'
-                    }
-                  `}
-                >
-                  {plan.id === 'enterprise' ? 'Falar com vendas' : 'Contratar Plano'}
-                </button>
+                  <button
+                    onClick={() => navigate(`/checkout?plan=${plan.id}`)}
+                    className={`
+                      mt-8 w-full rounded-xl py-3 font-semibold transition-all
+                      ${plan.highlight
+                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:scale-105 hover:shadow-xl'
+                        : 'border-2 border-[var(--crm-border)] bg-white text-[var(--crm-ink)] hover:border-blue-500 hover:text-blue-500 dark:bg-slate-900'
+                      }
+                    `}
+                  >
+                    Contratar Plano
+                  </button>
               </div>
             );
           })}

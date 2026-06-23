@@ -59,29 +59,37 @@ export default function Checkout() {
   });
 
   const plans = {
-    starter: {
-      id: 'starter',
-      name: 'Starter',
-      price: 297,
-      priceFormatted: 'R$ 297',
-      description: 'Ideal para pequenas equipes',
-      features: ['Até 3 usuários', '1 produto', 'Suporte por email']
+    b2b: {
+      id: 'b2b',
+      name: 'B2B Privado',
+      price: 98.00,
+      priceFormatted: 'R$ 98,00',
+      description: 'Gestão de vendas B2B',
+      features: ['Até 5 usuários', 'Gestão de oportunidades', 'Funil de vendas', 'Relatórios']
     },
-    professional: {
-      id: 'professional',
-      name: 'Professional',
-      price: 697,
-      priceFormatted: 'R$ 697',
-      description: 'Para equipes em crescimento',
-      features: ['Até 10 usuários', '2 produtos', 'Suporte prioritário', 'API']
+    b2g: {
+      id: 'b2g',
+      name: 'B2G Governo',
+      price: 110.90,
+      priceFormatted: 'R$ 110,90',
+      description: 'Licitações e governo',
+      features: ['Até 5 usuários', 'Licitações eletrônicas', 'Documentação', 'RDC Eletrônico']
     },
-    enterprise: {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 0,
-      priceFormatted: 'Sob consulta',
-      description: 'Solução completa',
-      features: ['Usuários ilimitados', 'Todos produtos', 'Suporte 24/7']
+    presales: {
+      id: 'presales',
+      name: 'Pré-Vendas',
+      price: 105.90,
+      priceFormatted: 'R$ 105,90',
+      description: 'Pré-vendas e POCs',
+      features: ['Até 5 usuários', 'POCs técnicas', 'Pré-vendas', 'Propostas técnicas']
+    },
+    completo: {
+      id: 'completo',
+      name: 'Plano Completo',
+      price: 289.90,
+      priceFormatted: 'R$ 289,90',
+      description: 'Todos os módulos do CRM',
+      features: ['Usuários ilimitados', 'Todos os módulos', 'Suporte prioritário', 'API completa']
     }
   };
 
@@ -96,9 +104,6 @@ export default function Checkout() {
   };
 
   const resolveLicensingPlan = (checkoutPlanId) => {
-    if (checkoutPlanId === 'professional') {
-      return { planId: 'plan-trimestral', planCode: 'TRIMESTRAL' };
-    }
     return { planId: 'plan-mensal', planCode: 'MENSAL' };
   };
 
