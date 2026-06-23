@@ -432,9 +432,16 @@ export default function FinEdgeApp() {
       return;
     }
 
-    const existingRaw = localStorage.getItem(CALCULATOR_PROPOSALS_STORAGE_KEY)
-      || sessionStorage.getItem(CALCULATOR_PROPOSALS_SESSION_KEY);
-    const budgetProposals = normalizeBudgetProposals(existingRaw ? JSON.parse(existingRaw) : []);
+    let budgetProposals: Record<string, any>[] = [];
+    try {
+      const existingRaw = localStorage.getItem(CALCULATOR_PROPOSALS_STORAGE_KEY)
+        || sessionStorage.getItem(CALCULATOR_PROPOSALS_SESSION_KEY);
+      budgetProposals = normalizeBudgetProposals(existingRaw ? JSON.parse(existingRaw) : []);
+    } catch (error) {
+      console.error('Erro ao carregar orçamentos existentes da precificação:', error);
+      budgetProposals = [];
+    }
+
     const nowIso = new Date().toISOString();
     const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(budgetProposals as SavedPricingProposal[]);
     const existing = budgetProposals.find((proposal) => proposal.number === proposalNumber);
@@ -545,7 +552,21 @@ export default function FinEdgeApp() {
       sessionStorage.removeItem(CALCULATOR_PROPOSALS_SESSION_KEY);
     } catch (error) {
       console.error('Erro ao salvar orçamento da precificação:', error);
-      sessionStorage.setItem(CALCULATOR_PROPOSALS_SESSION_KEY, JSON.stringify(ordered));
+      try {
+        sessionStorage.setItem(CALCULATOR_PROPOSALS_SESSION_KEY, JSON.stringify(ordered));
+      } catch (sessionError) {
+        console.error('Erro ao salvar orçamento da precificação em sessionStorage:', sessionError);
+        setProposalFeedback({
+          type: 'error',
+          text: 'Não foi possível adicionar ao orçamento neste navegador.'
+        });
+        toast({
+          title: 'Erro ao adicionar orçamento',
+          description: 'O navegador bloqueou o armazenamento local da proposta.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     setProposalForm((prev) => ({ ...prev, number: proposalNumber }));
@@ -554,7 +575,11 @@ export default function FinEdgeApp() {
       type: 'success',
       text: `Orçamento ${proposalNumber} adicionado com a precificação gerada.`
     });
-  }, [hasGeneratedResults, opportunities, params, proposalForm, results]);
+    toast({
+      title: 'Orçamento adicionado',
+      description: `A precificação ${proposalNumber} foi enviada para o orçamento.`,
+    });
+  }, [hasGeneratedResults, opportunities, params, proposalForm, results, toast]);
 
   const emptyResults = useMemo(
     () => PricingEngine.calculate(buildEmptyPricingInput(calculatorPricingSettings)),
@@ -610,7 +635,7 @@ export default function FinEdgeApp() {
               <div className="flex justify-between items-center mb-6 overflow-x-auto pb-2">
                 <TabsList className="bg-white border border-slate-200 p-1.5 h-auto rounded-2xl shadow-sm">
                   <TabsTrigger value="simulator" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary/5 data-[state=active]:text-primary font-bold text-sm">
-                    <Box size={16} className="mr-2" /> Simulador
+                    <Box size={16} className="mr-2" /> Calculadora
                   </TabsTrigger>
                   <TabsTrigger value="allocation" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary/5 data-[state=active]:text-primary font-bold text-sm">
                     <Share2 size={16} className="mr-2" /> Rateio de Produtos
@@ -635,7 +660,7 @@ export default function FinEdgeApp() {
                   <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
                     <CardContent className="p-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Simulador</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Calculadora</p>
                         <h2 className="mt-2 text-2xl font-bold text-slate-900 font-headline">Inicie uma nova precificação</h2>
                         <p className="mt-2 max-w-2xl text-sm text-slate-500">
                           Cadastre os dados da proposta antes de adicionar produtos e serviços ao cálculo.

@@ -173,7 +173,7 @@ export function ProductManager({
               className="h-11 self-end rounded-xl bg-primary hover:bg-primary/90 text-white font-bold shadow-md"
             >
               {isCalculating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}
-              {isCalculating ? 'Processando...' : 'Recalcular'}
+              {isCalculating ? 'Processando...' : 'Calcular'}
             </Button>
           </div>
         </div>
