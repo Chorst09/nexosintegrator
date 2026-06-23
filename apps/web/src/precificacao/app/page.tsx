@@ -24,8 +24,6 @@ import { loadCalculatorPricingSettings } from '@/app/lib/calculator-settings';
 import { buildApiUrl, getAuthHeaders } from '../../config/api';
 
 const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
-const CALCULATOR_PROPOSALS_STORAGE_KEY = 'crm-calculadoras-propostas-v1';
-const CALCULATOR_PROPOSALS_SESSION_KEY = 'crm-calculadoras-propostas-session-v1';
 
 type SimulatorStep = 'start' | 'proposal' | 'calculation';
 
@@ -72,17 +70,6 @@ const normalizeSavedPricingProposals = (source: unknown): SavedPricingProposal[]
   if (Array.isArray(source)) return source as SavedPricingProposal[];
   if (source && typeof source === 'object') return Object.values(source) as SavedPricingProposal[];
   return [];
-};
-
-const normalizeBudgetProposals = (source: unknown): Record<string, any>[] => {
-  if (Array.isArray(source)) return source as Record<string, any>[];
-  if (source && typeof source === 'object') return Object.values(source) as Record<string, any>[];
-  return [];
-};
-
-const toFiniteNumber = (value: unknown, fallback = 0) => {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 };
 
 const getManagerDefaults = () => {
@@ -432,154 +419,49 @@ export default function FinEdgeApp() {
       return;
     }
 
-    let budgetProposals: Record<string, any>[] = [];
-    try {
-      const existingRaw = localStorage.getItem(CALCULATOR_PROPOSALS_STORAGE_KEY)
-        || sessionStorage.getItem(CALCULATOR_PROPOSALS_SESSION_KEY);
-      budgetProposals = normalizeBudgetProposals(existingRaw ? JSON.parse(existingRaw) : []);
-    } catch (error) {
-      console.error('Erro ao carregar orçamentos existentes da precificação:', error);
-      budgetProposals = [];
-    }
-
     const nowIso = new Date().toISOString();
-    const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(budgetProposals as SavedPricingProposal[]);
-    const existing = budgetProposals.find((proposal) => proposal.number === proposalNumber);
-    const linkedOpportunity = opportunities.find((item) => item.id === proposalForm.opportunityId);
-    const safeDuration = Math.max(1, toFiniteNumber(params.durationMonths, 1));
+    const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(savedPricingProposals);
+    const existing = activeProposalId
+      ? savedPricingProposals.find(item => item.id === activeProposalId)
+      : savedPricingProposals.find(item => item.number === proposalNumber);
 
-    const upfrontItems = params.upfrontItems.map((item, index) => {
-      const quantity = toFiniteNumber(item.quantity, 0);
-      const unitCost = toFiniteNumber(item.unitCost, 0);
-      return {
-        id: item.id || `prec_setup_${Date.now()}_${index}`,
-        description: item.name || `Setup ${index + 1}`,
-        quantity,
-        unitCost,
-        calculation: {
-          rbUnitario: unitCost,
-          marginComissaoValor: 0,
-          impostosValor: 0,
-          difalVenda: 0
-        },
-        pricing: {
-          source: 'precificacao',
-          type: 'setup',
-          description: item.description || '',
-          durationMonths: safeDuration
-        }
-      };
-    });
-
-    const recurringItems = params.recurringItems.map((item, index) => {
-      const quantity = toFiniteNumber(item.quantity, 0);
-      const unitCost = toFiniteNumber(item.unitCost, 0);
-      const monthlyCost = quantity * unitCost;
-      return {
-        id: item.id || `prec_recurring_${Date.now()}_${index}`,
-        description: item.name || `Recorrente ${index + 1}`,
-        estimatedHours: quantity || 1,
-        baseSalary: unitCost,
-        contractType: 'terceiro',
-        calculation: {
-          hourlyCost: unitCost,
-          sellPricePerHour: unitCost,
-          totalCost: monthlyCost,
-          totalSellPrice: monthlyCost
-        },
-        pricing: {
-          source: 'precificacao',
-          type: 'recurring',
-          description: item.description || '',
-          durationMonths: safeDuration
-        }
-      };
-    });
-
-    const payload = {
-      id: existing?.id || `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    const payload: SavedPricingProposal = {
+      id: existing?.id || crypto.randomUUID?.() || `prec_${Date.now()}`,
       number: proposalNumber,
-      calculatorType: 'precificacao',
-      calculatorLabel: 'Precificação',
-      opportunity: {
-        id: proposalForm.opportunityId || '',
-        number: linkedOpportunity?.number || proposalForm.opportunityNumber || '',
-        title: linkedOpportunity?.title || linkedOpportunity?.projectName || proposalForm.opportunityTitle || ''
+      proposalForm: {
+        ...proposalForm,
+        number: proposalNumber,
+        clientCompany: proposalForm.clientCompany.trim(),
+        clientContact: proposalForm.clientContact.trim(),
+        clientPhone: proposalForm.clientPhone.trim(),
+        clientEmail: proposalForm.clientEmail.trim(),
+        managerName: proposalForm.managerName.trim(),
+        managerEmail: proposalForm.managerEmail.trim(),
+        managerPhone: proposalForm.managerPhone.trim(),
       },
-      client: {
-        companyName: proposalForm.clientCompany.trim() || 'Cliente não informado',
-        contactName: proposalForm.clientContact.trim() || 'Contato não informado',
-        phone: proposalForm.clientPhone.trim(),
-        email: proposalForm.clientEmail.trim()
-      },
-      accountManager: {
-        name: proposalForm.managerName.trim(),
-        email: proposalForm.managerEmail.trim(),
-        phone: proposalForm.managerPhone.trim()
-      },
-      pricing: {
-        operationType: 'precificacao',
-        regimeName: params.taxRegimeName || 'Configurações Gerais',
-        desiredMargin: toFiniteNumber(params.markupPercentage, 0),
-        rentalPeriod: safeDuration,
-        durationMonths: safeDuration,
-        monthlyAmortization: results.monthlyAmortization,
-        totalMonthlyRecurringCost: results.totalMonthlyRecurringCost
-      },
-      snapshot: {
-        saleItems: upfrontItems,
-        rentalItems: [],
-        serviceItems: recurringItems
-      },
-      result: {
-        finalPrice: results.totalContractValue,
-        monthlyPrice: results.finalMonthlyPrice,
-        baseCost: results.baseMonthlyCost,
-        impostosValor: Math.max(0, results.dre?.taxes?.monthlyValue || 0),
-        margemEComissaoValor: Math.max(0, results.finalMonthlyPrice - results.baseMonthlyCost)
-      },
+      params,
+      results,
       createdAt: existing?.createdAt || nowIso,
       updatedAt: nowIso
     };
 
     const nextProposals = existing
-      ? budgetProposals.map((proposal) => (proposal.id === payload.id ? payload : proposal))
-      : [payload, ...budgetProposals];
-    const ordered = [...nextProposals].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      ? savedPricingProposals.map(item => item.id === existing.id ? payload : item)
+      : [payload, ...savedPricingProposals];
 
-    try {
-      localStorage.setItem(CALCULATOR_PROPOSALS_STORAGE_KEY, JSON.stringify(ordered));
-      sessionStorage.removeItem(CALCULATOR_PROPOSALS_SESSION_KEY);
-    } catch (error) {
-      console.error('Erro ao salvar orçamento da precificação:', error);
-      try {
-        sessionStorage.setItem(CALCULATOR_PROPOSALS_SESSION_KEY, JSON.stringify(ordered));
-      } catch (sessionError) {
-        console.error('Erro ao salvar orçamento da precificação em sessionStorage:', sessionError);
-        setProposalFeedback({
-          type: 'error',
-          text: 'Não foi possível adicionar ao orçamento neste navegador.'
-        });
-        toast({
-          title: 'Erro ao adicionar orçamento',
-          description: 'O navegador bloqueou o armazenamento local da proposta.',
-          variant: 'destructive',
-        });
-        return;
-      }
-    }
-
-    setProposalForm((prev) => ({ ...prev, number: proposalNumber }));
+    persistPricingProposals(nextProposals);
+    setProposalForm(payload.proposalForm);
     setProposalSearchNumber(proposalNumber);
+    setActiveProposalId(payload.id);
     setProposalFeedback({
       type: 'success',
-      text: `Orçamento ${proposalNumber} adicionado com a precificação gerada.`
+      text: `Orçamento ${proposalNumber} salvo nesta calculadora.`
     });
     toast({
-      title: 'Orçamento adicionado',
-      description: `A precificação ${proposalNumber} foi enviada para o orçamento.`,
+      title: 'Orçamento salvo',
+      description: `A precificação ${proposalNumber} foi salva na própria calculadora.`,
     });
-  }, [hasGeneratedResults, opportunities, params, proposalForm, results, toast]);
+  }, [activeProposalId, hasGeneratedResults, params, proposalForm, results, savedPricingProposals, toast]);
 
   const emptyResults = useMemo(
     () => PricingEngine.calculate(buildEmptyPricingInput(calculatorPricingSettings)),
