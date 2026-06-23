@@ -2,16 +2,17 @@
 'use client';
 
 import React from 'react';
-import { DollarSign, Calendar, Activity, Zap } from 'lucide-react';
+import { DollarSign, Calendar, Activity, Zap, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '@/app/lib/formatters';
 import { PricingOutput, PricingInput } from '@/app/lib/pricing-engine';
 
 interface SimulatorProps {
   results: PricingOutput;
   params: PricingInput;
+  onAddToBudget?: () => void;
 }
 
-export function PricingSimulator({ results, params }: SimulatorProps) {
+export function PricingSimulator({ results, params, onAddToBudget }: SimulatorProps) {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -63,6 +64,17 @@ export function PricingSimulator({ results, params }: SimulatorProps) {
           </p>
         </div>
       </div>
+
+      {onAddToBudget && (
+        <button
+          type="button"
+          onClick={onAddToBudget}
+          className="w-full inline-flex items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-600 px-6 py-4 text-base font-bold text-white shadow-md transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+        >
+          <CheckCircle2 className="w-5 h-5" />
+          Adicionar ao Orçamento
+        </button>
+      )}
     </div>
   );
 }
