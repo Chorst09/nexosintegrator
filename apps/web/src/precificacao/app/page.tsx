@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   ArrowRight, Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2,
   FilePlus2, FileText, Search, Save
@@ -117,27 +117,23 @@ const buildProposalForm = (proposalNumber: string, managerDefaults = getManagerD
   managerPhone: managerDefaults.managerPhone || ''
 });
 
+const buildEmptyPricingInput = (calculatorPricingSettings: ReturnType<typeof loadCalculatorPricingSettings>): PricingInput => ({
+  upfrontItems: [],
+  recurringItems: [],
+  durationMonths: 36,
+  markupPercentage: 40,
+  taxRatePercentage: calculatorPricingSettings.taxRatePercentage,
+  commissionPercentage: calculatorPricingSettings.commissionPercentage,
+  operatingExpensePercentage: calculatorPricingSettings.operatingExpensePercentage,
+  taxRegimeName: calculatorPricingSettings.regimeName,
+});
+
 export default function FinEdgeApp() {
   const { toast } = useToast();
   const calculatorPricingSettings = loadCalculatorPricingSettings();
-  const [params, setParams] = useState<PricingInput>({
-    upfrontItems: [
-      { id: 'u1', name: 'Implantação & Onboarding', description: 'Processo completo de configuração inicial.', quantity: 1, unitCost: 15000 },
-      { id: 'u2', name: 'Treinamento de Equipe', description: 'Capacitação técnica para administradores.', quantity: 1, unitCost: 5000 }
-    ],
-    recurringItems: [
-      { id: 'r1', name: 'Licença Base SaaS', description: 'Acesso à plataforma core em nuvem.', quantity: 1, unitCost: 4500 },
-      { id: 'r2', name: 'Suporte Premium', description: 'Atendimento 24/7 com SLA de 4h.', quantity: 1, unitCost: 1200 }
-    ],
-    durationMonths: 36,
-    markupPercentage: 40,
-    taxRatePercentage: calculatorPricingSettings.taxRatePercentage,
-    commissionPercentage: calculatorPricingSettings.commissionPercentage,
-    operatingExpensePercentage: calculatorPricingSettings.operatingExpensePercentage,
-    taxRegimeName: calculatorPricingSettings.regimeName,
-  });
-
+  const [params, setParams] = useState<PricingInput>(() => buildEmptyPricingInput(calculatorPricingSettings));
   const [results, setResults] = useState<PricingOutput>(() => PricingEngine.calculate(params));
+  const [hasGeneratedResults, setHasGeneratedResults] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [history, setHistory] = useState<SavedScenario[]>([]);
   const [simulatorStep, setSimulatorStep] = useState<SimulatorStep>('start');
@@ -196,6 +192,7 @@ export default function FinEdgeApp() {
   useEffect(() => {
     const refreshCalculatorSettings = () => {
       const next = loadCalculatorPricingSettings();
+      setHasGeneratedResults(false);
       setParams(prev => ({
         ...prev,
         taxRatePercentage: next.taxRatePercentage,
@@ -214,6 +211,7 @@ export default function FinEdgeApp() {
     const { name, value } = e.target;
     const numValue = value === '' ? 0 : parseFloat(value);
     
+    setHasGeneratedResults(false);
     setParams(prev => ({
       ...prev,
       [name]: isNaN(numValue) ? 0 : numValue
@@ -222,6 +220,7 @@ export default function FinEdgeApp() {
 
   const handleItemChange = (type: 'upfront' | 'recurring', id: string, field: keyof ProductItem, value: string | number) => {
     const key = type === 'upfront' ? 'upfrontItems' : 'recurringItems';
+    setHasGeneratedResults(false);
     setParams(prev => ({
       ...prev,
       [key]: prev[key].map(item => {
@@ -246,6 +245,7 @@ export default function FinEdgeApp() {
       quantity: 1,
       unitCost: 0
     };
+    setHasGeneratedResults(false);
     setParams(prev => ({
       ...prev,
       [key]: [...prev[key], newItem]
@@ -254,6 +254,7 @@ export default function FinEdgeApp() {
 
   const handleRemoveItem = (type: 'upfront' | 'recurring', id: string) => {
     const key = type === 'upfront' ? 'upfrontItems' : 'recurringItems';
+    setHasGeneratedResults(false);
     setParams(prev => ({
       ...prev,
       [key]: prev[key].filter(item => item.id !== id)
@@ -264,6 +265,7 @@ export default function FinEdgeApp() {
     // 1. CÁLCULO LOCAL IMEDIATO - Os números na tela mudam na hora
     const newResults = PricingEngine.calculate(params);
     setResults(newResults);
+    setHasGeneratedResults(true);
     
     // Inicia estado de processamento para o salvamento em nuvem
     setIsCalculating(true);
@@ -298,10 +300,14 @@ export default function FinEdgeApp() {
   const startNewPricing = () => {
     const nextNumber = generateProposalNumber(savedPricingProposals);
     const nextForm = buildProposalForm(nextNumber, getManagerDefaults());
+    const emptyParams = buildEmptyPricingInput(loadCalculatorPricingSettings());
     setProposalForm(nextForm);
     setProposalSearchNumber(nextNumber);
     setActiveProposalId(null);
     setProposalFeedback(null);
+    setParams(emptyParams);
+    setResults(PricingEngine.calculate(emptyParams));
+    setHasGeneratedResults(false);
     setSimulatorStep('proposal');
   };
 
@@ -401,10 +407,17 @@ export default function FinEdgeApp() {
     setProposalForm(found.proposalForm);
     setParams(found.params);
     setResults(found.results);
+    setHasGeneratedResults(true);
     setActiveProposalId(found.id);
     setSimulatorStep('calculation');
     setProposalFeedback({ type: 'success', text: `Precificação ${found.number} carregada.` });
   };
+
+  const emptyResults = useMemo(
+    () => PricingEngine.calculate(buildEmptyPricingInput(calculatorPricingSettings)),
+    [calculatorPricingSettings]
+  );
+  const displayedResults = hasGeneratedResults ? results : emptyResults;
 
   return (
     <div className="precificacao-module min-h-screen bg-transparent font-body text-[var(--crm-ink)] pb-20">
@@ -430,18 +443,18 @@ export default function FinEdgeApp() {
             <div className="space-y-1 text-center md:text-left">
               <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">TCV (Contrato Total)</p>
               <p className="text-2xl font-bold text-primary tabular-nums font-headline">
-                {formatCurrency(results.totalContractValue)}
+                {formatCurrency(displayedResults.totalContractValue)}
               </p>
             </div>
             <div className="space-y-1 text-center md:text-left">
               <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Margem EBITDA</p>
               <div className="flex items-center justify-center md:justify-start space-x-2">
-                <TrendingUp className={cn("w-4 h-4", results.metrics.ebitdaMargin >= 20 ? 'text-emerald-500' : 'text-amber-500')} />
+                <TrendingUp className={cn("w-4 h-4", displayedResults.metrics.ebitdaMargin >= 20 ? 'text-emerald-500' : 'text-amber-500')} />
                 <p className={cn(
                   "text-2xl font-bold tabular-nums font-headline",
-                  results.metrics.ebitdaMargin >= 20 ? 'text-emerald-600' : 'text-amber-600'
+                  displayedResults.metrics.ebitdaMargin >= 20 ? 'text-emerald-600' : 'text-amber-600'
                 )}>
-                  {formatPercent(results.metrics.ebitdaMargin)}
+                  {formatPercent(displayedResults.metrics.ebitdaMargin)}
                 </p>
               </div>
             </div>
@@ -641,7 +654,7 @@ export default function FinEdgeApp() {
                         Editar Dados da Proposta
                       </button>
                     </div>
-                    <PricingSimulator results={results} params={params} />
+                    {hasGeneratedResults && <PricingSimulator results={results} params={params} />}
                     <ProductManager
                       params={params}
                       upfrontItems={params.upfrontItems}
@@ -662,15 +675,15 @@ export default function FinEdgeApp() {
               </TabsContent>
 
               <TabsContent value="analytics" className="focus-visible:outline-none">
-                <AnalyticsDashboard results={results} params={params} />
+                <AnalyticsDashboard results={displayedResults} params={params} />
               </TabsContent>
 
               <TabsContent value="dre" className="focus-visible:outline-none">
-                <DREGenerator results={results} durationMonths={params.durationMonths} />
+                <DREGenerator results={displayedResults} durationMonths={params.durationMonths} />
               </TabsContent>
 
               <TabsContent value="ai" className="focus-visible:outline-none">
-                <AIAnalysis results={results} params={params} />
+                <AIAnalysis results={displayedResults} params={params} />
               </TabsContent>
 
               <TabsContent value="history" className="focus-visible:outline-none">
@@ -685,6 +698,7 @@ export default function FinEdgeApp() {
                       <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 hover:border-primary/30 transition-all cursor-pointer group" onClick={() => {
                         setParams(item.inputs);
                         setResults(item.results);
+                        setHasGeneratedResults(true);
                         toast({ title: "Cenário Restaurado", description: "Parâmetros aplicados com sucesso." });
                       }}>
                         <CardContent className="p-5 flex items-center justify-between">
