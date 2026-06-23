@@ -297,7 +297,7 @@ export default function DashboardGeral() {
       { key: 'opportunitiesB2G', label: 'Oportunidades B2G', endpoint: '/opportunities?clientType=B2G', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
       { key: 'companiesB2B', label: 'Empresas B2B', endpoint: '/companies?clientType=B2B', enabled: access.accessB2B, normalize: parseRows, emptyValue: [] },
       { key: 'companiesB2G', label: 'Empresas B2G', endpoint: '/companies?clientType=B2G', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
-      { key: 'b2g', label: 'Editais B2G', endpoint: '/b2g', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
+      { key: 'b2g', label: 'Editais B2G', endpoint: '/b2g/editais', enabled: access.accessB2G, normalize: parseRows, emptyValue: [] },
       { key: 'prevendasOportunidades', label: 'Registro Pré-Vendas', endpoint: '/prevendas-cadastros/oportunidades', enabled: (access.accessPreSales || adminLike), normalize: parseRows, emptyValue: [] },
       { key: 'preSales', label: 'Pré-vendas', endpoint: '/pre-vendas?limit=200', enabled: access.accessPreSales || adminLike, normalize: parsePreSales, emptyValue: { rows: [], total: 0 }, count: (payload) => payload.total },
       { key: 'preSalesPocs', label: 'POCs Pré-Vendas', endpoint: '/pre-sales-pocs', enabled: access.accessPreSales || adminLike, normalize: parseRows, emptyValue: [] },
