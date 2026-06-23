@@ -69,6 +69,8 @@ const buildGeneralDashboard = async () => {
   const opportunitySelect = {
     id: true,
     value: true,
+    projectType: true,
+    projectMonths: true,
     stage: true,
     createdAt: true,
     updatedAt: true,

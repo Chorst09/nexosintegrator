@@ -8,6 +8,7 @@ import {
   Brain,
   Building2,
   Calculator,
+  CalendarClock,
   CheckCircle2,
   ClipboardList,
   DollarSign,
@@ -89,6 +90,8 @@ const parseUserFromStorage = () => {
 const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const monthLabel = (date) => `${monthLabels[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
+const OPEN_STAGES = new Set(['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION']);
+const MONTHLY_PROJECT_TYPE = 'MONTHLY';
 
 const createMonthBuckets = (count = 6) => {
   const now = new Date();
@@ -112,6 +115,111 @@ const buildLeadStatsFromCompanies = (companies = []) => {
   stats.total = stats.hotLeads + stats.warmLeads + stats.coldLeads + stats.lowPriority;
   return stats;
 };
+
+const normalizeProjectType = (value) =>
+  String(value || '').trim().toUpperCase() === MONTHLY_PROJECT_TYPE ? MONTHLY_PROJECT_TYPE : 'SINGLE';
+
+const normalizeProjectMonths = (value) => {
+  const months = Number(value);
+  return Number.isFinite(months) && months > 0 ? months : 12;
+};
+
+const revenueBreakdownFromOpportunities = (rows = []) =>
+  toArray(rows).reduce((acc, item) => {
+    const value = toNumber(item?.value);
+    const isMonthly = normalizeProjectType(item?.projectType) === MONTHLY_PROJECT_TYPE;
+    if (isMonthly) {
+      const months = normalizeProjectMonths(item?.projectMonths);
+      acc.monthly += value;
+      acc.contract += value * months;
+      acc.total += value * months;
+      acc.monthlyCount += 1;
+    } else {
+      acc.single += value;
+      acc.total += value;
+      acc.singleCount += 1;
+    }
+    acc.count += 1;
+    return acc;
+  }, { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
+
+const revenueBreakdownFromNotices = (rows = []) =>
+  toArray(rows).reduce((acc, item) => {
+    const value = toNumber(item?.estimatedValue);
+    acc.single += value;
+    acc.total += value;
+    acc.singleCount += 1;
+    acc.count += 1;
+    return acc;
+  }, { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
+
+const mergeRevenueBreakdowns = (...items) =>
+  items.reduce((acc, item) => ({
+    monthly: acc.monthly + toNumber(item?.monthly),
+    contract: acc.contract + toNumber(item?.contract),
+    single: acc.single + toNumber(item?.single),
+    total: acc.total + toNumber(item?.total),
+    count: acc.count + toNumber(item?.count),
+    monthlyCount: acc.monthlyCount + toNumber(item?.monthlyCount),
+    singleCount: acc.singleCount + toNumber(item?.singleCount)
+  }), { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
+
+function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
+  const accents = {
+    cyan: {
+      border: 'border-cyan-300/35',
+      glow: 'shadow-[0_24px_80px_-54px_rgba(34,211,238,0.95)]',
+      bg: 'from-cyan-500/22 via-sky-500/10 to-blue-950/60',
+      icon: 'bg-cyan-400/16 text-cyan-200 ring-cyan-300/30'
+    },
+    violet: {
+      border: 'border-violet-300/35',
+      glow: 'shadow-[0_24px_80px_-54px_rgba(139,92,246,0.95)]',
+      bg: 'from-violet-500/24 via-indigo-500/12 to-blue-950/62',
+      icon: 'bg-violet-400/16 text-violet-200 ring-violet-300/30'
+    },
+    emerald: {
+      border: 'border-emerald-300/35',
+      glow: 'shadow-[0_24px_80px_-54px_rgba(16,185,129,0.95)]',
+      bg: 'from-emerald-500/22 via-teal-500/10 to-blue-950/60',
+      icon: 'bg-emerald-400/16 text-emerald-200 ring-emerald-300/30'
+    }
+  };
+  const tone = accents[accent] || accents.cyan;
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border ${tone.border} bg-gradient-to-br ${tone.bg} p-5 ${tone.glow}`}>
+      <div className="pointer-events-none absolute -right-16 -top-16 h-36 w-36 rounded-full bg-white/10 blur-3xl" />
+      <div className="relative flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#9fb9d7]">{title}</p>
+          <p className="mt-1 text-sm font-semibold text-[#c9ddf3]/78">{subtitle}</p>
+        </div>
+        <div className={`rounded-2xl p-3 ring-1 ${tone.icon}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+      <div className="relative mt-5 grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Mensal</p>
+          <p className="mt-1 text-lg font-black text-white">{formatCurrency(totals.monthly)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Contrato</p>
+          <p className="mt-1 text-lg font-black text-white">{formatCurrency(totals.contract)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Pontual</p>
+          <p className="mt-1 text-lg font-black text-white">{formatCurrency(totals.single)}</p>
+        </div>
+      </div>
+      <div className="relative mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-black/10 px-3 py-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-[#9fb9d7]">Total comercial</span>
+        <span className="text-xl font-black text-white">{formatCurrency(totals.total)}</span>
+      </div>
+    </div>
+  );
+}
 
 function KpiCard({ icon: Icon, label, value, sub, tone = 'blue', onClick }) {
   const tones = {
@@ -425,12 +533,11 @@ export default function DashboardGeral() {
     const proposalsRange = proposals.filter((item) => inRange(item.createdAt || item.updatedAt || item.sentAt));
     const contractsRange = contracts.filter((item) => inRange(item.createdAt || item.updatedAt || item.startDate));
 
-    const openStages = new Set(['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION']);
-    const openB2B = opportunitiesB2BRange.filter((item) => openStages.has(String(item.stage || '').toUpperCase()));
+    const openB2B = opportunitiesB2BRange.filter((item) => OPEN_STAGES.has(String(item.stage || '').toUpperCase()));
     const wonB2B = opportunitiesB2BRange.filter((item) => String(item.stage || '').toUpperCase() === 'WON');
     const lostB2B = opportunitiesB2BRange.filter((item) => String(item.stage || '').toUpperCase() === 'LOST');
 
-    const openB2GOpps = opportunitiesB2GRange.filter((item) => openStages.has(String(item.stage || '').toUpperCase()));
+    const openB2GOpps = opportunitiesB2GRange.filter((item) => OPEN_STAGES.has(String(item.stage || '').toUpperCase()));
     const wonB2GOpps = opportunitiesB2GRange.filter((item) => String(item.stage || '').toUpperCase() === 'WON');
 
     const activeNoticeStatuses = new Set([
@@ -501,12 +608,23 @@ export default function DashboardGeral() {
 
     const activeProducts = products.filter((item) => item?.active !== false);
 
-    const b2bPipelineValue = openB2B.reduce((sum, item) => sum + toNumber(item.value), 0);
-    const b2bWonValue = wonB2B.reduce((sum, item) => sum + toNumber(item.value), 0);
-    const b2gNoticePipelineValue = activeB2GNotices.reduce((sum, item) => sum + toNumber(item.estimatedValue), 0);
-    const b2gNoticeWonValue = wonB2GNotices.reduce((sum, item) => sum + toNumber(item.estimatedValue), 0);
-    const b2gOpportunityPipelineValue = openB2GOpps.reduce((sum, item) => sum + toNumber(item.value), 0);
-    const b2gOpportunityWonValue = wonB2GOpps.reduce((sum, item) => sum + toNumber(item.value), 0);
+    const b2bRevenue = revenueBreakdownFromOpportunities(openB2B);
+    const b2gOpportunityRevenue = revenueBreakdownFromOpportunities(openB2GOpps);
+    const b2gNoticeRevenue = revenueBreakdownFromNotices(activeB2GNotices);
+    const b2gRevenue = mergeRevenueBreakdowns(b2gOpportunityRevenue, b2gNoticeRevenue);
+    const consolidatedRevenue = mergeRevenueBreakdowns(b2bRevenue, b2gRevenue);
+    const b2bWonRevenue = revenueBreakdownFromOpportunities(wonB2B);
+    const b2gWonRevenue = mergeRevenueBreakdowns(
+      revenueBreakdownFromOpportunities(wonB2GOpps),
+      revenueBreakdownFromNotices(wonB2GNotices)
+    );
+
+    const b2bPipelineValue = b2bRevenue.total;
+    const b2bWonValue = b2bWonRevenue.total;
+    const b2gNoticePipelineValue = b2gNoticeRevenue.total;
+    const b2gNoticeWonValue = revenueBreakdownFromNotices(wonB2GNotices).total;
+    const b2gOpportunityPipelineValue = b2gOpportunityRevenue.total;
+    const b2gOpportunityWonValue = revenueBreakdownFromOpportunities(wonB2GOpps).total;
 
     const totalPipeline = b2bPipelineValue + b2gNoticePipelineValue + b2gOpportunityPipelineValue;
     const totalWonValue = b2bWonValue + b2gNoticeWonValue + b2gOpportunityWonValue;
@@ -543,7 +661,7 @@ export default function DashboardGeral() {
       if (String(item.stage || '').toUpperCase() === 'WON') {
         teamMap[ownerName].won += 1;
       }
-      if (openStages.has(String(item.stage || '').toUpperCase())) {
+      if (OPEN_STAGES.has(String(item.stage || '').toUpperCase())) {
         teamMap[ownerName].pipeline += toNumber(item.value);
       }
     });
@@ -567,6 +685,33 @@ export default function DashboardGeral() {
     const monthlyPotential = new Array(buckets.length).fill(0);
     const monthlyWon = new Array(buckets.length).fill(0);
     const monthlyActivities = new Array(buckets.length).fill(0);
+    const monthlyB2B = {
+      recurring: new Array(buckets.length).fill(0),
+      contract: new Array(buckets.length).fill(0),
+      single: new Array(buckets.length).fill(0)
+    };
+    const monthlyB2G = {
+      recurring: new Array(buckets.length).fill(0),
+      contract: new Array(buckets.length).fill(0),
+      single: new Array(buckets.length).fill(0)
+    };
+
+    const addOpportunityRevenueToBucket = (item, bucketSet) => {
+      const createdDate = toDate(item.createdAt || item.updatedAt);
+      if (!createdDate) return;
+      const idx = monthIndex.get(monthKey(createdDate));
+      if (idx === undefined) return;
+      const value = toNumber(item.value);
+      if (normalizeProjectType(item.projectType) === MONTHLY_PROJECT_TYPE) {
+        bucketSet.recurring[idx] += value;
+        bucketSet.contract[idx] += value * normalizeProjectMonths(item.projectMonths);
+      } else {
+        bucketSet.single[idx] += value;
+      }
+    };
+
+    opportunitiesB2BRange.forEach((item) => addOpportunityRevenueToBucket(item, monthlyB2B));
+    opportunitiesB2GRange.forEach((item) => addOpportunityRevenueToBucket(item, monthlyB2G));
 
     [...opportunitiesB2BRange, ...opportunitiesB2GRange].forEach((item) => {
       const createdDate = toDate(item.createdAt || item.updatedAt);
@@ -586,6 +731,7 @@ export default function DashboardGeral() {
       if (idx === undefined) return;
       if (activeNoticeStatuses.has(String(item.status || '').toUpperCase())) {
         monthlyPotential[idx] += toNumber(item.estimatedValue);
+        monthlyB2G.single[idx] += toNumber(item.estimatedValue);
       }
       if (wonNoticeStatuses.has(String(item.status || '').toUpperCase())) {
         monthlyWon[idx] += toNumber(item.estimatedValue);
@@ -652,6 +798,11 @@ export default function DashboardGeral() {
       approvedPreSalesPocs,
       blockedPreSalesPocs,
       overduePreSalesPocs,
+      b2bRevenue,
+      b2gRevenue,
+      consolidatedRevenue,
+      b2bWonRevenue,
+      b2gWonRevenue,
       totalPipeline,
       totalWonValue,
       b2bPipelineValue,
@@ -668,6 +819,8 @@ export default function DashboardGeral() {
       monthlyPotential,
       monthlyWon,
       monthlyActivities,
+      monthlyB2B,
+      monthlyB2G,
       stageOrder,
       stageLabels,
       b2bStageCounts,
@@ -706,6 +859,11 @@ export default function DashboardGeral() {
       activeB2GNotices,
       opportunitiesB2BRange,
       opportunitiesB2GRange,
+      b2bRevenue,
+      b2gRevenue,
+      consolidatedRevenue,
+      monthlyB2B,
+      monthlyB2G,
       b2bPipelineValue,
       totalPipeline
     } = computed;
@@ -824,17 +982,17 @@ export default function DashboardGeral() {
     };
 
     const pipelineComposition = {
-      labels: ['Pipeline B2B', 'Pipeline B2G (editais)', 'Pipeline B2G (oportunidades)'],
+      labels: ['B2B', 'B2G editais', 'B2G oportunidades'],
       datasets: [
         {
           data: [
             b2bPipelineValue,
             activeB2GNotices.reduce((sum, item) => sum + toNumber(item.estimatedValue), 0),
             opportunitiesB2GRange
-              .filter((item) => ['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION'].includes(String(item.stage || '').toUpperCase()))
-              .reduce((sum, item) => sum + toNumber(item.value), 0)
+              .filter((item) => OPEN_STAGES.has(String(item.stage || '').toUpperCase()))
+              .reduce((sum, item) => sum + revenueBreakdownFromOpportunities([item]).total, 0)
           ],
-          backgroundColor: ['#38bdf8', '#818cf8', '#22d3ee'],
+          backgroundColor: ['#22d3ee', '#8b5cf6', '#38bdf8'],
           borderWidth: 0
         }
       ]
@@ -856,8 +1014,73 @@ export default function DashboardGeral() {
       ]
     };
 
+    const revenueMix = {
+      labels: ['B2B', 'B2G', 'Consolidado'],
+      datasets: [
+        {
+          label: 'Mensal',
+          data: [b2bRevenue.monthly, b2gRevenue.monthly, consolidatedRevenue.monthly],
+          backgroundColor: 'rgba(45, 212, 191, 0.78)',
+          borderColor: 'rgba(153, 246, 228, 0.95)',
+          borderWidth: 1,
+          borderRadius: 10
+        },
+        {
+          label: 'Total contrato',
+          data: [b2bRevenue.contract, b2gRevenue.contract, consolidatedRevenue.contract],
+          backgroundColor: 'rgba(59, 130, 246, 0.78)',
+          borderColor: 'rgba(147, 197, 253, 0.95)',
+          borderWidth: 1,
+          borderRadius: 10
+        },
+        {
+          label: 'Pontual',
+          data: [b2bRevenue.single, b2gRevenue.single, consolidatedRevenue.single],
+          backgroundColor: 'rgba(168, 85, 247, 0.78)',
+          borderColor: 'rgba(216, 180, 254, 0.95)',
+          borderWidth: 1,
+          borderRadius: 10
+        }
+      ]
+    };
+
+    const monthlyRevenueSplit = {
+      labels: buckets.map((item) => item.label),
+      datasets: [
+        {
+          label: 'B2B mensal',
+          data: monthlyB2B.recurring,
+          borderColor: '#2dd4bf',
+          backgroundColor: 'rgba(45, 212, 191, 0.16)',
+          tension: 0.38,
+          fill: true,
+          borderWidth: 2
+        },
+        {
+          label: 'B2B contrato',
+          data: monthlyB2B.contract,
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96, 165, 250, 0.12)',
+          tension: 0.38,
+          fill: true,
+          borderWidth: 2
+        },
+        {
+          label: 'B2G pontual',
+          data: monthlyB2G.single,
+          borderColor: '#c084fc',
+          backgroundColor: 'rgba(192, 132, 252, 0.12)',
+          tension: 0.38,
+          fill: true,
+          borderWidth: 2
+        }
+      ]
+    };
+
     return {
       monthlyTrend,
+      monthlyRevenueSplit,
+      revenueMix,
       stageDistribution,
       leadTemperature,
       operationalLoad,
@@ -975,6 +1198,11 @@ export default function DashboardGeral() {
     approvedPreSalesPocs,
     blockedPreSalesPocs,
     overduePreSalesPocs,
+    b2bRevenue,
+    b2gRevenue,
+    consolidatedRevenue,
+    b2bWonRevenue,
+    b2gWonRevenue,
     totalPipeline,
     totalWonValue,
     b2bPipelineValue,
@@ -1004,6 +1232,9 @@ export default function DashboardGeral() {
       route: '/dashboard',
       badge: `${opportunitiesB2BRange.length} oport.`,
       kpis: [
+        { label: 'Mensal', value: formatCurrency(b2bRevenue.monthly) },
+        { label: 'Contrato', value: formatCurrency(b2bRevenue.contract) },
+        { label: 'Pontual', value: formatCurrency(b2bRevenue.single) },
         { label: 'Pipeline', value: formatCurrency(b2bPipelineValue) },
         { label: 'Ganhos', value: formatCurrency(b2bWonValue) },
         { label: 'Conversão', value: formatPercent(b2bConversion) }
@@ -1018,6 +1249,9 @@ export default function DashboardGeral() {
       route: '/b2g-dashboard',
       badge: `${activeB2GNotices.length} ativos`,
       kpis: [
+        { label: 'Mensal', value: formatCurrency(b2gRevenue.monthly) },
+        { label: 'Contrato', value: formatCurrency(b2gRevenue.contract) },
+        { label: 'Pontual', value: formatCurrency(b2gRevenue.single) },
         { label: 'Editais', value: formatNumber(b2gNoticesRange.length) },
         { label: 'Em análise', value: formatNumber(inAnalysisB2G.length) },
         { label: 'Taxa', value: formatPercent(b2gConversion) }
@@ -1135,9 +1369,33 @@ export default function DashboardGeral() {
         </div>
       </div>
 
+      <div data-section="receita-arquitetura" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <RevenueCard
+          title="B2B Privado"
+          subtitle="Pipeline aberto separado por modelo comercial"
+          icon={Building2}
+          totals={b2bRevenue}
+          accent="cyan"
+        />
+        <RevenueCard
+          title="B2G Governo"
+          subtitle="Oportunidades e editais ativos no período"
+          icon={Gavel}
+          totals={b2gRevenue}
+          accent="violet"
+        />
+        <RevenueCard
+          title="Consolidado"
+          subtitle="Mensal, contrato e pontual em uma visão executiva"
+          icon={CalendarClock}
+          totals={consolidatedRevenue}
+          accent="emerald"
+        />
+      </div>
+
       <div data-section="kpis" className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8">
-        <KpiCard icon={DollarSign} label="Pipeline Consolidado" value={formatCurrency(totalPipeline)} sub="B2B + B2G" tone="blue" />
-        <KpiCard icon={TrendingUp} label="Receita Ganha" value={formatCurrency(totalWonValue)} sub="Período selecionado" tone="green" />
+        <KpiCard icon={DollarSign} label="Pipeline Consolidado" value={formatCurrency(totalPipeline)} sub="Contrato + pontual" tone="blue" />
+        <KpiCard icon={TrendingUp} label="Receita Ganha" value={formatCurrency(totalWonValue)} sub={`B2B ${formatCurrency(b2bWonRevenue.total)} | B2G ${formatCurrency(b2gWonRevenue.total)}`} tone="green" />
         <KpiCard icon={Target} label="Oportunidades" value={formatNumber(opportunitiesB2BRange.length + opportunitiesB2GRange.length)} sub="B2B + B2G" tone="cyan" onClick={() => navigate('/oportunidades')} />
         <KpiCard icon={Building2} label="Empresas" value={formatNumber(companiesB2B.length + companiesB2G.length)} sub="Carteira total" tone="purple" onClick={() => navigate('/empresas')} />
         <KpiCard icon={Package} label="Produtos Ativos" value={formatNumber(activeProducts.length)} sub={`${formatNumber(regions.length)} regiões`} tone="amber" onClick={() => navigate('/produtos')} />
@@ -1196,6 +1454,51 @@ export default function DashboardGeral() {
             badge={module.badge}
           />
         ))}
+      </div>
+
+      <div data-section="receita-graficos" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <ChartCard
+          title="Mix de Receita B2B x B2G"
+          subtitle="Mensal, total do período do contrato e receita pontual"
+          action={<span className="rounded-full bg-cyan-400/15 px-2 py-1 text-xs font-semibold text-cyan-200">{formatCurrency(consolidatedRevenue.total)}</span>}
+        >
+          <Bar
+            data={chartData.revenueMix}
+            options={{
+              ...chartOptionsBase,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
+              },
+              scales: {
+                ...chartOptionsBase.scales,
+                x: { ...chartOptionsBase.scales.x, stacked: false },
+                y: { ...chartOptionsBase.scales.y, ticks: { ...chartOptionsBase.scales.y.ticks, callback: (value) => formatCurrency(value) } }
+              }
+            }}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Receita Mensal por Modelo"
+          subtitle="Separação temporal entre mensal, contrato e pontual"
+          action={<span className="rounded-full bg-emerald-400/15 px-2 py-1 text-xs font-semibold text-emerald-200">{formatCurrency(consolidatedRevenue.monthly)}/mês</span>}
+        >
+          <Line
+            data={chartData.monthlyRevenueSplit}
+            options={{
+              ...chartOptionsBase,
+              plugins: {
+                ...chartOptionsBase.plugins,
+                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
+              },
+              scales: {
+                ...chartOptionsBase.scales,
+                y: { ...chartOptionsBase.scales.y, ticks: { ...chartOptionsBase.scales.y.ticks, callback: (value) => formatCurrency(value) } }
+              }
+            }}
+          />
+        </ChartCard>
       </div>
 
       <div data-section="charts-row-1" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
