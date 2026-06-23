@@ -279,6 +279,26 @@ export default function DashboardGeral() {
     setLoading(true);
     const headers = getAuthHeaders();
 
+    try {
+      const response = await fetch(buildApiUrl('/dashboard?type=general'), { headers });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const payload = await response.json().catch(() => null);
+      if (!payload?.data || !Array.isArray(payload?.moduleHealth)) {
+        throw new Error('Resposta agregada inválida');
+      }
+
+      setData(payload.data);
+      setModuleHealth(payload.moduleHealth);
+      setUpdatedAt(new Date());
+      setLoading(false);
+      return;
+    } catch (error) {
+      console.warn('Dashboard geral agregado indisponível, usando carregamento legado:', error);
+    }
+
     const parseRows = (payload) => {
       if (Array.isArray(payload)) return payload;
       if (Array.isArray(payload?.rows)) return payload.rows;

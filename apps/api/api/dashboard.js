@@ -1,10 +1,238 @@
 import { prisma } from '../lib/prisma.js';
 
+const GENERAL_DASHBOARD_DAYS = 180;
+
+const toNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const countRows = (count) => Array.from({ length: Math.max(0, toNumber(count)) }, () => ({}));
+
+const rangeStartDate = (days = GENERAL_DASHBOARD_DAYS) =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+const safeQuery = async (operation, fallback) => {
+  try {
+    return await operation();
+  } catch {
+    return fallback;
+  }
+};
+
+const leadStatsWhere = (clientType) => ({
+  clientType,
+  status: { not: 'INACTIVE' }
+});
+
+const buildLeadStats = async (clientType) => {
+  const [hotLeads, warmLeads, coldLeads, lowPriority] = await Promise.all([
+    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 80, lte: 100 } } }),
+    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 60, lte: 79 } } }),
+    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 40, lte: 59 } } }),
+    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 0, lte: 39 } } })
+  ]);
+
+  return {
+    hotLeads,
+    warmLeads,
+    coldLeads,
+    lowPriority,
+    total: hotLeads + warmLeads + coldLeads + lowPriority
+  };
+};
+
+const readPreSalesRegistry = async () => {
+  const row = await prisma.systemSetting.findUnique({ where: { key: 'pre_sales_registry_v1' } });
+  try {
+    const parsed = row?.value ? JSON.parse(row.value) : {};
+    return Array.isArray(parsed?.oportunidades) ? parsed.oportunidades : [];
+  } catch {
+    return [];
+  }
+};
+
+const buildModuleHealth = (items) =>
+  items.map(({ key, label, data, count }) => ({
+    key,
+    label,
+    endpoint: '/api/dashboard?type=general',
+    enabled: true,
+    status: 'ok',
+    count: count ?? (Array.isArray(data) ? data.length : toNumber(data?.total || 0)),
+    data,
+    error: null
+  }));
+
+const buildGeneralDashboard = async () => {
+  const since = rangeStartDate();
+  const opportunitySelect = {
+    id: true,
+    value: true,
+    stage: true,
+    createdAt: true,
+    updatedAt: true,
+    owner: { select: { name: true } }
+  };
+
+  const [
+    opportunitiesB2B,
+    opportunitiesB2G,
+    companiesB2BCount,
+    companiesB2GCount,
+    b2gNotices,
+    preSalesRows,
+    preSalesTotal,
+    preSalesPocs,
+    activities,
+    productsActiveCount,
+    sellers,
+    proposals,
+    contracts,
+    commissionsCount,
+    salesTargetsCount,
+    leadStatsB2B,
+    leadStatsB2G,
+    workflowsCount,
+    automationRulesCount,
+    automationNotificationsCount,
+    integrationsCount,
+    regionsCount,
+    prevendasOportunidades
+  ] = await Promise.all([
+    prisma.opportunity.findMany({
+      where: {
+        company: { clientType: 'B2B' },
+        b2gStage: null,
+        createdAt: { gte: since }
+      },
+      select: opportunitySelect,
+      orderBy: { updatedAt: 'desc' }
+    }),
+    prisma.opportunity.findMany({
+      where: {
+        OR: [
+          { projectClientType: 'B2G' },
+          { b2gStage: { not: null } },
+          { company: { clientType: 'B2G' } }
+        ],
+        createdAt: { gte: since }
+      },
+      select: opportunitySelect,
+      orderBy: { updatedAt: 'desc' }
+    }),
+    prisma.company.count({ where: { clientType: 'B2B' } }),
+    prisma.company.count({ where: { clientType: 'B2G' } }),
+    safeQuery(() => prisma.bidNotice.findMany({
+      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
+      select: { id: true, status: true, estimatedValue: true, createdAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' }
+    }), []),
+    safeQuery(() => prisma.preSalesRequest.findMany({
+      where: { createdAt: { gte: since } },
+      select: { id: true, status: true, createdAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' }
+    }), []),
+    safeQuery(() => prisma.preSalesRequest.count(), 0),
+    safeQuery(() => prisma.preSalesPoc.findMany({
+      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
+      select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' }
+    }), []),
+    prisma.activity.findMany({
+      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
+      select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' }
+    }),
+    prisma.product.count({ where: { active: true } }),
+    prisma.user.findMany({
+      where: { role: 'SELLER' },
+      select: { id: true, name: true, _count: { select: { opportunities: true } } },
+      orderBy: { name: 'asc' }
+    }),
+    prisma.proposal.findMany({
+      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
+      select: { id: true, createdAt: true, updatedAt: true }
+    }),
+    prisma.contract.findMany({
+      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { startDate: { gte: since } }] },
+      select: { id: true, createdAt: true, updatedAt: true, startDate: true }
+    }),
+    prisma.commission.count(),
+    prisma.salesTarget.count(),
+    buildLeadStats('B2B'),
+    buildLeadStats('B2G'),
+    safeQuery(() => prisma.workflow.count(), 0),
+    safeQuery(() => prisma.automationRule.count(), 0),
+    safeQuery(() => prisma.notification.count(), 0),
+    safeQuery(() => prisma.integration.count(), 0),
+    prisma.region.count(),
+    safeQuery(readPreSalesRegistry, [])
+  ]);
+
+  const data = {
+    opportunitiesB2B,
+    opportunitiesB2G,
+    companiesB2B: countRows(companiesB2BCount),
+    companiesB2G: countRows(companiesB2GCount),
+    b2g: b2gNotices,
+    prevendasOportunidades,
+    preSales: { rows: preSalesRows, total: preSalesTotal },
+    preSalesPocs,
+    activities,
+    products: countRows(productsActiveCount).map(() => ({ active: true })),
+    sellers,
+    proposals,
+    contracts,
+    commissions: countRows(commissionsCount),
+    salesTargets: countRows(salesTargetsCount),
+    leadStatsB2B,
+    leadStatsB2G,
+    workflows: countRows(workflowsCount),
+    automationRules: countRows(automationRulesCount),
+    automationNotifications: countRows(automationNotificationsCount),
+    integrations: countRows(integrationsCount),
+    regions: countRows(regionsCount)
+  };
+
+  return {
+    data,
+    moduleHealth: buildModuleHealth([
+      { key: 'opportunitiesB2B', label: 'Oportunidades B2B', data: opportunitiesB2B },
+      { key: 'opportunitiesB2G', label: 'Oportunidades B2G', data: opportunitiesB2G },
+      { key: 'companiesB2B', label: 'Empresas B2B', data: data.companiesB2B, count: companiesB2BCount },
+      { key: 'companiesB2G', label: 'Empresas B2G', data: data.companiesB2G, count: companiesB2GCount },
+      { key: 'b2g', label: 'Editais B2G', data: b2gNotices },
+      { key: 'prevendasOportunidades', label: 'Registro Pré-Vendas', data: prevendasOportunidades },
+      { key: 'preSales', label: 'Pré-vendas', data: data.preSales, count: preSalesTotal },
+      { key: 'preSalesPocs', label: 'POCs Pré-Vendas', data: preSalesPocs },
+      { key: 'activities', label: 'Atividades', data: activities },
+      { key: 'products', label: 'Produtos', data: data.products, count: productsActiveCount },
+      { key: 'sellers', label: 'Equipe comercial', data: sellers },
+      { key: 'proposals', label: 'Propostas', data: proposals },
+      { key: 'contracts', label: 'Contratos', data: contracts },
+      { key: 'commissions', label: 'Comissões', data: data.commissions, count: commissionsCount },
+      { key: 'salesTargets', label: 'Metas comerciais', data: data.salesTargets, count: salesTargetsCount },
+      { key: 'leadStatsB2B', label: 'Lead scoring B2B', data: leadStatsB2B, count: leadStatsB2B.total },
+      { key: 'leadStatsB2G', label: 'Lead scoring B2G', data: leadStatsB2G, count: leadStatsB2G.total },
+      { key: 'workflows', label: 'Workflows', data: data.workflows, count: workflowsCount },
+      { key: 'automationRules', label: 'Regras de automação', data: data.automationRules, count: automationRulesCount },
+      { key: 'automationNotifications', label: 'Notificações automação', data: data.automationNotifications, count: automationNotificationsCount },
+      { key: 'integrations', label: 'Integrações', data: data.integrations, count: integrationsCount },
+      { key: 'regions', label: 'Regiões', data: data.regions, count: regionsCount }
+    ])
+  };
+};
+
 export default async function handler(req) {
   if (req.method === 'GET') {
     const { type = 'executive', userId, period = '6' } = req.query || {};
 
     try {
+      if (type === 'general') {
+        return Response.json(await buildGeneralDashboard());
+      }
+
       if (type === 'executive') {
         // Dashboard Executivo
         const [
