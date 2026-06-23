@@ -65,6 +65,13 @@ const numberFormatter = new Intl.NumberFormat('pt-BR');
 const formatCurrency = (value) => currencyFormatter.format(Number(value || 0));
 const formatNumber = (value) => numberFormatter.format(Number(value || 0));
 const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
+const formatCompactCurrency = (value) => {
+  const amount = Math.abs(Number(value || 0));
+  if (amount >= 1_000_000_000) return `R$ ${(Number(value || 0) / 1_000_000_000).toFixed(2).replace('.', ',')} bi`;
+  if (amount >= 1_000_000) return `R$ ${(Number(value || 0) / 1_000_000).toFixed(2).replace('.', ',')} mi`;
+  if (amount >= 1_000) return `R$ ${(Number(value || 0) / 1_000).toFixed(1).replace('.', ',')} mil`;
+  return formatCurrency(value);
+};
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toNumber = (value) => {
@@ -200,22 +207,30 @@ function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
         </div>
       </div>
       <div className="relative mt-5 grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.045] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Mensal</p>
-          <p className="mt-1 text-lg font-black text-white">{formatCurrency(totals.monthly)}</p>
+          <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.monthly)}>
+            {formatCompactCurrency(totals.monthly)}
+          </p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.045] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Contrato</p>
-          <p className="mt-1 text-lg font-black text-white">{formatCurrency(totals.contract)}</p>
+          <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.contract)}>
+            {formatCompactCurrency(totals.contract)}
+          </p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.045] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Pontual</p>
-          <p className="mt-1 text-lg font-black text-white">{formatCurrency(totals.single)}</p>
+          <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.single)}>
+            {formatCompactCurrency(totals.single)}
+          </p>
         </div>
       </div>
-      <div className="relative mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-black/10 px-3 py-2">
-        <span className="text-xs font-bold uppercase tracking-wide text-[#9fb9d7]">Total comercial</span>
-        <span className="text-xl font-black text-white">{formatCurrency(totals.total)}</span>
+      <div className="relative mt-4 flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/10 px-3 py-2">
+        <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-[#9fb9d7]">Total comercial</span>
+        <span className="min-w-0 truncate text-[clamp(1rem,1.45vw,1.25rem)] font-black leading-tight text-white" title={formatCurrency(totals.total)}>
+          {formatCompactCurrency(totals.total)}
+        </span>
       </div>
     </div>
   );
@@ -279,11 +294,13 @@ function ModuleCard({ title, subtitle, icon: Icon, color, kpis, route, navigate,
           )}
         </div>
       </div>
-      <div className="grid grid-cols-3 divide-x divide-[var(--crm-border)]">
+      <div className={`grid ${kpis.length > 3 ? 'grid-cols-2' : 'grid-cols-3'} border-t border-[var(--crm-border)]`}>
         {kpis.map((item) => (
-          <div key={item.label} className="p-4 text-center">
-            <p className="text-lg font-bold text-[var(--crm-ink)]">{item.value}</p>
-            <p className="text-xs text-[var(--crm-muted)]">{item.label}</p>
+          <div key={item.label} className="min-w-0 border-b border-r border-[var(--crm-border)] p-3 text-center last:border-r-0">
+            <p className="truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-bold leading-tight text-[var(--crm-ink)]" title={String(item.value)}>
+              {String(item.value).startsWith('R$') ? formatCompactCurrency(String(item.value).replace(/[^\d,-]/g, '').replace('.', '').replace(',', '.')) : item.value}
+            </p>
+            <p className="mt-1 text-[11px] leading-tight text-[var(--crm-muted)]">{item.label}</p>
           </div>
         ))}
       </div>
