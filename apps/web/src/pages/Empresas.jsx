@@ -8,9 +8,17 @@ import ModernTable from '../components/ModernTable';
 import Modal from '../components/Modal';
 import { API_ENDPOINTS, buildApiUrl, getAuthHeaders } from '../config/api';
 
-const initialFormData = () => ({
+const normalizeClientType = (value, fallback = 'B2B') => {
+  const raw = String(value || '').trim().toUpperCase();
+  return raw === 'B2G' ? 'B2G' : raw === 'B2B' ? 'B2B' : fallback;
+};
+
+const sectorLabel = (clientType) => (normalizeClientType(clientType) === 'B2G' ? 'Governo' : 'Privado');
+
+const initialFormData = (clientType = 'B2B') => ({
   name: '',
   document: '',
+  clientType: normalizeClientType(clientType),
   segment: '',
   size: 'SMALL',
   website: '',
@@ -81,8 +89,16 @@ const ScorePill = ({ score }) => {
   );
 };
 
-export default function Empresas() {
+export default function Empresas({ clientType = 'B2B' }) {
   const navigate = useNavigate();
+  const pageClientType = normalizeClientType(clientType);
+  const isGovernmentMode = pageClientType === 'B2G';
+  const entityLabel = isGovernmentMode ? 'Órgão' : 'Empresa';
+  const entityLabelPlural = isGovernmentMode ? 'Órgãos' : 'Empresas';
+  const entityLabelLower = isGovernmentMode ? 'órgão' : 'empresa';
+  const contactTitle = isGovernmentMode ? 'Contato do órgão' : 'Contato principal';
+  const secondaryContactTitle = isGovernmentMode ? 'Contato administrativo' : 'Contato de Compras';
+  const defaultSecondaryPosition = isGovernmentMode ? 'Administrativo' : 'Compras';
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -98,14 +114,14 @@ export default function Empresas() {
   const [docUploading, setDocUploading] = useState(false);
   const [viewDocFiles, setViewDocFiles] = useState([]);
   const [viewDocUploading, setViewDocUploading] = useState(false);
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState(() => initialFormData(pageClientType));
 
   const empresasArray = Array.isArray(empresas) ? empresas : [];
 
   const loadEmpresas = async () => {
     try {
       setLoading(true);
-      const response = await fetch(API_ENDPOINTS.companies, { headers: getAuthHeaders() });
+      const response = await fetch(`${API_ENDPOINTS.companies}?clientType=${pageClientType}`, { headers: getAuthHeaders() });
       if (!response.ok) return;
       const data = await response.json();
       setEmpresas(Array.isArray(data) ? data : []);
@@ -118,7 +134,7 @@ export default function Empresas() {
 
   useEffect(() => {
     loadEmpresas();
-  }, []);
+  }, [pageClientType]);
 
   const getUploadHeaders = () => {
     const token = localStorage.getItem('token');
@@ -243,6 +259,7 @@ export default function Empresas() {
         e.name,
         e.document,
         e.segment,
+        sectorLabel(e.clientType),
         e.website,
         e.city,
         e.state
@@ -265,7 +282,7 @@ export default function Empresas() {
 
   const openCreate = () => {
     setEditingCompany(null);
-    setFormData(initialFormData());
+    setFormData(initialFormData(pageClientType));
     setDocFiles([]);
     setShowForm(true);
   };
@@ -287,6 +304,7 @@ export default function Empresas() {
     setFormData({
       name: company?.name || '',
       document: company?.document || '',
+      clientType: normalizeClientType(company?.clientType, pageClientType),
       segment: company?.segment || '',
       size: company?.size || 'SMALL',
       website: company?.website || '',
@@ -299,7 +317,7 @@ export default function Empresas() {
         name: comprasContact?.name || '',
         email: comprasContact?.email || '',
         phone: comprasContact?.phone || '',
-        position: comprasContact?.position || 'Compras'
+        position: comprasContact?.position || defaultSecondaryPosition
       }
     });
     setDocFiles([]);
@@ -312,7 +330,7 @@ export default function Empresas() {
     setSaving(false);
     setDocFiles([]);
     setDocUploading(false);
-    setFormData(initialFormData());
+    setFormData(initialFormData(pageClientType));
   };
 
   const handleSubmit = async (e) => {
@@ -361,7 +379,11 @@ export default function Empresas() {
 
         return [primaryContact, ...remainingContacts];
       })();
-      const payload = { ...baseData, contacts: contactsPayload };
+      const payload = {
+        ...baseData,
+        clientType: normalizeClientType(baseData.clientType, pageClientType),
+        contacts: contactsPayload
+      };
       if (editingCompany?.id) {
         const response = await fetch(API_ENDPOINTS.companies, {
           method: 'PUT',
@@ -467,7 +489,7 @@ export default function Empresas() {
   };
 
   const handleDelete = async (company) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a empresa "${company.name}"?`)) {
+    if (!window.confirm(`Tem certeza que deseja excluir ${isGovernmentMode ? 'o órgão' : 'a empresa'} "${company.name}"?`)) {
       return;
     }
 
@@ -539,12 +561,12 @@ export default function Empresas() {
   const columns = useMemo(() => ([
     {
       key: 'name',
-      label: 'Empresa',
+      label: entityLabel,
       render: (item) => (
         <div className="min-w-[220px]">
           <div className="text-sm font-extrabold text-[var(--crm-ink)]">{item.name}</div>
           <div className="mt-0.5 text-xs text-[var(--crm-muted)] truncate">
-            {[item.segment, item.website].filter(Boolean).join(' • ') || 'Sem informacoes extras'}
+            {[sectorLabel(item.clientType), item.segment, item.website].filter(Boolean).join(' • ') || 'Sem informacoes extras'}
           </div>
         </div>
       )
@@ -589,19 +611,19 @@ export default function Empresas() {
         </span>
       )
     }
-  ]), []);
+  ]), [entityLabel]);
 
   return (
     <div>
       <PageHeader
-        title="Empresas"
-        subtitle="Gerencie seus clientes e prospects"
+        title={entityLabelPlural}
+        subtitle={isGovernmentMode ? 'Cadastro de órgãos governamentais separado das empresas privadas' : 'Gerencie empresas privadas, clientes e prospects'}
         icon={Building2}
         gradient="blue"
-        breadcrumbs={['Home', 'Empresas']}
+        breadcrumbs={isGovernmentMode ? ['Home', 'B2G Governo', 'Órgãos'] : ['Home', 'Empresas']}
         actions={[
           {
-            label: 'Nova Empresa',
+            label: isGovernmentMode ? 'Novo Órgão' : 'Nova Empresa',
             onClick: openCreate,
             icon: Plus,
             variant: 'primary'
@@ -610,7 +632,7 @@ export default function Empresas() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
-        <AnimatedStats title="Total" value={kpis.total} subtitle="Empresas cadastradas" icon={Building2} color="blue" />
+        <AnimatedStats title="Total" value={kpis.total} subtitle={`${entityLabelPlural} cadastrados`} icon={Building2} color="blue" />
         <AnimatedStats title="Leads" value={kpis.leads} subtitle="Novas oportunidades" icon={Users} color="purple" />
         <AnimatedStats title="Ativos" value={kpis.active} subtitle="Clientes em andamento" icon={Users} color="green" />
         <AnimatedStats title="Hot" value={kpis.hot} subtitle="Score 80+" icon={Flame} color="red" />
@@ -618,7 +640,7 @@ export default function Empresas() {
       </div>
 
       <ModernTable
-        title="Lista de Empresas"
+        title={`Lista de ${entityLabelPlural}`}
         data={filteredEmpresas}
         columns={columns}
         searchTerm={searchTerm}
@@ -642,15 +664,15 @@ export default function Empresas() {
         onEdit={openEdit}
         onDelete={handleDelete}
         onBulkDelete={handleBulkDelete}
-        bulkDeleteLabel="Excluir selecionadas"
+        bulkDeleteLabel="Excluir selecionados"
         emptyState={
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
               <Building2 className="w-8 h-8 text-[var(--crm-muted)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[var(--crm-ink)] mb-2">Nenhuma empresa encontrada</h3>
+            <h3 className="text-lg font-semibold text-[var(--crm-ink)] mb-2">Nenhum {entityLabelLower} encontrado</h3>
             <p className="text-[var(--crm-muted)] max-w-sm mx-auto">
-              Tente ajustar a busca ou crie uma nova empresa.
+              Tente ajustar a busca ou crie um novo cadastro.
             </p>
           </div>
         }
@@ -659,12 +681,12 @@ export default function Empresas() {
       <Modal
         isOpen={showForm}
         onClose={closeModal}
-        title={editingCompany ? 'Editar Empresa' : 'Nova Empresa'}
+        title={editingCompany ? `Editar ${entityLabel}` : `Novo ${entityLabel}`}
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Nome da Empresa *</label>
+              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Nome {isGovernmentMode ? 'do Órgão' : 'da Empresa'} *</label>
               <input
                 type="text"
                 required
@@ -675,7 +697,7 @@ export default function Empresas() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">CNPJ/CPF</label>
+              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">{isGovernmentMode ? 'CNPJ / Código do órgão' : 'CNPJ/CPF'}</label>
               <input
                 type="text"
                 value={formData.document}
@@ -685,7 +707,20 @@ export default function Empresas() {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Segmento</label>
+              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Setor</label>
+              <select
+                value={formData.clientType}
+                onChange={(e) => setFormData({ ...formData, clientType: normalizeClientType(e.target.value, pageClientType) })}
+                className="crm-input"
+                disabled
+              >
+                <option value="B2B">Privado</option>
+                <option value="B2G">Governo</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">{isGovernmentMode ? 'Esfera / Área' : 'Segmento'}</label>
               <input
                 type="text"
                 value={formData.segment}
@@ -736,7 +771,7 @@ export default function Empresas() {
           </div>
 
           <div className="crm-panel-muted p-4">
-            <div className="text-sm font-extrabold text-[var(--crm-ink)]">Contato principal</div>
+            <div className="text-sm font-extrabold text-[var(--crm-ink)]">{contactTitle}</div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <input
                 type="text"
@@ -790,11 +825,11 @@ export default function Empresas() {
           </div>
 
           <div className="crm-panel-muted p-4">
-            <div className="text-sm font-extrabold text-[var(--crm-ink)]">Contato de Compras</div>
+            <div className="text-sm font-extrabold text-[var(--crm-ink)]">{secondaryContactTitle}</div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <input
                 type="text"
-                placeholder="Nome do contato de compras"
+                placeholder={isGovernmentMode ? 'Nome do contato administrativo' : 'Nome do contato de compras'}
                 value={formData.purchasesContact?.name || ''}
                 onChange={(e) =>
                   setFormData({
@@ -806,7 +841,7 @@ export default function Empresas() {
               />
               <input
                 type="email"
-                placeholder="Email do contato de compras"
+                placeholder={isGovernmentMode ? 'Email do contato administrativo' : 'Email do contato de compras'}
                 value={formData.purchasesContact?.email || ''}
                 onChange={(e) =>
                   setFormData({
@@ -818,7 +853,7 @@ export default function Empresas() {
               />
               <input
                 type="tel"
-                placeholder="Telefone do contato de compras"
+                placeholder={isGovernmentMode ? 'Telefone do contato administrativo' : 'Telefone do contato de compras'}
                 value={formData.purchasesContact?.phone || ''}
                 onChange={(e) =>
                   setFormData({
@@ -831,7 +866,7 @@ export default function Empresas() {
               <input
                 type="text"
                 placeholder="Cargo"
-                value={formData.purchasesContact?.position || 'Compras'}
+                value={formData.purchasesContact?.position || defaultSecondaryPosition}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -848,7 +883,7 @@ export default function Empresas() {
               <div>
                 <div className="text-sm font-extrabold text-[var(--crm-ink)]">Documentação</div>
                 <div className="text-xs text-[var(--crm-muted)]">
-                  Anexe documentos da empresa (PDF, DOC, XLS, imagens).
+                  Anexe documentos {isGovernmentMode ? 'do órgão' : 'da empresa'} (PDF, DOC, XLS, imagens).
                 </div>
               </div>
               {docFiles.length > 0 && (
@@ -902,7 +937,7 @@ export default function Empresas() {
       <Modal
         isOpen={showViewModal}
         onClose={closeViewModal}
-        title={viewingCompany?.name || 'Detalhes da Empresa'}
+        title={viewingCompany?.name || `Detalhes ${isGovernmentMode ? 'do Órgão' : 'da Empresa'}`}
         size="large"
       >
         {viewingCompany && (
@@ -957,15 +992,19 @@ export default function Empresas() {
                   <div className="crm-panel-muted p-6">
                     <h4 className="text-sm font-bold text-[var(--crm-ink)] mb-4">Informações Básicas</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-xs font-semibold text-[var(--crm-muted)] uppercase mb-1">Setor</div>
+                        <div className="text-sm text-[var(--crm-ink)] font-medium">{sectorLabel(viewingCompany.clientType)}</div>
+                      </div>
                       {viewingCompany.document && (
                         <div>
-                          <div className="text-xs font-semibold text-[var(--crm-muted)] uppercase mb-1">CNPJ/CPF</div>
+                          <div className="text-xs font-semibold text-[var(--crm-muted)] uppercase mb-1">{isGovernmentMode ? 'CNPJ / Código do órgão' : 'CNPJ/CPF'}</div>
                           <div className="text-sm text-[var(--crm-ink)] font-medium">{viewingCompany.document}</div>
                         </div>
                       )}
                       {viewingCompany.segment && (
                         <div>
-                          <div className="text-xs font-semibold text-[var(--crm-muted)] uppercase mb-1">Segmento</div>
+                          <div className="text-xs font-semibold text-[var(--crm-muted)] uppercase mb-1">{isGovernmentMode ? 'Esfera / Área' : 'Segmento'}</div>
                           <div className="text-sm text-[var(--crm-ink)] font-medium">{viewingCompany.segment}</div>
                         </div>
                       )}
@@ -1331,7 +1370,7 @@ export default function Empresas() {
                   <div className="crm-panel-muted p-4 space-y-3">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <div className="text-sm font-bold text-[var(--crm-ink)]">Documentação da empresa</div>
+                        <div className="text-sm font-bold text-[var(--crm-ink)]">Documentação {isGovernmentMode ? 'do órgão' : 'da empresa'}</div>
                         <div className="text-xs text-[var(--crm-muted)]">
                           Envie contratos sociais, certificados, propostas e anexos relacionados.
                         </div>
@@ -1432,7 +1471,7 @@ export default function Empresas() {
                 }}
                 className="crm-btn crm-btn-primary"
               >
-                Editar Empresa
+                Editar {entityLabel}
               </button>
               <button onClick={closeViewModal} className="crm-btn crm-btn-secondary">
                 Fechar

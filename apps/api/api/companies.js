@@ -236,6 +236,7 @@ export default async function handler(req) {
           name: body.name,
           document: body.document,
           segment: body.segment,
+          clientType: body.clientType === 'B2G' ? 'B2G' : body.clientType === 'B2B' ? 'B2B' : undefined,
           size: body.size,
           website: body.website,
           address: body.address,

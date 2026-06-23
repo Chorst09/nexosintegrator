@@ -126,6 +126,14 @@ export default function App() {
             }
           />
           <Route
+            path="b2g-orgaos"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+                <Empresas clientType="B2G" />
+              </RoleGuard>
+            }
+          />
+          <Route
             path="b2g-oportunidades"
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>

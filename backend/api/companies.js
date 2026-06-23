@@ -16,6 +16,11 @@ const parsePathIdFromUrl = (urlValue) => {
 const resolveCompanyId = (req, body) =>
   body?.id || req.query?.id || parsePathIdFromUrl(req.url);
 
+const normalizeClientType = (value, fallback = 'B2B') => {
+  const raw = String(value || '').trim().toUpperCase();
+  return raw === 'B2G' ? 'B2G' : raw === 'B2B' ? 'B2B' : fallback;
+};
+
 const isSchemaDriftError = (error) => {
   return error?.code === 'P2021' || error?.code === 'P2022';
 };
@@ -107,6 +112,7 @@ export default async function handler(req) {
         name: body.name,
         document: body.document,
         segment: body.segment,
+        clientType: normalizeClientType(body.clientType),
         size: body.size,
         website: body.website,
         address: body.address,
@@ -170,6 +176,7 @@ export default async function handler(req) {
         name: body.name,
         document: body.document,
         segment: body.segment,
+        clientType: body.clientType ? normalizeClientType(body.clientType) : undefined,
         size: body.size,
         website: body.website,
         address: body.address,

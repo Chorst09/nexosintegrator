@@ -131,6 +131,7 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
       icon: Gavel,
       items: [
         { path: '/b2g-dashboard', label: 'Dashboard', icon: BarChart3, description: 'Visão estratégica B2G' },
+        { path: '/b2g-orgaos', label: 'Órgãos', icon: Landmark, description: 'Cadastro de órgãos governamentais' },
         { path: '/b2g-portal-busca', label: 'Portal de Busca', icon: Search, description: 'Busca de editais e licitações no PNCP' },
         { path: '/b2g-leads', label: 'Leads', icon: Users, description: 'Órgãos e contas no radar' },
         { path: '/b2g-oportunidades', label: 'Oportunidades', icon: Target, description: 'Pipeline de licitações' },
