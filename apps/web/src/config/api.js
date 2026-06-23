@@ -116,6 +116,7 @@ export const API_ENDPOINTS = {
     publicCheckoutConfirm: `${API_BASE_URL}/licensing/public/checkout/confirm`,
     plans: `${API_BASE_URL}/licensing/plans`,
     companies: `${API_BASE_URL}/licensing/companies`,
+    updateCompany: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}`,
     companyLicense: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}/license`,
     companyUsers: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}/users`,
     deleteCompany: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}`,

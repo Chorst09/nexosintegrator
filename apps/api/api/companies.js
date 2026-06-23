@@ -40,6 +40,25 @@ const normalizeContacts = (contacts) => {
   }));
 };
 
+const normalizeCompanyStatus = (value, fallback = 'ACTIVE') => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (['LEAD', 'PROSPECT', 'ACTIVE', 'INACTIVE', 'CHURNED'].includes(raw)) return raw;
+  if (['SUSPENDED', 'CANCELED'].includes(raw)) return 'INACTIVE';
+  return fallback;
+};
+
+const normalizeModuleAccess = (body = {}, fallback = {}) => {
+  const accessB2B = body.accessB2B !== undefined ? Boolean(body.accessB2B) : fallback.accessB2B !== undefined ? Boolean(fallback.accessB2B) : true;
+  const accessB2G = body.accessB2G !== undefined ? Boolean(body.accessB2G) : fallback.accessB2G !== undefined ? Boolean(fallback.accessB2G) : false;
+  const accessPreSales = body.accessPreSales !== undefined ? Boolean(body.accessPreSales) : fallback.accessPreSales !== undefined ? Boolean(fallback.accessPreSales) : false;
+  return {
+    accessB2B,
+    accessB2G,
+    accessPreSales,
+    accessManagement: accessB2B && accessB2G
+  };
+};
+
 const isSchemaDriftError = (error) => {
   return error?.code === 'P2021' || error?.code === 'P2022';
 };
@@ -166,12 +185,13 @@ export default async function handler(req) {
         document: body.document,
         segment: body.segment,
         clientType: body.clientType === 'B2G' ? 'B2G' : body.clientType === 'B2B' ? 'B2B' : undefined,
+        ...normalizeModuleAccess(body),
         size: body.size,
         website: body.website,
         address: body.address,
         city: body.city,
         state: body.state,
-        status: body.status || 'LEAD',
+        status: normalizeCompanyStatus(body.status, 'LEAD'),
         leadScore: Number.isFinite(Number(body.leadScore)) ? Number(body.leadScore) : undefined,
         regionId,
         contacts: contactsToCreate.length > 0
@@ -229,6 +249,12 @@ export default async function handler(req) {
     }
 
     const contactsToSave = normalizeContacts(body.contacts);
+    const existingCompany = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { accessB2B: true, accessB2G: true, accessPreSales: true }
+    });
+    if (!existingCompany) return new Response('Empresa não encontrada', { status: 404 });
+
     const company = await prisma.$transaction(async (tx) => {
       const updatedCompany = await tx.company.update({
         where: { id: companyId },
@@ -237,12 +263,13 @@ export default async function handler(req) {
           document: body.document,
           segment: body.segment,
           clientType: body.clientType === 'B2G' ? 'B2G' : body.clientType === 'B2B' ? 'B2B' : undefined,
+          ...normalizeModuleAccess(body, existingCompany),
           size: body.size,
           website: body.website,
           address: body.address,
           city: body.city,
           state: body.state,
-          status: body.status,
+          status: body.status !== undefined ? normalizeCompanyStatus(body.status) : undefined,
           leadScore: body.leadScore
         },
         include: {

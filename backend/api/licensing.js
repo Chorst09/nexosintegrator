@@ -32,6 +32,30 @@ const requireMasterAccess = (req) => {
   }
 };
 
+const normalizeModuleAccess = (body = {}, fallback = {}) => {
+  const accessB2B = body.accessB2B !== undefined ? Boolean(body.accessB2B) : fallback.accessB2B !== undefined ? Boolean(fallback.accessB2B) : true;
+  const accessB2G = body.accessB2G !== undefined ? Boolean(body.accessB2G) : fallback.accessB2G !== undefined ? Boolean(fallback.accessB2G) : false;
+  const accessPreSales = body.accessPreSales !== undefined ? Boolean(body.accessPreSales) : fallback.accessPreSales !== undefined ? Boolean(fallback.accessPreSales) : false;
+  return {
+    accessB2B,
+    accessB2G,
+    accessPreSales,
+    accessManagement: accessB2B && accessB2G
+  };
+};
+
+const normalizeCompanyStatus = (value, fallback = 'ACTIVE') => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (['LEAD', 'PROSPECT', 'ACTIVE', 'INACTIVE', 'CHURNED'].includes(raw)) return raw;
+  if (['SUSPENDED', 'CANCELED'].includes(raw)) return 'INACTIVE';
+  return fallback;
+};
+
+const parseCompanyIdFromUrl = (urlValue) => {
+  const match = String(urlValue || '').split('?')[0].match(/\/companies\/([^/]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
 export default async function handler(req) {
   // POST /api/licensing/public/checkout/confirm
   if (req.method === 'POST' && req.url.includes('/public/checkout/confirm')) {
@@ -90,11 +114,13 @@ export default async function handler(req) {
       }
 
       // Criar empresa
+      const moduleAccess = normalizeModuleAccess(company, { accessB2B: true, accessB2G: true, accessPreSales: true });
       const newCompany = await prisma.company.create({
         data: {
           name: company.name,
           document: company.cnpj,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          ...moduleAccess
         }
       });
 
@@ -107,7 +133,10 @@ export default async function handler(req) {
           name: adminUser.name,
           email: adminUser.email,
           password: hashedPassword,
-          role: 'ADMIN'
+          role: 'ADMIN',
+          accessB2B: moduleAccess.accessB2B,
+          accessB2G: moduleAccess.accessB2G,
+          accessPreSales: moduleAccess.accessPreSales
         }
       });
 
@@ -206,6 +235,10 @@ export default async function handler(req) {
           name: true,
           document: true,
           status: true,
+          accessB2B: true,
+          accessB2G: true,
+          accessPreSales: true,
+          accessManagement: true,
           createdAt: true,
           _count: {
             select: { contacts: true }
@@ -220,6 +253,43 @@ export default async function handler(req) {
         JSON.stringify({ error: 'Erro ao listar empresas' }),
         { status: 500 }
       );
+    }
+  }
+
+  if (req.method === 'PUT' && req.url.includes('/companies/')) {
+    const authError = requireMasterAccess(req);
+    if (authError) return authError;
+
+    try {
+      const companyId = parseCompanyIdFromUrl(req.url);
+      if (!companyId) {
+        return new Response(JSON.stringify({ error: 'ID da empresa inválido' }), { status: 400 });
+      }
+
+      const body = await req.json();
+      const existing = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { id: true, accessB2B: true, accessB2G: true, accessPreSales: true }
+      });
+      if (!existing) {
+        return new Response(JSON.stringify({ error: 'Empresa não encontrada' }), { status: 404 });
+      }
+
+      const company = await prisma.company.update({
+        where: { id: companyId },
+        data: {
+          name: String(body.name || '').trim() || undefined,
+          document: String(body.document || body.cnpj || '').trim() || null,
+          segment: String(body.segment || '').trim() || null,
+          status: normalizeCompanyStatus(body.status),
+          ...normalizeModuleAccess(body, existing)
+        }
+      });
+
+      return new Response(JSON.stringify({ data: company }), { status: 200 });
+    } catch (error) {
+      console.error('Erro ao editar empresa:', error);
+      return new Response(JSON.stringify({ error: 'Erro ao editar empresa' }), { status: 500 });
     }
   }
 

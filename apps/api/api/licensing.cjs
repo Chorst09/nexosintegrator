@@ -123,6 +123,18 @@ const normalizeEmail = (value) => {
   return email.toLowerCase();
 };
 
+const normalizeModuleAccess = (body = {}, fallback = {}) => {
+  const accessB2B = body.accessB2B !== undefined ? Boolean(body.accessB2B) : fallback.accessB2B !== undefined ? Boolean(fallback.accessB2B) : true;
+  const accessB2G = body.accessB2G !== undefined ? Boolean(body.accessB2G) : fallback.accessB2G !== undefined ? Boolean(fallback.accessB2G) : false;
+  const accessPreSales = body.accessPreSales !== undefined ? Boolean(body.accessPreSales) : fallback.accessPreSales !== undefined ? Boolean(fallback.accessPreSales) : false;
+  return {
+    accessB2B,
+    accessB2G,
+    accessPreSales,
+    accessManagement: accessB2B && accessB2G
+  };
+};
+
 const toPublicPlan = (plan) => ({
   id: plan.id,
   code: plan.code,
@@ -225,6 +237,10 @@ const mapCompanyWithLicense = (company) => {
     phone: company.phone,
     status: company.status,
     notes: company.notes,
+    accessB2B: Boolean(company.accessB2B),
+    accessB2G: Boolean(company.accessB2G),
+    accessPreSales: Boolean(company.accessPreSales),
+    accessManagement: Boolean(company.accessManagement || (company.accessB2B && company.accessB2G)),
     usersCount: company.users?.length || 0,
     adminsCount: (company.users || []).filter((user) => normalizeRole(user.role) === 'ADMIN').length,
     users: (company.users || []).map((user) => ({
@@ -360,6 +376,7 @@ router.post('/public/checkout/confirm', async (req, res) => {
     const startDate = normalizeDate(req.body?.startDate) || new Date();
     const endDate = normalizeDate(req.body?.endDate) || calculateEndDate(startDate, plan.billingCycle);
     const seats = normalizeInt(req.body?.seats) || plan.seatsIncluded || 1;
+    const moduleAccess = normalizeModuleAccess(req.body?.company, { accessB2B: true, accessB2G: true, accessPreSales: true });
 
     const result = await prisma.$transaction(async (tx) => {
       let tenantCompany = null;
@@ -381,7 +398,8 @@ router.post('/public/checkout/confirm', async (req, res) => {
             cnpj: companyCnpj,
             email: companyEmail,
             phone: companyPhone,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
+            ...moduleAccess
           }
         });
       } else {
@@ -393,6 +411,7 @@ router.post('/public/checkout/confirm', async (req, res) => {
             email: companyEmail,
             phone: companyPhone,
             status: 'ACTIVE',
+            ...moduleAccess,
             notes: `Provisionado automaticamente pelo checkout publico em ${new Date().toISOString()}`
           }
         });
@@ -448,9 +467,9 @@ router.post('/public/checkout/confirm', async (req, res) => {
             password: adminPasswordInput ? passwordHash : undefined,
             role: 'ADMIN',
             tenantCompanyId: tenantCompany.id,
-            accessB2B: true,
-            accessB2G: true,
-            accessPreSales: true,
+            accessB2B: moduleAccess.accessB2B,
+            accessB2G: moduleAccess.accessB2G,
+            accessPreSales: moduleAccess.accessPreSales,
             isCompanyOwner: true
           }
         });
@@ -462,9 +481,9 @@ router.post('/public/checkout/confirm', async (req, res) => {
             password: passwordHash,
             role: 'ADMIN',
             tenantCompanyId: tenantCompany.id,
-            accessB2B: true,
-            accessB2G: true,
-            accessPreSales: true,
+            accessB2B: moduleAccess.accessB2B,
+            accessB2G: moduleAccess.accessB2G,
+            accessPreSales: moduleAccess.accessPreSales,
             isCompanyOwner: true
           }
         });
@@ -677,6 +696,7 @@ router.post('/companies', requireRole(['ADMIN']), async (req, res) => {
         status: COMPANY_STATUS.has(String(req.body?.status || '').trim().toUpperCase())
           ? String(req.body.status).trim().toUpperCase()
           : 'PROSPECT',
+        ...normalizeModuleAccess(req.body),
         notes: normalizeString(req.body?.notes, 600)
       }
     });
@@ -688,6 +708,53 @@ router.post('/companies', requireRole(['ADMIN']), async (req, res) => {
       return res.status(409).json({ error: 'CNPJ já cadastrado em outra empresa' });
     }
     return res.status(500).json({ error: 'Erro ao criar empresa' });
+  }
+});
+
+router.put('/companies/:id', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    if (!isMaster(req.user) && !ensureTenantAccess(req, req.params.id)) {
+      return res.status(403).json({ error: 'Sem permissão para editar esta empresa' });
+    }
+
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) return res.status(400).json({ error: 'ID da empresa inválido' });
+
+    const existing = await prisma.tenantCompany.findUnique({
+      where: { id: companyId },
+      select: { id: true, accessB2B: true, accessB2G: true, accessPreSales: true }
+    });
+    if (!existing) return res.status(404).json({ error: 'Empresa não encontrada' });
+
+    const statusInput = String(req.body?.status || '').trim().toUpperCase();
+    const company = await prisma.tenantCompany.update({
+      where: { id: companyId },
+      data: {
+        name: normalizeString(req.body?.name, 220) || undefined,
+        legalName: normalizeString(req.body?.legalName, 220),
+        cnpj: normalizeCnpj(req.body?.cnpj),
+        email: normalizeEmail(req.body?.email),
+        phone: normalizeString(req.body?.phone, 40),
+        status: COMPANY_STATUS.has(statusInput) ? statusInput : undefined,
+        ...normalizeModuleAccess(req.body, existing),
+        notes: normalizeString(req.body?.notes, 600)
+      },
+      include: {
+        users: true,
+        licenses: {
+          include: { plan: true },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    return res.json({ data: mapCompanyWithLicense(company) });
+  } catch (error) {
+    console.error('Erro ao editar empresa de licenciamento:', error);
+    if (String(error.code || '').includes('P2002')) {
+      return res.status(409).json({ error: 'CNPJ já cadastrado em outra empresa' });
+    }
+    return res.status(500).json({ error: 'Erro ao editar empresa' });
   }
 });
 

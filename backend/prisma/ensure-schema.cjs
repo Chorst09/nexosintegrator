@@ -19,6 +19,20 @@ async function main() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Company"
+      ADD COLUMN IF NOT EXISTS "accessB2B" BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS "accessB2G" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessManagement" BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    UPDATE "Company"
+      SET "accessManagement" = true
+      WHERE "accessB2B" = true AND "accessB2G" = true;
+  `);
+
+  await prisma.$executeRawUnsafe(`
     ALTER TABLE "Opportunity"
       ADD COLUMN IF NOT EXISTS "number" TEXT,
       ADD COLUMN IF NOT EXISTS "b2gStage" TEXT,

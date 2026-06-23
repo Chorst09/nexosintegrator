@@ -66,6 +66,10 @@ model Company {
   status      CompanyStatus @default(ACTIVE)
   leadScore   Int      @default(0)
   churnRisk   Float    @default(0)
+  accessB2B   Boolean  @default(true)
+  accessB2G   Boolean  @default(false)
+  accessPreSales Boolean @default(false)
+  accessManagement Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   

@@ -94,6 +94,28 @@ const resolveAccessByRole = (role, currentAccess = {}) => {
   };
 };
 
+const normalizeCompanyModuleAccess = (company = {}) => {
+  const accessB2B = company.accessB2B !== undefined ? Boolean(company.accessB2B) : true;
+  const accessB2G = company.accessB2G !== undefined ? Boolean(company.accessB2G) : false;
+  const accessPreSales = company.accessPreSales !== undefined ? Boolean(company.accessPreSales) : false;
+  return {
+    accessB2B,
+    accessB2G,
+    accessPreSales,
+    accessManagement: accessB2B && accessB2G
+  };
+};
+
+const companyModuleBadges = (company = {}) => {
+  const access = normalizeCompanyModuleAccess(company);
+  return [
+    access.accessB2B && 'B2B',
+    access.accessB2G && 'B2G',
+    access.accessPreSales && 'Pré-vendas',
+    access.accessManagement && 'Gestão'
+  ].filter(Boolean);
+};
+
 const SETTINGS_TABS = [
   { id: 'perfil', label: 'Perfil', icon: '👤' },
   { id: 'empresa', label: 'Empresa', icon: '🏢' },
@@ -265,6 +287,7 @@ const normalizeCompanyForManagement = (company, source = 'licensing', index = 0)
     state: company?.state || null,
     country: company?.country || null,
     notes: company?.notes || null,
+    ...normalizeCompanyModuleAccess(company),
     license: company?.license || null,
     createdAt: company?.createdAt || null,
     updatedAt: company?.updatedAt || null
@@ -368,7 +391,10 @@ export default function Administracao() {
     email: '',
     phone: '',
     status: 'PROSPECT',
-    notes: ''
+    notes: '',
+    accessB2B: true,
+    accessB2G: false,
+    accessPreSales: false
   });
   const [savingCompany, setSavingCompany] = useState(false);
   const [licenseDrafts, setLicenseDrafts] = useState({});
@@ -414,7 +440,10 @@ export default function Administracao() {
     phone: '',
     status: 'ACTIVE',
     segment: '',
-    notes: ''
+    notes: '',
+    accessB2B: true,
+    accessB2G: false,
+    accessPreSales: false
   });
   const [savingCompanyEdit, setSavingCompanyEdit] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
@@ -502,7 +531,10 @@ export default function Administracao() {
         console.log('📋 Empresas encontradas:', licensingCompaniesList.length);
         if (licensingCompaniesList.length > 0) {
           setCompanies(
-            licensingCompaniesList.map((company, index) => normalizeCompanyForManagement(company, 'licensing', index))
+            licensingCompaniesList.map((company, index) => {
+              const source = company.license || Array.isArray(company.users) ? 'licensing' : 'operational';
+              return normalizeCompanyForManagement(company, source, index);
+            })
           );
           return;
         }
@@ -1515,7 +1547,10 @@ export default function Administracao() {
       email: '',
       phone: '',
       status: 'PROSPECT',
-      notes: ''
+      notes: '',
+      accessB2B: true,
+      accessB2G: false,
+      accessPreSales: false
     });
     setShowCompanyModal(true);
   };
@@ -1571,7 +1606,10 @@ export default function Administracao() {
           name: companyForm.companyName.trim(),
           email: companyForm.email.trim(),
           cnpj: companyForm.document.trim(),
-          phone: companyForm.phone.trim()
+          phone: companyForm.phone.trim(),
+          accessB2B: Boolean(companyForm.accessB2B),
+          accessB2G: Boolean(companyForm.accessB2G),
+          accessPreSales: Boolean(companyForm.accessPreSales)
         },
         adminUser: {
           name: companyForm.adminName.trim(),
@@ -1610,7 +1648,10 @@ export default function Administracao() {
         adminPassword: '',
         adminConfirmPassword: '',
         planCode: 'MENSAL',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        accessB2B: true,
+        accessB2G: false,
+        accessPreSales: false
       });
 
       // Recarregar lista de empresas
@@ -1692,7 +1733,8 @@ export default function Administracao() {
       phone: String(company?.phone || ''),
       status: String(company?.status || 'ACTIVE'),
       segment: String(company?.segment || ''),
-      notes: String(company?.notes || '')
+      notes: String(company?.notes || ''),
+      ...normalizeCompanyModuleAccess(company)
     });
     setShowCompanyEditModal(true);
   };
@@ -1706,11 +1748,6 @@ export default function Administracao() {
   const saveEditedManagementCompany = async (e) => {
     e.preventDefault();
     if (!editingManagementCompany?.id) return;
-
-    if (editingManagementCompany?.source && editingManagementCompany.source !== 'operational') {
-      setError('Edição disponível apenas para empresas operacionais nesta tela.');
-      return;
-    }
 
     try {
       setSavingCompanyEdit(true);
@@ -1731,10 +1768,17 @@ export default function Administracao() {
         phone: String(companyEditForm.phone || '').trim() || null,
         status: String(companyEditForm.status || 'ACTIVE').trim().toUpperCase(),
         segment: String(companyEditForm.segment || '').trim() || null,
-        notes: String(companyEditForm.notes || '').trim() || null
+        notes: String(companyEditForm.notes || '').trim() || null,
+        accessB2B: Boolean(companyEditForm.accessB2B),
+        accessB2G: Boolean(companyEditForm.accessB2G),
+        accessPreSales: Boolean(companyEditForm.accessPreSales)
       };
 
-      const res = await fetch(API_ENDPOINTS.companies, {
+      const endpoint = editingManagementCompany.source === 'licensing'
+        ? API_ENDPOINTS.licensing.updateCompany(editingManagementCompany.id)
+        : API_ENDPOINTS.companies;
+
+      const res = await fetch(endpoint, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -1893,6 +1937,14 @@ export default function Administracao() {
       if (!next.accessB2B && !next.accessB2G) {
         next.accessB2B = true;
       }
+      return next;
+    });
+  };
+
+  const handleCompanyModuleToggle = (setter, moduleKey, checked) => {
+    setter((prev) => {
+      const next = { ...prev, [moduleKey]: Boolean(checked) };
+      next.accessManagement = Boolean(next.accessB2B && next.accessB2G);
       return next;
     });
   };
@@ -2337,7 +2389,10 @@ export default function Administracao() {
                         adminPassword: '',
                         adminConfirmPassword: '',
                         planCode: 'MENSAL',
-                      status: 'ACTIVE'
+                        status: 'ACTIVE',
+                        accessB2B: true,
+                        accessB2G: false,
+                        accessPreSales: false
                     });
                   }}
                   className="crm-btn crm-btn-primary"
@@ -2383,6 +2438,9 @@ export default function Administracao() {
                         Status
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
+                        Módulos
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
                         Usuários
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-300 uppercase tracking-wider">
@@ -2419,6 +2477,18 @@ export default function Administracao() {
                               {statusMeta.label}
                             </span>
                           </td>
+                          <td className="px-6 py-4">
+                            <div className="flex max-w-[18rem] flex-wrap gap-1.5">
+                              {companyModuleBadges(company).map((module) => (
+                                <span
+                                  key={module}
+                                  className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-100"
+                                >
+                                  {module}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {company.usersCount ?? '-'}
                           </td>
@@ -2435,9 +2505,8 @@ export default function Administracao() {
                               </button>
                               <button
                                 onClick={() => openEditManagementCompany(company)}
-                                disabled={company.source !== 'operational'}
-                                title={company.source === 'operational' ? 'Editar empresa' : 'Edição disponível para empresas operacionais'}
-                                className="text-amber-600 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Editar empresa"
+                                className="text-amber-600 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
                               >
                                 Editar
                               </button>
@@ -3114,6 +3183,36 @@ export default function Administracao() {
             </div>
 
             <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-2">Módulos de acesso</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {[
+                  ['accessB2B', 'Módulo B2B'],
+                  ['accessB2G', 'Módulo B2G'],
+                  ['accessPreSales', 'Pré-vendas']
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-blue-500/20">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(companyEditForm[key])}
+                      onChange={(e) => handleCompanyModuleToggle(setCompanyEditForm, key, e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <span className="font-medium text-gray-800 dark:text-slate-100">{label}</span>
+                  </label>
+                ))}
+                <div className={[
+                  'rounded-lg border p-3 text-sm',
+                  companyEditForm.accessB2B && companyEditForm.accessB2G
+                    ? 'border-emerald-300/40 bg-emerald-500/10 text-emerald-100'
+                    : 'border-gray-200 text-gray-500 dark:border-blue-500/20 dark:text-slate-400'
+                ].join(' ')}>
+                  <div className="font-semibold">Módulo Gestão</div>
+                  <div className="text-xs">Liberado automaticamente quando B2B e B2G estão ativos.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">Segmento</label>
               <input
                 type="text"
@@ -3526,6 +3625,36 @@ export default function Administracao() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                 placeholder="contato@empresa.com"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-2">Módulos de acesso</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {[
+                  ['accessB2B', 'Módulo B2B'],
+                  ['accessB2G', 'Módulo B2G'],
+                  ['accessPreSales', 'Pré-vendas']
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-blue-500/20">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(companyForm[key])}
+                      onChange={(e) => handleCompanyModuleToggle(setCompanyForm, key, e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <span className="font-medium text-gray-800 dark:text-slate-100">{label}</span>
+                  </label>
+                ))}
+                <div className={[
+                  'rounded-lg border p-3 text-sm',
+                  companyForm.accessB2B && companyForm.accessB2G
+                    ? 'border-emerald-300/40 bg-emerald-500/10 text-emerald-100'
+                    : 'border-gray-200 text-gray-500 dark:border-blue-500/20 dark:text-slate-400'
+                ].join(' ')}>
+                  <div className="font-semibold">Módulo Gestão</div>
+                  <div className="text-xs">Liberado automaticamente quando B2B e B2G estão ativos.</div>
+                </div>
+              </div>
             </div>
           </div>
 
