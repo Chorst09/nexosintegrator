@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 
 const JWT_SECRET = (() => {
   const secret = String(process.env.JWT_SECRET || '').trim();
@@ -33,6 +34,40 @@ const getSessionRole = (req) => {
   }
 };
 
+const normalizeRole = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PRE-VENDAS' || raw === 'PREVENDAS') return 'PRE_SALES';
+  if (raw === 'USUARIO') return 'USER';
+  return raw || 'SELLER';
+};
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const resolveUserAccess = (role, input = {}) => {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === 'MASTER' || normalizedRole === 'ADMIN' || normalizedRole === 'MANAGER') {
+    return { accessB2B: true, accessB2G: true, accessPreSales: true };
+  }
+
+  if (normalizedRole === 'DIRECTOR') {
+    return { accessB2B: true, accessB2G: true, accessPreSales: false };
+  }
+
+  if (normalizedRole === 'PRE_SALES') {
+    return { accessB2B: false, accessB2G: false, accessPreSales: true };
+  }
+
+  const accessB2B = input.accessB2B !== undefined ? Boolean(input.accessB2B) : true;
+  const accessB2G = input.accessB2G !== undefined ? Boolean(input.accessB2G) : false;
+
+  return {
+    accessB2B: accessB2B || !accessB2G,
+    accessB2G,
+    accessPreSales: false
+  };
+};
+
 export default async function handler(req) {
   if (req.method === 'GET') {
     const { role, active } = req.query || {};
@@ -42,7 +77,7 @@ export default async function handler(req) {
     const isMasterSession = userRole === 'MASTER';
     
     const where = {};
-    if (role) where.role = role;
+    if (role) where.role = normalizeRole(role);
     
     if (!isMasterSession && role === 'MASTER') {
       return Response.json([]);
@@ -62,6 +97,9 @@ export default async function handler(req) {
         role: true,
         region: true,
         quota: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
         commissionSalePercentage: true,
         commissionProject12: true,
         commissionProject24: true,
@@ -89,23 +127,43 @@ export default async function handler(req) {
     if (session.error) return session.error;
     const userRole = session.role;
     const isMasterSession = userRole === 'MASTER';
+    const role = normalizeRole(body.role || 'SELLER');
     
     // Apenas MASTER pode criar usuários MASTER.
-    if (!isMasterSession && body.role === 'MASTER') {
+    if (!isMasterSession && role === 'MASTER') {
       return new Response(
         JSON.stringify({ error: 'Apenas usuários MASTER podem criar usuários MASTER' }),
         { status: 403 }
       );
     }
+
+    if (!body?.name || !body?.email || !body?.password) {
+      return Response.json(
+        { error: 'Nome, email e senha são obrigatórios' },
+        { status: 400 }
+      );
+    }
+
+    const email = normalizeEmail(body.email);
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (existing) {
+      return Response.json({ error: 'Email já está em uso' }, { status: 409 });
+    }
+
+    const access = resolveUserAccess(role, body);
+    const hashedPassword = await bcrypt.hash(body.password, 10);
     
     const user = await prisma.user.create({
       data: {
         name: body.name,
-        email: body.email,
-        password: body.password,
-        role: body.role || 'SELLER',
-        region: body.region,
+        email,
+        password: hashedPassword,
+        role,
+        regionId: body.regionId || null,
         quota: body.quota,
+        accessB2B: access.accessB2B,
+        accessB2G: access.accessB2G,
+        accessPreSales: access.accessPreSales,
         commissionSalePercentage: body.commissionSalePercentage ?? null,
         commissionProject12: body.commissionProject12 ?? null,
         commissionProject24: body.commissionProject24 ?? null,
@@ -120,6 +178,9 @@ export default async function handler(req) {
         role: true,
         region: true,
         quota: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
         commissionSalePercentage: true,
         commissionProject12: true,
         commissionProject24: true,
@@ -153,28 +214,45 @@ export default async function handler(req) {
     }
     
     // Apenas MASTER pode promover usuários para MASTER.
-    if (!isMasterSession && body.role === 'MASTER') {
+    const nextRole = body.role ? normalizeRole(body.role) : normalizeRole(targetUser?.role);
+
+    if (!isMasterSession && nextRole === 'MASTER') {
       return new Response(
         JSON.stringify({ error: 'Apenas usuários MASTER podem promover usuários para MASTER' }),
         { status: 403 }
       );
     }
+
+    const access = resolveUserAccess(nextRole, body);
+
+    const updateData = {
+      name: body.name,
+      email: body.email ? normalizeEmail(body.email) : undefined,
+      role: nextRole,
+      regionId: body.regionId || null,
+      quota: body.quota,
+      accessB2B: access.accessB2B,
+      accessB2G: access.accessB2G,
+      accessPreSales: access.accessPreSales,
+      commissionSalePercentage: body.commissionSalePercentage ?? null,
+      commissionProject12: body.commissionProject12 ?? null,
+      commissionProject24: body.commissionProject24 ?? null,
+      commissionProject36: body.commissionProject36 ?? null,
+      commissionProject48: body.commissionProject48 ?? null,
+      commissionProject60: body.commissionProject60 ?? null
+    };
+
+    if (body.password) {
+      updateData.password = await bcrypt.hash(body.password, 10);
+    }
+
+    Object.keys(updateData).forEach((key) => {
+      if (updateData[key] === undefined) delete updateData[key];
+    });
     
     const user = await prisma.user.update({
       where: { id: body.id },
-      data: {
-        name: body.name,
-        email: body.email,
-        role: body.role,
-        region: body.region,
-        quota: body.quota,
-        commissionSalePercentage: body.commissionSalePercentage ?? null,
-        commissionProject12: body.commissionProject12 ?? null,
-        commissionProject24: body.commissionProject24 ?? null,
-        commissionProject36: body.commissionProject36 ?? null,
-        commissionProject48: body.commissionProject48 ?? null,
-        commissionProject60: body.commissionProject60 ?? null
-      },
+      data: updateData,
       select: {
         id: true,
         name: true,
@@ -182,6 +260,9 @@ export default async function handler(req) {
         role: true,
         region: true,
         quota: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
         commissionSalePercentage: true,
         commissionProject12: true,
         commissionProject24: true,

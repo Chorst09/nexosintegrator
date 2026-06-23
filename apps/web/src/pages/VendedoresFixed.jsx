@@ -4,6 +4,27 @@ import AnimatedStats from '../components/AnimatedStats';
 import Modal from '../components/Modal';
 import { API_ENDPOINTS, getAuthHeaders } from '../config/api';
 
+const normalizeRole = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PRE-VENDAS' || raw === 'PREVENDAS') return 'PRE_SALES';
+  return raw || 'SELLER';
+};
+
+const roleLabels = {
+  SELLER: 'Vendedor',
+  PRE_SALES: 'Pré-Vendas',
+  DIRECTOR: 'Diretor',
+  MANAGER: 'Gerente',
+  ADMIN: 'Administrador'
+};
+
+const resolveSellerType = (item = {}) => (Boolean(item.accessB2G) ? 'governo' : 'privado');
+
+const accessBySellerType = (type) => ({
+  accessB2B: type !== 'governo',
+  accessB2G: type === 'governo'
+});
+
 export default function VendedoresFixed() {
   const userRaw = localStorage.getItem('user');
   const currentUser = userRaw ? JSON.parse(userRaw) : null;
@@ -31,19 +52,30 @@ export default function VendedoresFixed() {
       setLoading(true);
       setError(null);
       
-      // Carregar vendedores
-      console.log('Carregando vendedores...');
-      const sellersResponse = await fetch(`${API_ENDPOINTS.users}?role=SELLER`, {
-        headers: getAuthHeaders()
-      });
-      
+      // Carregar equipe comercial e Pré-Vendas
+      console.log('Carregando equipe comercial e Pré-Vendas...');
+      const [sellersResponse, preSalesResponse] = await Promise.all([
+        fetch(`${API_ENDPOINTS.users}?role=SELLER`, { headers: getAuthHeaders() }),
+        fetch(`${API_ENDPOINTS.users}?role=PRE_SALES`, { headers: getAuthHeaders() })
+      ]);
+
       if (!sellersResponse.ok) {
         throw new Error(`Erro ao carregar vendedores: ${sellersResponse.status}`);
       }
-      
-      const sellersData = await sellersResponse.json();
-      console.log('Vendedores carregados:', sellersData);
-      setSellers(sellersData || []);
+      if (!preSalesResponse.ok) {
+        throw new Error(`Erro ao carregar Pré-Vendas: ${preSalesResponse.status}`);
+      }
+
+      const [sellersData, preSalesData] = await Promise.all([
+        sellersResponse.json(),
+        preSalesResponse.json()
+      ]);
+      const teamData = [
+        ...(Array.isArray(sellersData) ? sellersData : []),
+        ...(Array.isArray(preSalesData) ? preSalesData : [])
+      ];
+      console.log('Equipe carregada:', teamData);
+      setSellers(teamData);
 
       // Carregar metas de vendas (opcional)
       try {
@@ -115,13 +147,17 @@ export default function VendedoresFixed() {
     try {
       const url = API_ENDPOINTS.users;
       const method = editingItem ? 'PUT' : 'POST';
-      const role = String(formData.role || 'SELLER').toUpperCase();
-      const basePayload = editingItem ? { ...formData, id: editingItem.id } : formData;
+      const role = normalizeRole(formData.role || 'SELLER');
+      const { sellerType: _sellerType, ...formPayload } = formData;
+      const basePayload = editingItem ? { ...formPayload, id: editingItem.id } : formPayload;
+      const sellerTypeAccess = accessBySellerType(formData.sellerType || resolveSellerType(formData));
+      const roleAccess = role === 'PRE_SALES'
+        ? { accessB2B: false, accessB2G: false, accessPreSales: true }
+        : { ...sellerTypeAccess, accessPreSales: false };
       const data = {
         ...basePayload,
         role,
-        accessB2B: formData.accessB2B ?? true,
-        accessB2G: formData.accessB2G ?? false
+        ...roleAccess
       };
 
       const response = await fetch(url, {
@@ -177,14 +213,17 @@ export default function VendedoresFixed() {
     setEditingItem(item);
     setModalType(type);
     if (type === 'seller') {
+      const role = normalizeRole(item.role);
+      const sellerType = resolveSellerType(item);
       setFormData({
         name: item.name,
         email: item.email,
-        role: item.role,
+        role,
         regionId: item.region?.id || '',
         quota: item.quota,
-        accessB2B: item.accessB2B,
-        accessB2G: item.accessB2G
+        sellerType,
+        ...accessBySellerType(sellerType),
+        accessPreSales: role === 'PRE_SALES'
       });
     } else if (type === 'target') {
       setFormData({
@@ -269,7 +308,7 @@ export default function VendedoresFixed() {
       label: 'Função',
       render: (item) => (
         <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-          {item.role}
+          {roleLabels[normalizeRole(item.role)] || item.role}
         </span>
       )
     },
@@ -283,11 +322,11 @@ export default function VendedoresFixed() {
       label: 'Tipo',
       render: (item) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          item.accessB2G
+          resolveSellerType(item) === 'governo'
             ? 'bg-purple-100 text-purple-800'
             : 'bg-blue-100 text-blue-800'
         }`}>
-          {item.accessB2G ? 'Governo' : 'Corporativo'}
+          {resolveSellerType(item) === 'governo' ? 'Governo' : 'Privado'}
         </span>
       )
     },
@@ -400,8 +439,10 @@ export default function VendedoresFixed() {
   ];
 
   // Calcular estatísticas
-  const totalSellers = sellers.length;
-  const activeSellers = sellers.filter(s => s._count?.opportunities > 0).length;
+  const sellerUsers = sellers.filter((user) => normalizeRole(user.role) === 'SELLER');
+  const preSalesUsers = sellers.filter((user) => normalizeRole(user.role) === 'PRE_SALES');
+  const totalSellers = sellerUsers.length;
+  const activeSellers = sellerUsers.filter(s => s._count?.opportunities > 0).length;
   const totalTargetValue = salesTargets.reduce((sum, target) => sum + target.targetValue, 0);
   const totalRealized = salesTargets.reduce((sum, target) => sum + (target.realized || 0), 0);
   const averageProgress = salesTargets.length > 0 
@@ -447,21 +488,41 @@ export default function VendedoresFixed() {
         </div>
         <div className="flex gap-2">
           {canManageUsers && (
-            <button
-              onClick={() => {
-                setModalType('seller');
-                setEditingItem(null);
-                setFormData({
-                  role: 'SELLER',
-                  accessB2B: true,
-                  accessB2G: false
-                });
-                setShowModal(true);
-              }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Novo Vendedor
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setModalType('seller');
+                  setEditingItem(null);
+                  setFormData({
+                    role: 'SELLER',
+                    sellerType: 'privado',
+                    ...accessBySellerType('privado'),
+                    accessPreSales: false
+                  });
+                  setShowModal(true);
+                }}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Novo Vendedor
+              </button>
+              <button
+                onClick={() => {
+                  setModalType('seller');
+                  setEditingItem(null);
+                  setFormData({
+                    role: 'PRE_SALES',
+                    sellerType: 'privado',
+                    accessB2B: false,
+                    accessB2G: false,
+                    accessPreSales: true
+                  });
+                  setShowModal(true);
+                }}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Novo Pré-Vendas
+              </button>
+            </>
           )}
           <button
             onClick={() => {
@@ -487,10 +548,11 @@ export default function VendedoresFixed() {
           color="blue"
         />
         <AnimatedStats
-          title="Meta Total"
-          value={formatCurrency(totalTargetValue)}
-          icon="🎯"
-          color="green"
+          title="Pré-Vendas"
+          value={preSalesUsers.length}
+          subtitle="cadastrados"
+          icon="🧩"
+          color="purple"
         />
         <AnimatedStats
           title="Realizado"
@@ -537,7 +599,7 @@ export default function VendedoresFixed() {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Vendedores Cadastrados</h2>
               <div className="text-sm text-gray-500 dark:text-slate-200">
-                {sellers.length} vendedores
+                {sellerUsers.length} vendedores · {preSalesUsers.length} Pré-Vendas
               </div>
             </div>
             <ModernTable
@@ -631,10 +693,20 @@ export default function VendedoresFixed() {
                   </label>
                   <select
                     value={formData.role || 'SELLER'}
-                    onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    onChange={(e) => {
+                      const role = normalizeRole(e.target.value);
+                      setFormData({
+                        ...formData,
+                        role,
+                        ...(role === 'PRE_SALES'
+                          ? { accessB2B: false, accessB2G: false, accessPreSales: true }
+                          : { ...accessBySellerType(formData.sellerType || 'privado'), accessPreSales: false })
+                      });
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="SELLER">Vendedor</option>
+                    <option value="PRE_SALES">Pré-Vendas</option>
                     <option value="DIRECTOR">Diretor</option>
                     <option value="MANAGER">Gerente</option>
                     <option value="ADMIN">Administrador</option>
@@ -659,26 +731,28 @@ export default function VendedoresFixed() {
                   </select>
                 </div>
                 
+                {normalizeRole(formData.role) !== 'PRE_SALES' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">
                     Tipo
                   </label>
                   <select
-                    value={formData.accessB2B ? 'corporativo' : 'governo'}
+                    value={formData.sellerType || resolveSellerType(formData)}
                     onChange={(e) => {
-                      const tipo = e.target.value;
+                      const sellerType = e.target.value;
                       setFormData({
                         ...formData,
-                        accessB2B: tipo === 'corporativo',
-                        accessB2G: tipo === 'governo'
+                        sellerType,
+                        ...accessBySellerType(sellerType)
                       });
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="corporativo">Corporativo</option>
+                    <option value="privado">Privado</option>
                     <option value="governo">Governo</option>
                   </select>
                 </div>
+                )}
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">

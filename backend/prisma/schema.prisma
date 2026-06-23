@@ -23,6 +23,9 @@ model User {
   commissionProject36 Float?
   commissionProject48 Float?
   commissionProject60 Float?
+  accessB2B Boolean @default(true)
+  accessB2G Boolean @default(true)
+  accessPreSales Boolean @default(false)
   createdAt DateTime @default(now())
   
   // Relacionamentos
@@ -894,6 +897,8 @@ enum Role {
   MANAGER
   DIRECTOR
   SELLER
+  USER
+  PRE_SALES
 }
 
 enum Stage {
