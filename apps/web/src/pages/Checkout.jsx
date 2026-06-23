@@ -29,6 +29,7 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmingReturn, setConfirmingReturn] = useState(false);
+  const [preferenceId, setPreferenceId] = useState(null);
   const [adminForm, setAdminForm] = useState({
     name: '',
     email: '',
@@ -125,6 +126,40 @@ export default function Checkout() {
       navigate('/?error=plano-invalido');
     }
   }, [planId, navigate]);
+
+  // Renderizar Wallet Brick do Mercado Pago quando a preferência for criada
+  useEffect(() => {
+    if (!preferenceId) return;
+
+    const timer = setTimeout(() => {
+      const container = document.getElementById('wallet_container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      try {
+        const mpPublicKey = import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY || 'TEST-ea423066-0567-48a7-800c-f1a39833ce5e';
+        if (typeof window.MercadoPago === 'undefined') {
+          setError('SDK do Mercado Pago não carregado. Atualize a página.');
+          return;
+        }
+        const mp = new window.MercadoPago(mpPublicKey, { locale: 'pt-BR' });
+
+        if (typeof mp.bricks === 'function') {
+          mp.bricks().create('wallet', 'wallet_container', {
+            initialization: { preferenceId }
+          });
+        } else {
+          // Fallback: redirect
+          window.location.href = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${preferenceId}`;
+        }
+      } catch (err) {
+        console.error('Erro ao renderizar Wallet Brick:', err);
+        window.location.href = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=${preferenceId}`;
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [preferenceId]);
 
   useEffect(() => {
     if (!checkoutStatus) return;
@@ -399,51 +434,13 @@ export default function Checkout() {
       console.log('💳 Payment URL:', paymentUrl);
       console.log('💳 Preference ID:', preferenceId);
 
-      if (!paymentUrl) {
-        throw new Error('URL de pagamento não recebida');
+      if (!preferenceId) {
+        throw new Error('ID da preferência de pagamento não recebido');
       }
 
-      // Tentar usar SDK do Mercado Pago primeiro
-      const mpPublicKey = import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY || 'TEST-ea423066-0567-48a7-800c-f1a39833ce5e';
-      
-      // Verificar se SDK está disponível e se temos preferenceId
-      if (typeof window.MercadoPago !== 'undefined' && preferenceId) {
-        try {
-          console.log('✅ Tentando usar SDK do Mercado Pago...');
-          console.log('🔑 MP Public Key:', mpPublicKey?.substring(0, 20) + '...');
-          
-          const mp = new window.MercadoPago(mpPublicKey, {
-            locale: 'pt-BR'
-          });
-
-          // Tentar abrir checkout
-          console.log('✅ Abrindo checkout do Mercado Pago...');
-          mp.checkout({
-            preference: {
-              id: preferenceId
-            },
-            autoOpen: true
-          });
-          
-          // Aguardar um pouco para ver se o modal abre
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Se chegou aqui, assumimos que o modal abriu
-          console.log('✅ Modal do MP deve ter aberto');
-          setLoading(false);
-          return;
-          
-        } catch (sdkError) {
-          console.warn('⚠️  Erro ao usar SDK do MP, usando fallback:', sdkError);
-          // Continua para o fallback abaixo
-        }
-      } else {
-        console.warn('⚠️  SDK do MP não disponível ou preferenceId ausente, usando fallback');
-      }
-
-      // Fallback: redirecionar diretamente para a URL do MP
-      console.log('✅ Redirecionando para URL do Mercado Pago...');
-      window.location.href = paymentUrl;
+      // Renderizar Wallet Brick na tela com o botão "Pagar"
+      setPreferenceId(preferenceId);
+      setLoading(false);
 
     } catch (err) {
       console.error('❌ Erro no pagamento:', err);
@@ -795,13 +792,19 @@ export default function Checkout() {
                   </div>
                 </div>
                 
-                <button
-                  onClick={handlePayment}
-                  disabled={loading || confirmingReturn}
-                  className="mt-8 w-full crm-btn crm-btn-primary disabled:opacity-50"
-                >
-                  {confirmingReturn ? 'Confirmando pagamento...' : loading ? 'Processando...' : `Pagar ${selectedPlan.priceFormatted}`}
-                </button>
+                {!preferenceId ? (
+                  <button
+                    onClick={handlePayment}
+                    disabled={loading || confirmingReturn}
+                    className="mt-8 w-full crm-btn crm-btn-primary disabled:opacity-50"
+                  >
+                    {confirmingReturn ? 'Confirmando pagamento...' : loading ? 'Processando...' : `Pagar ${selectedPlan.priceFormatted}`}
+                  </button>
+                ) : (
+                  <div className="mt-8">
+                    <div id="wallet_container"></div>
+                  </div>
+                )}
               </div>
             )}
           </div>

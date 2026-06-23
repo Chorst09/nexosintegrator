@@ -2,6 +2,20 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+// Catch unhandled promise rejections to prevent the process from crashing.
+// This is critical in production to avoid intermittent 502 errors.
+process.on('unhandledRejection', (reason) => {
+  console.error('🔴 UNHANDLED REJECTION (capturado para evitar crash):');
+  console.error('   Motivo:', reason instanceof Error ? reason.message : reason);
+  console.error('   Stack:', reason instanceof Error ? reason.stack : '');
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('🔴 UNCAUGHT EXCEPTION (capturado para evitar crash):');
+  console.error('   Mensagem:', error.message);
+  console.error('   Stack:', error.stack);
+});
+
 const { authenticateToken } = require('./lib/auth');
 
 // Importar apenas as rotas CommonJS (novas)
@@ -20,6 +34,20 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Timeout global para requests - evita que requisições lentas
+// ao banco consumam conexões do pool e causem 502 no nginx.
+const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '25000', 10);
+app.use((req, res, next) => {
+  if (req.path === '/health') return next();
+  res.setTimeout(REQUEST_TIMEOUT, () => {
+    console.error(`⏰ Request timeout (${REQUEST_TIMEOUT}ms): ${req.method} ${req.path}`);
+    if (!res.headersSent) {
+      res.status(503).json({ error: 'Tempo limite da requisição excedido' });
+    }
+  });
+  next();
+});
+
 // Logging middleware
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
@@ -27,9 +55,25 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
+app.get('/health', async (req, res) => {
+  let dbOk = false;
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('DB timeout')), 5000))
+    ]);
+    await prisma.$disconnect();
+    dbOk = true;
+  } catch (err) {
+    console.error('🔴 Health check — banco indisponível:', err.message);
+  }
+
+  const statusCode = dbOk ? 200 : 503;
+  res.status(statusCode).json({
+    status: dbOk ? 'ok' : 'degraded',
+    database: dbOk ? 'connected' : 'error',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'

@@ -4,6 +4,21 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { authenticateToken } = require('./lib/auth.cjs');
+
+// Catch unhandled promise rejections to prevent the process from crashing.
+// This is critical in production to avoid intermittent 502 errors when
+// an unexpected async error occurs (e.g. DB connection timeout, extension race).
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔴 UNHANDLED REJECTION (capturado para evitar crash):');
+  console.error('   Motivo:', reason instanceof Error ? reason.message : reason);
+  console.error('   Stack:', reason instanceof Error ? reason.stack : '');
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('🔴 UNCAUGHT EXCEPTION (capturado para evitar crash):');
+  console.error('   Mensagem:', error.message);
+  console.error('   Stack:', error.stack);
+});
 const { canAccessModule, isMaster, normalizeRole } = require('./lib/permissions.cjs');
 
 // Importar apenas as rotas CommonJS (novas)
@@ -187,6 +202,23 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Timeout global para requests - evita que conexões lentas ao banco
+// ou erros inesperados deixem requisições pendentes, consumindo
+// conexões do pool do Prisma e causando 502 no nginx.
+const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '25000', 10);
+app.use((req, res, next) => {
+  // Não aplica timeout ao health check
+  if (req.path === '/health') return next();
+
+  res.setTimeout(REQUEST_TIMEOUT, () => {
+    console.error(`⏰ Request timeout (${REQUEST_TIMEOUT}ms): ${req.method} ${req.path}`);
+    if (!res.headersSent) {
+      res.status(503).json({ error: 'Tempo limite da requisição excedido' });
+    }
+  });
+  next();
+});
+
 // Expor apenas assets públicos do sistema. Documentos e anexos passam por rotas autenticadas.
 app.use('/uploads/system', express.static(path.join(__dirname, 'uploads/system')));
 
@@ -337,10 +369,24 @@ app.use('/api/activities-simple', require('./api/activities-simple.cjs'));
 // API de Geração de PDF (CommonJS)
 app.use('/api/pdf-generator', require('./api/pdf-generator.cjs'));
 
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
+app.get('/api/health', async (req, res) => {
+  let dbOk = false;
+  try {
+    const { prisma } = require('./lib/prisma.cjs');
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('DB timeout')), 5000))
+    ]);
+    dbOk = true;
+  } catch (err) {
+    console.error('🔴 Health check — banco indisponível:', err.message);
+  }
+
+  const statusCode = dbOk ? 200 : 503;
+  res.status(statusCode).json({
+    status: dbOk ? 'ok' : 'degraded',
     service: 'crm-api',
+    database: dbOk ? 'connected' : 'error',
     timestamp: new Date().toISOString()
   });
 });

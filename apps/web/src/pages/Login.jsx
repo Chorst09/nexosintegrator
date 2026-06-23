@@ -93,6 +93,12 @@ const Login = () => {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        // Pequeno delay para permitir que extensões de navegador
+        // (gerenciadores de senha, etc.) concluam operações assíncronas
+        // antes da navegação. Isso evita erros como:
+        // "A listener indicated an asynchronous response by returning true,
+        //  but the message channel closed before a response was received"
+        await new Promise((r) => setTimeout(r, 150));
         return navigate('/dashboard-geral');
       } else {
         setFeedback({ type: 'error', message: data.error || 'Erro ao fazer login' });

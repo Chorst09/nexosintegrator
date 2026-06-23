@@ -1,11 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const JWT_SECRET = (() => {
   const secret = String(process.env.JWT_SECRET || '').trim();
@@ -23,17 +22,32 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        password: true,
-        role: true
+    // Buscar usuário com timeout para evitar que conexões lentas
+    // ao banco causem timeout do nginx (502)
+    const user = await Promise.race([
+      prisma.user.findUnique({
+        where: { email: email.toLowerCase().trim() },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          password: true,
+          role: true
+        }
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Query timeout')), 15000)
+      )
+    ]).catch((err) => {
+      if (err.message === 'Query timeout') {
+        console.error('⏰ Timeout na consulta de login para:', email);
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Tente novamente.' });
       }
+      throw err;
     });
+
+    // Se já respondeu com timeout, interrompe
+    if (!user || res.headersSent) return;
 
     if (!user) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
@@ -52,10 +66,6 @@ router.post('/login', async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    // Não precisamos mais salvar sessões no banco, apenas usar JWT
-
-    // Não precisamos mais atualizar lastLogin
-
     // Remover senha da resposta
     const { password: _, ...userWithoutPassword } = user;
 
@@ -65,7 +75,9 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro no login:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erro interno do servidor' });
+    }
   }
 });
 

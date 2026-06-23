@@ -52,6 +52,26 @@ import {
   Workflow
 } from 'lucide-react';
 
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
 import AnimatedStats from '../components/AnimatedStats';
 import B2GFunnelStrategic from '../components/B2GFunnelStrategic';
 import Modal from '../components/Modal';
@@ -1915,9 +1935,9 @@ export default function B2GEditais() {
   }, [sortedFilteredOpportunities]);
 
   const dashboardTotals = useMemo(() => {
-    const monthlyCut = Date.now() - Number(dashboardPeriod) * 24 * 60 * 60 * 1000;
     let pipelineValue = 0;
     let monthlyValue = 0;
+    let punctualValue = 0;
     let projectedValue = 0;
     let openValue = 0;
     let wonValue = 0;
@@ -1931,13 +1951,17 @@ export default function B2GEditais() {
       const value = item.__value;
       const probability = item.__probability;
       const columnId = item.__columnId;
-      const createdAtTs = toTimestamp(item?.createdAt || item?.updatedAt);
+      const projectType = item?.projectType || 'SINGLE';
+      const projectMonths = Number(item?.projectMonths) || 1;
+      const monthlyPart = projectType === 'MONTHLY' ? (value / projectMonths) : value;
 
       pipelineValue += value;
       projectedValue += value * (probability / 100);
 
-      if (createdAtTs >= monthlyCut) {
-        monthlyValue += value;
+      if (projectType === 'MONTHLY') {
+        monthlyValue += monthlyPart;
+      } else {
+        punctualValue += value;
       }
 
       if (columnId === 'GANHO') {
@@ -1957,7 +1981,6 @@ export default function B2GEditais() {
 
     const totalCount = dashboardOpportunities.length;
     const fallbackMonthlyValue = monthlyValue > 0 ? monthlyValue : wonValue;
-    const punctualValue = projectedValue - wonValue;
 
     return {
       pipelineValue,
@@ -1974,7 +1997,7 @@ export default function B2GEditais() {
       totalCount,
       winRate: (wonCount + lostCount) > 0 ? (wonCount / (wonCount + lostCount)) * 100 : 0
     };
-  }, [dashboardOpportunities, dashboardPeriod]);
+  }, [dashboardOpportunities]);
 
   const dashboardForecastScore = useMemo(() => {
     if (dashboardOpportunities.length === 0) return 0;
@@ -2116,6 +2139,64 @@ export default function B2GEditais() {
     const max = Math.max(...dashboardStageValueRows.map((item) => Number(item.value || 0)), 0);
     return max > 0 ? max : 1;
   }, [dashboardStageValueRows]);
+
+  const monthlyProjectData = useMemo(() => {
+    const byMonth = {};
+    const projectSet = new Set();
+    const topN = 6;
+
+    dashboardOpportunities.forEach((item) => {
+      const date = parseFlexibleDate(item.createdAt);
+      if (!date) return;
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const project = item.__organization || 'Não identificado';
+      const totalValue = Number(item.value) || 0;
+      const projectType = item?.projectType || 'SINGLE';
+      const projectMonths = Number(item?.projectMonths) || 1;
+      const monthlyPart = projectType === 'MONTHLY' ? (totalValue / projectMonths) : totalValue;
+
+      if (!byMonth[monthKey]) byMonth[monthKey] = {};
+      if (!byMonth[monthKey][project]) byMonth[monthKey][project] = 0;
+      byMonth[monthKey][project] += monthlyPart;
+      projectSet.add(project);
+    });
+
+    const projectTotals = [];
+    projectSet.forEach((project) => {
+      let total = 0;
+      Object.values(byMonth).forEach((month) => { total += month[project] || 0; });
+      projectTotals.push({ project, total });
+    });
+
+    const topProjects = new Set(
+      projectTotals
+        .sort((a, b) => b.total - a.total)
+        .slice(0, topN)
+        .map((p) => p.project)
+    );
+
+    const months = Object.keys(byMonth).sort();
+
+    const palette = [
+      '#49c5ff', '#6de0a0', '#f8b525', '#9164ff', '#f56b88',
+      '#34d399', '#f472b6', '#a78bfa', '#fb923c', '#22d3ee'
+    ];
+
+    const datasets = [];
+    let colorIndex = 0;
+    topProjects.forEach((project) => {
+      datasets.push({
+        label: project,
+        data: months.map((month) => byMonth[month][project] || 0),
+        backgroundColor: palette[colorIndex % palette.length],
+        borderRadius: 4,
+        borderSkipped: false
+      });
+      colorIndex += 1;
+    });
+
+    return { months, datasets };
+  }, [dashboardOpportunities]);
 
   const dashboardCriticalDeadlines = useMemo(() => {
     return filteredNotices
@@ -4517,6 +4598,90 @@ export default function B2GEditais() {
             </div>
           </div>
         </section>
+
+        {/* Valor Mensal por Projeto */}
+        {monthlyProjectData.months.length > 0 && (
+          <section
+            className="rounded-[22px] border border-[#78c5ff50] p-5 text-[#d9edff] lg:p-6"
+            style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
+          >
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-xl md:text-2xl font-black leading-tight text-[#dcecff]">
+                  Valor Mensal por Projeto
+                </h3>
+                <p className="mt-1 text-sm md:text-base font-medium text-[#aac6e4]">
+                  Valor mensal (recorrente) por cliente, calculado a partir das oportunidades do pipeline.
+                </p>
+              </div>
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-[#8dc8ff59] bg-[#2b5f925e]">
+                <BarChart3 className="h-6 w-6 text-[#8fd1ff]" />
+              </span>
+            </div>
+
+            <div className="h-[320px]">
+              <Bar
+                data={{
+                  labels: monthlyProjectData.months.map((m) => {
+                    const [y, mo] = m.split('-');
+                    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+                    return `${months[parseInt(mo, 10) - 1]}/${y}`;
+                  }),
+                  datasets: monthlyProjectData.datasets
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        color: 'rgba(195, 216, 240, 0.92)',
+                        usePointStyle: true,
+                        boxWidth: 10,
+                        padding: 12,
+                        font: { size: 11, weight: '600' }
+                      }
+                    },
+                    tooltip: {
+                      backgroundColor: 'rgba(5, 16, 34, 0.94)',
+                      titleColor: '#e8f4ff',
+                      bodyColor: '#d3e6fb',
+                      borderColor: 'rgba(125, 176, 234, 0.35)',
+                      borderWidth: 1,
+                      callbacks: {
+                        label: (ctx) => {
+                          const value = Number(ctx.raw) || 0;
+                          return ` ${ctx.dataset.label}: R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        }
+                      }
+                    }
+                  },
+                  scales: {
+                    x: {
+                      stacked: true,
+                      grid: { color: 'rgba(125, 162, 206, 0.25)' },
+                      ticks: { color: 'rgba(195, 216, 240, 0.92)', font: { size: 11, weight: '600' } }
+                    },
+                    y: {
+                      stacked: true,
+                      grid: { color: 'rgba(125, 162, 206, 0.25)' },
+                      ticks: {
+                        color: 'rgba(195, 216, 240, 0.92)',
+                        font: { size: 11, weight: '600' },
+                        callback: (value) => {
+                          if (value >= 1000000) return `R$${(value / 1000000).toFixed(1)}M`;
+                          if (value >= 1000) return `R$${(value / 1000).toFixed(0)}k`;
+                          return `R$${value}`;
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+          </section>
+        )}
 
         <section
           className="rounded-[22px] border border-[#78c5ff50] p-4 text-[#d9edff] lg:p-6"

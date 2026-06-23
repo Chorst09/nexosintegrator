@@ -4,7 +4,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   ArrowRight, Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2,
-  FilePlus2, FileText, Search, Save
+  FilePlus2, FileText, Search, Save, Eye, Pencil, Trash2, X
 } from 'lucide-react';
 import { PricingSimulator } from '@/app/components/pricing-simulator';
 import { DREGenerator } from '@/app/components/dre-generator';
@@ -143,6 +143,8 @@ export default function FinEdgeApp() {
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [proposalFeedback, setProposalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
+  const [viewingScenario, setViewingScenario] = useState<SavedScenario | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -463,6 +465,31 @@ export default function FinEdgeApp() {
     });
   }, [activeProposalId, hasGeneratedResults, params, proposalForm, results, savedPricingProposals, toast]);
 
+  const handleViewScenario = (item: SavedScenario) => {
+    setViewingScenario(item);
+  };
+
+  const handleEditScenario = (item: SavedScenario) => {
+    setParams(item.inputs);
+    setResults(item.results);
+    setHasGeneratedResults(true);
+    setViewingScenario(null);
+    toast({ title: "Cenário Restaurado", description: "Parâmetros aplicados com sucesso." });
+  };
+
+  const handleDeleteScenario = async (id: string) => {
+    try {
+      await scenarioService.deleteScenario(id);
+      setHistory(prev => prev.filter(item => item.id !== id));
+      setDeleteConfirmId(null);
+      if (viewingScenario?.id === id) setViewingScenario(null);
+      toast({ title: "Cenário Excluído", description: "O cenário foi removido do histórico." });
+    } catch (error) {
+      console.error("Erro ao excluir cenário:", error);
+      toast({ title: "Erro", description: "Não foi possível excluir o cenário.", variant: "destructive" });
+    }
+  };
+
   const emptyResults = useMemo(
     () => PricingEngine.calculate(buildEmptyPricingInput(calculatorPricingSettings)),
     [calculatorPricingSettings]
@@ -751,15 +778,10 @@ export default function FinEdgeApp() {
                     </Card>
                   ) : (
                     history.map((item) => (
-                      <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 hover:border-primary/30 transition-all cursor-pointer group" onClick={() => {
-                        setParams(item.inputs);
-                        setResults(item.results);
-                        setHasGeneratedResults(true);
-                        toast({ title: "Cenário Restaurado", description: "Parâmetros aplicados com sucesso." });
-                      }}>
+                      <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 transition-all group">
                         <CardContent className="p-5 flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="p-3 bg-slate-50 rounded-xl text-primary group-hover:bg-primary/5 transition-colors">
+                          <div className="flex items-center space-x-4 flex-1 min-w-0" onClick={() => handleEditScenario(item)}>
+                            <div className="p-3 bg-slate-50 rounded-xl text-primary group-hover:bg-primary/5 transition-colors shrink-0">
                               <Clock size={20} />
                             </div>
                             <div>
@@ -777,17 +799,140 @@ export default function FinEdgeApp() {
                               {item.inputs.upfrontItems?.length || 0} / {item.inputs.recurringItems?.length || 0} itens
                             </p>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right mr-4">
                             <p className="text-[10px] text-slate-400 font-bold uppercase">Margem</p>
                             <p className={cn("text-sm font-bold", item.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
                               {formatPercent(item.results.metrics.ebitdaMargin)}
                             </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => handleViewScenario(item)}
+                              title="Visualizar"
+                              className="h-9 w-9 rounded-xl border border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEditScenario(item)}
+                              title="Editar"
+                              className="h-9 w-9 rounded-xl border border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {deleteConfirmId === item.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleDeleteScenario(item.id)}
+                                  title="Confirmar exclusão"
+                                  className="h-9 rounded-xl border border-red-200 bg-red-50 px-3 text-[10px] font-bold text-red-600 inline-flex items-center justify-center gap-1 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  title="Cancelar"
+                                  className="h-9 w-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 inline-flex items-center justify-center transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirmId(item.id)}
+                                title="Excluir"
+                                className="h-9 w-9 rounded-xl border border-red-100 text-red-400 hover:text-red-600 hover:border-red-200 inline-flex items-center justify-center transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
                     ))
                   )}
                 </div>
+
+                {/* View Scenario Modal */}
+                {viewingScenario && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setViewingScenario(null)}>
+                    <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                        <h2 className="text-lg font-bold text-slate-900 font-headline">Detalhes do Cenário</h2>
+                        <button onClick={() => setViewingScenario(null)} className="h-9 w-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 inline-flex items-center justify-center">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="p-6 space-y-5">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Data</p>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {viewingScenario.createdAt?.toDate ? viewingScenario.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Preço Final</p>
+                            <p className="text-xl font-bold text-primary">{formatCurrency(viewingScenario.results.finalMonthlyPrice)}</p>
+                            <p className="text-[10px] text-slate-400">/mês</p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">TCV</p>
+                            <p className="text-xl font-bold text-slate-900">{formatCurrency(viewingScenario.results.totalContractValue)}</p>
+                            <p className="text-[10px] text-slate-400">Total do contrato</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Margem EBITDA</p>
+                            <p className={cn("text-lg font-bold", viewingScenario.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
+                              {formatPercent(viewingScenario.results.metrics.ebitdaMargin)}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Markup</p>
+                            <p className="text-lg font-bold text-slate-900">{formatPercent(viewingScenario.inputs.markupPercentage)}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Itens</p>
+                          <div className="flex gap-4 mt-2">
+                            <div>
+                              <p className="text-xs text-slate-500">Setup</p>
+                              <p className="text-sm font-bold text-slate-800">{viewingScenario.inputs.upfrontItems?.length || 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Recorrentes</p>
+                              <p className="text-sm font-bold text-slate-800">{viewingScenario.inputs.recurringItems?.length || 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Duração</p>
+                              <p className="text-sm font-bold text-slate-800">{viewingScenario.inputs.durationMonths} meses</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            onClick={() => { handleEditScenario(viewingScenario); }}
+                            className="flex-1 rounded-2xl border border-primary/20 bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2"
+                          >
+                            <Pencil className="w-4 h-4" /> Editar Cenário
+                          </button>
+                          <button
+                            onClick={() => setViewingScenario(null)}
+                            className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                          >
+                            Fechar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </main>

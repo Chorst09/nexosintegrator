@@ -8,7 +8,10 @@ import {
   orderBy, 
   limit, 
   serverTimestamp,
-  Timestamp 
+  Timestamp,
+  deleteDoc,
+  doc,
+  updateDoc
 } from "firebase/firestore";
 import { PricingInput, PricingOutput } from "@/app/lib/pricing-engine";
 
@@ -87,6 +90,47 @@ export const scenarioService = {
     } catch (error) {
       console.error("Erro ao buscar cenários:", error);
       return [];
+    }
+  },
+
+  async deleteScenario(id: string) {
+    try {
+      if (!db) {
+        const local = readLocalScenarios();
+        const next = local.filter(item => item.id !== id);
+        localStorage.setItem(LOCAL_SCENARIOS_KEY, JSON.stringify(next));
+        return;
+      }
+      await deleteDoc(doc(db, SCENARIOS_COLLECTION, id));
+    } catch (error) {
+      console.error("Erro ao excluir cenário:", error);
+      throw error;
+    }
+  },
+
+  async updateScenario(id: string, inputs: PricingInput, results: PricingOutput) {
+    try {
+      const cleanInputs = JSON.parse(JSON.stringify(inputs));
+      const cleanResults = JSON.parse(JSON.stringify(results));
+
+      if (!db) {
+        const local = readLocalScenarios();
+        const next = local.map(item =>
+          item.id === id
+            ? { ...item, inputs: cleanInputs, results: cleanResults, createdAt: { toDate: () => new Date() } as Timestamp }
+            : item
+        );
+        localStorage.setItem(LOCAL_SCENARIOS_KEY, JSON.stringify(next));
+        return;
+      }
+      await updateDoc(doc(db, SCENARIOS_COLLECTION, id), {
+        inputs: cleanInputs,
+        results: cleanResults,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar cenário:", error);
+      throw error;
     }
   }
 };

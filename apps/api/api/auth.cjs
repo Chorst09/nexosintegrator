@@ -54,31 +54,46 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
-    // Buscar usuário
-    const user = await prisma.user.findFirst({
-      where: {
-        email: {
-          equals: normalizedEmail,
-          mode: 'insensitive'
+    // Buscar usuário com timeout para evitar que conexões lentas
+    // ao banco causem timeout do nginx (502)
+    const user = await Promise.race([
+      prisma.user.findFirst({
+        where: {
+          email: {
+            equals: normalizedEmail,
+            mode: 'insensitive'
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          password: true,
+          role: true,
+          regionId: true,
+          quota: true,
+          tenantCompanyId: true,
+          accessB2B: true,
+          accessB2G: true,
+          accessPreSales: true,
+          permissionOverrides: true,
+          isCompanyOwner: true,
+          createdAt: true
         }
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        password: true,
-        role: true,
-        regionId: true,
-        quota: true,
-        tenantCompanyId: true,
-        accessB2B: true,
-        accessB2G: true,
-        accessPreSales: true,
-        permissionOverrides: true,
-        isCompanyOwner: true,
-        createdAt: true
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Query timeout')), 15000)
+      )
+    ]).catch((err) => {
+      if (err.message === 'Query timeout') {
+        console.error('⏰ Timeout na consulta de login para:', normalizedEmail);
+        return res.status(503).json({ error: 'Serviço temporariamente indisponível. Tente novamente.' });
       }
+      throw err;
     });
+
+    // Se já respondeu com timeout, interrompe
+    if (!user || res.headersSent) return;
 
     if (!user) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
@@ -106,7 +121,9 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro no login:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erro interno do servidor' });
+    }
   }
 });
 
