@@ -142,7 +142,7 @@ app.use('/api/team-commissions', handleLegacyAPI('./api/team-commissions.js'));
 app.use('/api/advanced-workflows', handleLegacyAPI('./api/advanced-workflows.js'));
 
 // Novas APIs - Licensing
-app.use('/api/licensing', handleLegacyAPI('./api/licensing.js'));
+app.use('/api/licensing', require('./api/licensing.cjs'));
 
 // B2G - Busca de Licitações e Editais
 app.use('/api/b2g-search', require('./api/b2g-search'));

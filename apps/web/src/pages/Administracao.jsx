@@ -116,6 +116,15 @@ const companyModuleBadges = (company = {}) => {
   ].filter(Boolean);
 };
 
+const constrainAccessToCompanyModules = (access = {}, company = {}) => {
+  const companyAccess = normalizeCompanyModuleAccess(company);
+  return {
+    accessB2B: Boolean(access.accessB2B && companyAccess.accessB2B),
+    accessB2G: Boolean(access.accessB2G && companyAccess.accessB2G),
+    accessPreSales: Boolean(access.accessPreSales && companyAccess.accessPreSales)
+  };
+};
+
 const SETTINGS_TABS = [
   { id: 'perfil', label: 'Perfil', icon: '👤' },
   { id: 'empresa', label: 'Empresa', icon: '🏢' },
@@ -124,7 +133,7 @@ const SETTINGS_TABS = [
   { id: 'backup', label: 'Backup', icon: '💾' },
   { id: 'usuarios_acessos', label: 'Usuários e Acessos', icon: '👥' },
   { id: 'gestao_empresas', label: 'Gestão de Empresas', icon: '🏛️', masterOnly: true, adminRouteOnly: true },
-  { id: 'politicas_role', label: 'Políticas por Role', icon: '🧭', masterOnly: true },
+  { id: 'politicas_role', label: 'Políticas por Role', icon: '🧭', adminOnly: true },
   { id: 'licenciamento', label: 'Licenciamento', icon: '🛡️', masterOnly: true }
 ];
 
@@ -460,6 +469,7 @@ export default function Administracao() {
     }
   }, []);
   const isMasterSession = normalizeRole(sessionUser?.role) === 'MASTER';
+  const isAdminSession = normalizeRole(sessionUser?.role) === 'ADMIN';
   const isAdministrationRoute = location.pathname.startsWith('/administracao');
   const defaultTab = isAdministrationRoute
     ? 'usuarios_acessos'
@@ -468,10 +478,11 @@ export default function Administracao() {
     () =>
       SETTINGS_TABS.filter((tab) => {
         if (tab.masterOnly && !isMasterSession) return false;
+        if (tab.adminOnly && !isMasterSession && !isAdminSession) return false;
         if (tab.adminRouteOnly && !isAdministrationRoute) return false;
         return true;
       }),
-    [isAdministrationRoute, isMasterSession]
+    [isAdministrationRoute, isAdminSession, isMasterSession]
   );
   const rolePolicyVisibleRoles = useMemo(
     () => (isMasterSession ? ROLE_POLICY_VISIBLE_ROLES : ['USER', 'PRE_SALES', 'ADMIN']),
@@ -529,39 +540,18 @@ export default function Administracao() {
         console.log('📦 Payload do licensing:', licensingPayload);
         const licensingCompaniesList = extractCollection(licensingPayload);
         console.log('📋 Empresas encontradas:', licensingCompaniesList.length);
-        if (licensingCompaniesList.length > 0) {
-          setCompanies(
-            licensingCompaniesList.map((company, index) => {
-              const source = company.license || Array.isArray(company.users) ? 'licensing' : 'operational';
-              return normalizeCompanyForManagement(company, source, index);
-            })
-          );
-          return;
-        }
+        setCompanies(
+          licensingCompaniesList.map((company, index) => normalizeCompanyForManagement(company, 'licensing', index))
+        );
+        return;
       } else if (licensingRes.status === 403 || licensingRes.status === 401) {
         console.log('⚠️  Sem permissão para acessar empresas de licenciamento');
         setCompanies([]);
         return;
       }
 
-      // Fallback para empresas operacionais já cadastradas (módulo Empresas).
-      console.log('📡 Buscando empresas operacionais...');
-      const companiesRes = await fetch(API_ENDPOINTS.companies, {
-        headers: getAuthHeaders()
-      });
-
-      if (companiesRes.ok) {
-        const companiesPayload = await companiesRes.json().catch(() => ({}));
-        console.log('📦 Payload operacional:', companiesPayload);
-        const operationalCompaniesList = extractCollection(companiesPayload);
-        console.log('📋 Empresas operacionais encontradas:', operationalCompaniesList.length);
-        setCompanies(
-          operationalCompaniesList.map((company, index) => normalizeCompanyForManagement(company, 'operational', index))
-        );
-      } else {
-        console.log('❌ Erro ao buscar empresas operacionais:', companiesRes.status);
-        setCompanies([]);
-      }
+      console.log('❌ Erro ao buscar empresas de licenciamento:', licensingRes.status);
+      setCompanies([]);
     } catch (err) {
       console.error('❌ Erro ao carregar empresas:', err);
       setCompanies([]);
@@ -1774,11 +1764,7 @@ export default function Administracao() {
         accessPreSales: Boolean(companyEditForm.accessPreSales)
       };
 
-      const endpoint = editingManagementCompany.source === 'licensing'
-        ? API_ENDPOINTS.licensing.updateCompany(editingManagementCompany.id)
-        : API_ENDPOINTS.companies;
-
-      const res = await fetch(endpoint, {
+      const res = await fetch(API_ENDPOINTS.licensing.updateCompany(editingManagementCompany.id), {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -1803,19 +1789,12 @@ export default function Administracao() {
 
     try {
       setError(null);
-      const isOperational = company.source === 'operational';
-      const endpoint = isOperational
-        ? API_ENDPOINTS.companies
-        : API_ENDPOINTS.licensing.deleteCompany(company.id);
       const requestInit = {
         method: 'DELETE',
         headers: getAuthHeaders()
       };
-      if (isOperational) {
-        requestInit.body = JSON.stringify({ id: company.id });
-      }
 
-      const res = await fetch(endpoint, requestInit);
+      const res = await fetch(API_ENDPOINTS.licensing.deleteCompany(company.id), requestInit);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Erro ao excluir empresa: ${res.status}`);
       if (selectedCompanyDetails?.id === company.id) {
@@ -1830,15 +1809,17 @@ export default function Administracao() {
   };
 
   const openCreateCompanyUser = (company) => {
+    const defaultAccess = constrainAccessToCompanyModules(
+      { accessB2B: true, accessB2G: true, accessPreSales: false },
+      company
+    );
     setTargetCompanyForUser(company);
     setCompanyUserForm({
       name: '',
       email: '',
       password: '',
       role: 'USER',
-      accessB2B: true,
-      accessB2G: true,
-      accessPreSales: false
+      ...defaultAccess
     });
     setShowCompanyUserModal(true);
   };
@@ -1851,14 +1832,15 @@ export default function Administracao() {
       setSavingCompanyUser(true);
       setError(null);
 
+      const userAccess = constrainAccessToCompanyModules(companyUserForm, targetCompanyForUser);
       const payload = {
         name: companyUserForm.name?.trim(),
         email: companyUserForm.email?.trim(),
         password: companyUserForm.password?.trim() || undefined,
         role: normalizeRole(companyUserForm.role),
-        accessB2B: Boolean(companyUserForm.accessB2B),
-        accessB2G: Boolean(companyUserForm.accessB2G),
-        accessPreSales: Boolean(companyUserForm.accessPreSales)
+        accessB2B: userAccess.accessB2B,
+        accessB2G: userAccess.accessB2G,
+        accessPreSales: userAccess.accessPreSales
       };
 
       if (!payload.name || !payload.email) {
@@ -1922,7 +1904,7 @@ export default function Administracao() {
     setCompanyUserForm((prev) => ({
       ...prev,
       role: nextRole,
-      ...resolveAccessByRole(nextRole, prev)
+      ...constrainAccessToCompanyModules(resolveAccessByRole(nextRole, prev), targetCompanyForUser)
     }));
   };
 
@@ -1930,12 +1912,20 @@ export default function Administracao() {
     setCompanyUserForm((prev) => {
       const role = normalizeRole(prev.role);
       if (['MASTER', 'ADMIN', 'PRE_SALES'].includes(role)) {
-        return { ...prev, ...resolveAccessByRole(role, prev) };
+        return {
+          ...prev,
+          ...constrainAccessToCompanyModules(resolveAccessByRole(role, prev), targetCompanyForUser)
+        };
       }
 
-      const next = { ...prev, [moduleKey]: Boolean(checked), accessPreSales: false };
+      const next = constrainAccessToCompanyModules(
+        { ...prev, [moduleKey]: Boolean(checked), accessPreSales: false },
+        targetCompanyForUser
+      );
       if (!next.accessB2B && !next.accessB2G) {
-        next.accessB2B = true;
+        const companyAccess = normalizeCompanyModuleAccess(targetCompanyForUser);
+        next.accessB2B = Boolean(companyAccess.accessB2B);
+        next.accessB2G = !next.accessB2B && Boolean(companyAccess.accessB2G);
       }
       return next;
     });
@@ -2369,7 +2359,7 @@ export default function Administracao() {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gestão de Empresas</h2>
                   <p className="text-sm text-gray-600 dark:text-slate-200 mt-1">
-                    Visualize e gerencie todas as empresas cadastradas no sistema
+                    Gerencie as empresas compradoras do software, licenças, módulos contratados e administradores.
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -2417,7 +2407,7 @@ export default function Administracao() {
               <div className="text-center py-16">
                 <div className="text-gray-900 dark:text-gray-100 font-semibold">Nenhuma empresa encontrada</div>
                 <div className="text-gray-500 dark:text-slate-200 text-sm mt-1">
-                  As empresas aparecerão aqui após o checkout ou cadastro no módulo Empresas
+                  As empresas aparecerão aqui após compra, checkout ou cadastro manual de licenciamento.
                 </div>
               </div>
             ) : (
@@ -2535,7 +2525,7 @@ export default function Administracao() {
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Políticas de Acesso por Role</h2>
             <p className="text-sm text-gray-600 dark:text-slate-200">
-              Defina exatamente quais módulos cada role pode acessar.
+              Defina o acesso por role dentro dos módulos contratados pela empresa.
             </p>
           </div>
 
@@ -2563,7 +2553,7 @@ export default function Administracao() {
           </div>
 
           <div className="rounded-xl border border-amber-300/40 bg-amber-50/80 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-            Administração global é exclusiva da role <strong>MASTER</strong> e não é configurada nesta matriz.
+            A empresa só consegue liberar módulos contratados. Administração global continua exclusiva da role <strong>MASTER</strong>.
           </div>
         </div>
       )}
@@ -2982,7 +2972,7 @@ export default function Administracao() {
                     <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-4 space-y-3">
                       <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Status e origem</div>
                       <div className="text-sm text-gray-600 dark:text-slate-300">
-                        <strong>Origem:</strong> {selectedCompanyDetails.source === 'licensing' ? 'Licenciamento' : 'Operacional'}
+                        <strong>Origem:</strong> Licenciamento
                       </div>
                       <div className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2">
                         <strong>Status:</strong>
@@ -3874,7 +3864,7 @@ export default function Administracao() {
                 <input
                   type="checkbox"
                   checked={Boolean(companyUserForm.accessB2B)}
-                  disabled={['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
+                  disabled={!normalizeCompanyModuleAccess(targetCompanyForUser).accessB2B || ['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
                   onChange={(e) => handleCompanyUserModuleToggle('accessB2B', e.target.checked)}
                 />
                 B2B
@@ -3883,7 +3873,7 @@ export default function Administracao() {
                 <input
                   type="checkbox"
                   checked={Boolean(companyUserForm.accessB2G)}
-                  disabled={['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
+                  disabled={!normalizeCompanyModuleAccess(targetCompanyForUser).accessB2G || ['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
                   onChange={(e) => handleCompanyUserModuleToggle('accessB2G', e.target.checked)}
                 />
                 B2G
@@ -3892,7 +3882,7 @@ export default function Administracao() {
                 <input
                   type="checkbox"
                   checked={Boolean(companyUserForm.accessPreSales)}
-                  disabled={normalizeRole(companyUserForm.role) !== 'PRE_SALES'}
+                  disabled={!normalizeCompanyModuleAccess(targetCompanyForUser).accessPreSales || normalizeRole(companyUserForm.role) !== 'PRE_SALES'}
                   onChange={(e) => handleCompanyUserModuleToggle('accessPreSales', e.target.checked)}
                 />
                 Pré-Vendas

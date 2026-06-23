@@ -14,6 +14,8 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(SELLER)
+  tenantCompanyId String?
+  tenantCompany TenantCompany? @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
   regionId  String?
   region    Region?  @relation(fields: [regionId], references: [id])
   quota     Float?
@@ -26,6 +28,8 @@ model User {
   accessB2B Boolean @default(true)
   accessB2G Boolean @default(true)
   accessPreSales Boolean @default(false)
+  permissionOverrides Json @default("{}")
+  isCompanyOwner Boolean @default(false)
   createdAt DateTime @default(now())
   
   // Relacionamentos
@@ -46,6 +50,9 @@ model User {
   supportTickets      SupportTicket[]
   ticketResponses     TicketResponse[]
   churnAlerts         ChurnAlert[]
+
+  @@index([tenantCompanyId])
+  @@index([role])
 }
 
 model Company {
@@ -84,6 +91,70 @@ model Company {
   npssurveys    NPSSurvey[]
   churnAlerts   ChurnAlert[]
   preSalesLeads PreSalesRequest[] @relation("PreSalesLead")
+}
+
+model TenantCompany {
+  id          String              @id @default(uuid())
+  name        String
+  legalName   String?
+  cnpj        String?             @unique
+  email       String?
+  phone       String?
+  status      TenantCompanyStatus @default(PROSPECT)
+  notes       String?
+  accessB2B   Boolean             @default(true)
+  accessB2G   Boolean             @default(false)
+  accessPreSales Boolean          @default(false)
+  accessManagement Boolean        @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  users       User[]
+  licenses    CompanyLicense[]
+
+  @@index([status, createdAt])
+}
+
+model LicensePlan {
+  id            String              @id @default(uuid())
+  code          String              @unique
+  name          String
+  description   String?
+  billingCycle  LicenseBillingCycle
+  price         Float
+  currency      String              @default("BRL")
+  seatsIncluded Int                 @default(1)
+  isActive      Boolean             @default(true)
+  sortOrder     Int                 @default(0)
+  features      Json                @default("{}")
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  licenses      CompanyLicense[]
+
+  @@index([isActive, sortOrder])
+}
+
+model CompanyLicense {
+  id                  String          @id @default(uuid())
+  tenantCompanyId     String
+  tenantCompany       TenantCompany   @relation(fields: [tenantCompanyId], references: [id], onDelete: Cascade)
+  planId              String
+  plan                LicensePlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status              LicenseStatus   @default(PENDING)
+  seats               Int             @default(1)
+  startDate           DateTime
+  endDate             DateTime
+  priceAtPurchase     Float
+  notes               String?
+  paymentReference    String?         @unique
+  paymentStatus       PaymentStatus   @default(PENDING)
+  paymentConfirmedAt  DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([tenantCompanyId, status, endDate])
+  @@index([paymentStatus, createdAt])
 }
 
 model Contact {
@@ -1168,4 +1239,33 @@ enum ClientType {
   B2B
   B2G
   B2C
+}
+
+enum TenantCompanyStatus {
+  PROSPECT
+  ACTIVE
+  SUSPENDED
+  CANCELED
+}
+
+enum LicenseBillingCycle {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+enum LicenseStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REFUNDED
 }
