@@ -145,6 +145,7 @@ export default function FinEdgeApp() {
   const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
   const [viewingScenario, setViewingScenario] = useState<SavedScenario | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('simulator');
 
   const loadHistory = useCallback(async () => {
     try {
@@ -474,6 +475,7 @@ export default function FinEdgeApp() {
     setResults(item.results);
     setHasGeneratedResults(true);
     setViewingScenario(null);
+    setActiveTab('simulator');
     toast({ title: "Cenário Restaurado", description: "Parâmetros aplicados com sucesso." });
   };
 
@@ -540,7 +542,7 @@ export default function FinEdgeApp() {
 
         <div className="grid grid-cols-1 gap-8 items-start">
           <main className="space-y-8">
-            <Tabs defaultValue="simulator" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="flex justify-between items-center mb-6 overflow-x-auto pb-2">
                 <TabsList className="bg-white border border-slate-200 p-1.5 h-auto rounded-2xl shadow-sm">
                   <TabsTrigger value="simulator" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary/5 data-[state=active]:text-primary font-bold text-sm">
@@ -779,67 +781,70 @@ export default function FinEdgeApp() {
                   ) : (
                     history.map((item) => (
                       <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 transition-all group hover:border-primary/20">
-                        <CardContent className="p-5">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                              <div className="p-3 bg-primary/5 rounded-xl text-primary shrink-0">
+                        <CardContent className="p-4 sm:p-5">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                            <div
+                              className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
+                              onClick={() => handleEditScenario(item)}
+                            >
+                              <div className="p-3 bg-primary/10 rounded-xl text-primary shrink-0">
                                 <Clock size={20} />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                                   {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
                                 </p>
-                                <p className="text-lg font-bold text-slate-800 truncate">
-                                  {formatCurrency(item.results.finalMonthlyPrice)} <span className="text-sm font-normal text-slate-400">/mês</span>
+                                <p className="text-lg font-bold text-slate-900 truncate">
+                                  {formatCurrency(item.results.finalMonthlyPrice)} <span className="text-sm font-normal text-slate-500">/mês</span>
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-6 sm:gap-8 ml-14 sm:ml-0">
+                            <div className="flex items-center gap-5 sm:gap-6 ml-16 sm:ml-0">
                               <div className="text-center">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Setup</p>
-                                <p className="text-sm font-bold text-slate-700">{item.inputs.upfrontItems?.length || 0}</p>
+                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Setup</p>
+                                <p className="text-sm font-bold text-slate-800">{item.inputs.upfrontItems?.length || 0}</p>
                               </div>
                               <div className="text-center">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Rec.</p>
-                                <p className="text-sm font-bold text-slate-700">{item.inputs.recurringItems?.length || 0}</p>
+                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Rec.</p>
+                                <p className="text-sm font-bold text-slate-800">{item.inputs.recurringItems?.length || 0}</p>
                               </div>
                               <div className="text-center">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Margem</p>
+                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Margem</p>
                                 <p className={cn("text-sm font-bold", item.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
                                   {formatPercent(item.results.metrics.ebitdaMargin)}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0 ml-14 sm:ml-0">
+                            <div className="flex items-center gap-1.5 shrink-0 ml-16 sm:ml-0">
                               <button
                                 onClick={() => handleViewScenario(item)}
-                                title="Visualizar PDF"
-                                className="h-9 px-3 rounded-xl border border-primary/20 bg-primary/5 text-primary font-bold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-primary/10 transition-colors"
+                                title="Visualizar em PDF"
+                                className="h-9 px-3.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-sky-100 hover:border-sky-300 transition-colors"
                               >
                                 <FileText className="w-3.5 h-3.5" /> PDF
                               </button>
                               <button
                                 onClick={() => handleEditScenario(item)}
-                                title="Editar"
-                                className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-primary hover:border-primary/40 hover:bg-primary/5 inline-flex items-center justify-center transition-colors shadow-sm"
+                                title="Editar cenário"
+                                className="h-9 px-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors"
                               >
-                                <Pencil className="w-4 h-4" />
+                                <Pencil className="w-3.5 h-3.5" /> Editar
                               </button>
                               {deleteConfirmId === item.id ? (
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => handleDeleteScenario(item.id)}
                                     title="Confirmar exclusão"
-                                    className="h-9 rounded-xl border border-red-300 bg-red-50 px-3 text-[11px] font-bold text-red-700 inline-flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                                    className="h-9 rounded-xl border border-red-300 bg-red-100 px-3 text-[11px] font-bold text-red-700 inline-flex items-center justify-center gap-1.5 transition-colors"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" /> Excluir
                                   </button>
                                   <button
                                     onClick={() => setDeleteConfirmId(null)}
                                     title="Cancelar"
-                                    className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-slate-700 inline-flex items-center justify-center transition-colors shadow-sm"
+                                    className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-slate-700 inline-flex items-center justify-center transition-colors"
                                   >
                                     <X className="w-4 h-4" />
                                   </button>
@@ -847,10 +852,10 @@ export default function FinEdgeApp() {
                               ) : (
                                 <button
                                   onClick={() => setDeleteConfirmId(item.id)}
-                                  title="Excluir"
-                                  className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 inline-flex items-center justify-center transition-colors shadow-sm"
+                                  title="Excluir cenário"
+                                  className="h-9 px-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-red-100 hover:border-red-300 transition-colors"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
                                 </button>
                               )}
                             </div>
