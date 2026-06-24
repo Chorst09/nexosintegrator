@@ -4,7 +4,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   ArrowRight, Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2,
-  FilePlus2, FileText, Search, Save, Eye, Pencil, Trash2, X
+  FilePlus2, FileText, Search, Save, Eye, Pencil, Trash2, X, Printer, Download
 } from 'lucide-react';
 import { PricingSimulator } from '@/app/components/pricing-simulator';
 import { DREGenerator } from '@/app/components/dre-generator';
@@ -778,74 +778,82 @@ export default function FinEdgeApp() {
                     </Card>
                   ) : (
                     history.map((item) => (
-                      <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 transition-all group">
-                        <CardContent className="p-5 flex items-center justify-between">
-                          <div className="flex items-center space-x-4 flex-1 min-w-0" onClick={() => handleEditScenario(item)}>
-                            <div className="p-3 bg-slate-50 rounded-xl text-primary group-hover:bg-primary/5 transition-colors shrink-0">
-                              <Clock size={20} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                                {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
-                              </p>
-                              <p className="text-lg font-bold text-slate-800">
-                                {formatCurrency(item.results.finalMonthlyPrice)} /mês
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right hidden sm:block">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase">Setup / OPEX</p>
-                            <p className="text-sm font-semibold text-slate-600">
-                              {item.inputs.upfrontItems?.length || 0} / {item.inputs.recurringItems?.length || 0} itens
-                            </p>
-                          </div>
-                          <div className="text-right mr-4">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase">Margem</p>
-                            <p className={cn("text-sm font-bold", item.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
-                              {formatPercent(item.results.metrics.ebitdaMargin)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={() => handleViewScenario(item)}
-                              title="Visualizar"
-                              className="h-9 w-9 rounded-xl border border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center transition-colors"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEditScenario(item)}
-                              title="Editar"
-                              className="h-9 w-9 rounded-xl border border-slate-200 text-slate-500 hover:text-primary hover:border-primary/30 inline-flex items-center justify-center transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            {deleteConfirmId === item.id ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => handleDeleteScenario(item.id)}
-                                  title="Confirmar exclusão"
-                                  className="h-9 rounded-xl border border-red-200 bg-red-50 px-3 text-[10px] font-bold text-red-600 inline-flex items-center justify-center gap-1 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
-                                </button>
-                                <button
-                                  onClick={() => setDeleteConfirmId(null)}
-                                  title="Cancelar"
-                                  className="h-9 w-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 inline-flex items-center justify-center transition-colors"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
+                      <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 transition-all group hover:border-primary/20">
+                        <CardContent className="p-5">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className="p-3 bg-primary/5 rounded-xl text-primary shrink-0">
+                                <Clock size={20} />
                               </div>
-                            ) : (
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                  {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
+                                </p>
+                                <p className="text-lg font-bold text-slate-800 truncate">
+                                  {formatCurrency(item.results.finalMonthlyPrice)} <span className="text-sm font-normal text-slate-400">/mês</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6 sm:gap-8 ml-14 sm:ml-0">
+                              <div className="text-center">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Setup</p>
+                                <p className="text-sm font-bold text-slate-700">{item.inputs.upfrontItems?.length || 0}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Rec.</p>
+                                <p className="text-sm font-bold text-slate-700">{item.inputs.recurringItems?.length || 0}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Margem</p>
+                                <p className={cn("text-sm font-bold", item.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
+                                  {formatPercent(item.results.metrics.ebitdaMargin)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 ml-14 sm:ml-0">
                               <button
-                                onClick={() => setDeleteConfirmId(item.id)}
-                                title="Excluir"
-                                className="h-9 w-9 rounded-xl border border-red-100 text-red-400 hover:text-red-600 hover:border-red-200 inline-flex items-center justify-center transition-colors"
+                                onClick={() => handleViewScenario(item)}
+                                title="Visualizar PDF"
+                                className="h-9 px-3 rounded-xl border border-primary/20 bg-primary/5 text-primary font-bold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-primary/10 transition-colors"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <FileText className="w-3.5 h-3.5" /> PDF
                               </button>
-                            )}
+                              <button
+                                onClick={() => handleEditScenario(item)}
+                                title="Editar"
+                                className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-primary hover:border-primary/40 hover:bg-primary/5 inline-flex items-center justify-center transition-colors shadow-sm"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              {deleteConfirmId === item.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleDeleteScenario(item.id)}
+                                    title="Confirmar exclusão"
+                                    className="h-9 rounded-xl border border-red-300 bg-red-50 px-3 text-[11px] font-bold text-red-700 inline-flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    title="Cancelar"
+                                    className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-slate-700 inline-flex items-center justify-center transition-colors shadow-sm"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeleteConfirmId(item.id)}
+                                  title="Excluir"
+                                  className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 inline-flex items-center justify-center transition-colors shadow-sm"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -853,78 +861,177 @@ export default function FinEdgeApp() {
                   )}
                 </div>
 
-                {/* View Scenario Modal */}
+                {/* View Scenario Modal - Pronto para Impressão */}
                 {viewingScenario && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setViewingScenario(null)}>
-                    <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-between p-6 border-b border-slate-100">
-                        <h2 className="text-lg font-bold text-slate-900 font-headline">Detalhes do Cenário</h2>
-                        <button onClick={() => setViewingScenario(null)} className="h-9 w-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 inline-flex items-center justify-center">
-                          <X className="w-4 h-4" />
-                        </button>
+                    <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between p-6 border-b border-slate-100 print:hidden">
+                        <h2 className="text-lg font-bold text-slate-900 font-headline">Visualizar Precificação</h2>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => window.print()}
+                            className="h-9 px-4 rounded-xl border border-primary/20 bg-primary text-white text-xs font-bold inline-flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
+                          >
+                            <Printer className="w-4 h-4" /> Imprimir / PDF
+                          </button>
+                          <button onClick={() => setViewingScenario(null)} className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-slate-700 inline-flex items-center justify-center transition-colors shadow-sm">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="p-6 space-y-5">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Data</p>
-                          <p className="text-sm font-semibold text-slate-800">
-                            {viewingScenario.createdAt?.toDate ? viewingScenario.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
+                      <div className="p-6 sm:p-8 space-y-6 print:space-y-4 print:p-4">
+                        {/* Cabeçalho print-friendly */}
+                        <div className="text-center hidden print:block mb-6">
+                          <h1 className="text-2xl font-bold text-slate-900">Precificação - FinEdge Architect</h1>
+                          <p className="text-sm text-slate-500 mt-1">
+                            {viewingScenario.createdAt?.toDate ? viewingScenario.createdAt.toDate().toLocaleString('pt-BR') : 'Data não informada'}
                           </p>
+                          <hr className="mt-4 border-slate-200" />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Preço Final</p>
-                            <p className="text-xl font-bold text-primary">{formatCurrency(viewingScenario.results.finalMonthlyPrice)}</p>
-                            <p className="text-[10px] text-slate-400">/mês</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="rounded-2xl bg-gradient-to-br from-primary/5 to-primary/10 p-5 border border-primary/10">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Preço Final Mensal</p>
+                            <p className="text-2xl font-bold text-primary">{formatCurrency(viewingScenario.results.finalMonthlyPrice)}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">/mês</p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">TCV</p>
-                            <p className="text-xl font-bold text-slate-900">{formatCurrency(viewingScenario.results.totalContractValue)}</p>
-                            <p className="text-[10px] text-slate-400">Total do contrato</p>
+                          <div className="rounded-2xl bg-slate-50 p-5 border border-slate-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">TCV - Total do Contrato</p>
+                            <p className="text-2xl font-bold text-slate-900">{formatCurrency(viewingScenario.results.totalContractValue)}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{viewingScenario.inputs.durationMonths} meses</p>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Margem EBITDA</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Margem EBITDA</p>
                             <p className={cn("text-lg font-bold", viewingScenario.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
                               {formatPercent(viewingScenario.results.metrics.ebitdaMargin)}
                             </p>
                           </div>
-                          <div className="rounded-2xl bg-slate-50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Markup</p>
+                          <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Markup</p>
                             <p className="text-lg font-bold text-slate-900">{formatPercent(viewingScenario.inputs.markupPercentage)}</p>
                           </div>
+                          <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Setup (itens)</p>
+                            <p className="text-lg font-bold text-slate-900">{viewingScenario.inputs.upfrontItems?.length || 0}</p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Recorrentes</p>
+                            <p className="text-lg font-bold text-slate-900">{viewingScenario.inputs.recurringItems?.length || 0}</p>
+                          </div>
                         </div>
 
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Itens</p>
-                          <div className="flex gap-4 mt-2">
+                        {/* Tabela de itens Setup */}
+                        {viewingScenario.inputs.upfrontItems && viewingScenario.inputs.upfrontItems.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                              Itens de Setup
+                            </h3>
+                            <div className="overflow-x-auto rounded-xl border border-slate-200">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-slate-50 text-left">
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500">Item</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Qtd</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Valor Unit.</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {viewingScenario.inputs.upfrontItems.map((upfrontItem) => (
+                                    <tr key={upfrontItem.id} className="hover:bg-slate-50">
+                                      <td className="px-4 py-3 font-medium text-slate-800">{upfrontItem.name}</td>
+                                      <td className="px-4 py-3 text-right text-slate-600">{upfrontItem.quantity}</td>
+                                      <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(upfrontItem.unitCost)}</td>
+                                      <td className="px-4 py-3 text-right font-bold text-slate-800">{formatCurrency(upfrontItem.quantity * upfrontItem.unitCost)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tabela de itens Recorrentes */}
+                        {viewingScenario.inputs.recurringItems && viewingScenario.inputs.recurringItems.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              Itens Recorrentes
+                            </h3>
+                            <div className="overflow-x-auto rounded-xl border border-slate-200">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-slate-50 text-left">
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500">Item</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Qtd</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Valor Unit.</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Total/mês</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {viewingScenario.inputs.recurringItems.map((recItem) => (
+                                    <tr key={recItem.id} className="hover:bg-slate-50">
+                                      <td className="px-4 py-3 font-medium text-slate-800">{recItem.name}</td>
+                                      <td className="px-4 py-3 text-right text-slate-600">{recItem.quantity}</td>
+                                      <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(recItem.unitCost)}</td>
+                                      <td className="px-4 py-3 text-right font-bold text-slate-800">{formatCurrency(recItem.quantity * recItem.unitCost)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Resumo financeiro */}
+                        <div className="rounded-2xl bg-slate-50 p-5 border border-slate-200">
+                          <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Resumo Financeiro
+                          </h3>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                             <div>
-                              <p className="text-xs text-slate-500">Setup</p>
-                              <p className="text-sm font-bold text-slate-800">{viewingScenario.inputs.upfrontItems?.length || 0}</p>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Receita Rec. Mensal</p>
+                              <p className="text-base font-bold text-slate-900">{formatCurrency(viewingScenario.results.metrics.totalRecurringRevenue)}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-slate-500">Recorrentes</p>
-                              <p className="text-sm font-bold text-slate-800">{viewingScenario.inputs.recurringItems?.length || 0}</p>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Custos Operacionais</p>
+                              <p className="text-base font-bold text-slate-900">{formatCurrency(viewingScenario.results.metrics.totalOperatingCosts)}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-slate-500">Duração</p>
-                              <p className="text-sm font-bold text-slate-800">{viewingScenario.inputs.durationMonths} meses</p>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Resultado Líquido</p>
+                              <p className={cn("text-base font-bold", viewingScenario.results.metrics.netResult >= 0 ? "text-emerald-600" : "text-red-600")}>
+                                {formatCurrency(viewingScenario.results.metrics.netResult)}
+                              </p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex gap-3 pt-2">
+                        {/* Rodapé print */}
+                        <div className="text-center text-[10px] text-slate-400 pt-4 border-t border-slate-100 hidden print:block">
+                          Documento gerado pelo FinEdge Architect - {new Date().toLocaleString('pt-BR')}
+                        </div>
+
+                        <div className="flex gap-3 pt-2 print:hidden">
+                          <button
+                            onClick={() => window.print()}
+                            className="flex-1 rounded-2xl border border-primary/20 bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2"
+                          >
+                            <Printer className="w-4 h-4" /> Imprimir / Gerar PDF
+                          </button>
                           <button
                             onClick={() => { handleEditScenario(viewingScenario); }}
-                            className="flex-1 rounded-2xl border border-primary/20 bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2"
+                            className="flex-1 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:text-primary hover:border-primary/30 transition-colors inline-flex items-center justify-center gap-2 shadow-sm"
                           >
                             <Pencil className="w-4 h-4" /> Editar Cenário
                           </button>
                           <button
                             onClick={() => setViewingScenario(null)}
-                            className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors shadow-sm"
                           >
                             Fechar
                           </button>
