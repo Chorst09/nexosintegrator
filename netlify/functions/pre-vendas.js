@@ -104,6 +104,33 @@ export async function handler(event) {
         ? body.tiposPrecificacao
         : ['VENDA'];
 
+      // Persist rich item metadata (sku, unidade, assignedToId, prazo) inside
+      // calculoDetalhes — these fields don't exist in the Prisma schema so we
+      // keep them in the JSON blob to avoid requiring a migration.
+      const itensSolicitados = Array.isArray(body.items)
+        ? body.items.map((i) => ({
+          descricao: i.descricao || '',
+          quantidade: Number(i.quantidade || 1) || 1,
+          sku: i.sku || null,
+          unidade: i.unidade || 'UN',
+          custoUnitario: Number(i.custoUnitario || 0) || 0
+        }))
+        : [];
+
+      const baseDetalhes = body.calculoDetalhes && typeof body.calculoDetalhes === 'object'
+        ? body.calculoDetalhes : {};
+
+      // Resolve "Para quem está encaminhando" and prazo
+      const assignedToId = body.assignedToId || null;
+      const prazoStr = body.prazo || null;
+
+      const calculoDetalhes = {
+        ...baseDetalhes,
+        ...(itensSolicitados.length > 0 ? { itensSolicitados } : {}),
+        ...(assignedToId ? { encaminhadoParaId: assignedToId } : {}),
+        ...(prazoStr ? { prazo: prazoStr } : {})
+      };
+
       const solicitacao = await prisma.preSalesRequest.create({
         data: {
           numero,
@@ -116,7 +143,7 @@ export async function handler(event) {
           valorSugerido: toNullableFloat(body.valorSugerido),
           custoTotal: toNullableFloat(body.custoTotal),
           margemLucro: toNullableFloat(body.margemLucro),
-          calculoDetalhes: body.calculoDetalhes ?? undefined,
+          calculoDetalhes: Object.keys(calculoDetalhes).length > 0 ? calculoDetalhes : undefined,
           observacoes: body.observacoes || null,
           solicitanteId: user.id,
           leadId: body.leadId || null,
