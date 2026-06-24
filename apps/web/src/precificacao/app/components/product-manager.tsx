@@ -10,7 +10,7 @@ import { PricingInput, ProductItem } from '@/app/lib/pricing-engine';
 import { formatCurrency } from '@/app/lib/formatters';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Textarea } from '@/components/ui/textarea';
+
 
 interface ProductManagerProps {
   params: PricingInput;
@@ -67,60 +67,53 @@ export function ProductManager({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
           {items.map((item) => (
-            <div key={item.id} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-primary/20 transition-all relative group">
+            <div key={item.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 hover:border-primary/30 transition-all group">
+              <div className="flex-1 min-w-0">
+                <Input 
+                  placeholder="Nome do item"
+                  value={item.name}
+                  onChange={(e) => onItemChange(type, item.id, 'name', e.target.value)}
+                  className="h-9 text-sm font-semibold bg-transparent border-transparent hover:border-slate-200 focus:border-primary/30 px-2"
+                />
+              </div>
+              <div className="w-48 min-w-0 hidden sm:block">
+                <Input 
+                  placeholder="Descrição"
+                  value={item.description || ''}
+                  onChange={(e) => onItemChange(type, item.id, 'description', e.target.value)}
+                  className="h-9 text-xs text-slate-500 bg-transparent border-transparent hover:border-slate-200 focus:border-primary/30 px-2"
+                />
+              </div>
+              <div className="w-[70px] shrink-0">
+                <Input 
+                  type="number"
+                  value={item.quantity}
+                  onChange={(e) => onItemChange(type, item.id, 'quantity', e.target.value)}
+                  className="h-9 text-center text-sm bg-transparent border-transparent hover:border-slate-200 focus:border-primary/30 px-1"
+                />
+              </div>
+              <div className="w-[110px] shrink-0">
+                <Input 
+                  type="number"
+                  value={item.unitCost}
+                  onChange={(e) => onItemChange(type, item.id, 'unitCost', e.target.value)}
+                  className="h-9 text-right text-sm bg-transparent border-transparent hover:border-slate-200 focus:border-primary/30 px-2"
+                />
+              </div>
+              <div className="w-[100px] shrink-0 text-right">
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total</p>
+                <p className="text-sm font-bold text-slate-800">{formatCurrency(item.quantity * item.unitCost)}</p>
+              </div>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => onRemoveItem(type, item.id)}
-                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-white shadow-sm text-red-500 hover:bg-red-50 p-0 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 p-0 shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-4 h-4" />
               </Button>
-              
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] text-slate-400 mb-1 block uppercase">Nome do Item</Label>
-                  <Input 
-                    placeholder="Ex: Licença Base, Instalação..."
-                    value={item.name}
-                    onChange={(e) => onItemChange(type, item.id, 'name', e.target.value)}
-                    className="h-9 text-sm font-semibold border-none bg-white shadow-sm focus:ring-1 focus:ring-primary/20"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] text-slate-400 mb-1 block uppercase">Descrição</Label>
-                  <Textarea 
-                    placeholder="Detalhes do item, especificações ou observações..."
-                    value={item.description || ''}
-                    onChange={(e) => onItemChange(type, item.id, 'description', e.target.value)}
-                    className="min-h-[60px] text-xs border-none bg-white shadow-sm focus:ring-1 focus:ring-primary/20 resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-1">
-                    <Label className="text-[9px] text-slate-400 mb-1 block uppercase">Qtd</Label>
-                    <Input 
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => onItemChange(type, item.id, 'quantity', e.target.value)}
-                      className="h-9 text-center text-sm rounded-xl bg-white"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-[9px] text-slate-400 mb-1 block uppercase">Custo Unitário (R$)</Label>
-                    <Input 
-                      type="number"
-                      value={item.unitCost}
-                      onChange={(e) => onItemChange(type, item.id, 'unitCost', e.target.value)}
-                      className="h-9 text-right text-sm rounded-xl bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
             </div>
           ))}
 
