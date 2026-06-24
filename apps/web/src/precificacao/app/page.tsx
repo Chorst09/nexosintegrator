@@ -475,6 +475,7 @@ export default function FinEdgeApp() {
     setResults(item.results);
     setHasGeneratedResults(true);
     setViewingScenario(null);
+    setSimulatorStep('calculation');
     setActiveTab('simulator');
     toast({ title: "Cenário Restaurado", description: "Parâmetros aplicados com sucesso." });
   };
