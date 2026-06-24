@@ -315,14 +315,6 @@ export default function FinEdgeApp() {
   };
 
   const continueToItems = () => {
-    if (!proposalForm.opportunityId) {
-      setProposalFeedback({
-        type: 'error',
-        text: 'Selecione a oportunidade vinculada a esta precificação.'
-      });
-      return;
-    }
-
     if (!proposalForm.clientCompany.trim() || !proposalForm.clientContact.trim()) {
       setProposalFeedback({
         type: 'error',
