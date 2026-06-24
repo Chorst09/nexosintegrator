@@ -131,6 +131,25 @@ export async function handler(event) {
         ...(prazoStr ? { prazo: prazoStr } : {})
       };
 
+      // Validate foreign keys before creating to avoid constraint errors
+      let validLeadId = null;
+      if (body.leadId) {
+        const leadExists = await prisma.company.findUnique({
+          where: { id: body.leadId },
+          select: { id: true }
+        });
+        if (leadExists) validLeadId = body.leadId;
+      }
+
+      let validOpportunityId = null;
+      if (body.opportunityId) {
+        const oppExists = await prisma.opportunity.findUnique({
+          where: { id: body.opportunityId },
+          select: { id: true }
+        });
+        if (oppExists) validOpportunityId = body.opportunityId;
+      }
+
       const solicitacao = await prisma.preSalesRequest.create({
         data: {
           numero,
@@ -146,8 +165,8 @@ export async function handler(event) {
           calculoDetalhes: Object.keys(calculoDetalhes).length > 0 ? calculoDetalhes : undefined,
           observacoes: body.observacoes || null,
           solicitanteId: user.id,
-          leadId: body.leadId || null,
-          opportunityId: body.opportunityId || null,
+          leadId: validLeadId,
+          opportunityId: validOpportunityId,
           items: Array.isArray(body.items) && body.items.length > 0 ? {
             create: body.items.map((item) => ({
               productId: item.productId || null,
