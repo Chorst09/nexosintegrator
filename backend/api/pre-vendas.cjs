@@ -277,6 +277,26 @@ router.post('/', async (req, res) => {
     const numeroFormatado = await generateBudgetNumber();
     const validLeadId = await resolveExistingCompanyId(leadId);
     const validOpportunityId = await resolveExistingOpportunityId(opportunityId);
+    const requestItems = Array.isArray(items)
+      ? items
+          .filter((item) => String(item?.descricao || '').trim())
+          .map((item) => {
+            const icmsCompra = item?.icmsCompra === null || item?.icmsCompra === undefined || item?.icmsCompra === ''
+              ? null
+              : Number(item.icmsCompra) || 0;
+
+            return {
+              descricao: String(item.descricao || '').trim(),
+              quantidade: Math.max(1, parseInt(item.quantidade, 10) || 1),
+              custoUnitario: Number(item.custoUnitario) || 0,
+              precoSugerido: Number(item.precoSugerido) || 0,
+              margemLucro: Number(item.margemLucro) || 0,
+              observacoes: icmsCompra === null
+                ? null
+                : JSON.stringify({ icmsCompra })
+            };
+          })
+      : [];
 
     // Criar solicitação
     const solicitacao = await prisma.preSalesRequest.create({
@@ -291,7 +311,11 @@ router.post('/', async (req, res) => {
         observacoes,
         solicitanteId: req.user.userId, // Usar req.user.userId em vez de req.user.id
         leadId: validLeadId,
-        opportunityId: validOpportunityId
+        opportunityId: validOpportunityId,
+        ...(requestItems.length > 0 ? { items: { create: requestItems } } : {})
+      },
+      include: {
+        items: true
       }
     });
 

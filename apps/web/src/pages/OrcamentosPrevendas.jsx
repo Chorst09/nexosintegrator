@@ -43,8 +43,8 @@ const nextItemRow = () => ({
   id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   descricao: '',
   quantidade: 1,
-  sku: '',
-  unidade: 'UN'
+  custoUnitario: '',
+  icmsCompra: ''
 });
 
 const fallbackBudgetNumber = () => `ORC-0001-${new Date().getFullYear()}`;
@@ -128,9 +128,8 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
           .map((i) => ({
             descricao: i.descricao.trim(),
             quantidade: Number(i.quantidade) || 1,
-            sku: i.sku.trim() || null,
-            unidade: i.unidade.trim() || 'UN',
-            custoUnitario: 0,
+            custoUnitario: Number(i.custoUnitario) || 0,
+            icmsCompra: i.icmsCompra === '' ? null : Number(i.icmsCompra) || 0,
             precoSugerido: 0,
             margemLucro: 0
           }))
@@ -328,7 +327,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
             <div className="space-y-2">
               {form.itens.map((item) => (
                 <div key={item.id} className="grid grid-cols-12 gap-2 items-center rounded-lg border border-slate-700/50 bg-slate-900/30 px-3 py-2">
-                  <div className="col-span-5">
+                  <div className="col-span-12 md:col-span-5">
                     <input
                       type="text"
                       value={item.descricao}
@@ -337,7 +336,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
                       className="w-full rounded-md border border-slate-600/40 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3 md:col-span-2">
                     <input
                       type="number"
                       min="1"
@@ -346,21 +345,25 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
                       className="w-full rounded-md border border-slate-600/40 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-4 md:col-span-2">
                     <input
-                      type="text"
-                      value={item.sku}
-                      onChange={(e) => updateItem(item.id, 'sku', e.target.value)}
-                      placeholder="SKU"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.custoUnitario}
+                      onChange={(e) => updateItem(item.id, 'custoUnitario', e.target.value)}
+                      placeholder="Custo Unit."
                       className="w-full rounded-md border border-slate-600/40 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-4 md:col-span-2">
                     <input
-                      type="text"
-                      value={item.unidade}
-                      onChange={(e) => updateItem(item.id, 'unidade', e.target.value)}
-                      placeholder="UN"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.icmsCompra}
+                      onChange={(e) => updateItem(item.id, 'icmsCompra', e.target.value)}
+                      placeholder="ICMS Compra %"
                       className="w-full rounded-md border border-slate-600/40 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                     />
                   </div>
@@ -380,10 +383,10 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
 
             {/* column labels */}
             <div className="grid grid-cols-12 gap-2 mt-1 px-3">
-              <span className="col-span-5 text-[11px] text-slate-500">Descrição</span>
-              <span className="col-span-2 text-[11px] text-slate-500">Qtde</span>
-              <span className="col-span-2 text-[11px] text-slate-500">SKU</span>
-              <span className="col-span-2 text-[11px] text-slate-500">Unidade</span>
+              <span className="col-span-12 md:col-span-5 text-[11px] text-slate-500">Descrição</span>
+              <span className="col-span-3 md:col-span-2 text-[11px] text-slate-500">Qtde</span>
+              <span className="col-span-4 md:col-span-2 text-[11px] text-slate-500">Custo Unit.</span>
+              <span className="col-span-4 md:col-span-2 text-[11px] text-slate-500">ICMS Compra</span>
             </div>
           </div>
 
