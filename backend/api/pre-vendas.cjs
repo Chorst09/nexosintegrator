@@ -8,6 +8,28 @@ const router = express.Router();
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);
 
+const generateBudgetNumber = async () => {
+  const year = new Date().getFullYear();
+  const suffix = `-${year}`;
+  const currentYearRequests = await prisma.preSalesRequest.findMany({
+    where: {
+      numero: {
+        startsWith: 'ORC-',
+        endsWith: suffix
+      }
+    },
+    select: { numero: true }
+  });
+
+  const current = currentYearRequests.reduce((max, request) => {
+    const match = String(request?.numero || '').match(/^ORC-(\d{4})-\d{4}$/);
+    const parsed = match ? parseInt(match[1], 10) : 0;
+    return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+  }, 0);
+  const next = current + 1;
+  return `ORC-${String(next).padStart(4, '0')}-${year}`;
+};
+
 // GET /api/pre-vendas - Listar todas as solicitações de precificação
 router.get('/', async (req, res) => {
   try {
@@ -223,26 +245,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Gerar número sequencial
-    const ultimaSolicitacao = await prisma.preSalesRequest.findFirst({
-      orderBy: { numero: 'desc' }
-    });
-
-    let proximoNumero = 1;
-    if (ultimaSolicitacao && ultimaSolicitacao.numero) {
-      const match = ultimaSolicitacao.numero.match(/PRE-(\d{4})-(\d{3})/);
-      if (match) {
-        const ano = parseInt(match[1]);
-        const numero = parseInt(match[2]);
-        const anoAtual = new Date().getFullYear();
-        
-        if (ano === anoAtual) {
-          proximoNumero = numero + 1;
-        }
-      }
-    }
-
-    const numeroFormatado = `PRE-${new Date().getFullYear()}-${String(proximoNumero).padStart(3, '0')}`;
+    const numeroFormatado = await generateBudgetNumber();
 
     // Criar solicitação
     const solicitacao = await prisma.preSalesRequest.create({

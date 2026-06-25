@@ -61,16 +61,24 @@ const getAuthenticatedUserId = (req) => req.user?.userId || req.user?.id || null
 
 const generatePreSalesNumber = async () => {
   const year = new Date().getFullYear();
-  const prefix = `PRE-${year}-`;
-  const latest = await prisma.preSalesRequest.findFirst({
-    where: { numero: { startsWith: prefix } },
-    orderBy: { createdAt: 'desc' },
+  const suffix = `-${year}`;
+  const currentYearRequests = await prisma.preSalesRequest.findMany({
+    where: {
+      numero: {
+        startsWith: 'ORC-',
+        endsWith: suffix
+      }
+    },
     select: { numero: true }
   });
 
-  const current = Number((latest?.numero || '').split('-').pop() || 0);
-  const next = Number.isFinite(current) ? current + 1 : 1;
-  return `${prefix}${String(next).padStart(3, '0')}`;
+  const current = currentYearRequests.reduce((max, request) => {
+    const match = String(request?.numero || '').match(/^ORC-(\d{4})-\d{4}$/);
+    const parsed = match ? parseInt(match[1], 10) : 0;
+    return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+  }, 0);
+  const next = current + 1;
+  return `ORC-${String(next).padStart(4, '0')}-${year}`;
 };
 
 // GET /api/activities-simple

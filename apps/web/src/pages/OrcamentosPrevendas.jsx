@@ -47,6 +47,8 @@ const nextItemRow = () => ({
   unidade: 'UN'
 });
 
+const fallbackBudgetNumber = () => `ORC-0001-${new Date().getFullYear()}`;
+
 const buildEmptyForm = (currentUser = {}) => ({
   titulo: '',
   descricao: '',
@@ -421,7 +423,7 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
   const [form, setForm] = useState({
     modalidade: 'VENDA',
     distribuidor: '',
-    numeroOrcamento: `ORC-${String(Date.now()).slice(-4)}`,
+    numeroOrcamento: fallbackBudgetNumber(),
     descricaoItem: '',
     quantidade: 1,
     custoUnitario: 0,
@@ -436,7 +438,7 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
       const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
         ? solicitacao.calculoDetalhes : {};
       setCustos(Array.isArray(details.cotacoes) ? details.cotacoes : []);
-      setForm((p) => ({ ...p, numeroOrcamento: `ORC-${String(Date.now()).slice(-4)}` }));
+      setForm((p) => ({ ...p, numeroOrcamento: solicitacao.numero || fallbackBudgetNumber() }));
       setFeedback('');
     }
   }, [isOpen, solicitacao]);
@@ -456,7 +458,7 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
         id: `COT-${Date.now()}`,
         modalidade: form.modalidade,
         distribuidor: form.distribuidor.trim(),
-        numeroOrcamento: form.numeroOrcamento.trim() || `ORC-${String(Date.now()).slice(-4)}`,
+        numeroOrcamento: form.numeroOrcamento.trim() || solicitacao.numero || fallbackBudgetNumber(),
         itens: [{ descricao: form.descricaoItem.trim(), quantidade: Number(form.quantidade) || 1, custoUnitario: Number(form.custoUnitario) || 0 }],
         subtotal: (Number(form.quantidade) || 1) * (Number(form.custoUnitario) || 0),
         observacoesCotacao: form.observacoes.trim(),
@@ -470,7 +472,7 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
       });
       if (!res.ok) throw new Error('Erro ao salvar custo');
       setCustos([newEntry, ...prevCotacoes]);
-      setForm((p) => ({ ...p, distribuidor: '', descricaoItem: '', quantidade: 1, custoUnitario: 0, observacoes: '', numeroOrcamento: `ORC-${String(Date.now()).slice(-4)}` }));
+      setForm((p) => ({ ...p, distribuidor: '', descricaoItem: '', quantidade: 1, custoUnitario: 0, observacoes: '', numeroOrcamento: solicitacao.numero || fallbackBudgetNumber() }));
       onSaved?.();
     } catch (err) {
       setFeedback(err.message || 'Erro ao salvar');
