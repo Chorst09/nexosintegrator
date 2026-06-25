@@ -50,6 +50,8 @@ const nextItemRow = () => ({
 const buildEmptyForm = (currentUser = {}) => ({
   titulo: '',
   descricao: '',
+  nomeCliente: '',
+  modalidade: 'VENDA',
   solicitanteId: currentUser.id || '',
   encaminhadoParaId: '',
   opportunityId: '',
@@ -111,6 +113,8 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
       const payload = {
         titulo: form.titulo.trim(),
         descricao: form.descricao.trim(),
+        nomeCliente: form.nomeCliente.trim() || null,
+        modalidade: form.modalidade || null,
         prioridade: form.prioridade,
         tiposPrecificacao: ['VENDA'],
         leadId: form.clientId.trim() || null,
@@ -194,6 +198,32 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
               placeholder="Contexto técnico e comercial da solicitação"
               className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"
             />
+          </div>
+
+          {/* Nome do Cliente e Modalidade */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Nome do Cliente</label>
+              <input
+                type="text"
+                value={form.nomeCliente}
+                onChange={(e) => setField('nomeCliente', e.target.value)}
+                placeholder="Nome da empresa ou cliente"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Modalidade</label>
+              <select
+                value={form.modalidade}
+                onChange={(e) => setField('modalidade', e.target.value)}
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              >
+                <option value="VENDA">Venda</option>
+                <option value="LOCACAO">Locação</option>
+                <option value="SERVICO">Serviço</option>
+              </select>
+            </div>
           </div>
 
           {/* Quem está solicitando / Para quem está encaminhando */}
@@ -723,11 +753,11 @@ export default function OrcamentosPrevendas() {
 
         {/* table header */}
         <div className="grid grid-cols-12 gap-2 bg-slate-900/40 px-5 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-700/40">
-          <span className="col-span-4">Atividade</span>
+          <span className="col-span-3">Atividade</span>
+          <span className="col-span-2">Cliente / Modalidade</span>
           <span className="col-span-2">Status</span>
           <span className="col-span-1 text-center">Uploads</span>
           <span className="col-span-1 text-center">Pendentes</span>
-          <span className="col-span-1 text-center">Falhas</span>
           <span className="col-span-3 text-right">Ações</span>
         </div>
 
@@ -758,18 +788,30 @@ export default function OrcamentosPrevendas() {
               const cotacoes = cotacaoCount(item);
               const createdAt = item.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : '-';
 
+              const modalidadeLabel = {
+                VENDA: 'Venda',
+                LOCACAO: 'Locação',
+                SERVICO: 'Serviço'
+              }[item.modalidade] || '-';
+
               return (
                 <div
                   key={item.id}
                   className="grid grid-cols-12 gap-2 items-center border-b border-slate-700/30 px-5 py-3.5 hover:bg-slate-800/20 transition-colors"
                 >
                   {/* Atividade */}
-                  <div className="col-span-4 min-w-0">
+                  <div className="col-span-3 min-w-0">
                     <p className="truncate text-sm font-medium text-white">{item.titulo}</p>
                     <p className="text-xs text-slate-400">
                       {item.numero && <span className="font-mono text-sky-400 mr-2">{item.numero}</span>}
                       • {createdAt}
                     </p>
+                  </div>
+
+                  {/* Cliente / Modalidade */}
+                  <div className="col-span-2 min-w-0">
+                    <p className="truncate text-sm text-slate-200">{item.nomeCliente || '-'}</p>
+                    <p className="text-xs text-slate-400">{modalidadeLabel}</p>
                   </div>
 
                   {/* Status */}
@@ -783,9 +825,6 @@ export default function OrcamentosPrevendas() {
                   <div className="col-span-1 text-center text-sm text-slate-300">{uploads}</div>
 
                   {/* Pendentes */}
-                  <div className="col-span-1 text-center text-sm text-slate-300">0</div>
-
-                  {/* Falhas */}
                   <div className="col-span-1 text-center text-sm text-slate-300">0</div>
 
                   {/* Ações */}

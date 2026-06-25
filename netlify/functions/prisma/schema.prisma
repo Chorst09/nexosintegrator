@@ -975,6 +975,8 @@ model PreSalesRequest {
   numero              String   @unique
   titulo              String
   descricao           String
+  nomeCliente         String?  // Nome do cliente
+  modalidade          String?  // 'VENDA', 'LOCACAO', 'SERVICO'
   status              PreSalesStatus @default(NOVA)
   prioridade          Priority @default(MEDIUM)
   tiposPrecificacao   String[] // ['VENDA', 'LOCACAO', 'SERVICOS']

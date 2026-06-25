@@ -155,6 +155,8 @@ export async function handler(event) {
           numero,
           titulo: body.titulo,
           descricao: body.descricao,
+          nomeCliente: body.nomeCliente || null,
+          modalidade: body.modalidade || null,
           status: 'NOVA',
           prioridade: body.prioridade || 'MEDIUM',
           tiposPrecificacao,
@@ -203,6 +205,8 @@ export async function handler(event) {
 
       if (typeof body.titulo === 'string' && body.titulo.trim()) nextData.titulo = body.titulo.trim();
       if (typeof body.descricao === 'string') nextData.descricao = body.descricao;
+      if (Object.prototype.hasOwnProperty.call(body, 'nomeCliente')) nextData.nomeCliente = body.nomeCliente || null;
+      if (Object.prototype.hasOwnProperty.call(body, 'modalidade')) nextData.modalidade = body.modalidade || null;
       if (typeof body.status === 'string' && body.status.trim()) nextData.status = body.status.trim();
       if (typeof body.prioridade === 'string' && body.prioridade.trim()) nextData.prioridade = body.prioridade.trim();
       if (Array.isArray(body.tiposPrecificacao)) nextData.tiposPrecificacao = body.tiposPrecificacao;
