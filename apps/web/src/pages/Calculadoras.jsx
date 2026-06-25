@@ -1007,6 +1007,19 @@ export default function Calculadoras() {
   const [showCotacaoModal, setShowCotacaoModal] = useState(false); // NOVO: Modal de seleção de cotações
   const [cotacoesDisponiveis, setCotacoesDisponiveis] = useState([]); // NOVO: Lista de cotações
   const [loadingCotacoes, setLoadingCotacoes] = useState(false); // NOVO: Loading das cotações
+  
+  // Estados para Custos (Orçamentos de Distribuidores)
+  const [distributorCosts, setDistributorCosts] = useState([]); // Lista de custos adicionados
+  const [currentCost, setCurrentCost] = useState({
+    modalidade: 'VENDA',
+    distribuidor: '',
+    numeroOrcamento: '',
+    item: '',
+    quantidade: 1,
+    custoUnitario: 0,
+    observacoes: ''
+  });
+  
   const [settingsTab, setSettingsTab] = useState('regimes');
   const [currentTab, setCurrentTab] = useState('vendas');
   const [calculatorStep, setCalculatorStep] = useState('proposal');
@@ -1522,6 +1535,7 @@ export default function Calculadoras() {
     setDesiredMargin(20);
     setIsIcmsContributor(false);
     setDestinationUF('SP');
+    setDistributorCosts([]); // Limpar custos de distribuidores
   };
 
   const normalizeOperationItems = (items, defaultItem, prefix) => {
@@ -1627,6 +1641,27 @@ export default function Calculadoras() {
       }
     });
     
+    // NOVO: Carregar custos de distribuidores para a seção de custos
+    const custosDistribuidores = [];
+    todosCustos.forEach((cotacao) => {
+      if (Array.isArray(cotacao.itens)) {
+        cotacao.itens.forEach((item) => {
+          custosDistribuidores.push({
+            id: `cost_${Date.now()}_${Math.random()}`,
+            modalidade: solicitacao.modalidade || 'VENDA',
+            distribuidor: cotacao.fornecedor || 'Fornecedor não especificado',
+            numeroOrcamento: solicitacao.numero || '',
+            item: item.descricao || '',
+            quantidade: Number(item.quantidade) || 1,
+            custoUnitario: Number(item.custoUnitario) || 0,
+            observacoes: cotacao.observacoes || '',
+            data: new Date().toISOString()
+          });
+        });
+      }
+    });
+    setDistributorCosts(custosDistribuidores);
+    
     // Determinar modalidade e tab correta
     const modalidadeItem = solicitacao.modalidade || 'VENDA';
     const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
@@ -1642,9 +1677,9 @@ export default function Calculadoras() {
     setActiveProposalId(null);
     setProposalFeedback({
       type: 'success',
-      text: `Cotação ${solicitacao.numero} carregada com ${todosItens.length} item(ns).`
+      text: `Cotação ${solicitacao.numero} carregada com ${todosItens.length} item(ns) e ${custosDistribuidores.length} custo(s).`
     });
-    setCalculatorStep('calculation');
+    setCalculatorStep('proposal');
     clearProposalCart();
     
     // Mapear itens para o formato correto baseado na modalidade
@@ -1690,6 +1725,67 @@ export default function Calculadoras() {
     setProposalFeedback(null);
     setCalculatorStep('proposal');
     clearProposalCart();
+    setDistributorCosts([]); // Limpar custos ao criar nova proposta vazia
+  };
+
+  // Handlers para Custos (Orçamentos de Distribuidores)
+  const handleCostFieldChange = (field, value) => {
+    setCurrentCost((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleAddDistributorCost = () => {
+    // Validação básica
+    if (!currentCost.distribuidor.trim()) {
+      alert('Por favor, preencha o nome do distribuidor');
+      return;
+    }
+    if (!currentCost.item.trim()) {
+      alert('Por favor, preencha o item/descrição');
+      return;
+    }
+    if (currentCost.quantidade <= 0) {
+      alert('Quantidade deve ser maior que zero');
+      return;
+    }
+    if (currentCost.custoUnitario <= 0) {
+      alert('Custo unitário deve ser maior que zero');
+      return;
+    }
+
+    // Adicionar custo à lista
+    const novoCusto = {
+      ...currentCost,
+      id: `cost_${Date.now()}`,
+      data: new Date().toISOString()
+    };
+    
+    setDistributorCosts((prev) => [...prev, novoCusto]);
+    
+    // Limpar formulário
+    setCurrentCost({
+      modalidade: 'VENDA',
+      distribuidor: '',
+      numeroOrcamento: '',
+      item: '',
+      quantidade: 1,
+      custoUnitario: 0,
+      observacoes: ''
+    });
+
+    // Feedback
+    setProposalFeedback({
+      type: 'success',
+      text: 'Custo adicionado com sucesso!'
+    });
+    
+    setTimeout(() => setProposalFeedback(null), 3000);
+  };
+
+  const handleRemoveDistributorCost = (costId) => {
+    setDistributorCosts((prev) => prev.filter((cost) => cost.id !== costId));
   };
 
   const openProposal = (proposal, { keepModalOpen = true } = {}) => {
@@ -1708,6 +1804,9 @@ export default function Calculadoras() {
     setSaleItems(normalizeOperationItems(snapshot.saleItems, DEFAULT_SALE_ITEM, 'sale'));
     setRentalItems(normalizeOperationItems(snapshot.rentalItems, DEFAULT_RENTAL_ITEM, 'rental'));
     setServiceItems(normalizeOperationItems(snapshot.serviceItems, DEFAULT_SERVICE_ITEM, 'service'));
+    
+    // NOVO: Carregar custos de distribuidores
+    setDistributorCosts(Array.isArray(proposal.distributorCosts) ? proposal.distributorCosts : []);
 
     setProposalForm({
       number: proposal.number || '',
@@ -1785,6 +1884,7 @@ export default function Calculadoras() {
           calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {}
         }))
       },
+      distributorCosts: deepClone(distributorCosts), // NOVO: Salvar custos de distribuidores
       result: {
         finalPrice: toNumber(calculationPreview.calculationResults.finalPrice, 0),
         monthlyPrice: toNumber(calculationPreview.calculationResults.monthlyPrice, 0),
@@ -3074,6 +3174,147 @@ export default function Calculadoras() {
               {proposalFeedback.text}
             </div>
           ) : null}
+
+          {/* NOVA SEÇÃO: Custos (Orçamentos de Distribuidores) */}
+          {calculatorStep === 'proposal' && (
+            <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
+              <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
+                <h3 className="text-xl font-bold text-white">Custos (Orçamentos de Distribuidores)</h3>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Formulário de entrada */}
+                <div className="grid grid-cols-6 gap-3 items-end">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Modalidade</label>
+                    <select 
+                      value={currentCost.modalidade}
+                      onChange={(e) => handleCostFieldChange('modalidade', e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    >
+                      <option value="VENDA">Venda</option>
+                      <option value="LOCACAO">Locação</option>
+                      <option value="SERVICOS">Serviços</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
+                    <input
+                      type="text"
+                      placeholder="Nome do distribuidor..."
+                      value={currentCost.distribuidor}
+                      onChange={(e) => handleCostFieldChange('distribuidor', e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
+                    <input
+                      type="text"
+                      placeholder="ORC-0001"
+                      value={currentCost.numeroOrcamento}
+                      onChange={(e) => handleCostFieldChange('numeroOrcamento', e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Item / Descrição</label>
+                    <input
+                      type="text"
+                      placeholder="Switch 48 portas, servidor..."
+                      value={currentCost.item}
+                      onChange={(e) => handleCostFieldChange('item', e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Qtde</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={currentCost.quantidade}
+                      onChange={(e) => handleCostFieldChange('quantidade', Number(e.target.value) || 1)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Custo Unit. R$</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={currentCost.custoUnitario}
+                      onChange={(e) => handleCostFieldChange('custoUnitario', Number(e.target.value) || 0)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    />
+                  </div>
+                </div>
+
+                {/* Observações e botão */}
+                <div className="flex gap-3 items-end">
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-400 mb-1">Observações</label>
+                    <input
+                      type="text"
+                      placeholder="Condições comerciais, prazo, impostos inclusos..."
+                      value={currentCost.observacoes}
+                      onChange={(e) => handleCostFieldChange('observacoes', e.target.value)}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddDistributorCost}
+                    className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 shrink-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar e Aplicar
+                  </button>
+                </div>
+
+                {/* Tabela de custos */}
+                <div className="rounded-xl border border-slate-700/50 overflow-hidden mt-4">
+                  <div className="grid grid-cols-8 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-700/40">
+                    <span>Modalidade</span>
+                    <span>Distribuidor</span>
+                    <span>Orçamento</span>
+                    <span className="col-span-2">Item</span>
+                    <span>Qtde</span>
+                    <span>Custo Unit.</span>
+                    <span>Data</span>
+                  </div>
+                  {distributorCosts.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-slate-500">
+                      Sem custos adicionados para esta proposta.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-700/30">
+                      {distributorCosts.map((cost) => (
+                        <div key={cost.id} className="grid grid-cols-8 gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/40">
+                          <span className="truncate">{cost.modalidade}</span>
+                          <span className="truncate">{cost.distribuidor}</span>
+                          <span className="truncate">{cost.numeroOrcamento || '-'}</span>
+                          <span className="col-span-2 truncate" title={cost.item}>{cost.item}</span>
+                          <span>{cost.quantidade}</span>
+                          <span>R$ {cost.custoUnitario.toFixed(2)}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs">{new Date(cost.data).toLocaleDateString('pt-BR')}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDistributorCost(cost.id)}
+                              className="text-red-400 hover:text-red-300 ml-auto"
+                              title="Remover custo"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {calculatorStep === 'proposal' && (
             <div className="rounded-lg border border-cyan-400/35 bg-slate-900/80 overflow-hidden">
