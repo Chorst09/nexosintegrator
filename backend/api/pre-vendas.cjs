@@ -30,6 +30,35 @@ const generateBudgetNumber = async () => {
   return `ORC-${String(next).padStart(4, '0')}-${year}`;
 };
 
+const normalizeOptionalId = (value) => {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+};
+
+const resolveExistingCompanyId = async (companyId) => {
+  const normalized = normalizeOptionalId(companyId);
+  if (!normalized) return null;
+
+  const company = await prisma.company.findUnique({
+    where: { id: normalized },
+    select: { id: true }
+  });
+
+  return company?.id || null;
+};
+
+const resolveExistingOpportunityId = async (opportunityId) => {
+  const normalized = normalizeOptionalId(opportunityId);
+  if (!normalized) return null;
+
+  const opportunity = await prisma.opportunity.findUnique({
+    where: { id: normalized },
+    select: { id: true }
+  });
+
+  return opportunity?.id || null;
+};
+
 // GET /api/pre-vendas - Listar todas as solicitações de precificação
 router.get('/', async (req, res) => {
   try {
@@ -246,6 +275,8 @@ router.post('/', async (req, res) => {
     }
 
     const numeroFormatado = await generateBudgetNumber();
+    const validLeadId = await resolveExistingCompanyId(leadId);
+    const validOpportunityId = await resolveExistingOpportunityId(opportunityId);
 
     // Criar solicitação
     const solicitacao = await prisma.preSalesRequest.create({
@@ -259,8 +290,8 @@ router.post('/', async (req, res) => {
         regimeTributario,
         observacoes,
         solicitanteId: req.user.userId, // Usar req.user.userId em vez de req.user.id
-        leadId: leadId || null,
-        opportunityId: opportunityId || null
+        leadId: validLeadId,
+        opportunityId: validOpportunityId
       }
     });
 

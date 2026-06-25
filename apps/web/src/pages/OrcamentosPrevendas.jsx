@@ -142,7 +142,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d?.error || 'Erro ao criar orçamento');
+        throw new Error(d?.message || d?.error || 'Erro ao criar orçamento');
       }
       const created = await res.json();
       onCreated?.(created);
