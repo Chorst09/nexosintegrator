@@ -1004,6 +1004,9 @@ const calculateOperation = ({
 export default function Calculadoras() {
   const [showModal, setShowModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showCotacaoModal, setShowCotacaoModal] = useState(false); // NOVO: Modal de seleção de cotações
+  const [cotacoesDisponiveis, setCotacoesDisponiveis] = useState([]); // NOVO: Lista de cotações
+  const [loadingCotacoes, setLoadingCotacoes] = useState(false); // NOVO: Loading das cotações
   const [settingsTab, setSettingsTab] = useState('regimes');
   const [currentTab, setCurrentTab] = useState('vendas');
   const [calculatorStep, setCalculatorStep] = useState('proposal');
@@ -1548,9 +1551,137 @@ export default function Calculadoras() {
     }
   };
 
-  const startNewProposal = (tabId = currentTab) => {
+  const startNewProposal = async (tabId = currentTab) => {
+    // Buscar cotações disponíveis
+    setLoadingCotacoes(true);
+    try {
+      const response = await fetch(buildApiUrl('/pre-vendas?limit=100'), { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        const solicitacoes = Array.isArray(data?.solicitacoes) ? data.solicitacoes : [];
+        
+        // Filtrar solicitações que têm custos/cotações
+        const comCotacoes = solicitacoes.filter((sol) => {
+          const details = sol?.calculoDetalhes && typeof sol.calculoDetalhes === 'object' ? sol.calculoDetalhes : {};
+          const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+          return cotacoes.length > 0;
+        });
+        
+        setCotacoesDisponiveis(comCotacoes);
+        
+        // Se houver cotações, mostrar o modal. Senão, criar proposta vazia
+        if (comCotacoes.length > 0) {
+          setShowCotacaoModal(true);
+        } else {
+          // Criar proposta vazia
+          resetForm();
+          setCurrentTab(tabId);
+          const nextNumber = generateProposalNumber(savedProposals);
+          const managerDefaults = getManagerDefaults();
+          setProposalForm(buildProposalForm(nextNumber, managerDefaults));
+          setProposalSearchNumber(nextNumber);
+          setActiveProposalId(null);
+          setProposalFeedback(null);
+          setCalculatorStep('proposal');
+          clearProposalCart();
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar cotações:', error);
+      // Em caso de erro, criar proposta vazia
+      resetForm();
+      setCurrentTab(tabId);
+      const nextNumber = generateProposalNumber(savedProposals);
+      const managerDefaults = getManagerDefaults();
+      setProposalForm(buildProposalForm(nextNumber, managerDefaults));
+      setProposalSearchNumber(nextNumber);
+      setActiveProposalId(null);
+      setProposalFeedback(null);
+      setCalculatorStep('proposal');
+      clearProposalCart();
+    } finally {
+      setLoadingCotacoes(false);
+    }
+  };
+
+  const selecionarCotacao = (solicitacao) => {
+    // Fechar modal de seleção
+    setShowCotacaoModal(false);
+    
+    // Preparar dados da cotação
+    const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+      ? solicitacao.calculoDetalhes : {};
+    const todosCustos = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+    
+    // Compilar todos os itens de todas as cotações
+    const todosItens = [];
+    todosCustos.forEach((cotacao) => {
+      if (Array.isArray(cotacao.itens)) {
+        cotacao.itens.forEach((item) => {
+          todosItens.push({
+            descricao: item.descricao || '',
+            quantidade: Number(item.quantidade) || 1,
+            custoUnitario: Number(item.custoUnitario) || 0
+          });
+        });
+      }
+    });
+    
+    // Determinar modalidade e tab correta
+    const modalidadeItem = solicitacao.modalidade || 'VENDA';
+    const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
+    const targetTab = tipoMap[String(modalidadeItem).toUpperCase()] || 'vendas';
+    
+    // Resetar form e criar nova proposta
     resetForm();
-    setCurrentTab(tabId);
+    setCurrentTab(targetTab);
+    const nextNumber = generateProposalNumber(savedProposals);
+    const managerDefaults = getManagerDefaults();
+    setProposalForm(buildProposalForm(nextNumber, managerDefaults));
+    setProposalSearchNumber(nextNumber);
+    setActiveProposalId(null);
+    setProposalFeedback({
+      type: 'success',
+      text: `Cotação ${solicitacao.numero} carregada com ${todosItens.length} item(ns).`
+    });
+    setCalculatorStep('calculation');
+    clearProposalCart();
+    
+    // Mapear itens para o formato correto baseado na modalidade
+    if (targetTab === 'locacao') {
+      const mappedItems = todosItens.map((item, idx) => ({
+        ...DEFAULT_RENTAL_ITEM,
+        id: `rental_${Date.now()}_${idx}`,
+        description: item.descricao,
+        quantity: item.quantidade,
+        assetValueBRL: item.custoUnitario
+      }));
+      setRentalItems(mappedItems);
+    } else if (targetTab === 'servicos') {
+      const mappedItems = todosItens.map((item, idx) => ({
+        ...DEFAULT_SERVICE_ITEM,
+        id: `service_${Date.now()}_${idx}`,
+        description: item.descricao,
+        estimatedHours: item.quantidade,
+        baseSalary: item.custoUnitario
+      }));
+      setServiceItems(mappedItems);
+    } else {
+      const mappedItems = todosItens.map((item, idx) => ({
+        ...DEFAULT_SALE_ITEM,
+        id: `sale_${Date.now()}_${idx}`,
+        description: item.descricao,
+        quantity: item.quantidade,
+        unitCost: item.custoUnitario
+      }));
+      setSaleItems(mappedItems);
+    }
+  };
+
+  const criarPropostaVazia = () => {
+    setShowCotacaoModal(false);
+    resetForm();
+    setCurrentTab(currentTab);
     const nextNumber = generateProposalNumber(savedProposals);
     const managerDefaults = getManagerDefaults();
     setProposalForm(buildProposalForm(nextNumber, managerDefaults));
@@ -3753,6 +3884,102 @@ export default function Calculadoras() {
               className="px-6 py-3 rounded-lg border border-blue-400/60 bg-blue-500/80 text-white hover:bg-blue-500"
             >
               Salvar Alterações
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Seleção de Cotações */}
+      <Modal
+        isOpen={showCotacaoModal}
+        onClose={() => setShowCotacaoModal(false)}
+        title="Selecionar Cotação para Precificação"
+        maxWidth="4xl"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Selecione uma cotação salva para carregar os custos automaticamente na calculadora,
+            ou crie uma proposta vazia.
+          </p>
+
+          {loadingCotacoes ? (
+            <div className="py-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-sky-500 border-r-transparent"></div>
+              <p className="mt-3 text-sm text-slate-400">Carregando cotações...</p>
+            </div>
+          ) : cotacoesDisponiveis.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-600 p-8 text-center">
+              <p className="text-slate-400">Nenhuma cotação disponível no momento.</p>
+              <button
+                type="button"
+                onClick={criarPropostaVazia}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-400"
+              >
+                <FilePlus2 className="h-4 w-4" />
+                Criar Proposta Vazia
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[500px] overflow-y-auto">
+              {cotacoesDisponiveis.map((solicitacao) => {
+                const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+                  ? solicitacao.calculoDetalhes : {};
+                const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+                const totalItens = cotacoes.reduce((sum, cot) => sum + (Array.isArray(cot.itens) ? cot.itens.length : 0), 0);
+                const modalidadeLabel = {
+                  VENDA: 'Venda',
+                  LOCACAO: 'Locação',
+                  SERVICO: 'Serviço'
+                }[solicitacao.modalidade] || 'Venda';
+
+                return (
+                  <button
+                    key={solicitacao.id}
+                    type="button"
+                    onClick={() => selecionarCotacao(solicitacao)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900/60 p-4 text-left transition hover:border-sky-500/50 hover:bg-slate-800/80"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-base font-semibold text-sky-300">{solicitacao.numero}</span>
+                          <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-100 border border-blue-400/30">
+                            {modalidadeLabel}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-200 truncate">{solicitacao.titulo}</p>
+                        {solicitacao.nomeCliente && (
+                          <p className="text-xs text-slate-400 mt-1">Cliente: {solicitacao.nomeCliente}</p>
+                        )}
+                        <p className="text-xs text-slate-500 mt-1">
+                          {cotacoes.length} cotação(ões) • {totalItens} item(ns)
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ArrowRight className="h-5 w-5 text-sky-400" />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-4 border-t border-slate-700">
+            <button
+              type="button"
+              onClick={criarPropostaVazia}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              <FilePlus2 className="h-4 w-4" />
+              Criar Proposta Vazia
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCotacaoModal(false)}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              Cancelar
             </button>
           </div>
         </div>
