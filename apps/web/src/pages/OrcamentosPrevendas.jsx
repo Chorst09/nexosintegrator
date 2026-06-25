@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Receipt, RefreshCcw, Search, DollarSign, ClipboardList, Building2,
   Eye, ArrowRight, Plus, Trash2, X, Upload, AlertCircle, CheckCircle,
-  Calculator, FileText, Loader2
+  Calculator, FileText, Loader2, Pencil
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import PageHeader from '../components/PageHeader';
@@ -14,6 +14,13 @@ import Modal from '../components/Modal';
 
 const toCurrency = (v) =>
   `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+const escapeHtml = (value) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
 
 const getCurrentUser = () => {
   try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
@@ -49,6 +56,38 @@ const nextItemRow = () => ({
 
 const fallbackBudgetNumber = () => `ORC-0001-${new Date().getFullYear()}`;
 
+const parseItemIcmsCompra = (item) => {
+  if (!item?.observacoes) return '';
+  try {
+    const parsed = JSON.parse(item.observacoes);
+    return parsed?.icmsCompra ?? '';
+  } catch {
+    return '';
+  }
+};
+
+const formFromRequest = (request, currentUser = {}) => ({
+  titulo: request?.titulo || '',
+  descricao: request?.descricao || '',
+  nomeCliente: request?.nomeCliente || request?.lead?.name || '',
+  modalidade: request?.modalidade || 'VENDA',
+  solicitanteId: request?.solicitanteId || request?.solicitante?.id || currentUser.id || '',
+  encaminhadoParaId: request?.assignedToId || '',
+  opportunityId: request?.opportunityId || request?.opportunity?.id || '',
+  clientId: request?.leadId || request?.lead?.id || '',
+  prioridade: request?.prioridade || 'MEDIUM',
+  prazo: request?.prazo || '',
+  itens: Array.isArray(request?.items) && request.items.length > 0
+    ? request.items.map((item) => ({
+        id: item.id || nextItemRow().id,
+        descricao: item.descricao || item.product?.name || '',
+        quantidade: item.quantidade || 1,
+        custoUnitario: item.custoUnitario ?? '',
+        icmsCompra: parseItemIcmsCompra(item)
+      }))
+    : [nextItemRow()]
+});
+
 const buildEmptyForm = (currentUser = {}) => ({
   titulo: '',
   descricao: '',
@@ -65,12 +104,13 @@ const buildEmptyForm = (currentUser = {}) => ({
 
 // ─── sub-component: NovoOrcamentoModal ──────────────────────────────────────
 
-function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
+function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null }) {
   const currentUser = getCurrentUser();
   const [form, setForm] = useState(() => buildEmptyForm(currentUser));
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const isEditing = Boolean(editingRequest?.id);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -84,11 +124,11 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
 
   useEffect(() => {
     if (isOpen) {
-      setForm(buildEmptyForm(currentUser));
+      setForm(isEditing ? formFromRequest(editingRequest, currentUser) : buildEmptyForm(currentUser));
       setFeedback('');
       loadUsers();
     }
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, isEditing, editingRequest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
 
@@ -134,20 +174,20 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
             margemLucro: 0
           }))
       };
-      const res = await fetch(buildApiUrl('/pre-vendas'), {
-        method: 'POST',
+      const res = await fetch(buildApiUrl(isEditing ? `/pre-vendas/${encodeURIComponent(editingRequest.id)}` : '/pre-vendas'), {
+        method: isEditing ? 'PUT' : 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d?.message || d?.error || 'Erro ao criar orçamento');
+        throw new Error(d?.message || d?.error || `Erro ao ${isEditing ? 'atualizar' : 'criar'} orçamento`);
       }
       const created = await res.json();
       onCreated?.(created);
       onClose();
     } catch (err) {
-      setFeedback(err.message || 'Erro ao criar orçamento');
+      setFeedback(err.message || `Erro ao ${isEditing ? 'atualizar' : 'criar'} orçamento`);
     } finally {
       setSaving(false);
     }
@@ -161,9 +201,13 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
         {/* header */}
         <div className="flex items-start justify-between p-6 border-b border-slate-700/50">
           <div>
-            <h2 className="text-xl font-bold text-white">Criar solicitação para Pré-vendas</h2>
+            <h2 className="text-xl font-bold text-white">
+              {isEditing ? 'Editar orçamento de Pré-vendas' : 'Criar solicitação para Pré-vendas'}
+            </h2>
             <p className="mt-1 text-sm text-slate-400">
-              Registre a demanda de proposta/orçamento e direcione para o fluxo de cotação e precificação.
+              {isEditing
+                ? 'Atualize os dados e itens solicitados do orçamento.'
+                : 'Registre a demanda de proposta/orçamento e direcione para o fluxo de cotação e precificação.'}
             </p>
           </div>
           <button
@@ -411,7 +455,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated }) {
               className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-60"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Criar solicitação
+              {isEditing ? 'Salvar alterações' : 'Criar solicitação'}
             </button>
           </div>
         </form>
@@ -650,6 +694,7 @@ export default function OrcamentosPrevendas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
   const [showNovoModal, setShowNovoModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   const [costosItem, setCostosItem] = useState(null); // solicitacao to open CustosModal for
 
   const currentUser = getCurrentUser();
@@ -712,6 +757,232 @@ export default function OrcamentosPrevendas() {
   const cotacaoCount = (r) => {
     const d = r?.calculoDetalhes && typeof r.calculoDetalhes === 'object' ? r.calculoDetalhes : {};
     return Array.isArray(d.cotacoes) ? d.cotacoes.length : 0;
+  };
+
+  const handleViewPdf = (item) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Não foi possível abrir a janela do PDF. Libere pop-ups e tente novamente.');
+      return;
+    }
+
+    const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object' ? item.calculoDetalhes : {};
+    const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+    const itensSolicitados = Array.isArray(item?.items) ? item.items : [];
+    const createdAt = item?.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : '-';
+    const updatedAt = item?.updatedAt ? new Date(item.updatedAt).toLocaleString('pt-BR') : '-';
+    const statusKey = String(item?.status || 'NOVA').toUpperCase();
+    const statusText = STATUS_LABEL[statusKey] || statusKey;
+    const modalidadeLabel = {
+      VENDA: 'Venda',
+      LOCACAO: 'Locação',
+      SERVICO: 'Serviço',
+      SERVICOS: 'Serviços'
+    }[item?.modalidade] || item?.modalidade || '-';
+
+    const requestedRows = itensSolicitados.length > 0
+      ? itensSolicitados.map((requestedItem) => {
+          const icmsCompra = parseItemIcmsCompra(requestedItem);
+          const quantidade = Number(requestedItem?.quantidade) || 0;
+          const custoUnitario = Number(requestedItem?.custoUnitario) || 0;
+          return `<tr>
+            <td>${escapeHtml(requestedItem?.descricao || requestedItem?.product?.name || '-')}</td>
+            <td style="text-align:center">${escapeHtml(quantidade)}</td>
+            <td style="text-align:right">${escapeHtml(toCurrency(custoUnitario))}</td>
+            <td style="text-align:right">${escapeHtml(icmsCompra === '' ? '-' : `${icmsCompra}%`)}</td>
+            <td style="text-align:right">${escapeHtml(toCurrency(quantidade * custoUnitario))}</td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="5" class="empty">Sem itens solicitados.</td></tr>';
+
+    const quotationRows = cotacoes.length > 0
+      ? cotacoes.flatMap((cotacao) => {
+          const itens = Array.isArray(cotacao?.itens) && cotacao.itens.length > 0
+            ? cotacao.itens
+            : [{ descricao: '-', quantidade: 0, custoUnitario: 0 }];
+          return itens.map((quotedItem) => {
+            const quantidade = Number(quotedItem?.quantidade) || 0;
+            const custoUnitario = Number(quotedItem?.custoUnitario) || 0;
+            return `<tr>
+              <td>${escapeHtml(cotacao?.modalidade || '-')}</td>
+              <td>${escapeHtml(cotacao?.distribuidor || '-')}</td>
+              <td>${escapeHtml(cotacao?.numeroOrcamento || item?.numero || '-')}</td>
+              <td>${escapeHtml(quotedItem?.descricao || '-')}</td>
+              <td style="text-align:center">${escapeHtml(quantidade)}</td>
+              <td style="text-align:right">${escapeHtml(toCurrency(custoUnitario))}</td>
+              <td style="text-align:right">${escapeHtml(toCurrency(quantidade * custoUnitario))}</td>
+            </tr>`;
+          });
+        }).join('')
+      : '<tr><td colspan="7" class="empty">Sem cotações de distribuidores registradas.</td></tr>';
+
+    const html = `
+      <!doctype html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Orçamento ${escapeHtml(item?.numero || '')}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 24px;
+            color: #0f172a;
+            background: #fff;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            border-bottom: 3px solid #0ea5e9;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+          }
+          h1 { margin: 0; color: #0369a1; font-size: 28px; }
+          h2 { margin: 22px 0 10px; color: #075985; font-size: 17px; }
+          .muted { color: #64748b; font-size: 13px; margin-top: 6px; }
+          .badge {
+            display: inline-block;
+            border: 1px solid #bae6fd;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #075985;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+          .card {
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            padding: 12px;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 4px 0;
+            font-size: 13px;
+          }
+          .label { color: #475569; }
+          .value { color: #0f172a; font-weight: 700; text-align: right; }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+          }
+          th {
+            background: #0f172a;
+            color: #fff;
+            padding: 8px;
+            text-align: left;
+          }
+          td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 8px;
+            vertical-align: top;
+          }
+          tr:nth-child(even) td { background: #f8fafc; }
+          .empty { color: #64748b; text-align: center; padding: 18px; }
+          .description {
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px;
+            color: #334155;
+            background: #f8fafc;
+          }
+          .footer {
+            margin-top: 24px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 11px;
+          }
+          @media print { body { margin: 12mm; } }
+        </style>
+        <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              window.focus();
+              window.print();
+            }, 400);
+          }, { once: true });
+        </script>
+      </head>
+      <body>
+        <section class="header">
+          <div>
+            <h1>Orçamento de Pré-vendas</h1>
+            <div class="muted">Nº ${escapeHtml(item?.numero || '-')} · Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</div>
+          </div>
+          <span class="badge">${escapeHtml(statusText)}</span>
+        </section>
+
+        <section class="grid">
+          <article class="card">
+            <div class="row"><span class="label">Título</span><span class="value">${escapeHtml(item?.titulo || '-')}</span></div>
+            <div class="row"><span class="label">Cliente</span><span class="value">${escapeHtml(item?.nomeCliente || item?.lead?.name || '-')}</span></div>
+            <div class="row"><span class="label">Modalidade</span><span class="value">${escapeHtml(modalidadeLabel)}</span></div>
+            <div class="row"><span class="label">Prioridade</span><span class="value">${escapeHtml(PRIORITY_LABEL[item?.prioridade] || item?.prioridade || '-')}</span></div>
+          </article>
+          <article class="card">
+            <div class="row"><span class="label">Solicitante</span><span class="value">${escapeHtml(item?.solicitante?.name || '-')}</span></div>
+            <div class="row"><span class="label">Oportunidade</span><span class="value">${escapeHtml(item?.opportunity?.title || '-')}</span></div>
+            <div class="row"><span class="label">Criado em</span><span class="value">${escapeHtml(createdAt)}</span></div>
+            <div class="row"><span class="label">Atualizado em</span><span class="value">${escapeHtml(updatedAt)}</span></div>
+          </article>
+        </section>
+
+        <h2>Descrição</h2>
+        <section class="description">${escapeHtml(item?.descricao || 'Sem descrição.')}</section>
+
+        <h2>Itens Solicitados</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th style="text-align:center">Qtde</th>
+              <th style="text-align:right">Custo Unit.</th>
+              <th style="text-align:right">ICMS Compra</th>
+              <th style="text-align:right">Total</th>
+            </tr>
+          </thead>
+          <tbody>${requestedRows}</tbody>
+        </table>
+
+        <h2>Cotações de Distribuidores</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Modalidade</th>
+              <th>Distribuidor</th>
+              <th>Orçamento</th>
+              <th>Item</th>
+              <th style="text-align:center">Qtde</th>
+              <th style="text-align:right">Custo Unit.</th>
+              <th style="text-align:right">Total</th>
+            </tr>
+          </thead>
+          <tbody>${quotationRows}</tbody>
+        </table>
+
+        <section class="footer">Documento gerado pelo módulo de Orçamentos de Pré-vendas.</section>
+      </body>
+      </html>
+    `;
+
+    const htmlBlob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(htmlBlob);
+    printWindow.location.href = blobUrl;
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
   };
 
   return (
@@ -857,7 +1128,23 @@ export default function OrcamentosPrevendas() {
                   <div className="col-span-1 text-center text-sm text-slate-300">0</div>
 
                   {/* Ações */}
-                  <div className="col-span-3 flex items-center justify-end gap-2">
+                  <div className="col-span-3 flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleViewPdf(item)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/25 whitespace-nowrap"
+                      title="Visualizar orçamento em PDF"
+                    >
+                      <FileText className="h-3.5 w-3.5" /> PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingItem(item)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-100 hover:bg-amber-500/25 whitespace-nowrap"
+                      title="Editar orçamento"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </button>
                     <button
                       type="button"
                       onClick={() => setCostosItem(item)}
@@ -933,9 +1220,13 @@ export default function OrcamentosPrevendas() {
 
       {/* modals */}
       <NovoOrcamentoModal
-        isOpen={showNovoModal}
-        onClose={() => setShowNovoModal(false)}
+        isOpen={showNovoModal || Boolean(editingItem)}
+        onClose={() => {
+          setShowNovoModal(false);
+          setEditingItem(null);
+        }}
         onCreated={() => { loadRequests(); }}
+        editingRequest={editingItem}
       />
 
       <CustosModal

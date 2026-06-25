@@ -350,7 +350,9 @@ router.put('/:id', async (req, res) => {
       margemLucro,
       calculoDetalhes,
       observacoes,
-      items = []
+      leadId,
+      opportunityId,
+      items
     } = req.body;
 
     // Verificar se a solicitação existe
@@ -378,35 +380,78 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    const shouldReplaceItems = Object.prototype.hasOwnProperty.call(req.body, 'items');
+    const requestItems = shouldReplaceItems && Array.isArray(items)
+      ? items
+          .filter((item) => String(item?.descricao || '').trim())
+          .map((item) => {
+            const icmsCompra = item?.icmsCompra === null || item?.icmsCompra === undefined || item?.icmsCompra === ''
+              ? null
+              : Number(item.icmsCompra) || 0;
+
+            return {
+              descricao: String(item.descricao || '').trim(),
+              quantidade: Math.max(1, parseInt(item.quantidade, 10) || 1),
+              custoUnitario: Number(item.custoUnitario) || 0,
+              precoSugerido: Number(item.precoSugerido) || 0,
+              margemLucro: Number(item.margemLucro) || 0,
+              observacoes: icmsCompra === null
+                ? null
+                : JSON.stringify({ icmsCompra })
+            };
+          })
+      : [];
+    const validLeadId = Object.prototype.hasOwnProperty.call(req.body, 'leadId')
+      ? await resolveExistingCompanyId(leadId)
+      : undefined;
+    const validOpportunityId = Object.prototype.hasOwnProperty.call(req.body, 'opportunityId')
+      ? await resolveExistingOpportunityId(opportunityId)
+      : undefined;
+
     // Atualizar solicitação
-    const solicitacao = await prisma.preSalesRequest.update({
-      where: { id },
-      data: {
+    const solicitacao = await prisma.$transaction(async (tx) => {
+      if (shouldReplaceItems) {
+        await tx.preSalesItem.deleteMany({ where: { preSalesRequestId: id } });
+      }
+
+      return tx.preSalesRequest.update({
+        where: { id },
+        data: {
         titulo,
         descricao,
         prioridade,
         status,
         tiposPrecificacao,
         regimeTributario,
+        leadId: validLeadId,
+        opportunityId: validOpportunityId,
         valorSugerido: valorSugerido === '' || valorSugerido === undefined || valorSugerido === null ? null : parseFloat(valorSugerido),
         custoTotal: custoTotal === '' || custoTotal === undefined || custoTotal === null ? null : parseFloat(custoTotal),
         margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? null : parseFloat(margemLucro),
         calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
         observacoes,
-        updatedAt: new Date()
-      },
-      include: {
-        solicitante: {
-          select: { id: true, name: true, email: true }
+        updatedAt: new Date(),
+        ...(shouldReplaceItems && requestItems.length > 0 ? { items: { create: requestItems } } : {})
         },
-        items: {
-          include: {
-            product: {
-              select: { id: true, name: true, price: true }
+        include: {
+          solicitante: {
+            select: { id: true, name: true, email: true }
+          },
+          lead: {
+            select: { id: true, name: true }
+          },
+          opportunity: {
+            select: { id: true, title: true }
+          },
+          items: {
+            include: {
+              product: {
+                select: { id: true, name: true, price: true }
+              }
             }
           }
         }
-      }
+      });
     });
 
     res.json({
