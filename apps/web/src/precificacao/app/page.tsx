@@ -28,6 +28,17 @@ const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
 type SimulatorStep = 'start' | 'proposal' | 'calculation';
 type DistributorCostMode = 'SETUP' | 'RECORRENTE';
 
+interface DistributorSummary {
+  id: string;
+  nome: string;
+}
+
+interface DistributorBudgetDraft {
+  distribuidorId: string;
+  distribuidor: string;
+  numeroOrcamento: string;
+}
+
 interface DistributorCostDraft {
   modalidade: DistributorCostMode;
   distribuidor: string;
@@ -40,6 +51,7 @@ interface DistributorCostDraft {
 
 interface DistributorCost extends DistributorCostDraft {
   id: string;
+  distribuidorId?: string;
   data: string;
 }
 
@@ -144,6 +156,12 @@ const buildEmptyDistributorCost = (): DistributorCostDraft => ({
   observacoes: ''
 });
 
+const buildEmptyDistributorBudget = (): DistributorBudgetDraft => ({
+  distribuidorId: '',
+  distribuidor: '',
+  numeroOrcamento: ''
+});
+
 const buildEmptyPricingInput = (calculatorPricingSettings: ReturnType<typeof loadCalculatorPricingSettings>): PricingInput => ({
   upfrontItems: [],
   recurringItems: [],
@@ -170,6 +188,8 @@ export default function FinEdgeApp() {
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [proposalFeedback, setProposalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
+  const [preSalesDistributors, setPreSalesDistributors] = useState<DistributorSummary[]>([]);
+  const [currentBudget, setCurrentBudget] = useState<DistributorBudgetDraft>(() => buildEmptyDistributorBudget());
   const [currentCost, setCurrentCost] = useState<DistributorCostDraft>(() => buildEmptyDistributorCost());
   const [distributorCosts, setDistributorCosts] = useState<DistributorCost[]>([]);
   const [viewingScenario, setViewingScenario] = useState<SavedScenario | null>(null);
@@ -213,6 +233,20 @@ export default function FinEdgeApp() {
       }
     };
     loadOpportunities();
+  }, []);
+
+  useEffect(() => {
+    const loadPreSalesDistributors = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/prevendas-cadastros'), { headers: getAuthHeaders() });
+        if (!response.ok) return;
+        const data = await response.json();
+        setPreSalesDistributors(Array.isArray(data?.distribuidores) ? data.distribuidores : []);
+      } catch (error) {
+        console.error('Erro ao carregar distribuidores de pré-vendas:', error);
+      }
+    };
+    loadPreSalesDistributors();
   }, []);
 
   useEffect(() => {
@@ -337,6 +371,7 @@ export default function FinEdgeApp() {
     setProposalSearchNumber(nextNumber);
     setActiveProposalId(null);
     setProposalFeedback(null);
+    setCurrentBudget(buildEmptyDistributorBudget());
     setCurrentCost(buildEmptyDistributorCost());
     setDistributorCosts([]);
     setParams(emptyParams);
@@ -370,6 +405,15 @@ export default function FinEdgeApp() {
     setCurrentCost(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleBudgetDistributorChange = (distribuidorId: string) => {
+    const selected = preSalesDistributors.find((item) => item.id === distribuidorId);
+    setCurrentBudget(prev => ({
+      ...prev,
+      distribuidorId,
+      distribuidor: selected?.nome || ''
+    }));
+  };
+
   const applyDistributorCostToItems = (cost: DistributorCost) => {
     const key = cost.modalidade === 'RECORRENTE' ? 'recurringItems' : 'upfrontItems';
     const item: ProductItem = {
@@ -395,16 +439,27 @@ export default function FinEdgeApp() {
     const quantidade = Math.max(1, Number(currentCost.quantidade) || 1);
     const custoUnitario = Math.max(0, Number(currentCost.custoUnitario) || 0);
 
-    if (!currentCost.distribuidor.trim() || !currentCost.item.trim() || custoUnitario <= 0) {
+    if (!currentBudget.distribuidor.trim() || !currentBudget.numeroOrcamento.trim()) {
       setProposalFeedback({
         type: 'error',
-        text: 'Informe distribuidor, item/descrição e custo unitário para adicionar o orçamento.'
+        text: 'Selecione o distribuidor e informe o número do orçamento antes de adicionar produtos.'
+      });
+      return;
+    }
+
+    if (!currentCost.item.trim() || custoUnitario <= 0) {
+      setProposalFeedback({
+        type: 'error',
+        text: 'Informe item/descrição e custo unitário para adicionar o produto ao orçamento.'
       });
       return;
     }
 
     const cost: DistributorCost = {
       ...currentCost,
+      distribuidorId: currentBudget.distribuidorId,
+      distribuidor: currentBudget.distribuidor,
+      numeroOrcamento: currentBudget.numeroOrcamento,
       id: crypto.randomUUID?.() || `orc_${Date.now()}`,
       quantidade,
       custoUnitario,
@@ -413,8 +468,11 @@ export default function FinEdgeApp() {
 
     setDistributorCosts(prev => [...prev, cost]);
     applyDistributorCostToItems(cost);
-    setCurrentCost(buildEmptyDistributorCost());
-    setProposalFeedback({ type: 'success', text: 'Orçamento adicionado e aplicado aos itens da precificação.' });
+    setCurrentCost(prev => ({
+      ...buildEmptyDistributorCost(),
+      modalidade: prev.modalidade
+    }));
+    setProposalFeedback({ type: 'success', text: 'Produto adicionado ao orçamento e aplicado aos itens da precificação.' });
   };
 
   const handleRemoveDistributorCost = (costId: string) => {
@@ -501,7 +559,13 @@ export default function FinEdgeApp() {
     }
 
     setProposalForm(found.proposalForm);
-    setDistributorCosts(found.distributorCosts || []);
+    const loadedDistributorCosts = found.distributorCosts || [];
+    setDistributorCosts(loadedDistributorCosts);
+    setCurrentBudget({
+      distribuidorId: loadedDistributorCosts[0]?.distribuidorId || '',
+      distribuidor: loadedDistributorCosts[0]?.distribuidor || '',
+      numeroOrcamento: loadedDistributorCosts[0]?.numeroOrcamento || ''
+    });
     setParams(found.params);
     setResults(found.results);
     setHasGeneratedResults(true);
@@ -751,7 +815,35 @@ export default function FinEdgeApp() {
                               </p>
                             </div>
                             <div className="space-y-4 p-6">
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(260px,1fr)_220px] md:items-end">
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Distribuidor</label>
+                                  <select
+                                    value={currentBudget.distribuidorId}
+                                    onChange={(event) => handleBudgetDistributorChange(event.target.value)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  >
+                                    <option value="">Selecione um distribuidor cadastrado</option>
+                                    {preSalesDistributors.map((distributor) => (
+                                      <option key={distributor.id} value={distributor.id}>
+                                        {distributor.nome}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nº Orçamento</label>
+                                  <input
+                                    type="text"
+                                    placeholder="ORC-0001"
+                                    value={currentBudget.numeroOrcamento}
+                                    onChange={(event) => setCurrentBudget(prev => ({ ...prev, numeroOrcamento: event.target.value }))}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[180px_minmax(280px,1fr)_160px_180px] xl:items-end">
                                 <div>
                                   <label className="block text-sm font-semibold text-slate-500 mb-1.5">Modalidade</label>
                                   <select
@@ -762,26 +854,6 @@ export default function FinEdgeApp() {
                                     <option value="SETUP">Setup / CAPEX</option>
                                     <option value="RECORRENTE">Recorrente / OPEX</option>
                                   </select>
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Distribuidor</label>
-                                  <input
-                                    type="text"
-                                    placeholder="Nome do distribuidor"
-                                    value={currentCost.distribuidor}
-                                    onChange={(event) => handleCostFieldChange('distribuidor', event.target.value)}
-                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nº Orçamento</label>
-                                  <input
-                                    type="text"
-                                    placeholder="ORC-0001"
-                                    value={currentCost.numeroOrcamento}
-                                    onChange={(event) => handleCostFieldChange('numeroOrcamento', event.target.value)}
-                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
-                                  />
                                 </div>
                                 <div>
                                   <label className="block text-sm font-semibold text-slate-500 mb-1.5">Item / Descrição</label>

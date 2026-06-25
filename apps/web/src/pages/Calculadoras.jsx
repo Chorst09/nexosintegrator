@@ -1018,10 +1018,14 @@ export default function Calculadoras({
   
   // Estados para Custos (Orçamentos de Distribuidores)
   const [distributorCosts, setDistributorCosts] = useState([]); // Lista de custos adicionados
+  const [preSalesDistributors, setPreSalesDistributors] = useState([]);
+  const [currentBudget, setCurrentBudget] = useState({
+    distribuidorId: '',
+    distribuidor: '',
+    numeroOrcamento: ''
+  });
   const [currentCost, setCurrentCost] = useState({
     modalidade: 'VENDA',
-    distribuidor: '',
-    numeroOrcamento: '',
     item: '',
     quantidade: 1,
     custoUnitario: 0,
@@ -1107,6 +1111,20 @@ export default function Calculadoras({
       }
     };
     loadOpportunities();
+  }, []);
+
+  useEffect(() => {
+    const loadPreSalesDistributors = async () => {
+      try {
+        const response = await fetch(buildApiUrl('/prevendas-cadastros'), { headers: getAuthHeaders() });
+        if (!response.ok) return;
+        const data = await response.json();
+        setPreSalesDistributors(Array.isArray(data?.distribuidores) ? data.distribuidores : []);
+      } catch (error) {
+        console.error('Erro ao carregar distribuidores de pré-vendas:', error);
+      }
+    };
+    loadPreSalesDistributors();
   }, []);
 
   useEffect(() => {
@@ -1546,6 +1564,11 @@ export default function Calculadoras({
     setIsIcmsContributor(false);
     setDestinationUF('SP');
     setDistributorCosts([]); // Limpar custos de distribuidores
+    setCurrentBudget({
+      distribuidorId: '',
+      distribuidor: '',
+      numeroOrcamento: ''
+    });
   };
 
   const normalizeOperationItems = (items, defaultItem, prefix) => {
@@ -1730,10 +1753,23 @@ export default function Calculadoras({
     }));
   };
 
+  const handleBudgetDistributorChange = (distribuidorId) => {
+    const selected = preSalesDistributors.find((item) => item.id === distribuidorId);
+    setCurrentBudget((prev) => ({
+      ...prev,
+      distribuidorId,
+      distribuidor: selected?.nome || ''
+    }));
+  };
+
   const handleAddDistributorCost = () => {
     // Validação básica
-    if (!currentCost.distribuidor.trim()) {
-      alert('Por favor, preencha o nome do distribuidor');
+    if (!currentBudget.distribuidor.trim()) {
+      alert('Por favor, selecione o distribuidor');
+      return;
+    }
+    if (!currentBudget.numeroOrcamento.trim()) {
+      alert('Por favor, preencha o número do orçamento');
       return;
     }
     if (!currentCost.item.trim()) {
@@ -1752,6 +1788,9 @@ export default function Calculadoras({
     // Adicionar custo à lista
     const novoCusto = {
       ...currentCost,
+      distribuidorId: currentBudget.distribuidorId,
+      distribuidor: currentBudget.distribuidor,
+      numeroOrcamento: currentBudget.numeroOrcamento,
       id: `cost_${Date.now()}`,
       data: new Date().toISOString()
     };
@@ -1762,8 +1801,6 @@ export default function Calculadoras({
     // Limpar formulário
     setCurrentCost({
       modalidade: 'VENDA',
-      distribuidor: '',
-      numeroOrcamento: '',
       item: '',
       quantidade: 1,
       custoUnitario: 0,
@@ -1863,7 +1900,13 @@ export default function Calculadoras({
     setServiceItems(normalizeOperationItems(snapshot.serviceItems, DEFAULT_SERVICE_ITEM, 'service'));
     
     // NOVO: Carregar custos de distribuidores
-    setDistributorCosts(Array.isArray(proposal.distributorCosts) ? proposal.distributorCosts : []);
+    const loadedDistributorCosts = Array.isArray(proposal.distributorCosts) ? proposal.distributorCosts : [];
+    setDistributorCosts(loadedDistributorCosts);
+    setCurrentBudget({
+      distribuidorId: loadedDistributorCosts[0]?.distribuidorId || '',
+      distribuidor: loadedDistributorCosts[0]?.distribuidor || '',
+      numeroOrcamento: loadedDistributorCosts[0]?.numeroOrcamento || ''
+    });
 
     setProposalForm({
       number: proposal.number || '',
@@ -3335,7 +3378,35 @@ export default function Calculadoras({
                     <h3 className="text-xl font-bold text-white">Custos (Orçamentos de Distribuidores)</h3>
                   </div>
                   <div className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1fr)_220px] md:items-end">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
+                        <select
+                          value={currentBudget.distribuidorId}
+                          onChange={(e) => handleBudgetDistributorChange(e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        >
+                          <option value="">Selecione um distribuidor cadastrado</option>
+                          {preSalesDistributors.map((distributor) => (
+                            <option key={distributor.id} value={distributor.id}>
+                              {distributor.nome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
+                        <input
+                          type="text"
+                          placeholder="ORC-0001"
+                          value={currentBudget.numeroOrcamento}
+                          onChange={(e) => setCurrentBudget((prev) => ({ ...prev, numeroOrcamento: e.target.value }))}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[180px_minmax(280px,1fr)_160px_180px] xl:items-end">
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">Modalidade</label>
                         <select 
@@ -3347,26 +3418,6 @@ export default function Calculadoras({
                           <option value="LOCACAO">Locação</option>
                           <option value="SERVICOS">Serviços</option>
                         </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
-                        <input
-                          type="text"
-                          placeholder="Nome do distribuidor..."
-                          value={currentCost.distribuidor}
-                          onChange={(e) => handleCostFieldChange('distribuidor', e.target.value)}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
-                        <input
-                          type="text"
-                          placeholder="ORC-0001"
-                          value={currentCost.numeroOrcamento}
-                          onChange={(e) => handleCostFieldChange('numeroOrcamento', e.target.value)}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                        />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">Item / Descrição</label>
