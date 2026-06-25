@@ -1003,7 +1003,13 @@ const calculateOperation = ({
   };
 };
 
-export default function Calculadoras() {
+export default function Calculadoras({
+  pageTitle = 'Calculadoras',
+  pageSubtitle = 'Ferramentas especializadas para diferentes modelos de negócio',
+  breadcrumbs = ['Home', 'Calculadoras'],
+  showCalculatorCards = true,
+  showPricingActions = false
+}) {
   const [showModal, setShowModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showCotacaoModal, setShowCotacaoModal] = useState(false); // NOVO: Modal de seleção de cotações
@@ -1266,6 +1272,8 @@ export default function Calculadoras() {
       iconBg: 'bg-purple-500'
     }
   ];
+
+  const draftProposalNumber = proposalForm.number || generateProposalNumber(savedProposals);
 
   const operationColumns = useMemo(() => {
     if (operationType === 'venda') {
@@ -1567,6 +1575,21 @@ export default function Calculadoras() {
     }
   };
 
+  const createBlankProposal = (tabId = currentTab) => {
+    setShowCotacaoModal(false);
+    resetForm();
+    setCurrentTab(tabId);
+    const nextNumber = generateProposalNumber(savedProposals);
+    const managerDefaults = getManagerDefaults();
+    setProposalForm(buildProposalForm(nextNumber, managerDefaults));
+    setProposalSearchNumber(nextNumber);
+    setActiveProposalId(null);
+    setProposalFeedback(null);
+    setCalculatorStep('proposal');
+    clearProposalCart();
+    setShowModal(true);
+  };
+
   const startNewProposal = async (tabId = currentTab) => {
     // Buscar cotações disponíveis
     setLoadingCotacoes(true);
@@ -1589,32 +1612,12 @@ export default function Calculadoras() {
         if (comCotacoes.length > 0) {
           setShowCotacaoModal(true);
         } else {
-          // Criar proposta vazia
-          resetForm();
-          setCurrentTab(tabId);
-          const nextNumber = generateProposalNumber(savedProposals);
-          const managerDefaults = getManagerDefaults();
-          setProposalForm(buildProposalForm(nextNumber, managerDefaults));
-          setProposalSearchNumber(nextNumber);
-          setActiveProposalId(null);
-          setProposalFeedback(null);
-          setCalculatorStep('proposal');
-          clearProposalCart();
+          createBlankProposal(tabId);
         }
       }
     } catch (error) {
       console.error('Erro ao buscar cotações:', error);
-      // Em caso de erro, criar proposta vazia
-      resetForm();
-      setCurrentTab(tabId);
-      const nextNumber = generateProposalNumber(savedProposals);
-      const managerDefaults = getManagerDefaults();
-      setProposalForm(buildProposalForm(nextNumber, managerDefaults));
-      setProposalSearchNumber(nextNumber);
-      setActiveProposalId(null);
-      setProposalFeedback(null);
-      setCalculatorStep('proposal');
-      clearProposalCart();
+      createBlankProposal(tabId);
     } finally {
       setLoadingCotacoes(false);
     }
@@ -1716,18 +1719,7 @@ export default function Calculadoras() {
   };
 
   const criarPropostaVazia = () => {
-    setShowCotacaoModal(false);
-    resetForm();
-    setCurrentTab(currentTab);
-    const nextNumber = generateProposalNumber(savedProposals);
-    const managerDefaults = getManagerDefaults();
-    setProposalForm(buildProposalForm(nextNumber, managerDefaults));
-    setProposalSearchNumber(nextNumber);
-    setActiveProposalId(null);
-    setProposalFeedback(null);
-    setCalculatorStep('proposal');
-    clearProposalCart();
-    setDistributorCosts([]); // Limpar custos ao criar nova proposta vazia
+    createBlankProposal(currentTab);
   };
 
   // Handlers para Custos (Orçamentos de Distribuidores)
@@ -1765,6 +1757,7 @@ export default function Calculadoras() {
     };
     
     setDistributorCosts((prev) => [...prev, novoCusto]);
+    applyDistributorCostToCalculator(novoCusto);
     
     // Limpar formulário
     setCurrentCost({
@@ -1784,6 +1777,68 @@ export default function Calculadoras() {
     });
     
     setTimeout(() => setProposalFeedback(null), 3000);
+  };
+
+  const applyDistributorCostToCalculator = (cost) => {
+    const modalidade = String(cost?.modalidade || 'VENDA').toUpperCase();
+    const quantity = Math.max(1, toNumber(cost?.quantidade, 1));
+    const unitCost = Math.max(0, toNumber(cost?.custoUnitario, 0));
+    const description = cost?.item || '';
+
+    if (modalidade === 'LOCACAO' || modalidade === 'LOCAÇÃO') {
+      setCurrentTab('locacao');
+      setRentalItems((prev) => {
+        const base = prev.length > 0 ? prev : [{ ...DEFAULT_RENTAL_ITEM, id: createItemId('rental') }];
+        return base.map((item, index) => (
+          index === 0
+            ? {
+                ...item,
+                description,
+                quantity,
+                assetValueBRL: unitCost
+              }
+            : item
+        ));
+      });
+      return;
+    }
+
+    if (modalidade === 'SERVICOS' || modalidade === 'SERVIÇOS' || modalidade === 'SERVICO') {
+      setCurrentTab('servicos');
+      setServiceItems((prev) => {
+        const base = prev.length > 0 ? prev : [{
+          ...DEFAULT_SERVICE_ITEM,
+          id: createItemId('service'),
+          baseSalary: toNumber(calculatorSettings.maoDeObra?.geral?.salarioBase, 5000)
+        }];
+        return base.map((item, index) => (
+          index === 0
+            ? {
+                ...item,
+                description,
+                estimatedHours: quantity,
+                baseSalary: unitCost
+              }
+            : item
+        ));
+      });
+      return;
+    }
+
+    setCurrentTab('vendas');
+    setSaleItems((prev) => {
+      const base = prev.length > 0 ? prev : [{ ...DEFAULT_SALE_ITEM, id: createItemId('sale') }];
+      return base.map((item, index) => (
+        index === 0
+          ? {
+              ...item,
+              description,
+              quantity,
+              unitCost
+            }
+          : item
+      ));
+    });
   };
 
   const handleRemoveDistributorCost = (costId) => {
@@ -2288,18 +2343,22 @@ export default function Calculadoras() {
   };
 
   const continueToCalculator = () => {
-    if (!proposalForm.opportunityId) {
-      setProposalFeedback({
-        type: 'error',
-        text: 'Selecione a oportunidade vinculada a esta proposta.'
-      });
-      return;
-    }
+    const requiredFields = [
+      proposalForm.clientCompany,
+      proposalForm.clientDocument,
+      proposalForm.clientContact,
+      proposalForm.clientEmail,
+      proposalForm.managerName,
+      proposalForm.managerEmail,
+      proposalForm.managerPhone,
+      proposalForm.premises
+    ];
+    const hasMissingFields = requiredFields.some((value) => !String(value || '').trim());
 
-    if (!proposalForm.clientCompany.trim() || !proposalForm.clientContact.trim()) {
+    if (hasMissingFields) {
       setProposalFeedback({
         type: 'error',
-        text: 'Preencha Empresa Cliente e Nome do Contato para continuar.'
+        text: 'Preencha todos os dados da proposta antes de continuar para as calculadoras.'
       });
       return;
     }
@@ -2323,9 +2382,8 @@ export default function Calculadoras() {
   };
 
   const abrirCalculadora = (tipo) => {
-    startNewProposal(tipo);
+    createBlankProposal(tipo);
     setHomeFeedback(null);
-    setShowModal(true);
   };
 
   const closeCalculatorModal = () => {
@@ -2684,35 +2742,38 @@ export default function Calculadoras() {
   };
 
   const activeCalcLabel = currentTab === 'vendas' ? 'Venda' : currentTab === 'locacao' ? 'Locação' : 'Serviços';
+  const headerActions = showPricingActions
+    ? [
+        {
+          label: 'Ratear Produtos',
+          icon: Calculator,
+          onClick: () => { window.location.href = '/ratear-produtos'; }
+        },
+        {
+          label: 'Configurações Gerais e Tributárias',
+          icon: SlidersHorizontal,
+          onClick: abrirConfiguracoes
+        }
+      ]
+    : [
+        {
+          label: 'Configurações',
+          icon: SlidersHorizontal,
+          onClick: abrirConfiguracoes
+        }
+      ];
 
   return (
     <div className="space-y-6">
-      <div className="relative">
+      <div>
         <PageHeader
-          title="Calculadoras"
-          subtitle="Ferramentas especializadas para diferentes modelos de negócio"
+          title={pageTitle}
+          subtitle={pageSubtitle}
           icon={Calculator}
           gradient="blue"
-          breadcrumbs={['Home', 'Calculadoras']}
-          actions={[]}
+          breadcrumbs={breadcrumbs}
+          actions={headerActions}
         />
-        <button
-          type="button"
-          onClick={abrirConfiguracoes}
-          className="absolute right-6 top-1/2 -translate-y-1/2 h-16 w-16 rounded-2xl border border-cyan-300/50 bg-cyan-300/80 text-blue-700 hover:bg-cyan-200 transition-colors shadow-lg flex items-center justify-center"
-          aria-label="Abrir configurações"
-          title="Abrir configurações"
-        >
-          <SlidersHorizontal className="w-6 h-6" />
-        </button>
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-6 px-4 py-2 rounded-2xl bg-slate-900/60 border border-cyan-400/30">
-          <span className="text-sm text-slate-100">
-            Regime Tributário Ativo:{' '}
-            <span className="font-semibold text-cyan-300">
-              {regimeAtivoHeader?.nome || 'Não definido'}
-            </span>
-          </span>
-        </div>
       </div>
 
       <div className="p-6 space-y-6">
@@ -2729,28 +2790,107 @@ export default function Calculadoras() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {calculadoras.map((calc) => (
-            <button
-              key={calc.id}
-              type="button"
-              className="crm-card text-left rounded-lg hover:shadow-md transition-all cursor-pointer p-6"
-              onClick={() => abrirCalculadora(calc.id)}
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${calc.iconBg}`}>
-                  <calc.icon className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">{calc.title}</h3>
-                  <p className="text-sm text-gray-500 dark:text-slate-200">{calc.description}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
+        <section className="rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4 md:p-5 shadow-xl shadow-black/10">
+          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-white">Controle da proposta</h2>
+              <p className="text-sm text-slate-400">Crie, localize e salve simulações de venda, locação e serviços.</p>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-sm font-semibold text-cyan-100">
+              Regime ativo: <span className="ml-1 text-cyan-300">{regimeAtivoHeader?.nome || 'Não definido'}</span>
+            </span>
+          </div>
 
-        <section className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 md:p-6 space-y-4">
+          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_auto] 2xl:items-end">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(180px,260px)_minmax(260px,1fr)]">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Nº Proposta</label>
+                <input
+                  type="text"
+                  value={draftProposalNumber}
+                  readOnly
+                  className="h-12 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 text-base font-semibold text-white outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Propostas Salvas</label>
+                <select
+                  value=""
+                  onChange={(event) => {
+                    const proposal = savedProposals.find((item) => item.id === event.target.value);
+                    if (proposal) openProposal(proposal, { keepModalOpen: true });
+                  }}
+                  className="h-12 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 text-base text-slate-100 outline-none transition focus:border-cyan-400"
+                >
+                  <option value="">Selecione uma proposta salva</option>
+                  {savedProposals.map((proposal) => (
+                    <option key={proposal.id} value={proposal.id}>
+                      {proposal.number} - {proposal?.client?.companyName || 'Sem cliente'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 2xl:min-w-[520px]">
+              <button
+                type="button"
+                onClick={() => {
+                  createBlankProposal(currentTab);
+                  setHomeFeedback(null);
+                }}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+              >
+                <FilePlus2 className="w-4 h-4" />
+                Nova
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(true);
+                  searchProposalByNumber();
+                }}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+              >
+                <Search className="w-4 h-4" />
+                Buscar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAndReturnHome}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-blue-400/60 bg-blue-500/85 px-4 font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
+              >
+                <Save className="w-4 h-4" />
+                Salvar Simulação
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {showCalculatorCards ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {calculadoras.map((calc) => (
+              <button
+                key={calc.id}
+                type="button"
+                className="group min-h-[150px] rounded-xl border border-slate-700/70 bg-slate-900/70 p-5 text-left shadow-xl shadow-black/10 transition-all hover:-translate-y-0.5 hover:border-cyan-400/50 hover:bg-slate-900"
+                onClick={() => abrirCalculadora(calc.id)}
+              >
+                <div className="flex h-full items-start gap-4">
+                  <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center ${calc.iconBg} shadow-lg shadow-black/20`}>
+                    <calc.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold text-white">{calc.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-300">{calc.description}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <section className="rounded-2xl border border-slate-700/60 bg-slate-950/60 p-4 md:p-5 space-y-4 shadow-xl shadow-black/10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg md:text-xl font-bold text-white">Propostas Salvas</h3>
@@ -2771,11 +2911,11 @@ export default function Calculadoras() {
               {savedProposals.map((proposal) => (
                 <div
                   key={proposal.id}
-                  className="rounded-xl border border-slate-700 bg-slate-950/60 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                  className="grid gap-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4 lg:grid-cols-[minmax(220px,1fr)_180px_minmax(360px,auto)] lg:items-center"
                 >
-                  <div className="space-y-1">
+                  <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-base font-semibold text-cyan-300">{proposal.number}</span>
+                      <span className="text-lg font-semibold text-cyan-300">{proposal.number}</span>
                       <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-100 border border-blue-400/30">
                         {proposal.calculatorLabel || '-'}
                       </span>
@@ -2788,41 +2928,44 @@ export default function Calculadoras() {
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="text-right min-w-[150px]">
+                  <div className="rounded-lg border border-slate-700/70 bg-slate-900/70 px-4 py-3 lg:text-right">
+                    <div>
                       <p className="text-xs text-slate-400 uppercase">Preço Final</p>
                       <p className="text-lg font-semibold text-white">
                         {formatCurrency(toNumber(proposal?.result?.finalPrice, 0))}
                       </p>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                     <button
                       type="button"
                       onClick={() => handleGenerateProposalPdf(proposal)}
-                      className="px-4 py-2 rounded-lg border border-emerald-400/40 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25 inline-flex items-center gap-2"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25"
                     >
                       <FileText className="w-4 h-4" />
-                      Gerar PDF
+                      PDF
                     </button>
                     <button
                       type="button"
                       onClick={() => openProposalPreview(proposal)}
-                      className="px-4 py-2 rounded-lg border border-indigo-400/40 bg-indigo-500/15 text-indigo-100 hover:bg-indigo-500/25 inline-flex items-center gap-2"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-400/40 bg-indigo-500/15 px-3 text-sm font-semibold text-indigo-100 hover:bg-indigo-500/25"
                     >
                       <Eye className="w-4 h-4" />
-                      Visualizar Proposta
+                      Ver
                     </button>
                     <button
                       type="button"
                       onClick={() => openProposal(proposal, { keepModalOpen: true })}
-                      className="px-4 py-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25 inline-flex items-center gap-2"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/25"
                     >
                       <FolderOpen className="w-4 h-4" />
-                      Abrir Proposta
+                      Abrir
                     </button>
                     <button
                       type="button"
                       onClick={() => openProposal(proposal, { keepModalOpen: true })}
-                      className="px-4 py-2 rounded-lg border border-amber-400/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25 inline-flex items-center gap-2"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 text-sm font-semibold text-amber-100 hover:bg-amber-500/25"
                     >
                       <Pencil className="w-4 h-4" />
                       Editar
@@ -2834,7 +2977,7 @@ export default function Calculadoras() {
                         persistSavedProposals(savedProposals.filter(p => p.id !== proposal.id));
                         if (activeProposalId === proposal.id) setActiveProposalId(null);
                       }}
-                      className="px-4 py-2 rounded-lg border border-red-400/40 bg-red-500/15 text-red-100 hover:bg-red-500/25 inline-flex items-center gap-2"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-400/40 bg-red-500/15 px-3 text-sm font-semibold text-red-100 hover:bg-red-500/25"
                     >
                       <Trash2 className="w-4 h-4" />
                       Excluir
@@ -3137,7 +3280,7 @@ export default function Calculadoras() {
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                 <button
                   type="button"
-                  onClick={() => startNewProposal(currentTab)}
+                  onClick={() => createBlankProposal(currentTab)}
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 py-3 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
                 >
                   <FilePlus2 className="w-4 h-4" />
@@ -3157,7 +3300,7 @@ export default function Calculadoras() {
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-400/60 bg-blue-500/85 px-4 py-3 font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
                 >
                   <Save className="w-4 h-4" />
-                  Salvar
+                  Salvar Simulação
                 </button>
                 <button
                   type="button"
@@ -3181,153 +3324,147 @@ export default function Calculadoras() {
             </div>
           ) : null}
 
-          {/* NOVA SEÇÃO: Custos (Orçamentos de Distribuidores) */}
-          {calculatorStep === 'proposal' && (
-            <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
-              <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
-                <h3 className="text-xl font-bold text-white">Custos (Orçamentos de Distribuidores)</h3>
-              </div>
-              <div className="p-5 space-y-4">
-                {/* Formulário de entrada */}
-                <div className="grid grid-cols-6 gap-3 items-end">
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Modalidade</label>
-                    <select 
-                      value={currentCost.modalidade}
-                      onChange={(e) => handleCostFieldChange('modalidade', e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    >
-                      <option value="VENDA">Venda</option>
-                      <option value="LOCACAO">Locação</option>
-                      <option value="SERVICOS">Serviços</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
-                    <input
-                      type="text"
-                      placeholder="Nome do distribuidor..."
-                      value={currentCost.distribuidor}
-                      onChange={(e) => handleCostFieldChange('distribuidor', e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
-                    <input
-                      type="text"
-                      placeholder="ORC-0001"
-                      value={currentCost.numeroOrcamento}
-                      onChange={(e) => handleCostFieldChange('numeroOrcamento', e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Item / Descrição</label>
-                    <input
-                      type="text"
-                      placeholder="Switch 48 portas, servidor..."
-                      value={currentCost.item}
-                      onChange={(e) => handleCostFieldChange('item', e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Qtde</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={currentCost.quantidade}
-                      onChange={(e) => handleCostFieldChange('quantidade', Number(e.target.value) || 1)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Custo Unit. R$</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={currentCost.custoUnitario}
-                      onChange={(e) => handleCostFieldChange('custoUnitario', Number(e.target.value) || 0)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    />
-                  </div>
-                </div>
-
-                {/* Observações e botão */}
-                <div className="flex gap-3 items-end">
-                  <div className="flex-1">
-                    <label className="block text-xs text-slate-400 mb-1">Observações</label>
-                    <input
-                      type="text"
-                      placeholder="Condições comerciais, prazo, impostos inclusos..."
-                      value={currentCost.observacoes}
-                      onChange={(e) => handleCostFieldChange('observacoes', e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAddDistributorCost}
-                    className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 shrink-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Adicionar e Aplicar
-                  </button>
-                </div>
-
-                {/* Tabela de custos */}
-                <div className="rounded-xl border border-slate-700/50 overflow-hidden mt-4">
-                  <div className="grid grid-cols-8 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-700/40">
-                    <span>Modalidade</span>
-                    <span>Distribuidor</span>
-                    <span>Orçamento</span>
-                    <span className="col-span-2">Item</span>
-                    <span>Qtde</span>
-                    <span>Custo Unit.</span>
-                    <span>Data</span>
-                  </div>
-                  {distributorCosts.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-slate-500">
-                      Sem custos adicionados para esta proposta.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-700/30">
-                      {distributorCosts.map((cost) => (
-                        <div key={cost.id} className="grid grid-cols-8 gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/40">
-                          <span className="truncate">{cost.modalidade}</span>
-                          <span className="truncate">{cost.distribuidor}</span>
-                          <span className="truncate">{cost.numeroOrcamento || '-'}</span>
-                          <span className="col-span-2 truncate" title={cost.item}>{cost.item}</span>
-                          <span>{cost.quantidade}</span>
-                          <span>R$ {cost.custoUnitario.toFixed(2)}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs">{new Date(cost.data).toLocaleDateString('pt-BR')}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDistributorCost(cost.id)}
-                              className="text-red-400 hover:text-red-300 ml-auto"
-                              title="Remover custo"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {calculatorStep === 'proposal' && (
             <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
               <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
                 <h4 className="text-xl font-bold text-white">Dados da Proposta</h4>
               </div>
               <div className="p-5 space-y-6">
+                <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
+                  <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
+                    <h3 className="text-xl font-bold text-white">Custos (Orçamentos de Distribuidores)</h3>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Modalidade</label>
+                        <select 
+                          value={currentCost.modalidade}
+                          onChange={(e) => handleCostFieldChange('modalidade', e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        >
+                          <option value="VENDA">Venda</option>
+                          <option value="LOCACAO">Locação</option>
+                          <option value="SERVICOS">Serviços</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
+                        <input
+                          type="text"
+                          placeholder="Nome do distribuidor..."
+                          value={currentCost.distribuidor}
+                          onChange={(e) => handleCostFieldChange('distribuidor', e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
+                        <input
+                          type="text"
+                          placeholder="ORC-0001"
+                          value={currentCost.numeroOrcamento}
+                          onChange={(e) => handleCostFieldChange('numeroOrcamento', e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Item / Descrição</label>
+                        <input
+                          type="text"
+                          placeholder="Switch 48 portas, servidor..."
+                          value={currentCost.item}
+                          onChange={(e) => handleCostFieldChange('item', e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Qtde</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={currentCost.quantidade}
+                          onChange={(e) => handleCostFieldChange('quantidade', Number(e.target.value) || 1)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Custo Unit. R$</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={currentCost.custoUnitario}
+                          onChange={(e) => handleCostFieldChange('custoUnitario', Number(e.target.value) || 0)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto] xl:items-end">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Observações</label>
+                        <input
+                          type="text"
+                          placeholder="Condições comerciais, prazo, impostos inclusos..."
+                          value={currentCost.observacoes}
+                          onChange={(e) => handleCostFieldChange('observacoes', e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddDistributorCost}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Adicionar e Aplicar
+                      </button>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-700/50 overflow-hidden mt-4">
+                      <div className="grid grid-cols-8 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-700/40">
+                        <span>Modalidade</span>
+                        <span>Distribuidor</span>
+                        <span>Orçamento</span>
+                        <span className="col-span-2">Item</span>
+                        <span>Qtde</span>
+                        <span>Custo Unit.</span>
+                        <span>Data</span>
+                      </div>
+                      {distributorCosts.length === 0 ? (
+                        <div className="px-4 py-8 text-sm text-slate-400">
+                          Sem custos adicionados para esta proposta.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-700/30">
+                          {distributorCosts.map((cost) => (
+                            <div key={cost.id} className="grid grid-cols-8 gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/40">
+                              <span className="truncate">{cost.modalidade}</span>
+                              <span className="truncate">{cost.distribuidor}</span>
+                              <span className="truncate">{cost.numeroOrcamento || '-'}</span>
+                              <span className="col-span-2 truncate" title={cost.item}>{cost.item}</span>
+                              <span>{cost.quantidade}</span>
+                              <span>R$ {cost.custoUnitario.toFixed(2)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs">{new Date(cost.data).toLocaleDateString('pt-BR')}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDistributorCost(cost.id)}
+                                  className="text-red-400 hover:text-red-300 ml-auto"
+                                  title="Remover custo"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Cliente / Órgão e CNPJ lado a lado */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   <div>

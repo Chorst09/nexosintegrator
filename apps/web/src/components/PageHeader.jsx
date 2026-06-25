@@ -18,7 +18,7 @@ const PageHeader = ({
   };
 
   return (
-    <div className={`relative overflow-hidden rounded-3xl bg-gradient-to-r ${gradients[gradient]} p-8 mb-8 shadow-soft-xl motion-safe:animate-fade-up`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${gradients[gradient]} p-6 md:p-7 mb-6 shadow-soft-xl motion-safe:animate-fade-up`}>
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0" style={{
@@ -43,19 +43,19 @@ const PageHeader = ({
           </nav>
         )}
 
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
+          <div className="flex min-w-0 items-center gap-4">
             {Icon && (
-              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <Icon className="w-8 h-8 text-white" />
+              <div className="shrink-0 p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Icon className="w-7 h-7 text-white" />
               </div>
             )}
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">
+            <div className="min-w-0">
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
                 {title}
               </h1>
               {subtitle && (
-                <p className="text-white/90 text-lg">
+                <p className="max-w-3xl text-white/90 text-base md:text-lg leading-relaxed">
                   {subtitle}
                 </p>
               )}
@@ -63,15 +63,15 @@ const PageHeader = ({
           </div>
 
           {actions.length > 0 && (
-            <div className="flex flex-wrap gap-3">
+            <div className="flex w-full flex-wrap gap-3 xl:w-auto xl:justify-end">
               {actions.map((action, index) => (
                 <button
                   key={index}
                   onClick={action.onClick}
                   disabled={!!action.disabled}
                   className={`
-                    px-4 py-2 rounded-xl font-medium transition-all duration-200
-                    flex items-center gap-2 backdrop-blur-sm
+                    px-4 py-2.5 rounded-xl font-semibold transition-all duration-200
+                    flex min-h-11 items-center justify-center gap-2 backdrop-blur-sm
                     ${action.variant === 'primary' 
                       ? 'bg-white text-gray-900 hover:bg-gray-100 shadow-lg' 
                       : 'bg-white/20 text-white hover:bg-white/30 border border-white/30'

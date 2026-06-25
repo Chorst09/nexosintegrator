@@ -4,7 +4,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   ArrowRight, Calculator, Box, PieChart, Sparkles, TrendingUp, BarChart3, Loader2, History, Clock, Share2,
-  FilePlus2, FileText, Search, Save, Eye, Pencil, Trash2, X, Printer, Download
+  FilePlus2, FileText, Search, Save, Eye, Pencil, Trash2, X, Printer, Download, Plus
 } from 'lucide-react';
 import { PricingSimulator } from '@/app/components/pricing-simulator';
 import { DREGenerator } from '@/app/components/dre-generator';
@@ -26,6 +26,22 @@ import { buildApiUrl, getAuthHeaders } from '../../config/api';
 const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
 
 type SimulatorStep = 'start' | 'proposal' | 'calculation';
+type DistributorCostMode = 'SETUP' | 'RECORRENTE';
+
+interface DistributorCostDraft {
+  modalidade: DistributorCostMode;
+  distribuidor: string;
+  numeroOrcamento: string;
+  item: string;
+  quantidade: number;
+  custoUnitario: number;
+  observacoes: string;
+}
+
+interface DistributorCost extends DistributorCostDraft {
+  id: string;
+  data: string;
+}
 
 interface PricingProposalForm {
   number: string;
@@ -60,6 +76,7 @@ interface SavedPricingProposal {
   id: string;
   number: string;
   proposalForm: PricingProposalForm;
+  distributorCosts?: DistributorCost[];
   params: PricingInput;
   results: PricingOutput;
   createdAt: string;
@@ -117,6 +134,16 @@ const buildProposalForm = (proposalNumber: string, managerDefaults = getManagerD
   managerPhone: managerDefaults.managerPhone || ''
 });
 
+const buildEmptyDistributorCost = (): DistributorCostDraft => ({
+  modalidade: 'SETUP',
+  distribuidor: '',
+  numeroOrcamento: '',
+  item: '',
+  quantidade: 1,
+  custoUnitario: 0,
+  observacoes: ''
+});
+
 const buildEmptyPricingInput = (calculatorPricingSettings: ReturnType<typeof loadCalculatorPricingSettings>): PricingInput => ({
   upfrontItems: [],
   recurringItems: [],
@@ -143,6 +170,8 @@ export default function FinEdgeApp() {
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [proposalFeedback, setProposalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
+  const [currentCost, setCurrentCost] = useState<DistributorCostDraft>(() => buildEmptyDistributorCost());
+  const [distributorCosts, setDistributorCosts] = useState<DistributorCost[]>([]);
   const [viewingScenario, setViewingScenario] = useState<SavedScenario | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('simulator');
@@ -308,6 +337,8 @@ export default function FinEdgeApp() {
     setProposalSearchNumber(nextNumber);
     setActiveProposalId(null);
     setProposalFeedback(null);
+    setCurrentCost(buildEmptyDistributorCost());
+    setDistributorCosts([]);
     setParams(emptyParams);
     setResults(PricingEngine.calculate(emptyParams));
     setHasGeneratedResults(false);
@@ -323,8 +354,77 @@ export default function FinEdgeApp() {
       return;
     }
 
+    if (distributorCosts.length === 0) {
+      setProposalFeedback({
+        type: 'error',
+        text: 'Adicione ao menos um orçamento de distribuidor antes de continuar.'
+      });
+      return;
+    }
+
     setProposalFeedback(null);
     setSimulatorStep('calculation');
+  };
+
+  const handleCostFieldChange = (field: keyof DistributorCostDraft, value: string | number) => {
+    setCurrentCost(prev => ({ ...prev, [field]: value }));
+  };
+
+  const applyDistributorCostToItems = (cost: DistributorCost) => {
+    const key = cost.modalidade === 'RECORRENTE' ? 'recurringItems' : 'upfrontItems';
+    const item: ProductItem = {
+      id: cost.id,
+      name: cost.item || cost.numeroOrcamento || 'Item do orçamento',
+      description: [
+        cost.distribuidor ? `Distribuidor: ${cost.distribuidor}` : '',
+        cost.numeroOrcamento ? `Orçamento: ${cost.numeroOrcamento}` : '',
+        cost.observacoes
+      ].filter(Boolean).join(' | '),
+      quantity: Math.max(1, Number(cost.quantidade) || 1),
+      unitCost: Math.max(0, Number(cost.custoUnitario) || 0)
+    };
+
+    setHasGeneratedResults(false);
+    setParams(prev => ({
+      ...prev,
+      [key]: [...prev[key].filter(existing => existing.id !== cost.id), item]
+    }));
+  };
+
+  const handleAddDistributorCost = () => {
+    const quantidade = Math.max(1, Number(currentCost.quantidade) || 1);
+    const custoUnitario = Math.max(0, Number(currentCost.custoUnitario) || 0);
+
+    if (!currentCost.distribuidor.trim() || !currentCost.item.trim() || custoUnitario <= 0) {
+      setProposalFeedback({
+        type: 'error',
+        text: 'Informe distribuidor, item/descrição e custo unitário para adicionar o orçamento.'
+      });
+      return;
+    }
+
+    const cost: DistributorCost = {
+      ...currentCost,
+      id: crypto.randomUUID?.() || `orc_${Date.now()}`,
+      quantidade,
+      custoUnitario,
+      data: new Date().toISOString()
+    };
+
+    setDistributorCosts(prev => [...prev, cost]);
+    applyDistributorCostToItems(cost);
+    setCurrentCost(buildEmptyDistributorCost());
+    setProposalFeedback({ type: 'success', text: 'Orçamento adicionado e aplicado aos itens da precificação.' });
+  };
+
+  const handleRemoveDistributorCost = (costId: string) => {
+    setDistributorCosts(prev => prev.filter(cost => cost.id !== costId));
+    setParams(prev => ({
+      ...prev,
+      upfrontItems: prev.upfrontItems.filter(item => item.id !== costId),
+      recurringItems: prev.recurringItems.filter(item => item.id !== costId)
+    }));
+    setHasGeneratedResults(false);
   };
 
   const handleProposalOpportunityChange = (opportunityId: string) => {
@@ -369,6 +469,7 @@ export default function FinEdgeApp() {
         managerEmail: proposalForm.managerEmail.trim(),
         managerPhone: proposalForm.managerPhone.trim(),
       },
+      distributorCosts,
       params,
       results: calculatedResults,
       createdAt: existing?.createdAt || now,
@@ -400,6 +501,7 @@ export default function FinEdgeApp() {
     }
 
     setProposalForm(found.proposalForm);
+    setDistributorCosts(found.distributorCosts || []);
     setParams(found.params);
     setResults(found.results);
     setHasGeneratedResults(true);
@@ -434,6 +536,7 @@ export default function FinEdgeApp() {
         managerEmail: proposalForm.managerEmail.trim(),
         managerPhone: proposalForm.managerPhone.trim(),
       },
+      distributorCosts,
       params,
       results,
       createdAt: existing?.createdAt || nowIso,
@@ -638,6 +741,144 @@ export default function FinEdgeApp() {
                       <>
                         <div className="border-b border-slate-100 bg-cyan-600 px-6 py-5">
                           <h2 className="text-2xl font-bold text-white font-headline">Informações da Proposta</h2>
+                        </div>
+                        <div className="border-b border-slate-100 bg-slate-50/60 p-6">
+                          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                            <div className="border-b border-slate-100 px-6 py-5">
+                              <h3 className="text-xl font-bold text-slate-900 font-headline">Custos (Orçamentos de Distribuidores)</h3>
+                              <p className="mt-1 text-sm text-slate-500">
+                                Cadastre os orçamentos recebidos antes de avançar para os itens da precificação.
+                              </p>
+                            </div>
+                            <div className="space-y-4 p-6">
+                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6 xl:items-end">
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Modalidade</label>
+                                  <select
+                                    value={currentCost.modalidade}
+                                    onChange={(event) => handleCostFieldChange('modalidade', event.target.value as DistributorCostMode)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  >
+                                    <option value="SETUP">Setup / CAPEX</option>
+                                    <option value="RECORRENTE">Recorrente / OPEX</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Distribuidor</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Nome do distribuidor"
+                                    value={currentCost.distribuidor}
+                                    onChange={(event) => handleCostFieldChange('distribuidor', event.target.value)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nº Orçamento</label>
+                                  <input
+                                    type="text"
+                                    placeholder="ORC-0001"
+                                    value={currentCost.numeroOrcamento}
+                                    onChange={(event) => handleCostFieldChange('numeroOrcamento', event.target.value)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Item / Descrição</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Servidor, licença, serviço..."
+                                    value={currentCost.item}
+                                    onChange={(event) => handleCostFieldChange('item', event.target.value)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Qtde</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={currentCost.quantidade}
+                                    onChange={(event) => handleCostFieldChange('quantidade', Number(event.target.value) || 1)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Custo Unit. R$</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={currentCost.custoUnitario}
+                                    onChange={(event) => handleCostFieldChange('custoUnitario', Number(event.target.value) || 0)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_auto] xl:items-end">
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-500 mb-1.5">Observações</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Condições comerciais, prazo, impostos inclusos..."
+                                    value={currentCost.observacoes}
+                                    onChange={(event) => handleCostFieldChange('observacoes', event.target.value)}
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleAddDistributorCost}
+                                  className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-primary/90 transition-colors"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Adicionar e Aplicar
+                                </button>
+                              </div>
+
+                              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                                <div className="hidden grid-cols-8 gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-slate-400 lg:grid">
+                                  <span>Modalidade</span>
+                                  <span>Distribuidor</span>
+                                  <span>Orçamento</span>
+                                  <span className="col-span-2">Item</span>
+                                  <span>Qtde</span>
+                                  <span>Custo Unit.</span>
+                                  <span>Data</span>
+                                </div>
+                                {distributorCosts.length === 0 ? (
+                                  <div className="px-4 py-6 text-sm font-semibold text-slate-400">
+                                    Sem custos adicionados para esta proposta.
+                                  </div>
+                                ) : (
+                                  <div className="divide-y divide-slate-100">
+                                    {distributorCosts.map((cost) => (
+                                      <div key={cost.id} className="grid grid-cols-1 gap-2 px-4 py-4 text-sm text-slate-600 lg:grid-cols-8 lg:items-center">
+                                        <span className="font-bold text-slate-900">{cost.modalidade === 'RECORRENTE' ? 'Recorrente' : 'Setup'}</span>
+                                        <span className="truncate">{cost.distribuidor}</span>
+                                        <span className="truncate">{cost.numeroOrcamento || '-'}</span>
+                                        <span className="col-span-2 truncate" title={cost.item}>{cost.item}</span>
+                                        <span>{cost.quantidade}</span>
+                                        <span className="font-bold text-slate-900">{formatCurrency(cost.custoUnitario)}</span>
+                                        <span className="flex items-center justify-between gap-2">
+                                          {new Date(cost.data).toLocaleDateString('pt-BR')}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveDistributorCost(cost.id)}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                                            title="Remover orçamento"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 p-6">
                           <div className="xl:col-span-2">
