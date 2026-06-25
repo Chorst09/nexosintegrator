@@ -481,17 +481,41 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
 
   const handlePrecificar = () => {
     if (!solicitacao) return;
-    const tipoMap = { LOCACAO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos' };
-    const tipo = tipoMap[String(form.modalidade).toUpperCase()] || 'vendas';
+    
+    // Pegar TODOS os custos salvos, não apenas o form atual
+    const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+      ? solicitacao.calculoDetalhes : {};
+    const todosCustos = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+    
+    // Compilar todos os itens de todas as cotações
+    const todosItens = [];
+    todosCustos.forEach((cotacao) => {
+      if (Array.isArray(cotacao.itens)) {
+        cotacao.itens.forEach((item) => {
+          todosItens.push({
+            descricao: item.descricao || '',
+            quantidade: Number(item.quantidade) || 1,
+            custoUnitario: Number(item.custoUnitario) || 0
+          });
+        });
+      }
+    });
+    
+    // Se não há custos salvos, usar a última modalidade do solicitacao ou do form
+    const modalidadeParaUsar = solicitacao.modalidade || form.modalidade || 'VENDA';
+    const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
+    const tipo = tipoMap[String(modalidadeParaUsar).toUpperCase()] || 'vendas';
+    
     const cotacaoKey = `cotacao_precificar_${Date.now()}`;
     localStorage.setItem(cotacaoKey, JSON.stringify({
-      itens: [{ descricao: form.descricaoItem, quantidade: Number(form.quantidade) || 1, custoUnitario: Number(form.custoUnitario) || 0 }],
-      subtotal: (Number(form.quantidade) || 1) * (Number(form.custoUnitario) || 0),
-      modalidade: form.modalidade,
-      numeroOrcamento: form.numeroOrcamento,
-      distribuidor: form.distribuidor,
-      solicitacaoId: solicitacao.id
+      itens: todosItens.length > 0 ? todosItens : [{ descricao: '', quantidade: 1, custoUnitario: 0 }],
+      subtotal: todosItens.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0),
+      modalidade: modalidadeParaUsar,
+      numeroOrcamento: solicitacao.numero || '',
+      solicitacaoId: solicitacao.id,
+      todosCustos: todosCustos // Enviar todos os custos para referência
     }));
+    
     window.location.href = `/calculadoras?tipo=${tipo}&cotacaoKey=${cotacaoKey}`;
   };
 
@@ -839,16 +863,40 @@ export default function OrcamentosPrevendas() {
                     <button
                       type="button"
                       onClick={() => {
+                        // Pegar os custos salvos da solicitação
+                        const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object'
+                          ? item.calculoDetalhes : {};
+                        const todosCustos = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+                        
+                        // Compilar todos os itens
+                        const todosItens = [];
+                        todosCustos.forEach((cotacao) => {
+                          if (Array.isArray(cotacao.itens)) {
+                            cotacao.itens.forEach((subItem) => {
+                              todosItens.push({
+                                descricao: subItem.descricao || '',
+                                quantidade: Number(subItem.quantidade) || 1,
+                                custoUnitario: Number(subItem.custoUnitario) || 0
+                              });
+                            });
+                          }
+                        });
+                        
+                        // Usar a modalidade da solicitação ou padrão VENDA
+                        const modalidadeItem = item.modalidade || 'VENDA';
+                        const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
+                        const tipoCalc = tipoMap[String(modalidadeItem).toUpperCase()] || 'vendas';
+                        
                         const cotacaoKey = `cotacao_precificar_${Date.now()}`;
                         localStorage.setItem(cotacaoKey, JSON.stringify({
-                          itens: [],
-                          subtotal: 0,
-                          modalidade: 'VENDA',
-                          numeroOrcamento: '',
-                          distribuidor: '',
-                          solicitacaoId: item.id
+                          itens: todosItens.length > 0 ? todosItens : [{ descricao: '', quantidade: 1, custoUnitario: 0 }],
+                          subtotal: todosItens.reduce((sum, i) => sum + (i.quantidade * i.custoUnitario), 0),
+                          modalidade: modalidadeItem,
+                          numeroOrcamento: item.numero || '',
+                          solicitacaoId: item.id,
+                          todosCustos: todosCustos
                         }));
-                        window.location.href = `/calculadoras?tipo=vendas&cotacaoKey=${cotacaoKey}`;
+                        window.location.href = `/calculadoras?tipo=${tipoCalc}&cotacaoKey=${cotacaoKey}`;
                       }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-200 hover:bg-sky-500/25 whitespace-nowrap"
                     >
