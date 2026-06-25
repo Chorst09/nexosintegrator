@@ -304,9 +304,11 @@ const buildProposalForm = (proposalNumber, managerDefaults = {}) => ({
   clientContact: '',
   clientPhone: '',
   clientEmail: '',
+  clientDocument: '', // NOVO: CNPJ/Documento
   managerName: managerDefaults.managerName || '',
   managerEmail: managerDefaults.managerEmail || '',
-  managerPhone: managerDefaults.managerPhone || ''
+  managerPhone: managerDefaults.managerPhone || '',
+  premises: '' // NOVO: Premissas da Proposta
 });
 
 const normalizeSavedProposals = (source) => {
@@ -1817,9 +1819,11 @@ export default function Calculadoras() {
       clientContact: proposal?.client?.contactName || '',
       clientPhone: proposal?.client?.phone || '',
       clientEmail: proposal?.client?.email || '',
+      clientDocument: proposal?.client?.document || '', // NOVO
       managerName: proposal?.accountManager?.name || '',
       managerEmail: proposal?.accountManager?.email || '',
-      managerPhone: proposal?.accountManager?.phone || ''
+      managerPhone: proposal?.accountManager?.phone || '',
+      premises: proposal?.premises || '' // NOVO
     });
     setProposalSearchNumber(proposal.number || '');
     setActiveProposalId(proposal.id || null);
@@ -1853,13 +1857,15 @@ export default function Calculadoras() {
         companyName: proposalForm.clientCompany.trim(),
         contactName: proposalForm.clientContact.trim(),
         phone: proposalForm.clientPhone.trim(),
-        email: proposalForm.clientEmail.trim()
+        email: proposalForm.clientEmail.trim(),
+        document: proposalForm.clientDocument?.trim() || '' // NOVO
       },
       accountManager: {
         name: proposalForm.managerName.trim(),
         email: proposalForm.managerEmail.trim(),
         phone: proposalForm.managerPhone.trim()
       },
+      premises: proposalForm.premises?.trim() || '', // NOVO
       pricing: {
         operationType,
         regimeId: vendasData.regimeTributario,
@@ -3317,108 +3323,123 @@ export default function Calculadoras() {
           )}
 
           {calculatorStep === 'proposal' && (
-            <div className="rounded-lg border border-cyan-400/35 bg-slate-900/80 overflow-hidden">
-              <div className="bg-cyan-500/30 border-b border-cyan-400/30 px-5 py-4">
-                <h4 className="text-2xl font-bold text-white">Informações da Proposta</h4>
+            <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
+              <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
+                <h4 className="text-xl font-bold text-white">Dados da Proposta</h4>
               </div>
-              <div className="p-5 grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="xl:col-span-2">
-                  <label className="block text-sm text-slate-300 mb-1">Oportunidade</label>
-                  <select
-                    value={proposalForm.opportunityId}
-                    onChange={(event) => handleProposalOpportunityChange(event.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  >
-                    <option value="">Selecione a oportunidade vinculada</option>
-                    {opportunities.map((opportunity) => (
-                      <option key={opportunity.id} value={opportunity.id}>
-                        {[opportunity.number, opportunity.title || opportunity.projectName, opportunity.company?.name]
-                          .filter(Boolean)
-                          .join(' - ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-4">
-                  <h5 className="text-2xl font-semibold text-blue-300">Dados do Cliente</h5>
+              <div className="p-5 space-y-6">
+                {/* Cliente / Órgão e CNPJ lado a lado */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">Nome da Empresa Cliente</label>
+                    <label className="block text-sm text-slate-300 mb-1">Cliente / Órgão</label>
                     <input
                       type="text"
+                      placeholder="Nome do cliente ou órgão"
                       value={proposalForm.clientCompany}
                       onChange={(event) => setProposalForm((prev) => ({ ...prev, clientCompany: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">Nome do Contato</label>
+                    <label className="block text-sm text-slate-300 mb-1">CNPJ / Documento</label>
                     <input
                       type="text"
-                      value={proposalForm.clientContact}
-                      onChange={(event) => setProposalForm((prev) => ({ ...prev, clientContact: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-1">Telefone</label>
-                    <input
-                      type="text"
-                      value={proposalForm.clientPhone}
-                      onChange={(event) => setProposalForm((prev) => ({ ...prev, clientPhone: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-300 mb-1">E-mail</label>
-                    <input
-                      type="email"
-                      value={proposalForm.clientEmail}
-                      onChange={(event) => setProposalForm((prev) => ({ ...prev, clientEmail: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      placeholder="00.000.000/0000-00"
+                      value={proposalForm.clientDocument || ''}
+                      onChange={(event) => setProposalForm((prev) => ({ ...prev, clientDocument: event.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h5 className="text-2xl font-semibold text-blue-300">Dados do Gerente de Contas</h5>
+                {/* Contato e Email do Cliente */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">Nome do Gerente</label>
+                    <label className="block text-sm text-slate-300 mb-1">Contato do Cliente</label>
                     <input
                       type="text"
-                      value={proposalForm.managerName}
-                      onChange={(event) => setProposalForm((prev) => ({ ...prev, managerName: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      placeholder="Nome do contato"
+                      value={proposalForm.clientContact}
+                      onChange={(event) => setProposalForm((prev) => ({ ...prev, clientContact: event.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">E-mail do Gerente</label>
+                    <label className="block text-sm text-slate-300 mb-1">Email do Cliente</label>
                     <input
                       type="email"
-                      value={proposalForm.managerEmail}
-                      onChange={(event) => setProposalForm((prev) => ({ ...prev, managerEmail: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      placeholder="email@cliente.com.br"
+                      value={proposalForm.clientEmail}
+                      onChange={(event) => setProposalForm((prev) => ({ ...prev, clientEmail: event.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Gerente de Conta e Email do Gerente */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-slate-300 mb-1">Gerente de Conta</label>
+                    <input
+                      type="text"
+                      placeholder="Nome do gerente"
+                      value={proposalForm.managerName}
+                      onChange={(event) => setProposalForm((prev) => ({ ...prev, managerName: event.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-slate-300 mb-1">Telefone do Gerente</label>
+                    <label className="block text-sm text-slate-300 mb-1">Email do Gerente</label>
                     <input
-                      type="text"
-                      value={proposalForm.managerPhone}
-                      onChange={(event) => setProposalForm((prev) => ({ ...prev, managerPhone: event.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      type="email"
+                      placeholder="gerente@empresa.com.br"
+                      value={proposalForm.managerEmail}
+                      onChange={(event) => setProposalForm((prev) => ({ ...prev, managerEmail: event.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
                     />
                   </div>
+                </div>
+
+                {/* Telefone do Gerente */}
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Telefone do Gerente</label>
+                  <input
+                    type="text"
+                    placeholder="(00) 00000-0000"
+                    value={proposalForm.managerPhone}
+                    onChange={(event) => setProposalForm((prev) => ({ ...prev, managerPhone: event.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500"
+                  />
+                </div>
+
+                {/* Premissas da Proposta */}
+                <div>
+                  <h5 className="text-lg font-semibold text-blue-300 mb-2">Premissas da Proposta</h5>
+                  <textarea
+                    placeholder="Descreva escopo, validade da proposta, SLA, condições comerciais, exclusões etc."
+                    value={proposalForm.premises || ''}
+                    onChange={(event) => setProposalForm((prev) => ({ ...prev, premises: event.target.value }))}
+                    rows={5}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 resize-none"
+                  />
                 </div>
               </div>
 
-              <div className="px-5 pb-5 flex justify-end">
+              <div className="px-5 pb-5 flex justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCalculatorStep('home')}
+                  className="px-6 py-3 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-800"
+                >
+                  Voltar
+                </button>
                 <button
                   type="button"
                   onClick={continueToCalculator}
                   className="px-6 py-3 rounded-lg border border-blue-400/60 bg-blue-500/80 text-white hover:bg-blue-500 inline-flex items-center gap-2"
                 >
+                  Continuar para Calculadoras
                   <ArrowRight className="w-4 h-4" />
-                  Continuar para Adicionar Itens
                 </button>
               </div>
             </div>
