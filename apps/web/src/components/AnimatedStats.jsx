@@ -143,7 +143,11 @@ const AnimatedStats = ({
           </div>
           
           <div className={`p-3 rounded-2xl bg-gradient-to-br ${classes.light} border border-white/10 shadow-sm`}>
-            <Icon className={`w-6 h-6 ${classes.icon}`} />
+            {typeof Icon === 'string' ? (
+              <span className="text-2xl">{Icon}</span>
+            ) : (
+              <Icon className={`w-6 h-6 ${classes.icon}`} />
+            )}
           </div>
         </div>
       </div>

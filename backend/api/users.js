@@ -275,5 +275,38 @@ export default async function handler(req) {
     return Response.json(user);
   }
 
+  if (req.method === 'DELETE') {
+    const body = await req.json().catch(() => ({}));
+    const id = body?.id || req.query?.id;
+    const session = getSessionRole(req);
+    if (session.error) return session.error;
+    const userRole = session.role;
+    const isMasterSession = userRole === 'MASTER';
+
+    if (!id) {
+      return Response.json({ error: 'ID do usuário é obrigatório' }, { status: 400 });
+    }
+
+    // Verificar se está tentando excluir um usuário MASTER
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true }
+    });
+
+    if (!targetUser) {
+      return Response.json({ error: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    if (targetUser.role === 'MASTER' && !isMasterSession) {
+      return new Response(
+        JSON.stringify({ error: 'Apenas usuários MASTER podem excluir usuários MASTER' }),
+        { status: 403 }
+      );
+    }
+
+    await prisma.user.delete({ where: { id } });
+    return Response.json({ message: 'Usuário excluído com sucesso' });
+  }
+
   return new Response('Method not allowed', { status: 405 });
 }

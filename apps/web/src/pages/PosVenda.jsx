@@ -19,7 +19,17 @@ import {
   CheckCircle2,
   Calendar,
   Target,
-  Activity
+  Activity,
+  MessageSquare,
+  Send,
+  X,
+  ChevronRight,
+  ArrowRight,
+  Loader2,
+  ThumbsUp,
+  ThumbsDown,
+  Meh,
+  RefreshCcw
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -44,17 +54,33 @@ const PosVenda = () => {
   const [contracts, setContracts] = useState([]);
   const [users, setUsers] = useState([]);
 
+  // View modals state
+  const [viewingOnboarding, setViewingOnboarding] = useState(null);
+  const [viewingTicket, setViewingTicket] = useState(null);
+  const [viewingNPS, setViewingNPS] = useState(null);
+  const [ticketResponses, setTicketResponses] = useState([]);
+  const [responseText, setResponseText] = useState('');
+  const [sendingResponse, setSendingResponse] = useState(false);
+  const [detectingChurn, setDetectingChurn] = useState(false);
+  const [advancingStep, setAdvancingStep] = useState(null);
+  const [feedbackMessage, setFeedbackMessage] = useState(null);
+
+  const showFeedback = (msg, type = 'success') => {
+    setFeedbackMessage({ text: msg, type });
+    setTimeout(() => setFeedbackMessage(null), 4000);
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
       const [onboardingRes, ticketsRes, npsRes, churnRes, companiesRes, contractsRes, usersRes] = await Promise.all([
-        fetch(buildApiUrl('/post-sales/onboarding'), { headers: getAuthHeaders() }),
-        fetch(buildApiUrl('/post-sales/support'), { headers: getAuthHeaders() }),
-        fetch(buildApiUrl('/post-sales/nps'), { headers: getAuthHeaders() }),
-        fetch(buildApiUrl('/post-sales/churn-alerts'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/post-sales/onboarding?limit=200'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/post-sales/support?limit=200'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/post-sales/nps?limit=200'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/post-sales/churn-alerts?limit=200'), { headers: getAuthHeaders() }),
         fetch(buildApiUrl('/companies'), { headers: getAuthHeaders() }),
         fetch(buildApiUrl('/contracts'), { headers: getAuthHeaders() }),
-        fetch(buildApiUrl('/auth/users'), { headers: getAuthHeaders() })
+        fetch(buildApiUrl('/users'), { headers: getAuthHeaders() })
       ]);
 
       if (onboardingRes.ok) {
@@ -138,17 +164,13 @@ const PosVenda = () => {
   };
 
   const getNPSCategory = (score) => {
-    if (score >= 9) return { label: 'Promotor', color: 'text-green-600' };
-    if (score >= 7) return { label: 'Neutro', color: 'text-yellow-600' };
-    return { label: 'Detrator', color: 'text-red-600' };
+    if (score >= 9) return { label: 'Promotor', color: 'text-green-600', icon: ThumbsUp };
+    if (score >= 7) return { label: 'Neutro', color: 'text-yellow-600', icon: Meh };
+    return { label: 'Detrator', color: 'text-red-600', icon: ThumbsDown };
   };
 
   const getClientTypeLabel = (clientType) => {
-    const labels = {
-      B2B: 'B2B',
-      B2G: 'B2G (Governo)',
-      B2C: 'B2C'
-    };
+    const labels = { B2B: 'B2B', B2G: 'B2G (Governo)', B2C: 'B2C' };
     return labels[clientType] || clientType;
   };
 
@@ -161,7 +183,6 @@ const PosVenda = () => {
     return badges[clientType] || 'bg-gray-100 text-gray-800';
   };
 
-  // Função para filtrar dados por tipo de cliente
   const filterByClientType = (items) => {
     if (!clientTypeFilter) return items;
     return items.filter(item => item.company?.clientType === clientTypeFilter);
@@ -184,17 +205,16 @@ const PosVenda = () => {
         headers: getAuthHeaders(),
         body: JSON.stringify(formData)
       });
-
       if (response.ok) {
         await fetchData();
         closeModal();
-        alert('Ticket criado com sucesso!');
+        showFeedback('Ticket criado com sucesso!');
       } else {
-        alert('Erro ao criar ticket');
+        const err = await response.json().catch(() => ({}));
+        showFeedback(err.error || 'Erro ao criar ticket', 'error');
       }
     } catch (error) {
-      console.error('Erro ao criar ticket:', error);
-      alert('Erro ao criar ticket');
+      showFeedback('Erro ao criar ticket', 'error');
     }
   };
 
@@ -205,17 +225,148 @@ const PosVenda = () => {
         headers: getAuthHeaders(),
         body: JSON.stringify(formData)
       });
-
       if (response.ok) {
         await fetchData();
         closeModal();
-        alert('Onboarding criado com sucesso!');
+        showFeedback('Onboarding criado com sucesso!');
       } else {
-        alert('Erro ao criar onboarding');
+        const err = await response.json().catch(() => ({}));
+        showFeedback(err.error || 'Erro ao criar onboarding', 'error');
       }
     } catch (error) {
-      console.error('Erro ao criar onboarding:', error);
-      alert('Erro ao criar onboarding');
+      showFeedback('Erro ao criar onboarding', 'error');
+    }
+  };
+
+  const handleSubmitNPSSurvey = async (formData) => {
+    try {
+      const response = await fetch(buildApiUrl('/post-sales/nps'), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(formData)
+      });
+      if (response.ok) {
+        await fetchData();
+        closeModal();
+        showFeedback('Pesquisa NPS enviada com sucesso!');
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showFeedback(err.error || 'Erro ao enviar pesquisa NPS', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao enviar pesquisa NPS', 'error');
+    }
+  };
+
+  const handleViewOnboarding = async (item) => {
+    setViewingOnboarding(item);
+  };
+
+  const handleAdvanceStep = async (onboardingId, step) => {
+    try {
+      setAdvancingStep(step.id);
+      const response = await fetch(buildApiUrl(`/post-sales/onboarding/${onboardingId}/steps/${step.id}`), {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status: 'COMPLETED' })
+      });
+      if (response.ok) {
+        await fetchData();
+        showFeedback(`Etapa "${step.title}" concluída!`);
+        // Atualizar o onboarding em visualização
+        const updated = onboardings.find(o => o.id === onboardingId);
+        if (updated) setViewingOnboarding(updated);
+      } else {
+        showFeedback('Erro ao avançar etapa', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao avançar etapa', 'error');
+    } finally {
+      setAdvancingStep(null);
+    }
+  };
+
+  const handleViewTicket = async (item) => {
+    setViewingTicket(item);
+    // Carregar respostas do ticket
+    try {
+      const res = await fetch(buildApiUrl(`/post-sales/support/${item.id}/responses`), { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setTicketResponses(data.responses || []);
+      }
+    } catch (e) {
+      console.error('Erro ao carregar respostas do ticket:', e);
+    }
+  };
+
+  const handleRespondTicket = async () => {
+    if (!responseText.trim() || !viewingTicket) return;
+    try {
+      setSendingResponse(true);
+      const res = await fetch(buildApiUrl(`/post-sales/support/${viewingTicket.id}/responses`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ message: responseText, isInternal: false })
+      });
+      if (res.ok) {
+        setResponseText('');
+        showFeedback('Resposta enviada com sucesso!');
+      } else {
+        showFeedback('Erro ao enviar resposta', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao enviar resposta', 'error');
+    } finally {
+      setSendingResponse(false);
+    }
+  };
+
+  const handleDetectChurn = async () => {
+    try {
+      setDetectingChurn(true);
+      const res = await fetch(buildApiUrl('/post-sales/churn-alerts/detect'), {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showFeedback(data.message || 'Detecção de churn concluída!');
+        await fetchData();
+      } else {
+        showFeedback('Erro ao detectar churn', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao detectar churn', 'error');
+    } finally {
+      setDetectingChurn(false);
+    }
+  };
+
+  const handleResolveChurn = async (alertId) => {
+    try {
+      const res = await fetch(buildApiUrl(`/post-sales/churn-alerts/${alertId}/resolve`), {
+        method: 'PUT',
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        showFeedback('Alerta de churn resolvido!');
+        await fetchData();
+      } else {
+        // Fallback: marcar como resolvido via PUT direto na empresa
+        const alert = churnAlerts.find(a => a.id === alertId);
+        if (alert?.company?.id) {
+          await fetch(buildApiUrl(`/companies/${alert.company.id}`), {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ churnRisk: 0 })
+          });
+        }
+        showFeedback('Alerta de churn resolvido (fallback)!');
+        await fetchData();
+      }
+    } catch (error) {
+      showFeedback('Erro ao resolver alerta', 'error');
     }
   };
 
@@ -230,9 +381,24 @@ const PosVenda = () => {
     );
   }
 
+  const StatusBadge = ({ status, type }) => (
+    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(status, type)}`}>
+      {status}
+    </span>
+  );
+
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {feedbackMessage && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-xl shadow-lg text-sm font-bold ${
+          feedbackMessage.type === 'error' 
+            ? 'bg-red-500 text-white' 
+            : 'bg-emerald-500 text-white'
+        }`}>
+          {feedbackMessage.text}
+        </div>
+      )}
+
       <PageHeader
         title="Sucesso do Cliente"
         subtitle="Maximize a satisfação e retenção através de onboarding, suporte e análise de churn"
@@ -242,13 +408,15 @@ const PosVenda = () => {
         actions={[
           {
             label: 'Detectar Churn',
-            icon: Zap,
-            onClick: () => {
-              fetch(buildApiUrl('/post-sales/churn-alerts/detect'), {
-                method: 'POST',
-                headers: getAuthHeaders()
-              }).then(() => fetchData());
-            },
+            icon: detectingChurn ? Loader2 : Zap,
+            onClick: handleDetectChurn,
+            variant: 'secondary',
+            disabled: detectingChurn
+          },
+          {
+            label: 'Nova Pesquisa NPS',
+            icon: Plus,
+            onClick: () => openModal('nps'),
             variant: 'secondary'
           },
           {
@@ -266,7 +434,6 @@ const PosVenda = () => {
         ]}
       />
 
-      {/* Métricas Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <AnimatedStats
           title="Onboardings Ativos"
@@ -274,18 +441,14 @@ const PosVenda = () => {
           subtitle={`${onboardings.length} total`}
           icon={UserCheck}
           color="blue"
-          trend={{ direction: 'up', value: '+8% este mês' }}
         />
-        
         <AnimatedStats
           title="Tickets Abertos"
           value={tickets.filter(t => ['OPEN', 'IN_PROGRESS'].includes(t.status)).length}
           subtitle="SLA médio: 24h"
           icon={HeadphonesIcon}
           color="green"
-          trend={{ direction: 'down', value: '-12% este mês' }}
         />
-        
         <AnimatedStats
           title="NPS Médio"
           value={npsData.length > 0 
@@ -295,20 +458,16 @@ const PosVenda = () => {
           subtitle={`${npsData.filter(n => n.status === 'RESPONDED').length} respostas`}
           icon={Award}
           color="yellow"
-          trend={{ direction: 'up', value: '+0.5 este mês' }}
         />
-        
         <AnimatedStats
           title="Alertas de Churn"
           value={churnAlerts.filter(a => a.status === 'ACTIVE').length}
           subtitle={`${churnAlerts.filter(a => a.riskLevel === 'CRITICAL').length} críticos`}
           icon={Shield}
           color="red"
-          trend={{ direction: 'down', value: '-15% este mês' }}
         />
       </div>
 
-      {/* Filtros */}
       <GradientCard gradient="gray" className="p-6">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -352,7 +511,6 @@ const PosVenda = () => {
         </div>
       </GradientCard>
 
-      {/* Tabs */}
       <GradientCard gradient="gray" className="shadow-lg">
         <div className="border-b border-gray-200 dark:border-blue-500/20">
           <nav className="-mb-px flex space-x-8 px-6">
@@ -395,7 +553,6 @@ const PosVenda = () => {
         </div>
 
         <div className="p-6">
-          {/* Tab Onboarding */}
           {activeTab === 'onboarding' && (
             <ModernTable
               title="Onboarding de Clientes"
@@ -432,9 +589,7 @@ const PosVenda = () => {
                   key: 'status',
                   label: 'Status',
                   render: (item) => (
-                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(item.status, 'onboarding')}`}>
-                      {item.status}
-                    </span>
+                    <StatusBadge status={item.status} type="onboarding" />
                   )
                 },
                 {
@@ -444,18 +599,12 @@ const PosVenda = () => {
                     const completedSteps = item.steps?.filter(s => s.status === 'COMPLETED').length || 0;
                     const totalSteps = item.steps?.length || 0;
                     const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-                    
                     return (
                       <div className="flex items-center">
                         <div className="w-20 bg-gray-200 rounded-full h-2 mr-3">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${progress}%` }}
-                          ></div>
+                          <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                         </div>
-                        <span className="text-sm text-gray-600 font-medium">
-                          {completedSteps}/{totalSteps}
-                        </span>
+                        <span className="text-sm text-gray-600 font-medium">{completedSteps}/{totalSteps}</span>
                       </div>
                     );
                   }
@@ -466,13 +615,9 @@ const PosVenda = () => {
                   render: (item) => (
                     <div className="flex items-center">
                       <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-xs font-medium text-blue-600">
-                          {item.assignedTo?.name?.charAt(0) || '?'}
-                        </span>
+                        <span className="text-xs font-medium text-blue-600">{item.assignedTo?.name?.charAt(0) || '?'}</span>
                       </div>
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
-                        {item.assignedTo?.name || 'Não atribuído'}
-                      </span>
+                      <span className="text-sm text-gray-900 dark:text-gray-100">{item.assignedTo?.name || 'Não atribuído'}</span>
                     </div>
                   )
                 },
@@ -483,10 +628,7 @@ const PosVenda = () => {
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 text-gray-400 mr-2" />
                       <span className="text-sm text-gray-900 dark:text-gray-100">
-                        {item.expectedEndDate 
-                          ? new Date(item.expectedEndDate).toLocaleDateString('pt-BR')
-                          : '-'
-                        }
+                        {item.expectedEndDate ? new Date(item.expectedEndDate).toLocaleDateString('pt-BR') : '-'}
                       </span>
                     </div>
                   )
@@ -494,18 +636,12 @@ const PosVenda = () => {
               ]}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onView={(item) => alert(`Ver detalhes do onboarding: ${item.company?.name}`)}
-              onEdit={(item) => alert(`Editar onboarding: ${item.company?.name}`)}
+              onView={(item) => handleViewOnboarding(item)}
               customActions={[
                 {
-                  label: 'Avançar Etapa',
-                  icon: CheckCircle2,
-                  onClick: (item) => alert(`Avançar etapa: ${item.company?.name}`)
-                },
-                {
-                  label: 'Agendar Reunião',
-                  icon: Calendar,
-                  onClick: (item) => alert(`Agendar reunião: ${item.company?.name}`)
+                  label: 'Ver Etapas',
+                  icon: ChevronRight,
+                  onClick: (item) => handleViewOnboarding(item)
                 }
               ]}
               emptyState={
@@ -518,7 +654,6 @@ const PosVenda = () => {
             />
           )}
 
-          {/* Tab Suporte */}
           {activeTab === 'support' && (
             <ModernTable
               title="Tickets de Suporte"
@@ -536,12 +671,8 @@ const PosVenda = () => {
                   label: 'Ticket',
                   render: (item) => (
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        #{item.number}
-                      </div>
-                      <div className="text-sm text-gray-500 max-w-xs truncate">
-                        {item.title}
-                      </div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">#{item.number}</div>
+                      <div className="text-sm text-gray-500 max-w-xs truncate">{item.title}</div>
                     </div>
                   )
                 },
@@ -552,13 +683,9 @@ const PosVenda = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-green-600">
-                            {item.company?.name?.charAt(0) || '?'}
-                          </span>
+                          <span className="text-xs font-medium text-green-600">{item.company?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm text-gray-900 dark:text-gray-100">
-                          {item.company?.name}
-                        </span>
+                        <span className="text-sm text-gray-900 dark:text-gray-100">{item.company?.name}</span>
                       </div>
                       {item.company?.clientType && (
                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded ${getClientTypeBadge(item.company.clientType)}`}>
@@ -580,32 +707,20 @@ const PosVenda = () => {
                 {
                   key: 'status',
                   label: 'Status',
-                  render: (item) => (
-                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(item.status, 'ticket')}`}>
-                      {item.status}
-                    </span>
-                  )
+                  render: (item) => <StatusBadge status={item.status} type="ticket" />
                 },
                 {
                   key: 'sla',
                   label: 'SLA',
                   render: (item) => {
                     const slaExpired = item.slaDeadline && new Date(item.slaDeadline) < new Date();
-                    
                     return (
                       <div className={`flex items-center ${slaExpired ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                         <Clock className={`w-4 h-4 mr-2 ${slaExpired ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
                         <span className="text-sm font-medium">
-                          {item.slaDeadline 
-                            ? new Date(item.slaDeadline).toLocaleDateString('pt-BR')
-                            : '-'
-                          }
+                          {item.slaDeadline ? new Date(item.slaDeadline).toLocaleDateString('pt-BR') : '-'}
                         </span>
-                        {slaExpired && (
-                          <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
-                            Vencido
-                          </span>
-                        )}
+                        {slaExpired && <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">Vencido</span>}
                       </div>
                     );
                   }
@@ -616,31 +731,21 @@ const PosVenda = () => {
                   render: (item) => (
                     <div className="flex items-center">
                       <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-xs font-medium text-purple-600">
-                          {item.assignedTo?.name?.charAt(0) || '?'}
-                        </span>
+                        <span className="text-xs font-medium text-purple-600">{item.assignedTo?.name?.charAt(0) || '?'}</span>
                       </div>
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
-                        {item.assignedTo?.name || 'Não atribuído'}
-                      </span>
+                      <span className="text-sm text-gray-900 dark:text-gray-100">{item.assignedTo?.name || 'Não atribuído'}</span>
                     </div>
                   )
                 }
               ]}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onView={(item) => alert(`Ver detalhes do ticket: ${item.number}`)}
-              onEdit={(item) => alert(`Editar ticket: ${item.number}`)}
+              onView={(item) => handleViewTicket(item)}
               customActions={[
                 {
                   label: 'Responder',
-                  icon: Activity,
-                  onClick: (item) => alert(`Responder ticket: ${item.number}`)
-                },
-                {
-                  label: 'Escalar',
-                  icon: TrendingUp,
-                  onClick: (item) => alert(`Escalar ticket: ${item.number}`)
+                  icon: MessageSquare,
+                  onClick: (item) => handleViewTicket(item)
                 }
               ]}
               emptyState={
@@ -653,7 +758,6 @@ const PosVenda = () => {
             />
           )}
 
-          {/* Tab NPS */}
           {activeTab === 'nps' && (
             <ModernTable
               title="Pesquisas de Satisfação (NPS)"
@@ -671,13 +775,9 @@ const PosVenda = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-yellow-600">
-                            {item.company?.name?.charAt(0) || '?'}
-                          </span>
+                          <span className="text-xs font-medium text-yellow-600">{item.company?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {item.company?.name}
-                        </span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.company?.name}</span>
                       </div>
                       {item.company?.clientType && (
                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded ${getClientTypeBadge(item.company.clientType)}`}>
@@ -704,18 +804,17 @@ const PosVenda = () => {
                   key: 'category',
                   label: 'Categoria',
                   render: (item) => {
-                    const category = item.score !== null ? getNPSCategory(item.score) : null;
-                    
-                    return category ? (
-                      <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                    if (item.score === null) return <span className="text-sm text-gray-500">-</span>;
+                    const category = getNPSCategory(item.score);
+                    const CatIcon = category.icon;
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
                         category.label === 'Promotor' ? 'bg-green-100 text-green-800' :
                         category.label === 'Neutro' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-red-100 text-red-800'
                       }`}>
-                        {category.label}
+                        <CatIcon className="w-3.5 h-3.5" /> {category.label}
                       </span>
-                    ) : (
-                      <span className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">-</span>
                     );
                   }
                 },
@@ -748,30 +847,22 @@ const PosVenda = () => {
                   render: (item) => (
                     item.feedback ? (
                       <div className="max-w-xs">
-                        <p className="text-sm text-gray-900 truncate" title={item.feedback}>
-                          {item.feedback}
-                        </p>
+                        <p className="text-sm text-gray-900 truncate" title={item.feedback}>{item.feedback}</p>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">Sem feedback</span>
+                      <span className="text-sm text-gray-500">Sem feedback</span>
                     )
                   )
                 }
               ]}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onView={(item) => alert(`Ver detalhes da pesquisa NPS: ${item.company?.name}`)}
-              onEdit={(item) => alert(`Editar pesquisa NPS: ${item.company?.name}`)}
+              onView={(item) => setViewingNPS(item)}
               customActions={[
                 {
-                  label: 'Reenviar Pesquisa',
-                  icon: Target,
-                  onClick: (item) => alert(`Reenviar pesquisa: ${item.company?.name}`)
-                },
-                {
-                  label: 'Ver Histórico',
-                  icon: Activity,
-                  onClick: (item) => alert(`Ver histórico NPS: ${item.company?.name}`)
+                  label: 'Detalhes',
+                  icon: Eye,
+                  onClick: (item) => setViewingNPS(item)
                 }
               ]}
               emptyState={
@@ -784,7 +875,6 @@ const PosVenda = () => {
             />
           )}
 
-          {/* Tab Churn */}
           {activeTab === 'churn' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
@@ -793,16 +883,12 @@ const PosVenda = () => {
                   <p className="text-sm text-gray-600 mt-1">Identifique clientes com risco de cancelamento</p>
                 </div>
                 <button
-                  onClick={() => {
-                    fetch(buildApiUrl('/post-sales/churn-alerts/detect'), {
-                      method: 'POST',
-                      headers: getAuthHeaders()
-                    }).then(() => fetchData());
-                  }}
-                  className="bg-gradient-to-r from-orange-600 to-red-600 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-red-700 flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  onClick={handleDetectChurn}
+                  disabled={detectingChurn}
+                  className="bg-gradient-to-r from-orange-600 to-red-600 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-red-700 flex items-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-60"
                 >
-                  <Zap className="w-5 h-5" />
-                  Detectar Churn
+                  {detectingChurn ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                  {detectingChurn ? 'Detectando...' : 'Detectar Churn'}
                 </button>
               </div>
 
@@ -821,13 +907,9 @@ const PosVenda = () => {
                     render: (item) => (
                       <div className="flex items-center">
                         <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
-                          <span className="text-xs font-medium text-red-600">
-                            {item.company?.name?.charAt(0) || '?'}
-                          </span>
+                          <span className="text-xs font-medium text-red-600">{item.company?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {item.company?.name}
-                        </span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.company?.name}</span>
                       </div>
                     )
                   },
@@ -848,14 +930,11 @@ const PosVenda = () => {
                     render: (item) => (
                       <div className="flex items-center">
                         <div className="w-20 bg-gray-200 rounded-full h-3 mr-3">
-                          <div 
-                            className={`h-3 rounded-full transition-all duration-300 ${
-                              item.score >= 80 ? 'bg-gradient-to-r from-red-500 to-red-600' : 
-                              item.score >= 65 ? 'bg-gradient-to-r from-orange-500 to-orange-600' : 
-                              'bg-gradient-to-r from-yellow-500 to-yellow-600'
-                            }`}
-                            style={{ width: `${item.score}%` }}
-                          ></div>
+                          <div className={`h-3 rounded-full transition-all duration-300 ${
+                            item.score >= 80 ? 'bg-gradient-to-r from-red-500 to-red-600' : 
+                            item.score >= 65 ? 'bg-gradient-to-r from-orange-500 to-orange-600' : 
+                            'bg-gradient-to-r from-yellow-500 to-yellow-600'
+                          }`} style={{ width: `${item.score}%` }} />
                         </div>
                         <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{item.score}%</span>
                       </div>
@@ -867,14 +946,10 @@ const PosVenda = () => {
                     render: (item) => (
                       <div className="max-w-xs">
                         {item.reasons?.slice(0, 2).map((reason, index) => (
-                          <div key={index} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full mb-1 inline-block mr-1">
-                            {reason}
-                          </div>
+                          <span key={index} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full mb-1 inline-block mr-1">{reason}</span>
                         ))}
                         {item.reasons?.length > 2 && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            +{item.reasons.length - 2} outros fatores
-                          </div>
+                          <div className="text-xs text-gray-500 mt-1">+{item.reasons.length - 2} outros fatores</div>
                         )}
                       </div>
                     )
@@ -896,38 +971,22 @@ const PosVenda = () => {
                     render: (item) => (
                       <div className="flex items-center">
                         <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
-                          <span className="text-xs font-medium text-indigo-600">
-                            {item.assignedTo?.name?.charAt(0) || '?'}
-                          </span>
+                          <span className="text-xs font-medium text-indigo-600">{item.assignedTo?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm text-gray-900 dark:text-gray-100">
-                          {item.assignedTo?.name || 'Não atribuído'}
-                        </span>
+                        <span className="text-sm text-gray-900 dark:text-gray-100">{item.assignedTo?.name || 'Não atribuído'}</span>
                       </div>
                     )
                   }
                 ]}
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
-                onView={(item) => alert(`Ver detalhes do alerta de churn: ${item.company?.name}`)}
-                onEdit={(item) => alert(`Editar alerta de churn: ${item.company?.name}`)}
-                customActions={[
-                  {
-                    label: 'Criar Plano de Retenção',
-                    icon: Shield,
-                    onClick: (item) => alert(`Criar plano de retenção: ${item.company?.name}`)
-                  },
-                  {
-                    label: 'Agendar Contato',
-                    icon: Calendar,
-                    onClick: (item) => alert(`Agendar contato: ${item.company?.name}`)
-                  },
-                  {
-                    label: 'Marcar como Resolvido',
-                    icon: CheckCircle2,
-                    onClick: (item) => alert(`Marcar como resolvido: ${item.company?.name}`)
+                onView={(item) => {
+                  if (item.status === 'ACTIVE') {
+                    if (window.confirm(`Deseja marcar o alerta de ${item.company?.name} como resolvido?`)) {
+                      handleResolveChurn(item.id);
+                    }
                   }
-                ]}
+                }}
                 emptyState={
                   <div>
                     <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -940,43 +999,78 @@ const PosVenda = () => {
           )}
         </div>
       </GradientCard>
-      {/* Modals */}
+
+      {/* Modal: Novo Ticket / Novo Onboarding / Nova Pesquisa NPS */}
       <Modal
         isOpen={showModal}
         onClose={closeModal}
-        title={modalType === 'ticket' ? 'Novo Ticket de Suporte' : modalType === 'onboarding' ? 'Novo Onboarding' : ''}
+        title={modalType === 'ticket' ? 'Novo Ticket de Suporte' : modalType === 'onboarding' ? 'Novo Onboarding' : modalType === 'nps' ? 'Nova Pesquisa NPS' : ''}
       >
         {modalType === 'ticket' && (
-          <TicketModal
-            onClose={closeModal}
-            onSubmit={handleSubmitTicket}
-            companies={companies}
-            users={users}
-          />
+          <TicketModal onClose={closeModal} onSubmit={handleSubmitTicket} companies={companies} users={users} />
         )}
         {modalType === 'onboarding' && (
-          <OnboardingModal
-            onClose={closeModal}
-            onSubmit={handleSubmitOnboarding}
-            companies={companies}
-            contracts={contracts}
-            users={users}
+          <OnboardingModal onClose={closeModal} onSubmit={handleSubmitOnboarding} companies={companies} contracts={contracts} users={users} />
+        )}
+        {modalType === 'nps' && (
+          <NPSSurveyModal onClose={closeModal} onSubmit={handleSubmitNPSSurvey} companies={companies} contracts={contracts} />
+        )}
+      </Modal>
+
+      {/* Modal: Detalhes do Onboarding */}
+      <Modal
+        isOpen={!!viewingOnboarding}
+        onClose={() => setViewingOnboarding(null)}
+        title={`Onboarding: ${viewingOnboarding?.company?.name || ''}`}
+      >
+        {viewingOnboarding && (
+          <OnboardingDetailModal
+            onboarding={viewingOnboarding}
+            onAdvanceStep={handleAdvanceStep}
+            advancingStep={advancingStep}
+            onClose={() => setViewingOnboarding(null)}
           />
+        )}
+      </Modal>
+
+      {/* Modal: Detalhes do Ticket */}
+      <Modal
+        isOpen={!!viewingTicket}
+        onClose={() => setViewingTicket(null)}
+        title={`Ticket #${viewingTicket?.number || ''}`}
+      >
+        {viewingTicket && (
+          <TicketDetailModal
+            ticket={viewingTicket}
+            responses={ticketResponses}
+            responseText={responseText}
+            onResponseChange={setResponseText}
+            onSendResponse={handleRespondTicket}
+            sendingResponse={sendingResponse}
+            onClose={() => setViewingTicket(null)}
+          />
+        )}
+      </Modal>
+
+      {/* Modal: Detalhes NPS */}
+      <Modal
+        isOpen={!!viewingNPS}
+        onClose={() => setViewingNPS(null)}
+        title="Detalhes da Pesquisa NPS"
+      >
+        {viewingNPS && (
+          <NPSDetailModal nps={viewingNPS} onClose={() => setViewingNPS(null)} getNPSCategory={getNPSCategory} />
         )}
       </Modal>
     </div>
   );
 };
 
-// Modal para criar novo ticket
+// ============ MODAL COMPONENTS ============
+
 const TicketModal = ({ onClose, onSubmit, companies, users }) => {
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    priority: 'MEDIUM',
-    category: 'Técnico',
-    companyId: '',
-    assignedToId: ''
+    title: '', description: '', priority: 'MEDIUM', category: 'Técnico', companyId: '', assignedToId: ''
   });
 
   const handleSubmit = (e) => {
@@ -988,152 +1082,72 @@ const TicketModal = ({ onClose, onSubmit, companies, users }) => {
     onSubmit(formData);
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   return (
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Título *</label>
+        <input type="text" name="title" value={formData.title} onChange={handleChange} className="crm-input" placeholder="Descreva brevemente o problema" required />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Descrição *</label>
+        <textarea name="description" value={formData.description} onChange={handleChange} rows={4} className="crm-input" placeholder="Descreva detalhadamente o problema ou solicitação" required />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-            Título *
-          </label>
-          <input
-            type="text"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            className="crm-input"
-            placeholder="Descreva brevemente o problema"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-            Descrição *
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={4}
-            className="crm-input"
-            placeholder="Descreva detalhadamente o problema ou solicitação"
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-              Prioridade
-            </label>
-            <select
-              name="priority"
-              value={formData.priority}
-              onChange={handleChange}
-              className="crm-input"
-            >
-              <option value="LOW">Baixa</option>
-              <option value="MEDIUM">Média</option>
-              <option value="HIGH">Alta</option>
-              <option value="URGENT">Urgente</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-              Categoria
-            </label>
-            <select
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              className="crm-input"
-            >
-              <option value="Técnico">Técnico</option>
-              <option value="Comercial">Comercial</option>
-              <option value="Financeiro">Financeiro</option>
-              <option value="Treinamento">Treinamento</option>
-              <option value="Outros">Outros</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-            Cliente *
-          </label>
-          <select
-            name="companyId"
-            value={formData.companyId}
-            onChange={handleChange}
-            className="crm-input"
-            required
-          >
-            <option value="">Selecione o cliente</option>
-            {companies.map(company => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
+          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Prioridade</label>
+          <select name="priority" value={formData.priority} onChange={handleChange} className="crm-input">
+            <option value="LOW">Baixa</option>
+            <option value="MEDIUM">Média</option>
+            <option value="HIGH">Alta</option>
+            <option value="URGENT">Urgente</option>
           </select>
         </div>
-
         <div>
-          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-            Responsável
-          </label>
-          <select
-            name="assignedToId"
-            value={formData.assignedToId}
-            onChange={handleChange}
-            className="crm-input"
-          >
-            <option value="">Atribuir automaticamente</option>
-            {users.map(user => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
-            ))}
+          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Categoria</label>
+          <select name="category" value={formData.category} onChange={handleChange} className="crm-input">
+            <option value="Técnico">Técnico</option>
+            <option value="Comercial">Comercial</option>
+            <option value="Financeiro">Financeiro</option>
+            <option value="Treinamento">Treinamento</option>
+            <option value="Outros">Outros</option>
           </select>
         </div>
-
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="crm-btn crm-btn-secondary"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="crm-btn crm-btn-primary"
-          >
-            Criar Ticket
-          </button>
-        </div>
-      </form>
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Cliente *</label>
+        <select name="companyId" value={formData.companyId} onChange={handleChange} className="crm-input" required>
+          <option value="">Selecione o cliente</option>
+          {companies.map(company => (
+            <option key={company.id} value={company.id}>{company.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Responsável</label>
+        <select name="assignedToId" value={formData.assignedToId} onChange={handleChange} className="crm-input">
+          <option value="">Atribuir automaticamente</option>
+          {users.map(user => (
+            <option key={user.id} value={user.id}>{user.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex justify-end space-x-3 pt-4">
+        <button type="button" onClick={onClose} className="crm-btn crm-btn-secondary">Cancelar</button>
+        <button type="submit" className="crm-btn crm-btn-primary">Criar Ticket</button>
+      </div>
+    </form>
   );
 };
 
-// Modal para criar novo onboarding
 const OnboardingModal = ({ onClose, onSubmit, companies, contracts, users }) => {
   const [formData, setFormData] = useState({
-    companyId: '',
-    contractId: '',
-    assignedToId: '',
-    expectedEndDate: '',
-    description: '',
+    companyId: '', contractId: '', assignedToId: '', expectedEndDate: '', description: '',
     steps: [
-      { title: 'Configuração inicial', description: 'Configurar parâmetros básicos do sistema', order: 1 },
-      { title: 'Treinamento da equipe', description: 'Treinar usuários no uso do sistema', order: 2 },
-      { title: 'Migração de dados', description: 'Importar dados do sistema anterior', order: 3 }
+      { title: 'Configuração inicial', description: 'Configurar parâmetros básicos do sistema' },
+      { title: 'Treinamento da equipe', description: 'Treinar usuários no uso do sistema' },
+      { title: 'Migração de dados', description: 'Importar dados do sistema anterior' }
     ]
   });
 
@@ -1146,199 +1160,377 @@ const OnboardingModal = ({ onClose, onSubmit, companies, contracts, users }) => 
     onSubmit(formData);
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleStepChange = (index, field, value) => {
     const newSteps = [...formData.steps];
     newSteps[index][field] = value;
-    setFormData({
-      ...formData,
-      steps: newSteps
-    });
+    setFormData(prev => ({ ...prev, steps: newSteps }));
   };
 
-  const addStep = () => {
-    setFormData({
-      ...formData,
-      steps: [
-        ...formData.steps,
-        { title: '', description: '', order: formData.steps.length + 1 }
-      ]
-    });
-  };
+  const addStep = () => setFormData(prev => ({
+    ...prev,
+    steps: [...prev.steps, { title: '', description: '' }]
+  }));
 
-  const removeStep = (index) => {
-    const newSteps = formData.steps.filter((_, i) => i !== index);
-    setFormData({
-      ...formData,
-      steps: newSteps.map((step, i) => ({ ...step, order: i + 1 }))
-    });
-  };
+  const removeStep = (index) => setFormData(prev => ({
+    ...prev,
+    steps: prev.steps.filter((_, i) => i !== index)
+  }));
 
   return (
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-              Cliente *
-            </label>
-            <select
-              name="companyId"
-              value={formData.companyId}
-              onChange={handleChange}
-              className="crm-input"
-              required
-            >
-              <option value="">Selecione o cliente</option>
-              {companies.map(company => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-              Contrato
-            </label>
-            <select
-              name="contractId"
-              value={formData.contractId}
-              onChange={handleChange}
-              className="crm-input"
-            >
-              <option value="">Selecione o contrato (opcional)</option>
-              {contracts.map(contract => (
-                <option key={contract.id} value={contract.id}>
-                  {contract.number} - {contract.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-              Responsável *
-            </label>
-            <select
-              name="assignedToId"
-              value={formData.assignedToId}
-              onChange={handleChange}
-              className="crm-input"
-              required
-            >
-              <option value="">Selecione o responsável</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-              Data Prevista de Conclusão *
-            </label>
-            <input
-              type="date"
-              name="expectedEndDate"
-              value={formData.expectedEndDate}
-              onChange={handleChange}
-              className="crm-input"
-              required
-            />
-          </div>
-        </div>
-
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">
-            Descrição
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={3}
-            className="crm-input"
-            placeholder="Descreva o processo de onboarding"
-          />
+          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Cliente *</label>
+          <select name="companyId" value={formData.companyId} onChange={handleChange} className="crm-input" required>
+            <option value="">Selecione o cliente</option>
+            {companies.map(company => (
+              <option key={company.id} value={company.id}>{company.name}</option>
+            ))}
+          </select>
         </div>
-
         <div>
-          <div className="flex justify-between items-center mb-3">
-            <label className="block text-sm font-semibold text-[var(--crm-ink)]">
-              Etapas do Onboarding
-            </label>
-            <button
-              type="button"
-              onClick={addStep}
-              className="crm-btn crm-btn-ghost px-3 py-1.5 text-sm"
-            >
-              + Adicionar Etapa
-            </button>
-          </div>
-          
-          <div className="space-y-3 max-h-60 overflow-y-auto">
-            {formData.steps.map((step, index) => (
-              <div key={index} className="crm-panel-muted p-3">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-sm font-semibold text-[var(--crm-muted)]">Etapa {step.order}</span>
-                  {formData.steps.length > 1 && (
+          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Contrato</label>
+          <select name="contractId" value={formData.contractId} onChange={handleChange} className="crm-input">
+            <option value="">Selecione o contrato (opcional)</option>
+            {contracts.map(contract => (
+              <option key={contract.id} value={contract.id}>{contract.number} - {contract.title}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Responsável *</label>
+          <select name="assignedToId" value={formData.assignedToId} onChange={handleChange} className="crm-input" required>
+            <option value="">Selecione o responsável</option>
+            {users.map(user => (
+              <option key={user.id} value={user.id}>{user.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Data Prevista de Conclusão *</label>
+          <input type="date" name="expectedEndDate" value={formData.expectedEndDate} onChange={handleChange} className="crm-input" required />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Descrição</label>
+        <textarea name="description" value={formData.description} onChange={handleChange} rows={3} className="crm-input" placeholder="Descreva o processo de onboarding" />
+      </div>
+      <div>
+        <div className="flex justify-between items-center mb-3">
+          <label className="block text-sm font-semibold text-[var(--crm-ink)]">Etapas do Onboarding</label>
+          <button type="button" onClick={addStep} className="crm-btn crm-btn-ghost px-3 py-1.5 text-sm">+ Adicionar Etapa</button>
+        </div>
+        <div className="space-y-3 max-h-60 overflow-y-auto">
+          {formData.steps.map((step, index) => (
+            <div key={index} className="crm-panel-muted p-3">
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-sm font-semibold text-[var(--crm-muted)]">Etapa {index + 1}</span>
+                {formData.steps.length > 1 && (
+                  <button type="button" onClick={() => removeStep(index)} className="crm-btn crm-btn-ghost px-2 py-1 text-sm text-red-700 dark:text-red-200">Remover</button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <input type="text" value={step.title} onChange={(e) => handleStepChange(index, 'title', e.target.value)} className="crm-input" placeholder="Título da etapa" />
+                <textarea value={step.description} onChange={(e) => handleStepChange(index, 'description', e.target.value)} rows={2} className="crm-input" placeholder="Descrição da etapa" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex justify-end space-x-3 pt-4">
+        <button type="button" onClick={onClose} className="crm-btn crm-btn-secondary">Cancelar</button>
+        <button type="submit" className="crm-btn crm-btn-primary">Criar Onboarding</button>
+      </div>
+    </form>
+  );
+};
+
+const NPSSurveyModal = ({ onClose, onSubmit, companies, contracts }) => {
+  const [formData, setFormData] = useState({ companyId: '', contractId: '' });
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.companyId) {
+      alert('Selecione o cliente');
+      return;
+    }
+    onSubmit(formData);
+  };
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Cliente *</label>
+        <select name="companyId" value={formData.companyId} onChange={(e) => setFormData(prev => ({ ...prev, companyId: e.target.value }))} className="crm-input" required>
+          <option value="">Selecione o cliente</option>
+          {companies.map(company => (
+            <option key={company.id} value={company.id}>{company.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[var(--crm-ink)] mb-2">Contrato</label>
+        <select name="contractId" value={formData.contractId} onChange={(e) => setFormData(prev => ({ ...prev, contractId: e.target.value }))} className="crm-input">
+          <option value="">Selecione o contrato (opcional)</option>
+          {contracts.map(contract => (
+            <option key={contract.id} value={contract.id}>{contract.number} - {contract.title}</option>
+          ))}
+        </select>
+      </div>
+      <p className="text-sm text-gray-500 bg-blue-50 p-3 rounded-lg">
+        Uma pesquisa de satisfação (NPS) será enviada para o cliente selecionado. O cliente receberá um link para avaliar de 0 a 10.
+      </p>
+      <div className="flex justify-end space-x-3 pt-4">
+        <button type="button" onClick={onClose} className="crm-btn crm-btn-secondary">Cancelar</button>
+        <button type="submit" className="crm-btn crm-btn-primary">Enviar Pesquisa</button>
+      </div>
+    </form>
+  );
+};
+
+const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClose }) => {
+  const completedSteps = onboarding.steps?.filter(s => s.status === 'COMPLETED').length || 0;
+  const totalSteps = onboarding.steps?.length || 0;
+  const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+  const allDone = completedSteps === totalSteps && totalSteps > 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 p-4 rounded-xl">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-semibold text-gray-700">Progresso</span>
+          <span className="text-sm font-bold text-blue-700">{completedSteps}/{totalSteps} etapas</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-3">
+          <div className="bg-blue-600 h-3 rounded-full transition-all" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      {allDone && (
+        <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center">
+          <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+          <p className="text-sm font-bold text-emerald-700">Onboarding concluído!</p>
+          <p className="text-xs text-emerald-600">Todas as etapas foram finalizadas.</p>
+        </div>
+      )}
+
+      <div className="space-y-3 max-h-80 overflow-y-auto">
+        {onboarding.steps?.map((step, index) => {
+          const isCompleted = step.status === 'COMPLETED';
+          const isPending = !isCompleted && step.status !== 'CANCELLED';
+          const isLoading = advancingStep === step.id;
+
+          return (
+            <div key={step.id || index} className={`p-4 rounded-xl border-2 transition-all ${
+              isCompleted ? 'border-emerald-200 bg-emerald-50/50' : 'border-gray-200 bg-white hover:border-blue-200'
+            }`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border-2 border-gray-300 shrink-0 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-gray-400">{step.order || index + 1}</span>
+                      </div>
+                    )}
+                    <span className={`text-sm font-bold ${isCompleted ? 'text-emerald-700' : 'text-gray-800'}`}>
+                      {step.title}
+                    </span>
+                  </div>
+                  {step.description && (
+                    <p className="text-xs text-gray-500 mt-1 ml-7">{step.description}</p>
+                  )}
+                </div>
+                <div className="shrink-0">
+                  {isCompleted ? (
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Concluída</span>
+                  ) : (
                     <button
-                      type="button"
-                      onClick={() => removeStep(index)}
-                      className="crm-btn crm-btn-ghost px-2 py-1 text-sm text-red-700 dark:text-red-200"
+                      onClick={() => onAdvanceStep(onboarding.id, step)}
+                      disabled={!!advancingStep}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
                     >
-                      Remover
+                      {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                      Concluir
                     </button>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={step.title}
-                    onChange={(e) => handleStepChange(index, 'title', e.target.value)}
-                    className="crm-input"
-                    placeholder="Título da etapa"
-                  />
-                  <textarea
-                    value={step.description}
-                    onChange={(e) => handleStepChange(index, 'description', e.target.value)}
-                    rows={2}
-                    className="crm-input"
-                    placeholder="Descrição da etapa"
-                  />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-end pt-2">
+        <button onClick={onClose} className="crm-btn crm-btn-secondary">Fechar</button>
+      </div>
+    </div>
+  );
+};
+
+const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendResponse, sendingResponse, onClose, responses }) => {
+  const slaExpired = ticket.slaDeadline && new Date(ticket.slaDeadline) < new Date();
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Ticket</p>
+          <p className="text-sm font-bold text-gray-900">#{ticket.number}</p>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</p>
+          <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
+            ticket.status === 'OPEN' ? 'bg-red-100 text-red-800' :
+            ticket.status === 'IN_PROGRESS' ? 'bg-sky-100 text-sky-800' :
+            ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-800' :
+            'bg-gray-100 text-gray-800'
+          }`}>{ticket.status}</span>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Prioridade</p>
+          <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
+            ticket.priority === 'URGENT' ? 'bg-red-100 text-red-800' :
+            ticket.priority === 'HIGH' ? 'bg-orange-100 text-orange-800' :
+            ticket.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-800' :
+            'bg-emerald-100 text-emerald-800'
+          }`}>{ticket.priority}</span>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">SLA</p>
+          <div className="flex items-center gap-1.5">
+            <Clock className={`w-3.5 h-3.5 ${slaExpired ? 'text-red-500' : 'text-gray-400'}`} />
+            <span className={`text-xs font-bold ${slaExpired ? 'text-red-600' : 'text-gray-700'}`}>
+              {ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleDateString('pt-BR') : '-'}
+              {slaExpired && ' (Vencido)'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 p-4 rounded-xl">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição</p>
+        <p className="text-sm text-gray-800">{ticket.description}</p>
+      </div>
+
+      {responses && responses.length > 0 && (
+        <div className="border-t border-gray-200 pt-4">
+          <p className="text-sm font-bold text-gray-700 mb-3">Respostas ({responses.length})</p>
+          <div className="space-y-3 max-h-60 overflow-y-auto">
+            {responses.map((resp, idx) => (
+              <div key={resp.id || idx} className="bg-gray-50 p-3 rounded-xl">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-gray-600">{resp.author?.name || 'Desconhecido'}</span>
+                  <span className="text-[10px] text-gray-400">{new Date(resp.createdAt).toLocaleString('pt-BR')}</span>
                 </div>
+                <p className="text-sm text-gray-800">{resp.message}</p>
               </div>
             ))}
           </div>
         </div>
+      )}
 
-        <div className="flex justify-end space-x-3 pt-4">
+      <div className="border-t border-gray-200 pt-4">
+        <p className="text-sm font-bold text-gray-700 mb-3">Adicionar Resposta</p>
+        <textarea
+          value={responseText}
+          onChange={(e) => onResponseChange(e.target.value)}
+          rows={3}
+          className="crm-input w-full"
+          placeholder="Digite sua resposta para o cliente..."
+        />
+        <div className="flex justify-end mt-2">
           <button
-            type="button"
-            onClick={onClose}
-            className="crm-btn crm-btn-secondary"
+            onClick={onSendResponse}
+            disabled={!responseText.trim() || sendingResponse}
+            className="crm-btn crm-btn-primary flex items-center gap-2 disabled:opacity-50"
           >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="crm-btn crm-btn-primary"
-          >
-            Criar Onboarding
+            {sendingResponse ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sendingResponse ? 'Enviando...' : 'Enviar Resposta'}
           </button>
         </div>
-      </form>
+      </div>
+
+      <div className="flex justify-end pt-2">
+        <button onClick={onClose} className="crm-btn crm-btn-secondary">Fechar</button>
+      </div>
+    </div>
+  );
+};
+
+const NPSDetailModal = ({ nps, onClose, getNPSCategory }) => {
+  const category = nps.score !== null ? getNPSCategory(nps.score) : null;
+  const CatIcon = category?.icon || Star;
+
+  return (
+    <div className="space-y-5">
+      <div className="text-center p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl">
+        {nps.score !== null ? (
+          <>
+            <div className="text-5xl font-bold text-gray-900 mb-2">{nps.score}</div>
+            <p className="text-sm text-gray-500">/ 10</p>
+            {category && (
+              <span className={`inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-full text-sm font-bold ${
+                category.label === 'Promotor' ? 'bg-green-100 text-green-800' :
+                category.label === 'Neutro' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                <CatIcon className="w-4 h-4" /> {category.label}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <Star className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-gray-600">Pesquisa ainda não respondida</p>
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cliente</p>
+          <p className="text-sm font-bold text-gray-900">{nps.company?.name}</p>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</p>
+          <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
+            nps.status === 'RESPONDED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+          }`}>{nps.status === 'RESPONDED' ? 'Respondido' : 'Pendente'}</span>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Enviada em</p>
+          <p className="text-sm font-bold text-gray-900">{new Date(nps.sentAt).toLocaleDateString('pt-BR')}</p>
+        </div>
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Respondida em</p>
+          <p className="text-sm font-bold text-gray-900">
+            {nps.respondedAt ? new Date(nps.respondedAt).toLocaleDateString('pt-BR') : '-'}
+          </p>
+        </div>
+      </div>
+
+      {nps.feedback && (
+        <div className="bg-gray-50 p-4 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Feedback do Cliente</p>
+          <p className="text-sm text-gray-700 italic">"{nps.feedback}"</p>
+        </div>
+      )}
+
+      {nps.contract && (
+        <div className="bg-gray-50 p-3 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Contrato</p>
+          <p className="text-sm font-bold text-gray-900">{nps.contract.number} - {nps.contract.title}</p>
+        </div>
+      )}
+
+      <div className="flex justify-end pt-2">
+        <button onClick={onClose} className="crm-btn crm-btn-secondary">Fechar</button>
+      </div>
+    </div>
   );
 };
 

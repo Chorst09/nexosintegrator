@@ -412,7 +412,76 @@ router.put('/nps/:id/respond', async (req, res) => {
   }
 });
 
+// Buscar respostas de um ticket
+router.get('/support/:id/responses', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const ticket = await prisma.supportTicket.findUnique({ where: { id } });
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket não encontrado' });
+    }
+
+    if (req.user.role === 'SELLER' && ticket.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const responses = await prisma.ticketResponse.findMany({
+      where: { ticketId: id },
+      include: {
+        author: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    res.json({ responses });
+  } catch (error) {
+    console.error('Erro ao listar respostas:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 // ===== CHURN ALERTS =====
+
+// Resolver alerta de churn
+router.put('/churn-alerts/:id/resolve', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const alert = await prisma.churnAlert.findUnique({ where: { id } });
+    if (!alert) {
+      return res.status(404).json({ error: 'Alerta não encontrado' });
+    }
+
+    const updated = await prisma.churnAlert.update({
+      where: { id },
+      data: {
+        status: 'RESOLVED'
+      },
+      include: {
+        company: {
+          select: { id: true, name: true, document: true, churnRisk: true }
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    // Resetar churnRisk da empresa
+    await prisma.company.update({
+      where: { id: alert.companyId },
+      data: { churnRisk: 0 }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Erro ao resolver alerta de churn:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
 
 // Listar alertas de churn
 router.get('/churn-alerts', authenticateToken, async (req, res) => {

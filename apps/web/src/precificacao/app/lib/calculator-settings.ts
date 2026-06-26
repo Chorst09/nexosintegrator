@@ -66,11 +66,11 @@ export const loadCalculatorPricingSettings = () => {
     : directTaxes + incomeTaxes;
 
   const commissionPercentage = toNumber(custos.comissaoServico);
+  const markupPercentage = toNumber(custos.margemLucroServico, 20);
   const operatingExpensePercentage = [
     custos.despesasAdmin,
     custos.outrasDespesas,
     custos.despesasVariaveisPercentual,
-    custos.custoFinanceiroMensal,
     custos.depreciacao,
   ].reduce((sum, value) => sum + toNumber(value), 0);
 
@@ -79,5 +79,6 @@ export const loadCalculatorPricingSettings = () => {
     taxRatePercentage: Number(taxRatePercentage.toFixed(2)),
     commissionPercentage: Number(commissionPercentage.toFixed(2)),
     operatingExpensePercentage: Number(operatingExpensePercentage.toFixed(2)),
+    markupPercentage: Number(markupPercentage.toFixed(2)),
   };
 };

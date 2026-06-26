@@ -238,7 +238,7 @@ const buildEmptyPricingInput = (calculatorPricingSettings: ReturnType<typeof loa
   recurringItems: [],
   projectBillingMode: 'standard',
   durationMonths: 36,
-  markupPercentage: 40,
+  markupPercentage: calculatorPricingSettings.markupPercentage,
   taxRatePercentage: calculatorPricingSettings.taxRatePercentage,
   commissionPercentage: calculatorPricingSettings.commissionPercentage,
   operatingExpensePercentage: calculatorPricingSettings.operatingExpensePercentage,
@@ -615,6 +615,7 @@ export default function FinEdgeApp() {
       setHasGeneratedResults(false);
       setParams(prev => ({
         ...prev,
+        markupPercentage: next.markupPercentage,
         taxRatePercentage: next.taxRatePercentage,
         commissionPercentage: next.commissionPercentage,
         operatingExpensePercentage: next.operatingExpensePercentage,
