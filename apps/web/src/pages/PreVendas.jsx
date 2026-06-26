@@ -903,7 +903,7 @@ export default function PreVendas() {
               <FileText className="w-4 h-4" />
               <span className="font-semibold">Solicitações</span>
             </div>
-            <p className="text-xs mt-1 text-gray-300">Controle de pedidos de precificação</p>
+            <p className="text-xs mt-1 text-gray-300">Controle de pedidos de Precificação/Rateio</p>
           </button>
           <button
             type="button"

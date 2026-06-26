@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Receipt, RefreshCcw, Search, DollarSign, ClipboardList, Building2,
   Eye, ArrowRight, Plus, Trash2, X, Upload, AlertCircle, CheckCircle,
-  Calculator, FileText, Loader2, Pencil
+  Calculator, FileText, Loader2, Pencil, BarChart3
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import PageHeader from '../components/PageHeader';
@@ -172,11 +172,11 @@ const buildPrecificacaoPayload = (solicitacao) => {
   };
 };
 
-const openPrecificacaoFromRequest = (solicitacao) => {
+const openPrecificacaoFromRequest = (solicitacao, destination = '/precificacao') => {
   if (!solicitacao) return;
   const cotacaoKey = `cotacao_precificar_${Date.now()}`;
   localStorage.setItem(cotacaoKey, JSON.stringify(buildPrecificacaoPayload(solicitacao)));
-  window.location.href = `/precificacao?cotacaoKey=${encodeURIComponent(cotacaoKey)}`;
+  window.location.href = `${destination}?cotacaoKey=${encodeURIComponent(cotacaoKey)}`;
 };
 
 // ─── sub-component: NovoOrcamentoModal ──────────────────────────────────────
@@ -543,7 +543,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
 
 // ─── sub-component: CustosModal (Orçamentos de Distribuidores) ──────────────
 
-function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
+function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
   const [form, setForm] = useState({
     modalidade: 'VENDA',
     distribuidor: '',
@@ -609,11 +609,16 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
     const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
       ? solicitacao.calculoDetalhes
       : {};
-    openPrecificacaoFromRequest({
+    const payload = {
       ...solicitacao,
       calculoDetalhes: { ...details, cotacoes: custos },
       modalidade: solicitacao?.modalidade || form.modalidade || 'VENDA'
-    });
+    };
+    if (onPrecificar) {
+      onPrecificar(payload);
+    } else {
+      openPrecificacaoFromRequest(payload);
+    }
   };
 
   if (!isOpen) return null;
@@ -744,6 +749,11 @@ export default function OrcamentosPrevendas() {
   const [showNovoModal, setShowNovoModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [costosItem, setCostosItem] = useState(null); // solicitacao to open CustosModal for
+  const [pendingPrecificacaoChoice, setPendingPrecificacaoChoice] = useState(null);
+
+  const requestPrecificacaoChoice = (solicitacao) => {
+    setPendingPrecificacaoChoice(solicitacao);
+  };
 
   const currentUser = getCurrentUser();
 
@@ -1202,7 +1212,7 @@ export default function OrcamentosPrevendas() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => openPrecificacaoFromRequest(item)}
+                      onClick={() => requestPrecificacaoChoice(item)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-200 hover:bg-sky-500/25 whitespace-nowrap"
                     >
                       <Calculator className="h-3.5 w-3.5" /> Ir para Precificação
@@ -1247,7 +1257,61 @@ export default function OrcamentosPrevendas() {
         onClose={() => setCostosItem(null)}
         solicitacao={costosItem}
         onSaved={() => loadRequests()}
+        onPrecificar={requestPrecificacaoChoice}
       />
+
+      {/* escolha de destino da precificação */}
+      {pendingPrecificacaoChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-600/50 bg-[#0a1628] p-6 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-2">Ir para Precificação</h3>
+            <p className="text-sm text-slate-400 mb-5">Escolha o módulo para continuar:</p>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const sol = pendingPrecificacaoChoice;
+                  setPendingPrecificacaoChoice(null);
+                  openPrecificacaoFromRequest(sol, '/calculadoras');
+                }}
+                className="flex w-full items-center gap-4 rounded-xl border border-slate-600/50 bg-slate-800/40 p-4 text-left text-white transition-colors hover:border-sky-500/50 hover:bg-sky-500/10"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400">
+                  <Calculator className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold">Calculadoras</p>
+                  <p className="text-xs text-slate-400">Venda, locação e serviços</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const sol = pendingPrecificacaoChoice;
+                  setPendingPrecificacaoChoice(null);
+                  openPrecificacaoFromRequest(sol, '/precificacao');
+                }}
+                className="flex w-full items-center gap-4 rounded-xl border border-slate-600/50 bg-slate-800/40 p-4 text-left text-white transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/10"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold">Precificação/Rateio</p>
+                  <p className="text-xs text-slate-400">DRE, simulador, analytics e rateio</p>
+                </div>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPendingPrecificacaoChoice(null)}
+              className="mt-4 w-full rounded-lg border border-slate-700/50 px-4 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800/50 hover:text-white"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
