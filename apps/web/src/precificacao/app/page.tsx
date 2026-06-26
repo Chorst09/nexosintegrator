@@ -848,43 +848,53 @@ export default function FinEdgeApp() {
   };
 
   const handleAddDistributorCost = () => {
-    const quantidade = Math.max(1, Number(currentCost.quantidade) || 1);
-    const custoUnitario = Math.max(0, Number(currentCost.custoUnitario) || 0);
+    try {
+      const quantidade = Math.max(1, Number(currentCost.quantidade) || 1);
+      const custoUnitario = Math.max(0, Number(currentCost.custoUnitario) || 0);
 
-    if (!currentBudget.distribuidor.trim() || !currentBudget.numeroOrcamento.trim()) {
+      if (!currentBudget.distribuidor.trim() || !currentBudget.numeroOrcamento.trim()) {
+        setProposalFeedback({
+          type: 'error',
+          text: 'Selecione o distribuidor e informe o número do orçamento antes de adicionar produtos.'
+        });
+        return;
+      }
+
+      if (!currentCost.item.trim() || custoUnitario <= 0) {
+        setProposalFeedback({
+          type: 'error',
+          text: 'Informe item/descrição e custo unitário para adicionar o produto ao orçamento.'
+        });
+        return;
+      }
+
+      const id = Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+
+      const cost: DistributorCost = {
+        ...currentCost,
+        distribuidorId: currentBudget.distribuidorId,
+        distribuidor: currentBudget.distribuidor,
+        numeroOrcamento: currentBudget.numeroOrcamento,
+        id,
+        quantidade,
+        custoUnitario,
+        data: new Date().toISOString()
+      };
+
+      setDistributorCosts(prev => [...prev, cost]);
+      applyDistributorCostToItems(cost);
+      setCurrentCost(prev => ({
+        ...buildEmptyDistributorCost(),
+        modalidade: prev.modalidade
+      }));
+      setProposalFeedback({ type: 'success', text: 'Produto adicionado ao orçamento e aplicado aos itens da precificação.' });
+    } catch (error) {
+      console.error('Erro ao adicionar custo do distribuidor:', error);
       setProposalFeedback({
         type: 'error',
-        text: 'Selecione o distribuidor e informe o número do orçamento antes de adicionar produtos.'
+        text: 'Erro ao adicionar produto. Verifique o console para mais detalhes.'
       });
-      return;
     }
-
-    if (!currentCost.item.trim() || custoUnitario <= 0) {
-      setProposalFeedback({
-        type: 'error',
-        text: 'Informe item/descrição e custo unitário para adicionar o produto ao orçamento.'
-      });
-      return;
-    }
-
-    const cost: DistributorCost = {
-      ...currentCost,
-      distribuidorId: currentBudget.distribuidorId,
-      distribuidor: currentBudget.distribuidor,
-      numeroOrcamento: currentBudget.numeroOrcamento,
-      id: crypto.randomUUID?.() || `orc_${Date.now()}`,
-      quantidade,
-      custoUnitario,
-      data: new Date().toISOString()
-    };
-
-    setDistributorCosts(prev => [...prev, cost]);
-    applyDistributorCostToItems(cost);
-    setCurrentCost(prev => ({
-      ...buildEmptyDistributorCost(),
-      modalidade: prev.modalidade
-    }));
-    setProposalFeedback({ type: 'success', text: 'Produto adicionado ao orçamento e aplicado aos itens da precificação.' });
   };
 
   const handleRemoveDistributorCost = (costId: string) => {
