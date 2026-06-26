@@ -15,10 +15,39 @@ import {
 } from "firebase/firestore";
 import { PricingInput, PricingOutput } from "@/app/lib/pricing-engine";
 
+export interface SavedScenarioMetadata {
+  proposalNumber?: string;
+  clientCompany?: string;
+  clientContact?: string;
+  opportunityNumber?: string;
+  opportunityTitle?: string;
+  allocation?: {
+    id: string;
+    name: string;
+    method: 'proportional' | 'equal';
+    durationMonths: number;
+    totalMonthlyAllocated: number;
+    results: Array<{
+      productId: string;
+      name: string;
+      originalMonthlyCost: number;
+      allocatedMonthlyCost: number;
+      totalMonthlyCost: number;
+      saleMonthlyPrice?: number;
+      percentageOfTotal: number;
+      breakdown: Array<{
+        sourceName: string;
+        amount: number;
+      }>;
+    }>;
+  };
+}
+
 export interface SavedScenario {
   id: string;
   inputs: PricingInput;
   results: PricingOutput;
+  metadata?: SavedScenarioMetadata;
   createdAt: Timestamp;
 }
 
@@ -33,11 +62,12 @@ const readLocalScenarios = (): SavedScenario[] => {
   }
 };
 
-const saveLocalScenario = (inputs: PricingInput, results: PricingOutput) => {
+const saveLocalScenario = (inputs: PricingInput, results: PricingOutput, metadata?: SavedScenarioMetadata) => {
   const scenario = {
     id: crypto.randomUUID?.() || `${Date.now()}`,
     inputs,
     results,
+    metadata,
     createdAt: {
       toDate: () => new Date(),
     },
@@ -49,21 +79,23 @@ const saveLocalScenario = (inputs: PricingInput, results: PricingOutput) => {
 };
 
 export const scenarioService = {
-  async saveScenario(inputs: PricingInput, results: PricingOutput) {
+  async saveScenario(inputs: PricingInput, results: PricingOutput, metadata?: SavedScenarioMetadata) {
     try {
       // Verifica se o Firebase está inicializado (evita erro se as envs estiverem vazias)
       if (!db) {
         console.warn("Firebase não inicializado. O cenário não será salvo.");
-        return saveLocalScenario(inputs, results);
+        return saveLocalScenario(inputs, results, metadata);
       }
 
       // Limpeza profunda para garantir que os dados são serializáveis para o Firestore
       const cleanInputs = JSON.parse(JSON.stringify(inputs));
       const cleanResults = JSON.parse(JSON.stringify(results));
+      const cleanMetadata = JSON.parse(JSON.stringify(metadata || {}));
 
       const docRef = await addDoc(collection(db, SCENARIOS_COLLECTION), {
         inputs: cleanInputs,
         results: cleanResults,
+        metadata: cleanMetadata,
         createdAt: serverTimestamp(),
       });
       return docRef.id;

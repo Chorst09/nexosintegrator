@@ -15,7 +15,8 @@ import {
   ArrowRight,
   FolderOpen,
   Eye,
-  Pencil
+  Pencil,
+  Loader2
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
@@ -315,6 +316,187 @@ const normalizeSavedProposals = (source) => {
   if (Array.isArray(source)) return source;
   if (source && typeof source === 'object') return Object.values(source);
   return [];
+};
+
+const normalizeCalculatorTypeFromModalidade = (modalidade) => {
+  const normalized = String(modalidade || '').toUpperCase();
+  const tabMap = {
+    VENDA: 'vendas',
+    LOCACAO: 'locacao',
+    LOCAÇÃO: 'locacao',
+    SERVICOS: 'servicos',
+    SERVIÇOS: 'servicos',
+    SERVICO: 'servicos'
+  };
+  return tabMap[normalized] || 'vendas';
+};
+
+const normalizeQuotedItem = (item = {}) => ({
+  descricao: item.descricao || item.description || '',
+  quantidade: Math.max(1, toNumber(item.quantidade ?? item.quantity, 1)),
+  custoUnitario: Math.max(0, toNumber(item.custoUnitario ?? item.unitCost ?? item.assetValueBRL ?? item.baseSalary, 0)),
+  modalidade: item.modalidade || ''
+});
+
+const getCotacoesFromSolicitacao = (solicitacao) => {
+  const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+    ? solicitacao.calculoDetalhes
+    : {};
+  return Array.isArray(details.cotacoes) ? details.cotacoes : [];
+};
+
+const getItemsFromSolicitacao = (solicitacao) => (
+  Array.isArray(solicitacao?.items)
+    ? solicitacao.items
+        .map((item) => normalizeQuotedItem({
+          descricao: item.descricao || item.product?.name || '',
+          quantidade: item.quantidade,
+          custoUnitario: item.custoUnitario ?? item.product?.price,
+          modalidade: solicitacao?.modalidade || 'VENDA'
+        }))
+        .filter((item) => item.descricao)
+    : []
+);
+
+const getBudgetItemCount = (solicitacao) => {
+  const quoteItems = getCotacoesFromSolicitacao(solicitacao).reduce((sum, cotacao) => (
+    sum + (Array.isArray(cotacao?.itens) ? cotacao.itens.length : 0)
+  ), 0);
+  return quoteItems || getItemsFromSolicitacao(solicitacao).length;
+};
+
+const buildCotacaoItems = (cotacoes = []) => {
+  const items = [];
+  cotacoes.forEach((cotacao) => {
+    if (!Array.isArray(cotacao.itens)) return;
+    cotacao.itens.forEach((item) => {
+      items.push(normalizeQuotedItem({ ...item, modalidade: item.modalidade || cotacao.modalidade }));
+    });
+  });
+  return items;
+};
+
+const buildDistributorCostsFromCotacoes = (cotacoes = [], solicitacao = {}) => {
+  const costs = [];
+  cotacoes.forEach((cotacao, cotacaoIndex) => {
+    if (!Array.isArray(cotacao.itens)) return;
+    cotacao.itens.forEach((item, itemIndex) => {
+      const normalizedItem = normalizeQuotedItem(item);
+      costs.push({
+        id: `cost_${Date.now()}_${cotacaoIndex}_${itemIndex}`,
+        modalidade: cotacao.modalidade || solicitacao.modalidade || 'VENDA',
+        distribuidor: cotacao.distribuidor || cotacao.fornecedor || 'Fornecedor não especificado',
+        numeroOrcamento: cotacao.numeroOrcamento || solicitacao.numero || '',
+        item: normalizedItem.descricao,
+        quantidade: normalizedItem.quantidade,
+        custoUnitario: normalizedItem.custoUnitario,
+        observacoes: cotacao.observacoesCotacao || cotacao.observacoes || '',
+        data: cotacao.createdAt || new Date().toISOString()
+      });
+    });
+  });
+  return costs;
+};
+
+const buildDistributorCostsFromSolicitacaoItems = (solicitacao = {}) => (
+  getItemsFromSolicitacao(solicitacao).map((item, index) => ({
+    id: `cost_req_${Date.now()}_${index}`,
+    modalidade: item.modalidade || solicitacao.modalidade || 'VENDA',
+    distribuidor: 'Solicitação',
+    numeroOrcamento: solicitacao.__matchedBudgetNumber || solicitacao.numero || '',
+    item: item.descricao,
+    quantidade: item.quantidade,
+    custoUnitario: item.custoUnitario,
+    observacoes: '',
+    data: new Date().toISOString()
+  }))
+);
+
+const buildDistributorCostsFromCotacaoPayload = (cotacaoData = {}) => {
+  const fromCotacoes = buildDistributorCostsFromCotacoes(cotacaoData.todosCustos || [], {
+    numero: cotacaoData.numeroOrcamento,
+    modalidade: cotacaoData.modalidade
+  });
+  if (fromCotacoes.length > 0) return fromCotacoes;
+
+  return Array.isArray(cotacaoData.itens)
+    ? cotacaoData.itens.map((item, index) => {
+        const normalizedItem = normalizeQuotedItem(item);
+        return {
+          id: `cost_${Date.now()}_${index}`,
+          modalidade: item.modalidade || cotacaoData.modalidade || 'VENDA',
+          distribuidor: item.distribuidor || item.fornecedor || cotacaoData.distribuidor || cotacaoData.fornecedor || 'Fornecedor não especificado',
+          numeroOrcamento: item.numeroOrcamento || cotacaoData.numeroOrcamento || '',
+          item: normalizedItem.descricao,
+          quantidade: normalizedItem.quantidade,
+          custoUnitario: normalizedItem.custoUnitario,
+          observacoes: item.observacoes || cotacaoData.observacoesCotacao || cotacaoData.observacoes || '',
+          data: new Date().toISOString()
+        };
+      })
+    : [];
+};
+
+const findBudgetRequestByNumber = async (number) => {
+  const normalizedNumber = String(number || '').trim().toUpperCase();
+  if (!normalizedNumber) return null;
+
+  const response = await fetch(buildApiUrl('/pre-vendas?limit=500'), { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error('Falha ao consultar a Fila de Orçamentos');
+
+  const data = await response.json();
+  const solicitacoes = Array.isArray(data?.solicitacoes)
+    ? data.solicitacoes
+    : Array.isArray(data?.data) ? data.data
+      : Array.isArray(data) ? data
+        : [];
+
+  return solicitacoes.find((solicitacao) => {
+    const requestNumber = String(solicitacao?.numero || '').trim().toUpperCase();
+    if (requestNumber === normalizedNumber) {
+      solicitacao.__matchedBudgetNumber = solicitacao?.numero || number;
+      return true;
+    }
+
+    const matchedQuote = getCotacoesFromSolicitacao(solicitacao).find((cotacao) => (
+      String(cotacao?.numeroOrcamento || '').trim().toUpperCase() === normalizedNumber
+    ));
+    if (matchedQuote) {
+      solicitacao.__matchedBudgetNumber = matchedQuote.numeroOrcamento || number;
+      return true;
+    }
+    return false;
+  }) || null;
+};
+
+const mapQuotedItemsToOperationItems = (items = [], targetTab) => {
+  if (targetTab === 'locacao') {
+    return items.map((item, idx) => ({
+      ...DEFAULT_RENTAL_ITEM,
+      id: `rental_${Date.now()}_${idx}`,
+      description: item.descricao,
+      quantity: item.quantidade,
+      assetValueBRL: item.custoUnitario
+    }));
+  }
+
+  if (targetTab === 'servicos') {
+    return items.map((item, idx) => ({
+      ...DEFAULT_SERVICE_ITEM,
+      id: `service_${Date.now()}_${idx}`,
+      description: item.descricao,
+      estimatedHours: item.quantidade,
+      baseSalary: item.custoUnitario
+    }));
+  }
+
+  return items.map((item, idx) => ({
+    ...DEFAULT_SALE_ITEM,
+    id: `sale_${Date.now()}_${idx}`,
+    description: item.descricao,
+    quantity: item.quantidade,
+    unitCost: item.custoUnitario
+  }));
 };
 
 const normalizeSettings = (settings = {}) => {
@@ -1163,12 +1345,21 @@ export default function Calculadoras({
     }
 
     const tipoNorm = String(tipo || '').toUpperCase();
-    const tabMap = { VENDA: 'vendas', LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVICOS: 'servicos', SERVIÇOS: 'servicos' };
-    const targetTab = tabMap[tipoNorm] || 'vendas';
+    const targetTab = normalizeCalculatorTypeFromModalidade(tipoNorm);
 
     const nextProposalNumber = generateProposalNumber(savedProposals);
-    setProposalForm(buildProposalForm(nextProposalNumber, getManagerDefaults()));
-    setProposalSearchNumber(nextProposalNumber);
+    const proposalNumberFromQuotation = cotacaoData?.numeroOrcamento || nextProposalNumber;
+    const clientName = cotacaoData?.nomeCliente || cotacaoData?.cliente?.nome || '';
+    setProposalForm({
+      ...buildProposalForm(proposalNumberFromQuotation, getManagerDefaults()),
+      number: proposalNumberFromQuotation,
+      clientCompany: clientName,
+      clientContact: cotacaoData?.cliente?.contato || clientName,
+      clientPhone: cotacaoData?.cliente?.telefone || '',
+      clientEmail: cotacaoData?.cliente?.email || '',
+      premises: cotacaoData?.titulo || ''
+    });
+    setProposalSearchNumber(proposalNumberFromQuotation);
     setActiveProposalId(null);
     setProposalFeedback(null);
     setCalculatorStep('proposal');
@@ -1178,23 +1369,24 @@ export default function Calculadoras({
 
     // Pré-preencher itens da cotação
     if (cotacaoData?.itens && Array.isArray(cotacaoData.itens) && cotacaoData.itens.length > 0) {
-      const DEFAULT_ITEM_BASE = targetTab === 'locacao'
-        ? { ...DEFAULT_RENTAL_ITEM }
-        : targetTab === 'servicos'
-          ? { ...DEFAULT_SERVICE_ITEM }
-          : { ...DEFAULT_SALE_ITEM };
-
-      const mappedItems = cotacaoData.itens.map((item, idx) => ({
-        ...DEFAULT_ITEM_BASE,
-        id: `${targetTab}_${Date.now()}_${idx}`,
-        description: item.descricao || item.description || '',
-        unitCost: toNumber(item.custoUnitario || item.unitCost, 0),
-        quantity: Math.max(1, toNumber(item.quantidade || item.quantity, 1))
-      }));
+      const quotedItems = cotacaoData.itens.map(normalizeQuotedItem);
+      const mappedItems = mapQuotedItemsToOperationItems(quotedItems, targetTab);
+      const cotacaoCosts = buildDistributorCostsFromCotacaoPayload(cotacaoData);
 
       if (targetTab === 'locacao') setRentalItems(mappedItems);
       else if (targetTab === 'servicos') setServiceItems(mappedItems);
       else setSaleItems(mappedItems);
+
+      setDistributorCosts(cotacaoCosts);
+      setCurrentBudget({
+        distribuidorId: '',
+        distribuidor: cotacaoCosts[0]?.distribuidor || '',
+        numeroOrcamento: cotacaoCosts[0]?.numeroOrcamento || cotacaoData.numeroOrcamento || ''
+      });
+      setProposalFeedback({
+        type: 'success',
+        text: `Cotação ${cotacaoData.numeroOrcamento || ''} carregada com ${quotedItems.length} item(ns).`
+      });
 
       // Limpar localStorage após uso
       if (cotacaoKey) localStorage.removeItem(cotacaoKey);
@@ -1623,11 +1815,9 @@ export default function Calculadoras({
         const solicitacoes = Array.isArray(data?.solicitacoes) ? data.solicitacoes : [];
         
         // Filtrar solicitações que têm custos/cotações
-        const comCotacoes = solicitacoes.filter((sol) => {
-          const details = sol?.calculoDetalhes && typeof sol.calculoDetalhes === 'object' ? sol.calculoDetalhes : {};
-          const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
-          return cotacoes.length > 0;
-        });
+        const comCotacoes = solicitacoes.filter((sol) => (
+          getCotacoesFromSolicitacao(sol).length > 0 || getItemsFromSolicitacao(sol).length > 0
+        ));
         
         setCotacoesDisponiveis(comCotacoes);
         
@@ -1651,57 +1841,31 @@ export default function Calculadoras({
     setShowCotacaoModal(false);
     
     // Preparar dados da cotação
-    const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
-      ? solicitacao.calculoDetalhes : {};
-    const todosCustos = Array.isArray(details.cotacoes) ? details.cotacoes : [];
-    
-    // Compilar todos os itens de todas as cotações
-    const todosItens = [];
-    todosCustos.forEach((cotacao) => {
-      if (Array.isArray(cotacao.itens)) {
-        cotacao.itens.forEach((item) => {
-          todosItens.push({
-            descricao: item.descricao || '',
-            quantidade: Number(item.quantidade) || 1,
-            custoUnitario: Number(item.custoUnitario) || 0
-          });
-        });
-      }
-    });
-    
-    // NOVO: Carregar custos de distribuidores para a seção de custos
-    const custosDistribuidores = [];
-    todosCustos.forEach((cotacao) => {
-      if (Array.isArray(cotacao.itens)) {
-        cotacao.itens.forEach((item) => {
-          custosDistribuidores.push({
-            id: `cost_${Date.now()}_${Math.random()}`,
-            modalidade: solicitacao.modalidade || 'VENDA',
-            distribuidor: cotacao.fornecedor || 'Fornecedor não especificado',
-            numeroOrcamento: solicitacao.numero || '',
-            item: item.descricao || '',
-            quantidade: Number(item.quantidade) || 1,
-            custoUnitario: Number(item.custoUnitario) || 0,
-            observacoes: cotacao.observacoes || '',
-            data: new Date().toISOString()
-          });
-        });
-      }
-    });
-    setDistributorCosts(custosDistribuidores);
+    const todosCustos = getCotacoesFromSolicitacao(solicitacao);
+    const todosItensCotacao = buildCotacaoItems(todosCustos);
+    const todosItens = todosItensCotacao.length > 0 ? todosItensCotacao : getItemsFromSolicitacao(solicitacao);
+    const custosCotacao = buildDistributorCostsFromCotacoes(todosCustos, solicitacao);
+    const custosDistribuidores = custosCotacao.length > 0 ? custosCotacao : buildDistributorCostsFromSolicitacaoItems(solicitacao);
     
     // Determinar modalidade e tab correta
     const modalidadeItem = solicitacao.modalidade || 'VENDA';
-    const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
-    const targetTab = tipoMap[String(modalidadeItem).toUpperCase()] || 'vendas';
+    const targetTab = normalizeCalculatorTypeFromModalidade(modalidadeItem);
     
     // Resetar form e criar nova proposta
     resetForm();
     setCurrentTab(targetTab);
     const nextNumber = generateProposalNumber(savedProposals);
     const managerDefaults = getManagerDefaults();
-    setProposalForm(buildProposalForm(nextNumber, managerDefaults));
-    setProposalSearchNumber(nextNumber);
+    const proposalNumber = solicitacao.__matchedBudgetNumber || solicitacao.numero || nextNumber;
+    const clientName = solicitacao.nomeCliente || solicitacao.lead?.name || '';
+    setProposalForm({
+      ...buildProposalForm(proposalNumber, managerDefaults),
+      number: proposalNumber,
+      clientCompany: clientName,
+      clientContact: clientName,
+      premises: solicitacao.titulo || ''
+    });
+    setProposalSearchNumber(proposalNumber);
     setActiveProposalId(null);
     setProposalFeedback({
       type: 'success',
@@ -1709,40 +1873,46 @@ export default function Calculadoras({
     });
     setCalculatorStep('proposal');
     clearProposalCart();
+    setDistributorCosts(custosDistribuidores);
+    setCurrentBudget({
+      distribuidorId: '',
+      distribuidor: custosDistribuidores[0]?.distribuidor || '',
+      numeroOrcamento: solicitacao.__matchedBudgetNumber || custosDistribuidores[0]?.numeroOrcamento || solicitacao.numero || ''
+    });
     
     // Mapear itens para o formato correto baseado na modalidade
-    if (targetTab === 'locacao') {
-      const mappedItems = todosItens.map((item, idx) => ({
-        ...DEFAULT_RENTAL_ITEM,
-        id: `rental_${Date.now()}_${idx}`,
-        description: item.descricao,
-        quantity: item.quantidade,
-        assetValueBRL: item.custoUnitario
-      }));
-      setRentalItems(mappedItems);
-    } else if (targetTab === 'servicos') {
-      const mappedItems = todosItens.map((item, idx) => ({
-        ...DEFAULT_SERVICE_ITEM,
-        id: `service_${Date.now()}_${idx}`,
-        description: item.descricao,
-        estimatedHours: item.quantidade,
-        baseSalary: item.custoUnitario
-      }));
-      setServiceItems(mappedItems);
-    } else {
-      const mappedItems = todosItens.map((item, idx) => ({
-        ...DEFAULT_SALE_ITEM,
-        id: `sale_${Date.now()}_${idx}`,
-        description: item.descricao,
-        quantity: item.quantidade,
-        unitCost: item.custoUnitario
-      }));
-      setSaleItems(mappedItems);
-    }
+    const mappedItems = mapQuotedItemsToOperationItems(todosItens, targetTab);
+    if (targetTab === 'locacao') setRentalItems(mappedItems);
+    else if (targetTab === 'servicos') setServiceItems(mappedItems);
+    else setSaleItems(mappedItems);
   };
 
   const criarPropostaVazia = () => {
     createBlankProposal(currentTab);
+  };
+
+  const openBudgetQueueForSelection = async () => {
+    setLoadingCotacoes(true);
+    try {
+      const response = await fetch(buildApiUrl('/pre-vendas?limit=500'), { headers: getAuthHeaders() });
+      if (!response.ok) throw new Error('Falha ao carregar a Fila de Orçamentos');
+      const data = await response.json();
+      const solicitacoes = Array.isArray(data?.solicitacoes)
+        ? data.solicitacoes
+        : Array.isArray(data?.data) ? data.data
+          : Array.isArray(data) ? data
+            : [];
+      const disponiveis = solicitacoes.filter((solicitacao) => (
+        getCotacoesFromSolicitacao(solicitacao).length > 0 || getItemsFromSolicitacao(solicitacao).length > 0
+      ));
+      setCotacoesDisponiveis(disponiveis);
+      setShowCotacaoModal(true);
+      setProposalFeedback(null);
+    } catch (error) {
+      setProposalFeedback({ type: 'error', text: error.message || 'Erro ao carregar a Fila de Orçamentos.' });
+    } finally {
+      setLoadingCotacoes(false);
+    }
   };
 
   // Handlers para Custos (Orçamentos de Distribuidores)
@@ -2257,15 +2427,39 @@ export default function Calculadoras({
     setHomeFeedback('Proposta salva com sucesso');
   };
 
-  const searchProposalByNumber = () => {
+  const searchBudgetByNumber = async (number) => {
+    const normalizedNumber = (number || '').trim().toUpperCase();
+    if (!normalizedNumber) {
+      await openBudgetQueueForSelection();
+      return false;
+    }
+
+    try {
+      setLoadingCotacoes(true);
+      const budgetRequest = await findBudgetRequestByNumber(normalizedNumber);
+      if (budgetRequest) {
+        selecionarCotacao(budgetRequest);
+        return true;
+      }
+      setProposalFeedback({ type: 'error', text: `Orçamento ${normalizedNumber} não encontrado na Fila de Orçamentos.` });
+    } catch (error) {
+      setProposalFeedback({ type: 'error', text: error.message || 'Erro ao buscar orçamento na Fila de Orçamentos.' });
+    } finally {
+      setLoadingCotacoes(false);
+    }
+    return false;
+  };
+
+  const searchProposalByNumber = async () => {
     const normalizedNumber = (proposalSearchNumber || '').trim().toUpperCase();
     if (!normalizedNumber) {
       setProposalFeedback({ type: 'error', text: 'Informe o número da proposta para buscar.' });
       return;
     }
+
     const found = savedProposals.find((proposal) => String(proposal.number || '').toUpperCase() === normalizedNumber);
     if (!found) {
-      setProposalFeedback({ type: 'error', text: `Proposta ${normalizedNumber} não encontrada.` });
+      await searchBudgetByNumber(normalizedNumber);
       return;
     }
     openProposal(found, { keepModalOpen: true });
@@ -3396,13 +3590,24 @@ export default function Calculadoras({
                       </div>
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
-                        <input
-                          type="text"
-                          placeholder="ORC-0001"
-                          value={currentBudget.numeroOrcamento}
-                          onChange={(e) => setCurrentBudget((prev) => ({ ...prev, numeroOrcamento: e.target.value }))}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="ORC-0001"
+                            value={currentBudget.numeroOrcamento}
+                            onChange={(e) => setCurrentBudget((prev) => ({ ...prev, numeroOrcamento: e.target.value }))}
+                            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => searchBudgetByNumber(currentBudget.numeroOrcamento)}
+                            disabled={loadingCotacoes}
+                            className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-cyan-400/40 bg-cyan-500/15 text-cyan-100 transition hover:bg-cyan-500/25 disabled:opacity-60"
+                            title="Buscar na Fila de Orçamentos"
+                          >
+                            {loadingCotacoes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -4375,7 +4580,7 @@ export default function Calculadoras({
                 const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
                   ? solicitacao.calculoDetalhes : {};
                 const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
-                const totalItens = cotacoes.reduce((sum, cot) => sum + (Array.isArray(cot.itens) ? cot.itens.length : 0), 0);
+                const totalItens = getBudgetItemCount(solicitacao);
                 const modalidadeLabel = {
                   VENDA: 'Venda',
                   LOCACAO: 'Locação',

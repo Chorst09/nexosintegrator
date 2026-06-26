@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Calculator, Loader2, Plus, Trash2, Package, Layers, Info } from 'lucide-react';
+import { Calculator, Loader2, Plus, Trash2, Package, Layers, Info, RefreshCw } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,8 @@ interface ProductManagerProps {
   onRemoveItem: (type: 'upfront' | 'recurring', id: string) => void;
   onCalculate: () => void;
   isCalculating: boolean;
+  onProjectBillingModeChange?: (mode: 'standard' | 'monthly') => void;
+  onApplyMonthlyProration?: () => void;
 }
 
 export function ProductManager({ 
@@ -34,7 +36,16 @@ export function ProductManager({
   onRemoveItem,
   onCalculate,
   isCalculating,
+  onProjectBillingModeChange,
+  onApplyMonthlyProration,
 }: ProductManagerProps) {
+  const safeDurationMonths = Math.max(1, Number(params.durationMonths) || 1);
+  const projectBillingMode = params.projectBillingMode || 'standard';
+  const isProratedItem = (item: ProductItem) => String(item.description || '').toLowerCase().includes('rateado de');
+  const itemsToProrate = [...upfrontItems, ...recurringItems.filter((item) => !isProratedItem(item))];
+  const monthlyProrationTotal = itemsToProrate.reduce((sum, item) => (
+    sum + ((Number(item.quantity) || 0) * (Number(item.unitCost) || 0) / safeDurationMonths)
+  ), 0);
   
   const renderItemSection = (title: string, description: string, type: 'upfront' | 'recurring', items: ProductItem[], icon: React.ReactNode) => {
     const total = items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
@@ -187,6 +198,67 @@ export function ProductManager({
             <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Encargos Comerciais</p>
             <p className="font-semibold text-slate-800">{params.operatingExpensePercentage || 0}%</p>
           </div>
+        </div>
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Tipo de Projeto</p>
+              <div className="mt-2 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => onProjectBillingModeChange?.('standard')}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${projectBillingMode === 'standard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  Venda / Setup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onProjectBillingModeChange?.('monthly')}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${projectBillingMode === 'monthly' ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  Projeto mensal
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-[520px]">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Rateio mensal dos produtos</p>
+                <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(monthlyProrationTotal)}</p>
+                <p className="mt-1 text-xs text-slate-500">{itemsToProrate.length} item(ns) em {safeDurationMonths} meses</p>
+              </div>
+              <Button
+                type="button"
+                onClick={onApplyMonthlyProration}
+                disabled={!onApplyMonthlyProration || itemsToProrate.length === 0}
+                className="min-h-[72px] rounded-xl bg-cyan-600 text-white font-bold shadow-md hover:bg-cyan-500 disabled:opacity-50"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Aplicar rateio mensal
+              </Button>
+            </div>
+          </div>
+
+          {projectBillingMode === 'monthly' && itemsToProrate.length > 0 && (
+            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100">
+              <div className="grid min-w-[760px] grid-cols-[1fr_120px_110px_130px_140px] gap-3 bg-slate-50 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <span>Produto</span>
+                <span>Origem</span>
+                <span className="text-right">Qtde</span>
+                <span className="text-right">Custo Unit.</span>
+                <span className="text-right">Mensal Unit.</span>
+              </div>
+              {itemsToProrate.map((item) => (
+                <div key={item.id} className="grid min-w-[760px] grid-cols-[1fr_120px_110px_130px_140px] gap-3 border-t border-slate-100 px-4 py-3 text-sm">
+                  <span className="truncate font-semibold text-slate-700">{item.name}</span>
+                  <span className="text-slate-500">{upfrontItems.some((upfrontItem) => upfrontItem.id === item.id) ? 'Setup' : 'Recorrente'}</span>
+                  <span className="text-right text-slate-500">{item.quantity}</span>
+                  <span className="text-right text-slate-500">{formatCurrency(item.unitCost)}</span>
+                  <span className="text-right font-bold text-cyan-700">{formatCurrency((Number(item.unitCost) || 0) / safeDurationMonths)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <TooltipProvider>
           <Tooltip>

@@ -10,6 +10,7 @@ export interface ProductItem {
 export interface PricingInput {
   upfrontItems: ProductItem[];   // Itens de Setup/CAPEX
   recurringItems: ProductItem[]; // Itens Recorrentes/OPEX
+  projectBillingMode?: 'standard' | 'monthly';
   durationMonths: number;    
   markupPercentage: number;  
   taxRatePercentage: number; 
@@ -52,6 +53,26 @@ export interface PricingOutput {
   };
 }
 
+export const getPricingDenominator = (input: Pick<PricingInput, 'markupPercentage' | 'taxRatePercentage' | 'commissionPercentage' | 'operatingExpensePercentage'>) => {
+  const targetMarginRate = Math.max(0, input.markupPercentage || 0) / 100;
+  const taxRate = Math.max(0, input.taxRatePercentage || 0) / 100;
+  const commissionRate = Math.max(0, input.commissionPercentage || 0) / 100;
+  const operatingExpenseRate = Math.max(0, input.operatingExpensePercentage || 0) / 100;
+  return 1 - targetMarginRate - taxRate - commissionRate - operatingExpenseRate;
+};
+
+export const calculateSalePriceFromMonthlyCost = (
+  monthlyCost: number,
+  input: Pick<PricingInput, 'markupPercentage' | 'taxRatePercentage' | 'commissionPercentage' | 'operatingExpensePercentage'>
+) => {
+  const safeCost = Math.max(0, Number(monthlyCost) || 0);
+  const denominator = getPricingDenominator(input);
+  if (denominator <= 0) {
+    return safeCost * (1 + (Math.max(0, input.markupPercentage || 0) / 100));
+  }
+  return safeCost / denominator;
+};
+
 export class PricingEngine {
   static calculate(input: PricingInput): PricingOutput {
     const { 
@@ -70,9 +91,7 @@ export class PricingEngine {
     const monthlyAmortization = totalUpfrontCost / safeDuration;
     const baseMonthlyCost = monthlyAmortization + totalMonthlyRecurringCost;
     
-    // Fator de markup aplicado sobre o custo base
-    const markupFactor = 1 + (markupPercentage / 100);
-    const finalMonthlyPrice = baseMonthlyCost * markupFactor;
+    const finalMonthlyPrice = calculateSalePriceFromMonthlyCost(baseMonthlyCost, input);
     const totalContractValue = finalMonthlyPrice * safeDuration;
 
     const createLine = (label: string, monthly: number, isSubtotal = false): FinancialStatementLine => ({
@@ -102,7 +121,7 @@ export class PricingEngine {
     const monthlyCashFlow = monthlyNetIncome + monthlyAmortization;
     const paybackMonths = monthlyCashFlow > 0 ? totalUpfrontCost / monthlyCashFlow : (totalUpfrontCost > 0 ? 999 : 0);
 
-    const marginDeductions = (taxRatePercentage / 100) + (commissionPercentage / 100);
+    const marginDeductions = (taxRatePercentage / 100) + (commissionPercentage / 100) + (operatingExpensePercentage / 100);
     const breakEvenMonthlyPrice = marginDeductions < 1 
       ? baseMonthlyCost / (1 - marginDeductions)
       : baseMonthlyCost;

@@ -102,6 +102,83 @@ const buildEmptyForm = (currentUser = {}) => ({
   itens: [nextItemRow()]
 });
 
+const normalizeCotacoesFromRequest = (solicitacao) => {
+  const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+    ? solicitacao.calculoDetalhes
+    : {};
+  return Array.isArray(details.cotacoes) ? details.cotacoes : [];
+};
+
+const normalizeItemsFromRequest = (solicitacao) => (
+  Array.isArray(solicitacao?.items)
+    ? solicitacao.items.map((item) => ({
+        descricao: item.descricao || item.product?.name || '',
+        quantidade: Number(item.quantidade) || 1,
+        custoUnitario: Number(item.custoUnitario ?? item.product?.price) || 0
+      })).filter((item) => item.descricao)
+    : []
+);
+
+const buildPrecificacaoPayload = (solicitacao) => {
+  const todosCustos = normalizeCotacoesFromRequest(solicitacao);
+  const itens = [];
+
+  todosCustos.forEach((cotacao) => {
+    if (!Array.isArray(cotacao.itens)) return;
+    cotacao.itens.forEach((item) => {
+      itens.push({
+        descricao: item.descricao || '',
+        quantidade: Number(item.quantidade) || 1,
+        custoUnitario: Number(item.custoUnitario) || 0,
+        modalidade: cotacao.modalidade || solicitacao?.modalidade || 'VENDA',
+        distribuidor: cotacao.distribuidor || cotacao.fornecedor || '',
+        numeroOrcamento: cotacao.numeroOrcamento || solicitacao?.numero || '',
+        observacoes: cotacao.observacoesCotacao || cotacao.observacoes || ''
+      });
+    });
+  });
+
+  if (itens.length === 0) {
+    normalizeItemsFromRequest(solicitacao).forEach((item) => {
+      itens.push({
+        ...item,
+        modalidade: solicitacao?.modalidade || 'VENDA',
+        distribuidor: 'Solicitação',
+        numeroOrcamento: solicitacao?.numero || '',
+        observacoes: ''
+      });
+    });
+  }
+
+  const modalidade = solicitacao?.modalidade || todosCustos[0]?.modalidade || 'VENDA';
+  const numeroOrcamento = todosCustos[0]?.numeroOrcamento || solicitacao?.numero || '';
+  const nomeCliente = solicitacao?.nomeCliente || solicitacao?.lead?.name || solicitacao?.cliente?.nome || '';
+
+  return {
+    itens: itens.length > 0 ? itens : [{ descricao: '', quantidade: 1, custoUnitario: 0 }],
+    subtotal: itens.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0),
+    modalidade,
+    numeroOrcamento,
+    solicitacaoId: solicitacao?.id || '',
+    titulo: solicitacao?.titulo || '',
+    nomeCliente,
+    cliente: {
+      nome: nomeCliente,
+      contato: solicitacao?.contatoCliente || nomeCliente,
+      telefone: solicitacao?.telefoneCliente || '',
+      email: solicitacao?.emailCliente || ''
+    },
+    todosCustos
+  };
+};
+
+const openPrecificacaoFromRequest = (solicitacao) => {
+  if (!solicitacao) return;
+  const cotacaoKey = `cotacao_precificar_${Date.now()}`;
+  localStorage.setItem(cotacaoKey, JSON.stringify(buildPrecificacaoPayload(solicitacao)));
+  window.location.href = `/precificacao?cotacaoKey=${encodeURIComponent(cotacaoKey)}`;
+};
+
 // ─── sub-component: NovoOrcamentoModal ──────────────────────────────────────
 
 function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null }) {
@@ -529,43 +606,14 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved }) {
   };
 
   const handlePrecificar = () => {
-    if (!solicitacao) return;
-    
-    // Pegar TODOS os custos salvos, não apenas o form atual
     const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
-      ? solicitacao.calculoDetalhes : {};
-    const todosCustos = Array.isArray(details.cotacoes) ? details.cotacoes : [];
-    
-    // Compilar todos os itens de todas as cotações
-    const todosItens = [];
-    todosCustos.forEach((cotacao) => {
-      if (Array.isArray(cotacao.itens)) {
-        cotacao.itens.forEach((item) => {
-          todosItens.push({
-            descricao: item.descricao || '',
-            quantidade: Number(item.quantidade) || 1,
-            custoUnitario: Number(item.custoUnitario) || 0
-          });
-        });
-      }
+      ? solicitacao.calculoDetalhes
+      : {};
+    openPrecificacaoFromRequest({
+      ...solicitacao,
+      calculoDetalhes: { ...details, cotacoes: custos },
+      modalidade: solicitacao?.modalidade || form.modalidade || 'VENDA'
     });
-    
-    // Se não há custos salvos, usar a última modalidade do solicitacao ou do form
-    const modalidadeParaUsar = solicitacao.modalidade || form.modalidade || 'VENDA';
-    const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
-    const tipo = tipoMap[String(modalidadeParaUsar).toUpperCase()] || 'vendas';
-    
-    const cotacaoKey = `cotacao_precificar_${Date.now()}`;
-    localStorage.setItem(cotacaoKey, JSON.stringify({
-      itens: todosItens.length > 0 ? todosItens : [{ descricao: '', quantidade: 1, custoUnitario: 0 }],
-      subtotal: todosItens.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0),
-      modalidade: modalidadeParaUsar,
-      numeroOrcamento: solicitacao.numero || '',
-      solicitacaoId: solicitacao.id,
-      todosCustos: todosCustos // Enviar todos os custos para referência
-    }));
-    
-    window.location.href = `/calculadoras?tipo=${tipo}&cotacaoKey=${cotacaoKey}`;
   };
 
   if (!isOpen) return null;
@@ -1154,42 +1202,7 @@ export default function OrcamentosPrevendas() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        // Pegar os custos salvos da solicitação
-                        const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object'
-                          ? item.calculoDetalhes : {};
-                        const todosCustos = Array.isArray(details.cotacoes) ? details.cotacoes : [];
-                        
-                        // Compilar todos os itens
-                        const todosItens = [];
-                        todosCustos.forEach((cotacao) => {
-                          if (Array.isArray(cotacao.itens)) {
-                            cotacao.itens.forEach((subItem) => {
-                              todosItens.push({
-                                descricao: subItem.descricao || '',
-                                quantidade: Number(subItem.quantidade) || 1,
-                                custoUnitario: Number(subItem.custoUnitario) || 0
-                              });
-                            });
-                          }
-                        });
-                        
-                        // Usar a modalidade da solicitação ou padrão VENDA
-                        const modalidadeItem = item.modalidade || 'VENDA';
-                        const tipoMap = { LOCACAO: 'locacao', LOCAÇÃO: 'locacao', SERVIÇOS: 'servicos', SERVICOS: 'servicos', SERVICO: 'servicos' };
-                        const tipoCalc = tipoMap[String(modalidadeItem).toUpperCase()] || 'vendas';
-                        
-                        const cotacaoKey = `cotacao_precificar_${Date.now()}`;
-                        localStorage.setItem(cotacaoKey, JSON.stringify({
-                          itens: todosItens.length > 0 ? todosItens : [{ descricao: '', quantidade: 1, custoUnitario: 0 }],
-                          subtotal: todosItens.reduce((sum, i) => sum + (i.quantidade * i.custoUnitario), 0),
-                          modalidade: modalidadeItem,
-                          numeroOrcamento: item.numero || '',
-                          solicitacaoId: item.id,
-                          todosCustos: todosCustos
-                        }));
-                        window.location.href = `/calculadoras?tipo=${tipoCalc}&cotacaoKey=${cotacaoKey}`;
-                      }}
+                      onClick={() => openPrecificacaoFromRequest(item)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-200 hover:bg-sky-500/25 whitespace-nowrap"
                     >
                       <Calculator className="h-3.5 w-3.5" /> Ir para Precificação

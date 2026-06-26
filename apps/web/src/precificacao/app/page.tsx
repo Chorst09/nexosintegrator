@@ -11,17 +11,18 @@ import { DREGenerator } from '@/app/components/dre-generator';
 import { AIAnalysis } from '@/app/components/ai-analysis';
 import { AnalyticsDashboard } from '@/app/components/analytics-dashboard';
 import { ProductManager } from '@/app/components/product-manager';
-import { ProductAllocation } from '@/app/components/product-allocation';
+import { ProductAllocation, SavedAllocation } from '@/app/components/product-allocation';
 import { PricingEngine, PricingInput, PricingOutput, ProductItem } from '@/app/lib/pricing-engine';
 import { formatCurrency, formatPercent } from '@/app/lib/formatters';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { scenarioService, SavedScenario } from '@/services/scenario-service';
+import { scenarioService, SavedScenario, SavedScenarioMetadata } from '@/services/scenario-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Toaster } from '@/components/ui/toaster';
 import { loadCalculatorPricingSettings } from '@/app/lib/calculator-settings';
 import { buildApiUrl, getAuthHeaders } from '../../config/api';
+import Modal from '../../components/Modal';
 
 const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
 
@@ -95,6 +96,76 @@ interface SavedPricingProposal {
   updatedAt: string;
 }
 
+interface IncomingQuotationItem {
+  descricao?: string;
+  description?: string;
+  product?: {
+    name?: string;
+    price?: number;
+  };
+  quantidade?: number;
+  quantity?: number;
+  custoUnitario?: number;
+  unitCost?: number;
+  modalidade?: string;
+  distribuidor?: string;
+  fornecedor?: string;
+  numeroOrcamento?: string;
+  observacoes?: string;
+}
+
+interface IncomingQuotation {
+  itens?: IncomingQuotationItem[];
+  todosCustos?: Array<{
+    id?: string;
+    modalidade?: string;
+    distribuidor?: string;
+    fornecedor?: string;
+    numeroOrcamento?: string;
+    observacoesCotacao?: string;
+    observacoes?: string;
+    createdAt?: string;
+    itens?: IncomingQuotationItem[];
+  }>;
+  modalidade?: string;
+  numeroOrcamento?: string;
+  distribuidor?: string;
+  fornecedor?: string;
+  observacoesCotacao?: string;
+  observacoes?: string;
+  solicitacaoId?: string;
+  titulo?: string;
+  nomeCliente?: string;
+  cliente?: {
+    nome?: string;
+    contato?: string;
+    telefone?: string;
+    email?: string;
+  };
+}
+
+interface PreSalesBudgetRequest {
+  id?: string;
+  __matchedBudgetNumber?: string;
+  numero?: string;
+  titulo?: string;
+  modalidade?: string;
+  nomeCliente?: string;
+  lead?: {
+    name?: string;
+  };
+  cliente?: {
+    nome?: string;
+  };
+  contatoCliente?: string;
+  telefoneCliente?: string;
+  emailCliente?: string;
+  items?: IncomingQuotationItem[];
+  calculoDetalhes?: {
+    cotacoes?: IncomingQuotation['todosCustos'];
+  };
+}
+
 const normalizeSavedPricingProposals = (source: unknown): SavedPricingProposal[] => {
   if (Array.isArray(source)) return source as SavedPricingProposal[];
   if (source && typeof source === 'object') return Object.values(source) as SavedPricingProposal[];
@@ -165,6 +236,7 @@ const buildEmptyDistributorBudget = (): DistributorBudgetDraft => ({
 const buildEmptyPricingInput = (calculatorPricingSettings: ReturnType<typeof loadCalculatorPricingSettings>): PricingInput => ({
   upfrontItems: [],
   recurringItems: [],
+  projectBillingMode: 'standard',
   durationMonths: 36,
   markupPercentage: 40,
   taxRatePercentage: calculatorPricingSettings.taxRatePercentage,
@@ -172,6 +244,225 @@ const buildEmptyPricingInput = (calculatorPricingSettings: ReturnType<typeof loa
   operatingExpensePercentage: calculatorPricingSettings.operatingExpensePercentage,
   taxRegimeName: calculatorPricingSettings.regimeName,
 });
+
+const normalizeCostMode = (value?: string): DistributorCostMode => {
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === 'RECORRENTE' || normalized === 'LOCACAO' || normalized === 'LOCAÇÃO' || normalized === 'SERVICOS' || normalized === 'SERVIÇOS') {
+    return 'RECORRENTE';
+  }
+  return 'SETUP';
+};
+
+const buildDistributorCostsFromQuotation = (quotation: IncomingQuotation): DistributorCost[] => {
+  const costs: DistributorCost[] = [];
+  const sourceQuotes = Array.isArray(quotation.todosCustos) ? quotation.todosCustos : [];
+
+  sourceQuotes.forEach((quote, quoteIndex) => {
+    if (!Array.isArray(quote.itens)) return;
+    quote.itens.forEach((item, itemIndex) => {
+      costs.push({
+        id: `cot_${Date.now()}_${quoteIndex}_${itemIndex}`,
+        modalidade: normalizeCostMode(item.modalidade || quote.modalidade || quotation.modalidade),
+        distribuidor: quote.distribuidor || quote.fornecedor || item.distribuidor || item.fornecedor || '',
+        numeroOrcamento: quote.numeroOrcamento || item.numeroOrcamento || quotation.numeroOrcamento || '',
+        item: item.descricao || item.description || '',
+        quantidade: Math.max(1, Number(item.quantidade ?? item.quantity) || 1),
+        custoUnitario: Math.max(0, Number(item.custoUnitario ?? item.unitCost) || 0),
+        observacoes: quote.observacoesCotacao || quote.observacoes || item.observacoes || '',
+        data: quote.createdAt || new Date().toISOString()
+      });
+    });
+  });
+
+  if (costs.length > 0) return costs;
+
+  return (quotation.itens || []).map((item, index) => ({
+    id: `cot_${Date.now()}_${index}`,
+    modalidade: normalizeCostMode(item.modalidade || quotation.modalidade),
+    distribuidor: item.distribuidor || item.fornecedor || quotation.distribuidor || quotation.fornecedor || '',
+    numeroOrcamento: item.numeroOrcamento || quotation.numeroOrcamento || '',
+    item: item.descricao || item.description || '',
+    quantidade: Math.max(1, Number(item.quantidade ?? item.quantity) || 1),
+    custoUnitario: Math.max(0, Number(item.custoUnitario ?? item.unitCost) || 0),
+    observacoes: item.observacoes || quotation.observacoesCotacao || quotation.observacoes || '',
+    data: new Date().toISOString()
+  }));
+};
+
+const buildPricingItemsFromCosts = (costs: DistributorCost[]) => {
+  const toProductItem = (cost: DistributorCost): ProductItem => ({
+    id: cost.id,
+    name: cost.item || cost.numeroOrcamento || 'Item do orçamento',
+    description: [
+      cost.distribuidor ? `Distribuidor: ${cost.distribuidor}` : '',
+      cost.numeroOrcamento ? `Orçamento: ${cost.numeroOrcamento}` : '',
+      cost.observacoes
+    ].filter(Boolean).join(' | '),
+    quantity: Math.max(1, Number(cost.quantidade) || 1),
+    unitCost: Math.max(0, Number(cost.custoUnitario) || 0)
+  });
+
+  return {
+    upfrontItems: costs.filter(cost => cost.modalidade !== 'RECORRENTE').map(toProductItem),
+    recurringItems: costs.filter(cost => cost.modalidade === 'RECORRENTE').map(toProductItem)
+  };
+};
+
+const getBudgetQuotesFromRequest = (request?: PreSalesBudgetRequest) => {
+  const details = request?.calculoDetalhes && typeof request.calculoDetalhes === 'object'
+    ? request.calculoDetalhes
+    : {};
+  return Array.isArray(details.cotacoes) ? details.cotacoes : [];
+};
+
+const getBudgetItemsFromRequest = (request?: PreSalesBudgetRequest): IncomingQuotationItem[] => (
+  Array.isArray(request?.items)
+    ? request.items
+        .map((item) => ({
+          descricao: item.descricao || item.product?.name || '',
+          quantidade: Math.max(1, Number(item.quantidade ?? item.quantity) || 1),
+          custoUnitario: Math.max(0, Number(item.custoUnitario ?? item.unitCost ?? item.product?.price) || 0),
+          modalidade: item.modalidade || request?.modalidade || 'VENDA',
+          distribuidor: 'Solicitação',
+          numeroOrcamento: request?.__matchedBudgetNumber || request?.numero || ''
+        }))
+        .filter((item) => item.descricao)
+    : []
+);
+
+const getBudgetItemCount = (request?: PreSalesBudgetRequest) => {
+  const quoteItems = getBudgetQuotesFromRequest(request).reduce((sum, quote) => (
+    sum + (Array.isArray(quote?.itens) ? quote.itens.length : 0)
+  ), 0);
+  return quoteItems || getBudgetItemsFromRequest(request).length;
+};
+
+const buildQuotationFromBudgetRequest = (request: PreSalesBudgetRequest): IncomingQuotation => {
+  const todosCustos = getBudgetQuotesFromRequest(request);
+  const numeroOrcamento = request.__matchedBudgetNumber || todosCustos[0]?.numeroOrcamento || request.numero || '';
+  const nomeCliente = request.nomeCliente || request.lead?.name || request.cliente?.nome || '';
+  const requestItems = getBudgetItemsFromRequest(request);
+
+  return {
+    itens: todosCustos.length > 0
+      ? todosCustos.flatMap((quote) => Array.isArray(quote?.itens) ? quote.itens : [])
+      : requestItems,
+    todosCustos,
+    modalidade: request.modalidade || todosCustos[0]?.modalidade || 'VENDA',
+    numeroOrcamento,
+    solicitacaoId: request.id || '',
+    titulo: request.titulo || '',
+    nomeCliente,
+    cliente: {
+      nome: nomeCliente,
+      contato: request.contatoCliente || nomeCliente,
+      telefone: request.telefoneCliente || '',
+      email: request.emailCliente || ''
+    }
+  };
+};
+
+const findBudgetRequestByNumber = async (number: string): Promise<PreSalesBudgetRequest | null> => {
+  const normalizedNumber = String(number || '').trim().toUpperCase();
+  if (!normalizedNumber) return null;
+
+  const response = await fetch(buildApiUrl('/pre-vendas?limit=500'), { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error('Falha ao consultar a Fila de Orçamentos');
+
+  const data = await response.json();
+  const requests: PreSalesBudgetRequest[] = Array.isArray(data?.solicitacoes)
+    ? data.solicitacoes
+    : Array.isArray(data?.data) ? data.data
+      : Array.isArray(data) ? data
+        : [];
+
+  return requests.find((request) => {
+    const requestNumber = String(request?.numero || '').trim().toUpperCase();
+    if (requestNumber === normalizedNumber) {
+      request.__matchedBudgetNumber = request.numero || number;
+      return true;
+    }
+
+    const matchedQuote = getBudgetQuotesFromRequest(request).find((quote) => (
+      String(quote?.numeroOrcamento || '').trim().toUpperCase() === normalizedNumber
+    ));
+    if (matchedQuote) {
+      request.__matchedBudgetNumber = matchedQuote.numeroOrcamento || number;
+      return true;
+    }
+    return false;
+  }) || null;
+};
+
+const isMonthlyProratedPricing = (input?: PricingInput) => {
+  if (!input) return false;
+  if (input.projectBillingMode === 'monthly') return true;
+  return (input.recurringItems || []).some((item) => (
+    String(item.description || '').toLowerCase().includes('rateado de')
+  ));
+};
+
+const isMonthlyProratedScenario = (scenario: SavedScenario) => (
+  Boolean(scenario.metadata?.allocation) || isMonthlyProratedPricing(scenario.inputs)
+);
+
+const buildScenarioMetadataFromProposalForm = (form: PricingProposalForm): SavedScenarioMetadata => ({
+  proposalNumber: form.number.trim(),
+  clientCompany: form.clientCompany.trim(),
+  clientContact: form.clientContact.trim(),
+  opportunityNumber: form.opportunityNumber.trim(),
+  opportunityTitle: form.opportunityTitle.trim()
+});
+
+const stringifyPricingInput = (input?: PricingInput) => {
+  try {
+    return JSON.stringify(input || {});
+  } catch {
+    return '';
+  }
+};
+
+const isProratedProductItem = (item?: ProductItem) => (
+  String(item?.description || '').toLowerCase().includes('rateado de')
+);
+
+const buildMonthlyProratedParams = (input: PricingInput): PricingInput => {
+  const duration = Math.max(1, Number(input.durationMonths) || 1);
+  const now = Date.now();
+  const alreadyMonthlyItems = input.recurringItems.filter(isProratedProductItem);
+  const itemsToProrate = [
+    ...input.upfrontItems,
+    ...input.recurringItems.filter((item) => !isProratedProductItem(item))
+  ];
+
+  if (itemsToProrate.length === 0) {
+    return {
+      ...input,
+      projectBillingMode: 'monthly',
+      upfrontItems: [],
+      recurringItems: alreadyMonthlyItems
+    };
+  }
+
+  const proratedItems = itemsToProrate.map((item, index) => {
+    const originalUnitCost = Math.max(0, Number(item.unitCost) || 0);
+    const monthlyUnitCost = Math.round((originalUnitCost / duration) * 100) / 100;
+    const sourceDescription = item.description ? `${item.description} | ` : '';
+    return {
+      ...item,
+      id: isProratedProductItem(item) ? item.id : `monthly_${item.id}_${now}_${index}`,
+      description: `${sourceDescription}Rateado de ${formatCurrency(originalUnitCost)} em ${duration} meses`,
+      unitCost: monthlyUnitCost
+    };
+  });
+
+  return {
+    ...input,
+    projectBillingMode: 'monthly',
+    upfrontItems: [],
+    recurringItems: [...alreadyMonthlyItems, ...proratedItems]
+  };
+};
 
 export default function FinEdgeApp() {
   const { toast } = useToast();
@@ -187,6 +478,9 @@ export default function FinEdgeApp() {
   const [opportunities, setOpportunities] = useState<OpportunitySummary[]>([]);
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
   const [proposalFeedback, setProposalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isBudgetSearchLoading, setIsBudgetSearchLoading] = useState(false);
+  const [showBudgetQueueModal, setShowBudgetQueueModal] = useState(false);
+  const [budgetQueue, setBudgetQueue] = useState<PreSalesBudgetRequest[]>([]);
   const [proposalForm, setProposalForm] = useState<PricingProposalForm>(() => buildProposalForm('', getManagerDefaults()));
   const [preSalesDistributors, setPreSalesDistributors] = useState<DistributorSummary[]>([]);
   const [currentBudget, setCurrentBudget] = useState<DistributorBudgetDraft>(() => buildEmptyDistributorBudget());
@@ -254,6 +548,66 @@ export default function FinEdgeApp() {
     const timer = window.setTimeout(() => setProposalFeedback(null), 4200);
     return () => window.clearTimeout(timer);
   }, [proposalFeedback]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const cotacaoKey = urlParams.get('cotacaoKey');
+    if (!cotacaoKey) return;
+
+    try {
+      const raw = localStorage.getItem(cotacaoKey);
+      const quotation: IncomingQuotation | null = raw ? JSON.parse(raw) : null;
+      if (!quotation) return;
+
+      const costs = buildDistributorCostsFromQuotation(quotation);
+      const pricingItems = buildPricingItemsFromCosts(costs);
+      const proposalNumber = quotation.numeroOrcamento || generateProposalNumber(savedPricingProposals);
+      const clientName = quotation.nomeCliente || quotation.cliente?.nome || '';
+      const clientContact = quotation.cliente?.contato || clientName;
+
+      const nextForm: PricingProposalForm = {
+        ...buildProposalForm(proposalNumber, getManagerDefaults()),
+        number: proposalNumber,
+        opportunityTitle: quotation.titulo || '',
+        clientCompany: clientName,
+        clientContact,
+        clientPhone: quotation.cliente?.telefone || '',
+        clientEmail: quotation.cliente?.email || ''
+      };
+
+      const nextParams: PricingInput = {
+        ...buildEmptyPricingInput(loadCalculatorPricingSettings()),
+        upfrontItems: pricingItems.upfrontItems,
+        recurringItems: pricingItems.recurringItems
+      };
+
+      setProposalForm(nextForm);
+      setProposalSearchNumber(proposalNumber);
+      setActiveProposalId(null);
+      setCurrentBudget({
+        distribuidorId: '',
+        distribuidor: costs[0]?.distribuidor || '',
+        numeroOrcamento: costs[0]?.numeroOrcamento || quotation.numeroOrcamento || ''
+      });
+      setCurrentCost(buildEmptyDistributorCost());
+      setDistributorCosts(costs);
+      setParams(nextParams);
+      setResults(PricingEngine.calculate(nextParams));
+      setHasGeneratedResults(false);
+      setSimulatorStep('proposal');
+      setActiveTab('simulator');
+      setProposalFeedback({
+        type: 'success',
+        text: `Orçamento ${proposalNumber} carregado com ${costs.length} custo(s) para precificação.`
+      });
+      localStorage.removeItem(cotacaoKey);
+    } catch (error) {
+      console.error('Erro ao carregar orçamento enviado para precificação:', error);
+      setProposalFeedback({ type: 'error', text: 'Não foi possível carregar os dados do orçamento para precificação.' });
+    } finally {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [savedPricingProposals]);
 
   useEffect(() => {
     const refreshCalculatorSettings = () => {
@@ -327,9 +681,31 @@ export default function FinEdgeApp() {
     }));
   };
 
+  const handleProjectBillingModeChange = (mode: 'standard' | 'monthly') => {
+    setHasGeneratedResults(false);
+    setParams(prev => ({
+      ...prev,
+      projectBillingMode: mode
+    }));
+  };
+
+  const handleApplyMonthlyProration = () => {
+    setHasGeneratedResults(false);
+    setParams(prev => buildMonthlyProratedParams(prev));
+    setProposalFeedback({
+      type: 'success',
+      text: 'Projeto mensal aplicado: produtos rateados pelo prazo do contrato.'
+    });
+  };
+
   const handleCalculate = useCallback(async () => {
+    const effectiveParams = params.projectBillingMode === 'monthly'
+      ? buildMonthlyProratedParams(params)
+      : params;
+
     // 1. CÁLCULO LOCAL IMEDIATO - Os números na tela mudam na hora
-    const newResults = PricingEngine.calculate(params);
+    const newResults = PricingEngine.calculate(effectiveParams);
+    setParams(effectiveParams);
     setResults(newResults);
     setHasGeneratedResults(true);
     
@@ -338,7 +714,7 @@ export default function FinEdgeApp() {
     
     try {
       // 2. TENTA SALVAR NO FIREBASE
-      await scenarioService.saveScenario(params, newResults);
+      await scenarioService.saveScenario(effectiveParams, newResults, buildScenarioMetadataFromProposalForm(proposalForm));
       await loadHistory();
       
       toast({
@@ -355,7 +731,42 @@ export default function FinEdgeApp() {
     } finally {
       setIsCalculating(false);
     }
-  }, [params, toast, loadHistory]);
+  }, [params, proposalForm, toast, loadHistory]);
+
+  const handleAllocationSavedToHistory = useCallback(async (allocation: SavedAllocation) => {
+    const scenarioParams: PricingInput = {
+      ...params,
+      projectBillingMode: 'monthly'
+    };
+    const scenarioResults = PricingEngine.calculate(scenarioParams);
+
+    try {
+      await scenarioService.saveScenario(scenarioParams, scenarioResults, {
+        ...buildScenarioMetadataFromProposalForm(proposalForm),
+        allocation: {
+          id: allocation.id,
+          name: allocation.name,
+          method: allocation.method,
+          durationMonths: allocation.durationMonths,
+          totalMonthlyAllocated: allocation.totalMonthlyAllocated,
+          results: allocation.results
+        }
+      });
+      await loadHistory();
+      setResults(scenarioResults);
+      setHasGeneratedResults(true);
+      setProposalFeedback({
+        type: 'success',
+        text: `Rateio ${allocation.name} salvo no Histórico da Precificação.`
+      });
+    } catch (error) {
+      console.error('Erro ao salvar rateio no histórico:', error);
+      setProposalFeedback({
+        type: 'error',
+        text: 'Rateio salvo na aba, mas não foi possível enviar para o Histórico.'
+      });
+    }
+  }, [params, proposalForm, loadHistory]);
 
   const persistPricingProposals = (items: SavedPricingProposal[]) => {
     const ordered = [...items].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
@@ -500,6 +911,103 @@ export default function FinEdgeApp() {
     }));
   };
 
+  const applyBudgetRequestToPricing = (request: PreSalesBudgetRequest) => {
+    const quotation = buildQuotationFromBudgetRequest(request);
+    const costs = buildDistributorCostsFromQuotation(quotation);
+    const pricingItems = buildPricingItemsFromCosts(costs);
+    const proposalNumber = quotation.numeroOrcamento || generateProposalNumber(savedPricingProposals);
+    const clientName = quotation.nomeCliente || quotation.cliente?.nome || '';
+    const clientContact = quotation.cliente?.contato || clientName;
+    const nextParams: PricingInput = {
+      ...buildEmptyPricingInput(loadCalculatorPricingSettings()),
+      upfrontItems: pricingItems.upfrontItems,
+      recurringItems: pricingItems.recurringItems
+    };
+
+    setProposalForm({
+      ...buildProposalForm(proposalNumber, getManagerDefaults()),
+      number: proposalNumber,
+      opportunityTitle: quotation.titulo || '',
+      clientCompany: clientName,
+      clientContact,
+      clientPhone: quotation.cliente?.telefone || '',
+      clientEmail: quotation.cliente?.email || ''
+    });
+    setProposalSearchNumber(proposalNumber);
+    setActiveProposalId(null);
+    setCurrentBudget({
+      distribuidorId: '',
+      distribuidor: costs[0]?.distribuidor || '',
+      numeroOrcamento: costs[0]?.numeroOrcamento || proposalNumber
+    });
+    setCurrentCost(buildEmptyDistributorCost());
+    setDistributorCosts(costs);
+    setParams(nextParams);
+    setResults(PricingEngine.calculate(nextParams));
+    setHasGeneratedResults(false);
+    setSimulatorStep('proposal');
+    setActiveTab('simulator');
+    setProposalFeedback({
+      type: 'success',
+      text: `Orçamento ${proposalNumber} carregado da Fila de Orçamentos com ${costs.length} custo(s).`
+    });
+  };
+
+  const openBudgetQueueForSelection = async () => {
+    try {
+      setIsBudgetSearchLoading(true);
+      const response = await fetch(buildApiUrl('/pre-vendas?limit=500'), { headers: getAuthHeaders() });
+      if (!response.ok) throw new Error('Falha ao carregar a Fila de Orçamentos');
+
+      const data = await response.json();
+      const requests: PreSalesBudgetRequest[] = Array.isArray(data?.solicitacoes)
+        ? data.solicitacoes
+        : Array.isArray(data?.data) ? data.data
+          : Array.isArray(data) ? data
+            : [];
+
+      setBudgetQueue(requests.filter((request) => (
+        getBudgetQuotesFromRequest(request).length > 0 || getBudgetItemsFromRequest(request).length > 0
+      )));
+      setShowBudgetQueueModal(true);
+      setProposalFeedback(null);
+    } catch (error) {
+      setProposalFeedback({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Erro ao carregar a Fila de Orçamentos.'
+      });
+    } finally {
+      setIsBudgetSearchLoading(false);
+    }
+  };
+
+  const searchBudgetRequestByNumber = async (number: string) => {
+    const normalizedNumber = String(number || '').trim();
+    if (!normalizedNumber) {
+      await openBudgetQueueForSelection();
+      return false;
+    }
+
+    try {
+      setIsBudgetSearchLoading(true);
+      const request = await findBudgetRequestByNumber(normalizedNumber);
+      if (!request) {
+        setProposalFeedback({ type: 'error', text: `Orçamento ${normalizedNumber} não encontrado na Fila de Orçamentos.` });
+        return false;
+      }
+      applyBudgetRequestToPricing(request);
+      return true;
+    } catch (error) {
+      setProposalFeedback({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Erro ao buscar orçamento na Fila de Orçamentos.'
+      });
+      return false;
+    } finally {
+      setIsBudgetSearchLoading(false);
+    }
+  };
+
   const savePricingProposal = () => {
     const proposalNumber = (proposalForm.number || '').trim() || generateProposalNumber(savedPricingProposals);
     const now = new Date().toISOString();
@@ -545,7 +1053,7 @@ export default function FinEdgeApp() {
     setProposalFeedback({ type: 'success', text: `Precificação ${proposalNumber} salva.` });
   };
 
-  const searchPricingProposal = () => {
+  const searchPricingProposal = async () => {
     const numberTyped = proposalSearchNumber.trim();
     if (!numberTyped) {
       setProposalFeedback({ type: 'error', text: 'Informe o número da proposta para buscar.' });
@@ -554,7 +1062,7 @@ export default function FinEdgeApp() {
 
     const found = savedPricingProposals.find(item => item.number === numberTyped);
     if (!found) {
-      setProposalFeedback({ type: 'error', text: `Nenhuma precificação encontrada para ${numberTyped}.` });
+      await searchBudgetRequestByNumber(numberTyped);
       return;
     }
 
@@ -629,14 +1137,54 @@ export default function FinEdgeApp() {
     setViewingScenario(item);
   };
 
+  const findSavedProposalForScenario = (item: SavedScenario) => {
+    const metadataNumber = item.metadata?.proposalNumber;
+    if (metadataNumber) {
+      const byNumber = savedPricingProposals.find((proposal) => proposal.number === metadataNumber);
+      if (byNumber) return byNumber;
+    }
+
+    const itemParams = stringifyPricingInput(item.inputs);
+    return savedPricingProposals.find((proposal) => (
+      stringifyPricingInput(proposal.params) === itemParams
+    ));
+  };
+
+  const getScenarioMetadata = (item: SavedScenario): SavedScenarioMetadata => {
+    const savedProposal = findSavedProposalForScenario(item);
+    const matchesCurrentForm = stringifyPricingInput(item.inputs) === stringifyPricingInput(params);
+    return {
+      proposalNumber: item.metadata?.proposalNumber || savedProposal?.number || (matchesCurrentForm ? proposalForm.number : '') || '',
+      clientCompany: item.metadata?.clientCompany || savedProposal?.proposalForm.clientCompany || (matchesCurrentForm ? proposalForm.clientCompany : '') || '',
+      clientContact: item.metadata?.clientContact || savedProposal?.proposalForm.clientContact || (matchesCurrentForm ? proposalForm.clientContact : '') || '',
+      opportunityNumber: item.metadata?.opportunityNumber || savedProposal?.proposalForm.opportunityNumber || (matchesCurrentForm ? proposalForm.opportunityNumber : '') || '',
+      opportunityTitle: item.metadata?.opportunityTitle || savedProposal?.proposalForm.opportunityTitle || (matchesCurrentForm ? proposalForm.opportunityTitle : '') || ''
+    };
+  };
+
   const handleEditScenario = (item: SavedScenario) => {
+    const savedProposal = findSavedProposalForScenario(item);
+    const metadata = getScenarioMetadata(item);
+    const proposalNumber = metadata.proposalNumber || savedProposal?.number || proposalForm.number || generateProposalNumber(savedPricingProposals);
+    const baseProposalForm = savedProposal?.proposalForm || buildProposalForm(proposalNumber, getManagerDefaults());
+
     setParams(item.inputs);
     setResults(item.results);
+    setProposalForm({
+      ...baseProposalForm,
+      number: proposalNumber,
+      clientCompany: metadata.clientCompany || baseProposalForm.clientCompany || '',
+      clientContact: metadata.clientContact || baseProposalForm.clientContact || '',
+      opportunityNumber: metadata.opportunityNumber || baseProposalForm.opportunityNumber || '',
+      opportunityTitle: metadata.opportunityTitle || baseProposalForm.opportunityTitle || ''
+    });
+    setProposalSearchNumber(proposalNumber);
+    setActiveProposalId(savedProposal?.id || null);
     setHasGeneratedResults(true);
     setViewingScenario(null);
     setSimulatorStep('calculation');
     setActiveTab('simulator');
-    toast({ title: "Cenário Restaurado", description: "Parâmetros aplicados com sucesso." });
+    toast({ title: "Cenário Restaurado", description: "Cálculo e dados do cliente aplicados com sucesso." });
   };
 
   const handleDeleteScenario = async (id: string) => {
@@ -657,6 +1205,152 @@ export default function FinEdgeApp() {
     [calculatorPricingSettings]
   );
   const displayedResults = hasGeneratedResults ? results : emptyResults;
+  const standardPricingHistory = useMemo(
+    () => history.filter((item) => !isMonthlyProratedScenario(item)),
+    [history]
+  );
+  const proratedPricingHistory = useMemo(
+    () => history.filter((item) => isMonthlyProratedScenario(item)),
+    [history]
+  );
+
+  const renderHistoryCard = (item: SavedScenario, variant: 'standard' | 'prorated') => {
+    const metadata = getScenarioMetadata(item);
+
+    return (
+    <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 transition-all group hover:border-primary/20">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div
+            className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
+            onClick={() => handleEditScenario(item)}
+          >
+            <div className={cn(
+              "p-3 rounded-xl shrink-0",
+              variant === 'prorated' ? "bg-cyan-50 text-cyan-700" : "bg-primary/10 text-primary"
+            )}>
+              <Clock size={20} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
+                </p>
+                <span className={cn(
+                  "rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest",
+                  variant === 'prorated'
+                    ? "border-cyan-200 bg-cyan-50 text-cyan-700"
+                    : "border-slate-200 bg-slate-50 text-slate-500"
+                )}>
+                  {variant === 'prorated' ? 'Com rateio' : 'Precificação'}
+                </span>
+              </div>
+              <p className="text-lg font-bold text-slate-900 truncate">
+                {formatCurrency(item.results.finalMonthlyPrice)} <span className="text-sm font-normal text-slate-500">/mês</span>
+              </p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-700">
+                Cliente: {metadata.clientCompany || 'Cliente não informado'}
+              </p>
+              {metadata.clientContact ? (
+                <p className="truncate text-xs font-semibold text-slate-500">
+                  Contato: {metadata.clientContact}
+                </p>
+              ) : null}
+              {item.metadata?.allocation ? (
+                <p className="mt-1 truncate text-xs font-bold text-cyan-700">
+                  Rateio: {item.metadata.allocation.name} · {formatCurrency(item.metadata.allocation.totalMonthlyAllocated)}/mês
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-5 sm:gap-6 ml-16 sm:ml-0">
+            <div className="text-center">
+              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Setup</p>
+              <p className="text-sm font-bold text-slate-800">{item.inputs.upfrontItems?.length || 0}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Rec.</p>
+              <p className="text-sm font-bold text-slate-800">{item.inputs.recurringItems?.length || 0}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Margem</p>
+              <p className={cn("text-sm font-bold", item.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
+                {formatPercent(item.results.metrics.ebitdaMargin)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 ml-16 sm:ml-0">
+            <button
+              onClick={() => handleViewScenario(item)}
+              title="Visualizar em PDF"
+              className="h-9 px-3.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-sky-100 hover:border-sky-300 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" /> PDF
+            </button>
+            <button
+              onClick={() => handleEditScenario(item)}
+              title="Editar cenário"
+              className="h-9 px-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Editar
+            </button>
+            {deleteConfirmId === item.id ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleDeleteScenario(item.id)}
+                  title="Confirmar exclusão"
+                  className="h-9 rounded-xl border border-red-300 bg-red-100 px-3 text-[11px] font-bold text-red-700 inline-flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  title="Cancelar"
+                  className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-slate-700 inline-flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setDeleteConfirmId(item.id)}
+                title="Excluir cenário"
+                className="h-9 px-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-red-100 hover:border-red-300 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Excluir
+              </button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+    );
+  };
+
+  const renderHistorySection = (
+    title: string,
+    description: string,
+    items: SavedScenario[],
+    variant: 'standard' | 'prorated'
+  ) => {
+    if (items.length === 0) return null;
+    return (
+      <section className="space-y-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">{title}</h3>
+            <p className="text-xs font-semibold text-slate-500">{description}</p>
+          </div>
+          <span className="text-xs font-bold uppercase tracking-widest text-slate-400">{items.length} salvo(s)</span>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          {items.map((item) => renderHistoryCard(item, variant))}
+        </div>
+      </section>
+    );
+  };
 
   return (
     <div className="precificacao-module min-h-screen bg-transparent font-body text-[var(--crm-ink)] pb-20">
@@ -778,8 +1472,8 @@ export default function FinEdgeApp() {
                         <button type="button" onClick={startNewPricing} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-700 transition hover:bg-cyan-500/20">
                           <FilePlus2 className="w-4 h-4" /> Nova
                         </button>
-                        <button type="button" onClick={searchPricingProposal} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-700 transition hover:bg-cyan-500/20">
-                          <Search className="w-4 h-4" /> Buscar
+                        <button type="button" onClick={searchPricingProposal} disabled={isBudgetSearchLoading} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-cyan-700 transition hover:bg-cyan-500/20 disabled:opacity-60">
+                          {isBudgetSearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Buscar
                         </button>
                         <button type="button" onClick={savePricingProposal} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-primary/90">
                           <Save className="w-4 h-4" /> Salvar
@@ -833,13 +1527,24 @@ export default function FinEdgeApp() {
                                 </div>
                                 <div>
                                   <label className="block text-sm font-semibold text-slate-500 mb-1.5">Nº Orçamento</label>
-                                  <input
-                                    type="text"
-                                    placeholder="ORC-0001"
-                                    value={currentBudget.numeroOrcamento}
-                                    onChange={(event) => setCurrentBudget(prev => ({ ...prev, numeroOrcamento: event.target.value }))}
-                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
-                                  />
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      placeholder="ORC-0001"
+                                      value={currentBudget.numeroOrcamento}
+                                      onChange={(event) => setCurrentBudget(prev => ({ ...prev, numeroOrcamento: event.target.value }))}
+                                      className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => searchBudgetRequestByNumber(currentBudget.numeroOrcamento)}
+                                      disabled={isBudgetSearchLoading}
+                                      className="inline-flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-2xl border border-cyan-400/40 bg-cyan-500/10 text-cyan-700 transition hover:bg-cyan-500/20 disabled:opacity-60"
+                                      title="Buscar na Fila de Orçamentos"
+                                    >
+                                      {isBudgetSearchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
@@ -1056,13 +1761,15 @@ export default function FinEdgeApp() {
                       onRemoveItem={handleRemoveItem}
                       onCalculate={handleCalculate}
                       isCalculating={isCalculating}
+                      onProjectBillingModeChange={handleProjectBillingModeChange}
+                      onApplyMonthlyProration={handleApplyMonthlyProration}
                     />
                   </>
                 )}
               </TabsContent>
 
               <TabsContent value="allocation" className="focus-visible:outline-none">
-                <ProductAllocation params={params} />
+                <ProductAllocation params={params} onSaveAllocation={handleAllocationSavedToHistory} />
               </TabsContent>
 
               <TabsContent value="analytics" className="focus-visible:outline-none">
@@ -1085,90 +1792,20 @@ export default function FinEdgeApp() {
                       <p className="text-slate-400">Nenhum cenário salvo ainda no histórico.</p>
                     </Card>
                   ) : (
-                    history.map((item) => (
-                      <Card key={item.id} className="rounded-2xl shadow-sm border-slate-200 transition-all group hover:border-primary/20">
-                        <CardContent className="p-4 sm:p-5">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                            <div
-                              className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
-                              onClick={() => handleEditScenario(item)}
-                            >
-                              <div className="p-3 bg-primary/10 rounded-xl text-primary shrink-0">
-                                <Clock size={20} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                                  {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('pt-BR') : 'Agora'}
-                                </p>
-                                <p className="text-lg font-bold text-slate-900 truncate">
-                                  {formatCurrency(item.results.finalMonthlyPrice)} <span className="text-sm font-normal text-slate-500">/mês</span>
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-5 sm:gap-6 ml-16 sm:ml-0">
-                              <div className="text-center">
-                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Setup</p>
-                                <p className="text-sm font-bold text-slate-800">{item.inputs.upfrontItems?.length || 0}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Rec.</p>
-                                <p className="text-sm font-bold text-slate-800">{item.inputs.recurringItems?.length || 0}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide">Margem</p>
-                                <p className={cn("text-sm font-bold", item.results.metrics.ebitdaMargin >= 20 ? "text-emerald-600" : "text-amber-600")}>
-                                  {formatPercent(item.results.metrics.ebitdaMargin)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0 ml-16 sm:ml-0">
-                              <button
-                                onClick={() => handleViewScenario(item)}
-                                title="Visualizar em PDF"
-                                className="h-9 px-3.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-sky-100 hover:border-sky-300 transition-colors"
-                              >
-                                <FileText className="w-3.5 h-3.5" /> PDF
-                              </button>
-                              <button
-                                onClick={() => handleEditScenario(item)}
-                                title="Editar cenário"
-                                className="h-9 px-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors"
-                              >
-                                <Pencil className="w-3.5 h-3.5" /> Editar
-                              </button>
-                              {deleteConfirmId === item.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDeleteScenario(item.id)}
-                                    title="Confirmar exclusão"
-                                    className="h-9 rounded-xl border border-red-300 bg-red-100 px-3 text-[11px] font-bold text-red-700 inline-flex items-center justify-center gap-1.5 transition-colors"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Excluir
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirmId(null)}
-                                    title="Cancelar"
-                                    className="h-9 w-9 rounded-xl border border-slate-300 bg-white text-slate-500 hover:text-slate-700 inline-flex items-center justify-center transition-colors"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirmId(item.id)}
-                                  title="Excluir cenário"
-                                  className="h-9 px-3.5 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-xs inline-flex items-center justify-center gap-1.5 hover:bg-red-100 hover:border-red-300 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
+                    <>
+                      {renderHistorySection(
+                        'Apenas precificação',
+                        'Cenários sem aplicação de rateio mensal de produtos.',
+                        standardPricingHistory,
+                        'standard'
+                      )}
+                      {renderHistorySection(
+                        'Precificação com rateio',
+                        'Cenários em que os produtos foram rateados pelo prazo do contrato.',
+                        proratedPricingHistory,
+                        'prorated'
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -1233,6 +1870,60 @@ export default function FinEdgeApp() {
                             <p className="text-lg font-bold text-slate-900">{viewingScenario.inputs.recurringItems?.length || 0}</p>
                           </div>
                         </div>
+
+                        {viewingScenario.metadata?.allocation ? (
+                          <div className="rounded-2xl border border-cyan-200 bg-cyan-50/70 p-5">
+                            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                              Rateio mensal aplicado
+                            </h3>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Nome do rateio</p>
+                                <p className="text-sm font-bold text-slate-900">{viewingScenario.metadata.allocation.name}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Método</p>
+                                <p className="text-sm font-bold text-slate-900">
+                                  {viewingScenario.metadata.allocation.method === 'proportional' ? 'Proporcional' : 'Igualitário'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total rateado/mês</p>
+                                <p className="text-sm font-bold text-cyan-700">{formatCurrency(viewingScenario.metadata.allocation.totalMonthlyAllocated)}</p>
+                              </div>
+                            </div>
+                            <div className="mt-4 overflow-x-auto rounded-xl border border-cyan-100 bg-white">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-cyan-50 text-left">
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500">Produto alvo</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Original/mês</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Rateado/mês</th>
+                                    <th className="px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-slate-500 text-right">Venda/mês</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-cyan-50">
+                                  {viewingScenario.metadata.allocation.results.map((allocationItem) => (
+                                    <tr key={allocationItem.productId}>
+                                      <td className="px-4 py-3 font-medium text-slate-800">
+                                        {allocationItem.name}
+                                        {allocationItem.breakdown.length > 0 ? (
+                                          <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                                            Fontes: {allocationItem.breakdown.map((source) => source.sourceName).join(', ')}
+                                          </p>
+                                        ) : null}
+                                      </td>
+                                      <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(allocationItem.originalMonthlyCost)}</td>
+                                      <td className="px-4 py-3 text-right text-cyan-700">+{formatCurrency(allocationItem.allocatedMonthlyCost)}</td>
+                                      <td className="px-4 py-3 text-right font-bold text-slate-900">{formatCurrency(allocationItem.saleMonthlyPrice || allocationItem.totalMonthlyCost)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : null}
 
                         {/* Tabela de itens Setup */}
                         {viewingScenario.inputs.upfrontItems && viewingScenario.inputs.upfrontItems.length > 0 && (
@@ -1353,6 +2044,68 @@ export default function FinEdgeApp() {
                 )}
               </TabsContent>
             </Tabs>
+
+            <Modal
+              isOpen={showBudgetQueueModal}
+              onClose={() => setShowBudgetQueueModal(false)}
+              title="Fila de Orçamentos"
+              size="large"
+              backgroundColor="dark"
+            >
+              <div className="space-y-4">
+                <p className="text-sm text-slate-400">
+                  Selecione um orçamento salvo para carregar automaticamente cliente, distribuidor e produtos na precificação.
+                </p>
+
+                {isBudgetSearchLoading ? (
+                  <div className="py-12 text-center">
+                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+                    <p className="mt-3 text-sm text-slate-400">Carregando Fila de Orçamentos...</p>
+                  </div>
+                ) : budgetQueue.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-8 text-center">
+                    <p className="text-sm text-slate-400">Nenhum orçamento com custos disponível no momento.</p>
+                  </div>
+                ) : (
+                  <div className="max-h-[520px] space-y-3 overflow-y-auto">
+                    {budgetQueue.map((request) => {
+                      const quotes = getBudgetQuotesFromRequest(request);
+                      const totalItems = getBudgetItemCount(request);
+                      const firstQuote = quotes[0];
+                      const budgetNumber = firstQuote?.numeroOrcamento || request.numero || '-';
+                      const clientName = request.nomeCliente || request.lead?.name || request.cliente?.nome || 'Cliente não informado';
+
+                      return (
+                        <button
+                          key={request.id || budgetNumber}
+                          type="button"
+                          onClick={() => {
+                            applyBudgetRequestToPricing(request);
+                            setShowBudgetQueueModal(false);
+                          }}
+                          className="w-full rounded-xl border border-slate-700 bg-slate-900/70 p-4 text-left transition hover:border-cyan-400/50 hover:bg-slate-900"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-base font-semibold text-cyan-300">{budgetNumber}</span>
+                                <span className="rounded-full border border-blue-400/30 bg-blue-500/20 px-2 py-1 text-xs font-semibold text-blue-100">
+                                  {request.modalidade || firstQuote?.modalidade || 'VENDA'}
+                                </span>
+                              </div>
+                              <p className="mt-2 truncate text-sm font-semibold text-white">{request.titulo || 'Orçamento sem título'}</p>
+                              <p className="mt-1 text-xs text-slate-400">Cliente: {clientName}</p>
+                              <p className="mt-1 text-xs text-slate-500">{quotes.length} cotação(ões) • {totalItems} item(ns)</p>
+                            </div>
+                            <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-cyan-300" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Modal>
           </main>
         </div>
       </div>

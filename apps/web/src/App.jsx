@@ -18,7 +18,7 @@ import Automacoes from './pages/Automacoes';
 import LeadManagement from './pages/LeadManagement';
 import PreVendas from './pages/PreVendas';
 import Calculadoras from './pages/Calculadoras';
-import Precificacao from './precificacao/app/page';
+import Precificacao from './pages/PrecificacaoHome';
 import RatearProdutos from './pages/RatearProdutos';
 import RateiosSalvos from './pages/RateiosSalvos';
 import GestaoPocs from './pages/GestaoPocs';

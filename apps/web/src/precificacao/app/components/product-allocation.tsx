@@ -9,23 +9,25 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PricingInput, ProductItem } from '@/app/lib/pricing-engine';
+import { calculateSalePriceFromMonthlyCost, PricingInput, ProductItem } from '@/app/lib/pricing-engine';
 import { formatCurrency } from '@/app/lib/formatters';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ProductAllocationProps {
   params: PricingInput;
+  onSaveAllocation?: (allocation: SavedAllocation) => void;
 }
 
 type AllocationMethod = 'proportional' | 'equal';
 
-interface AllocationResult {
+export interface AllocationResult {
   productId: string;
   name: string;
   originalMonthlyCost: number;
   allocatedMonthlyCost: number;
   totalMonthlyCost: number;
+  saleMonthlyPrice: number;
   percentageOfTotal: number;
   breakdown: Array<{
     sourceName: string;
@@ -33,7 +35,7 @@ interface AllocationResult {
   }>;
 }
 
-interface SavedAllocation {
+export interface SavedAllocation {
   id: string;
   name: string;
   method: AllocationMethod;
@@ -62,7 +64,7 @@ const formatDateTime = (value: string) => {
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('pt-BR');
 };
 
-export function ProductAllocation({ params }: ProductAllocationProps) {
+export function ProductAllocation({ params, onSaveAllocation }: ProductAllocationProps) {
   const [method, setMethod] = useState<AllocationMethod>('proportional');
   const [targetIds, setTargetIds] = useState<Set<string>>(new Set());
   const [sourceIds, setSourceIds] = useState<Set<string>>(new Set());
@@ -170,11 +172,12 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
         originalMonthlyCost: targetOriginalMonthly,
         allocatedMonthlyCost: allocatedAmount,
         totalMonthlyCost: totalMonthly,
+        saleMonthlyPrice: calculateSalePriceFromMonthlyCost(totalMonthly, params),
         percentageOfTotal: projectTotalMonthly > 0 ? (totalMonthly / projectTotalMonthly) * 100 : 0,
         breakdown
       };
     });
-  }, [allItems, targetIds, sourceIds, method]);
+  }, [allItems, targetIds, sourceIds, method, params]);
 
   const totalMonthlyAllocated = useMemo(() => 
     allItems.filter(item => sourceIds.has(item.id))
@@ -223,6 +226,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
     persistAllocations(next);
     setEditingId(payload.id);
     setViewingAllocation(payload);
+    onSaveAllocation?.(payload);
     showMessage(editingId ? 'Rateio mensal atualizado.' : 'Rateio mensal salvo.');
   };
 
@@ -244,7 +248,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
     }
 
     const totalOriginal = allocation.results.reduce((sum, item) => sum + item.originalMonthlyCost, 0);
-    const totalLoaded = allocation.results.reduce((sum, item) => sum + item.totalMonthlyCost, 0);
+    const totalSale = allocation.results.reduce((sum, item) => sum + (item.saleMonthlyPrice || item.totalMonthlyCost), 0);
     const totalSources = allocation.results.reduce((sum, item) => sum + item.breakdown.length, 0);
     const methodLabel = allocation.method === 'proportional' ? 'Proporcional' : 'Igualitário';
 
@@ -261,7 +265,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
           </td>
           <td>${formatCurrency(result.originalMonthlyCost)}</td>
           <td class="positive">+${formatCurrency(result.allocatedMonthlyCost)}</td>
-          <td class="strong">${formatCurrency(result.totalMonthlyCost)}</td>
+          <td class="strong">${formatCurrency(result.saleMonthlyPrice || result.totalMonthlyCost)}</td>
           <td>${formatPercent(variation)}</td>
         </tr>
       `;
@@ -537,8 +541,8 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
         <strong>${formatCurrency(totalOriginal)}</strong>
       </div>
       <div class="metric">
-        <label>Custo Carregado / Mês</label>
-        <strong>${formatCurrency(totalLoaded)}</strong>
+        <label>Venda / Mês</label>
+        <strong>${formatCurrency(totalSale)}</strong>
       </div>
       <div class="metric">
         <label>Fontes Aplicadas</label>
@@ -552,7 +556,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
 
     <div class="section-title">
       <h2>Resumo por Produto</h2>
-      <p class="note">Original + rateado = custo mensal carregado</p>
+      <p class="note">Venda considera margem, impostos, comissão e encargos comerciais</p>
     </div>
     <table>
       <thead>
@@ -560,7 +564,7 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
           <th>Produto / Serviço</th>
           <th>Original / Mês</th>
           <th>Rateado / Mês</th>
-          <th>Carregado / Mês</th>
+          <th>Venda / Mês</th>
           <th>Variação</th>
         </tr>
       </thead>
@@ -852,8 +856,8 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
                         <p className="text-[10px] text-slate-400 mt-1">Custo original mensal: {formatCurrency(result.originalMonthlyCost)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Final/mês</p>
-                        <p className="text-lg font-bold text-slate-900">{formatCurrency(result.totalMonthlyCost)}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Venda/mês</p>
+                        <p className="text-lg font-bold text-slate-900">{formatCurrency(result.saleMonthlyPrice || result.totalMonthlyCost)}</p>
                       </div>
                     </div>
                   </div>
@@ -866,9 +870,9 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
               <CardTitle className="text-xl font-bold font-headline flex items-center">
                 <BarChart3 className="w-5 h-5 mr-3 text-emerald-600" />
-                Impacto Mensal Carregado
+                Venda Mensal com Rateio
               </CardTitle>
-              <CardDescription>Custo mensal final por item após absorção.</CardDescription>
+              <CardDescription>Preço mensal por item após rateio, margem, tributos, comissão e encargos.</CardDescription>
             </CardHeader>
             <CardContent className="p-5">
               {allocationResults.length === 0 ? (
@@ -918,8 +922,8 @@ export function ProductAllocation({ params }: ProductAllocationProps) {
                           <p className="text-sm font-semibold text-emerald-600 tabular-nums">+{formatCurrency(result.allocatedMonthlyCost)}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Carregado/mês</p>
-                          <p className="text-base font-bold text-slate-900 font-headline tabular-nums">{formatCurrency(result.totalMonthlyCost)}</p>
+                          <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Venda/mês</p>
+                          <p className="text-base font-bold text-slate-900 font-headline tabular-nums">{formatCurrency(result.saleMonthlyPrice || result.totalMonthlyCost)}</p>
                         </div>
                         <div className="md:text-right">
                           <span className="inline-flex items-center justify-center rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600">
