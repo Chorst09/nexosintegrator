@@ -2722,6 +2722,21 @@ export default function Calculadoras({
     const itemCount = snapSaleItems.length + snapRentalItems.length + snapServiceItems.length;
     const rentalPeriodSaved = toNumber(proposal?.pricing?.rentalPeriod, 12);
 
+    const distributorCostsData = Array.isArray(proposal?.distributorCosts) ? proposal.distributorCosts : [];
+    const distributorRows = distributorCostsData.map((dc, i) => {
+      const qty = Math.max(0, toNumber(dc?.quantidade, 0));
+      const unitCost = toNumber(dc?.custoUnitario, 0);
+      return `<tr>
+        <td>${escRow(dc.distribuidor)}</td>
+        <td>${escRow(dc.numeroOrcamento)}</td>
+        <td>${escRow(dc.modalidade)}</td>
+        <td>${escRow(dc.item)}</td>
+        <td style="text-align:center">${qty}</td>
+        <td style="text-align:right">${cur(unitCost)}</td>
+        <td style="text-align:right">${cur(qty * unitCost)}</td>
+      </tr>`;
+    }).join('');
+
     const escRow = (v) => escapeHtml(String(v ?? '-'));
     const cur = (v) => escapeHtml(formatCurrency(toNumber(v, 0)));
 
@@ -2872,10 +2887,14 @@ export default function Calculadoras({
           .items-section {
             margin-top: 16px;
           }
-          .items-section h3 {
+          .items-section h3,
+          .distributor-section h3 {
             margin: 0 0 8px;
             color: #1e40af;
             font-size: 16px;
+          }
+          .distributor-section {
+            margin-top: 16px;
           }
           table {
             width: 100%;
@@ -2946,6 +2965,23 @@ export default function Calculadoras({
             <div class="row"><span class="label">Regime</span><span class="value">${escapeHtml(proposal?.pricing?.regimeName || '-')}</span></div>
           </article>
         </section>
+
+        ${distributorCostsData.length > 0 ? `
+        <section class="distributor-section">
+          <h3>Custos de Distribuidores</h3>
+          <table>
+            <thead><tr>
+              <th style="text-align:left">Distribuidor</th>
+              <th style="text-align:left">Nº Orçamento</th>
+              <th style="text-align:left">Modalidade</th>
+              <th style="text-align:left">Item</th>
+              <th style="text-align:center">Qtde</th>
+              <th style="text-align:right">Custo Unit.</th>
+              <th style="text-align:right">Total</th>
+            </tr></thead>
+            <tbody>${distributorRows}</tbody>
+          </table>
+        </section>` : ''}
 
         <section class="summary">
           <h3>Resumo Financeiro</h3>
