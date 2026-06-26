@@ -16,7 +16,9 @@ import {
   FolderOpen,
   Eye,
   Pencil,
-  Loader2
+  Loader2,
+  BarChart3,
+  PieChart
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
@@ -1458,6 +1460,37 @@ export default function Calculadoras({
     return serviceItems.reduce((acc, item) => acc + toNumber(itemCalcs[item.id]?.totalCost, 0), 0);
   }, [operationType, saleItems, rentalItems, serviceItems, calculationPreview]);
   const isReformaRegimeSelected = calculationPreview.calculationResults.taxRegimeType === 'reforma';
+  const currentItemCount = currentItems.length;
+  const currentRevenueValue = operationType === 'locacao'
+    ? toNumber(calculationPreview.calculationResults.monthlyPrice, 0)
+    : toNumber(calculationPreview.calculationResults.finalPrice, 0);
+  const currentRevenueLabel = operationType === 'locacao' ? 'Receita Mensal' : 'Receita da Proposta';
+  const currentBaseCost = toNumber(calculationPreview.calculationResults.baseCost, 0);
+  const rawAccountingCost = toNumber(calculationPreview.calculationResults.accountingCost, 0);
+  const currentAccountingCost = rawAccountingCost > 0 ? rawAccountingCost : currentBaseCost;
+  const currentTaxes = toNumber(calculationPreview.calculationResults.impostosValor, 0);
+  const currentNetRevenue = currentRevenueValue - currentTaxes;
+  const currentGrossProfit = currentNetRevenue - currentAccountingCost;
+  const currentMarginValue = toNumber(calculationPreview.calculationResults.margemEComissaoValor, 0);
+  const currentGrossMarginPercent = currentRevenueValue > 0 ? (currentGrossProfit / currentRevenueValue) * 100 : 0;
+  const currentTaxPercent = currentRevenueValue > 0 ? (currentTaxes / currentRevenueValue) * 100 : 0;
+  const currentCostPercent = currentRevenueValue > 0 ? (currentAccountingCost / currentRevenueValue) * 100 : 0;
+  const currentTotalContractValue = operationType === 'locacao'
+    ? toNumber(calculationPreview.calculationResults.finalPrice, 0)
+    : currentRevenueValue;
+  const analyticsCards = [
+    { label: currentRevenueLabel, value: currentRevenueValue, detail: operationType === 'locacao' ? `${toNumber(rentalPeriod, 12)} meses` : 'valor total' },
+    { label: 'Custo Base', value: currentAccountingCost || currentBaseCost, detail: `${formatPercent(currentCostPercent)} da receita` },
+    { label: 'Tributos', value: currentTaxes, detail: `${formatPercent(currentTaxPercent)} da receita` },
+    { label: 'Margem Bruta', value: currentGrossProfit, detail: `${formatPercent(currentGrossMarginPercent)} da receita` }
+  ];
+  const dreRows = [
+    { label: 'Receita Bruta', value: currentRevenueValue, percent: 100, emphasis: true },
+    { label: '(-) Tributos', value: -currentTaxes, percent: -currentTaxPercent },
+    { label: '= Receita Líquida', value: currentNetRevenue, percent: currentRevenueValue > 0 ? (currentNetRevenue / currentRevenueValue) * 100 : 0, subtotal: true },
+    { label: '(-) Custo Base / CPV', value: -currentAccountingCost, percent: -currentCostPercent },
+    { label: '= Resultado Gerencial', value: currentGrossProfit, percent: currentGrossMarginPercent, final: true }
+  ];
 
   const calculadoras = [
     {
@@ -4030,13 +4063,85 @@ export default function Calculadoras({
                   <div>
                     <div className="text-xs text-slate-400 uppercase">Itens na proposta</div>
                     <div className="text-lg font-semibold text-white">
-                      {previewProposal?.calculatorType === 'vendas'
-                        ? (previewProposal?.snapshot?.saleItems?.length || 0)
-                        : previewProposal?.calculatorType === 'locacao'
-                          ? (previewProposal?.snapshot?.rentalItems?.length || 0)
-                          : (previewProposal?.snapshot?.serviceItems?.length || 0)}
+                      {currentItemCount}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="inline-flex items-center gap-2 text-lg font-semibold text-cyan-300">
+                      <BarChart3 className="h-5 w-5" />
+                      Analytics
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-400">Indicadores atualizados conforme os itens e parâmetros da calculadora.</p>
+                  </div>
+                  <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+                    {calculationPreview.calculationResults.taxRegimeName || 'Regime não definido'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {analyticsCards.map((card) => (
+                    <div key={card.label} className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{card.label}</p>
+                      <p className={`mt-2 text-xl font-bold ${card.value < 0 ? 'text-red-300' : 'text-white'}`}>
+                        {formatCurrency(card.value)}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">{card.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total do contrato</p>
+                    <p className="mt-2 text-lg font-bold text-white">{formatCurrency(currentTotalContractValue)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Margem + comissão</p>
+                    <p className="mt-2 text-lg font-bold text-white">{formatCurrency(currentMarginValue)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-700/70 bg-slate-950/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Itens calculados</p>
+                    <p className="mt-2 text-lg font-bold text-white">{currentItemCount}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-900/80 p-4">
+                <div className="mb-4">
+                  <h4 className="inline-flex items-center gap-2 text-lg font-semibold text-emerald-300">
+                    <PieChart className="h-5 w-5" />
+                    DRE Gerencial
+                  </h4>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {operationType === 'locacao'
+                      ? 'Visão mensal da locação com total de contrato destacado no Analytics.'
+                      : 'Visão gerencial da proposta com tributos e custos calculados.'}
+                  </p>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-slate-700">
+                  {dreRows.map((row) => (
+                    <div
+                      key={row.label}
+                      className={`grid grid-cols-1 gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_160px_110px] sm:gap-3 ${
+                        row.final
+                          ? 'bg-emerald-500/10 text-emerald-100'
+                          : row.subtotal
+                            ? 'bg-slate-800/80 text-white'
+                            : 'bg-slate-950/60 text-slate-200'
+                      } border-b border-slate-800 last:border-b-0`}
+                    >
+                      <span className={row.emphasis || row.final || row.subtotal ? 'font-semibold' : ''}>{row.label}</span>
+                      <span className={`font-mono sm:text-right ${row.value < 0 ? 'text-red-300' : row.final ? 'text-emerald-200' : 'text-slate-100'}`}>
+                        {formatCurrency(row.value)}
+                      </span>
+                      <span className={`font-mono sm:text-right ${row.percent < 0 ? 'text-red-300' : 'text-slate-400'}`}>
+                        {formatPercent(row.percent)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
