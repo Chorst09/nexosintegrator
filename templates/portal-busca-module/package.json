@@ -1,0 +1,16 @@
+{
+  "name": "portal-busca-module",
+  "private": true,
+  "description": "Modulo isolado de Portal de Busca B2G para reutilizacao em outro sistema.",
+  "frontendDependencies": {
+    "lucide-react": "0.562.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-router-dom": "6.30.4"
+  },
+  "backendDependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

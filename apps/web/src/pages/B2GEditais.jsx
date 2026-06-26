@@ -3744,7 +3744,6 @@ export default function B2GEditais() {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          ...opportunity,
           stage: nextPipelineStage,
           b2gStage: targetColumnId
         })

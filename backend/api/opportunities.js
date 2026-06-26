@@ -312,6 +312,7 @@ export default async function handler(req) {
     
     const updateData = {};
     if (body.stage) updateData.stage = body.stage;
+    if (body.b2gStage !== undefined) updateData.b2gStage = body.b2gStage || null;
     if (body.title) updateData.title = body.title;
     if (body.projectType !== undefined) {
       updateData.projectType = normalizeProjectType(body.projectType);
