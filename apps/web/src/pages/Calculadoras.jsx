@@ -1330,14 +1330,8 @@ export default function Calculadoras({
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.has('tipo')) return;
 
-    const tipo = urlParams.get('tipo');
-    const custoUnitario = toNumber(urlParams.get('custoUnitario'), 0);
-    const quantidade = toNumber(urlParams.get('quantidade'), 1);
-    const margemDesejada = toNumber(urlParams.get('margemDesejada'), 20);
-
-    // Verificar se há dados de cotação no localStorage (fluxo Solicitações → Calculadora)
+    // Verificar se há dados de cotação no localStorage (fluxo Solicitações/Orçamentos → Calculadora)
     const cotacaoKey = urlParams.get('cotacaoKey');
     let cotacaoData = null;
     if (cotacaoKey) {
@@ -1345,6 +1339,13 @@ export default function Calculadoras({
         cotacaoData = JSON.parse(localStorage.getItem(cotacaoKey) || 'null');
       } catch { cotacaoData = null; }
     }
+
+    if (!urlParams.has('tipo') && !cotacaoData) return;
+
+    const tipo = urlParams.get('tipo') || cotacaoData?.modalidade || 'VENDA';
+    const custoUnitario = toNumber(urlParams.get('custoUnitario'), 0);
+    const quantidade = toNumber(urlParams.get('quantidade'), 1);
+    const margemDesejada = toNumber(urlParams.get('margemDesejada'), 20);
 
     const tipoNorm = String(tipo || '').toUpperCase();
     const targetTab = normalizeCalculatorTypeFromModalidade(tipoNorm);
