@@ -3744,6 +3744,7 @@ export default function B2GEditais() {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({
+          ...opportunity,
           stage: nextPipelineStage,
           b2gStage: targetColumnId
         })
@@ -3760,7 +3761,7 @@ export default function B2GEditais() {
         setOpportunities((prev) =>
           prev.map((item) =>
             normalizeEntityId(item.id) === updatedId
-              ? { ...item, ...data, stage: nextPipelineStage, b2gStage: targetColumnId }
+              ? { ...item, stage: nextPipelineStage, b2gStage: targetColumnId }
               : item
           )
         );
