@@ -2088,9 +2088,17 @@ export default function Calculadoras({
   const openProposal = (proposal, { keepModalOpen = true } = {}) => {
     if (!proposal) return;
 
-    const targetTab = proposal.calculatorType || 'vendas';
     const pricing = proposal.pricing || {};
     const snapshot = proposal.snapshot || {};
+
+    // Resolve target tab: if calculatorType is unknown/mixed, detect from snapshot contents
+    let targetTab = proposal.calculatorType || 'vendas';
+    if (targetTab !== 'vendas' && targetTab !== 'locacao' && targetTab !== 'servicos') {
+      const snapSales = Array.isArray(snapshot.saleItems) ? snapshot.saleItems.length : 0;
+      const snapRentals = Array.isArray(snapshot.rentalItems) ? snapshot.rentalItems.length : 0;
+      const snapServices = Array.isArray(snapshot.serviceItems) ? snapshot.serviceItems.length : 0;
+      targetTab = snapSales > 0 ? 'vendas' : snapRentals > 0 ? 'locacao' : snapServices > 0 ? 'servicos' : 'vendas';
+    }
 
     setCurrentTab(targetTab);
     setVendasData((prev) => ({ ...prev, regimeTributario: pricing.regimeId || regimeAtivoId }));
@@ -2392,11 +2400,24 @@ export default function Calculadoras({
       totalImpostos += (sellPrice - cost) * 0.3; // Aproximação
     });
 
+    // Determine calculatorType from actual cart contents
+    const hasSales = proposalCart.sales.length > 0;
+    const hasRentals = proposalCart.rentals.length > 0;
+    const hasServices = proposalCart.services.length > 0;
+    const nonMixedCount = [hasSales, hasRentals, hasServices].filter(Boolean).length;
+    const calcType = nonMixedCount === 1
+      ? (hasSales ? 'vendas' : hasRentals ? 'locacao' : 'servicos')
+      : 'mixed';
+    const calcLabel = calcType === 'vendas' ? 'Venda'
+      : calcType === 'locacao' ? 'Locação'
+        : calcType === 'servicos' ? 'Serviços'
+          : 'Proposta Mista';
+
     const payload = {
       id: existing?.id || createItemId('proposal'),
       number: proposalNumber,
-      calculatorType: 'mixed',
-      calculatorLabel: 'Proposta Mista',
+      calculatorType: calcType,
+      calculatorLabel: calcLabel,
       opportunity: {
         id: proposalForm.opportunityId || '',
         number: linkedOpportunity?.number || proposalForm.opportunityNumber || '',
@@ -2406,23 +2427,30 @@ export default function Calculadoras({
         companyName: proposalForm.clientCompany.trim() || 'Cliente não informado',
         contactName: proposalForm.clientContact.trim() || 'Contato não informado',
         phone: proposalForm.clientPhone.trim(),
-        email: proposalForm.clientEmail.trim()
+        email: proposalForm.clientEmail.trim(),
+        document: proposalForm.clientDocument?.trim() || ''
       },
       accountManager: {
         name: proposalForm.managerName.trim(),
         email: proposalForm.managerEmail.trim(),
         phone: proposalForm.managerPhone.trim()
       },
+      premises: proposalForm.premises?.trim() || '',
       pricing: {
-        operationType: 'mixed',
+        operationType: calcType === 'vendas' ? 'venda' : calcType === 'locacao' ? 'locacao' : calcType === 'servicos' ? 'servicos' : 'mixed',
         regimeId: vendasData.regimeTributario,
-        regimeName: calculationPreview.calculationResults.taxRegimeName
+        regimeName: calculationPreview.calculationResults.taxRegimeName,
+        desiredMargin: toNumber(desiredMargin, 20),
+        destinationUF,
+        rentalPeriod: toNumber(rentalPeriod, 12),
+        isIcmsContributor
       },
       snapshot: {
         saleItems: deepClone(proposalCart.sales),
         rentalItems: deepClone(proposalCart.rentals),
         serviceItems: deepClone(proposalCart.services)
       },
+      distributorCosts: deepClone(distributorCosts),
       result: {
         finalPrice: totalFinalPrice,
         monthlyPrice: totalMonthlyPrice,
