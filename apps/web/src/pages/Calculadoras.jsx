@@ -2185,19 +2185,25 @@ export default function Calculadoras({
         isIcmsContributor
       },
       snapshot: {
-        saleItems: deepClone(saleItems).map(item => ({
-          ...item,
-          calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {}
-        })),
-        rentalItems: deepClone(rentalItems).map(item => ({
-          ...item,
-          calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {},
-          pricing: { rentalPeriod: toNumber(rentalPeriod, 12) }
-        })),
-        serviceItems: deepClone(serviceItems).map(item => ({
-          ...item,
-          calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {}
-        }))
+        saleItems: proposalCart.sales.length > 0
+          ? deepClone(proposalCart.sales)
+          : deepClone(saleItems).map(item => ({
+            ...item,
+            calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {}
+          })),
+        rentalItems: proposalCart.rentals.length > 0
+          ? deepClone(proposalCart.rentals)
+          : deepClone(rentalItems).map(item => ({
+            ...item,
+            calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {},
+            pricing: { rentalPeriod: toNumber(rentalPeriod, 12) }
+          })),
+        serviceItems: proposalCart.services.length > 0
+          ? deepClone(proposalCart.services)
+          : deepClone(serviceItems).map(item => ({
+            ...item,
+            calculation: calculationPreview.calculationResults.itemCalculations?.[item.id] || item.calculation || {}
+          }))
       },
       distributorCosts: deepClone(distributorCosts), // NOVO: Salvar custos de distribuidores
       result: {
