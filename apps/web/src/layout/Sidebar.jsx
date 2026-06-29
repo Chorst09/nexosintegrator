@@ -50,6 +50,7 @@ const resolvePublicUrl = (maybeRelativeUrl) => {
 export default function Sidebar({ open = false, onOpenChange = () => {} }) {
   const location = useLocation();
   const navRef = useRef(null);
+  const lastActiveSectionIdRef = useRef(null);
   const userRaw = localStorage.getItem('user');
   const user = userRaw ? JSON.parse(userRaw) : null;
   const role = normalizeRole(user?.role || null);
@@ -277,6 +278,9 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
     );
 
     if (!activeSection) return;
+    if (lastActiveSectionIdRef.current === activeSection.id) return;
+
+    lastActiveSectionIdRef.current = activeSection.id;
 
     setExpandedSections((prev) => (
       prev[activeSection.id] ? prev : { ...prev, [activeSection.id]: true }
