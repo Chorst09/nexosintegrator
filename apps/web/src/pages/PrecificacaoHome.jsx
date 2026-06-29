@@ -3,37 +3,63 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   Calculator,
+  Clock,
   FilePlus2,
   FileText,
   FolderOpen,
   History,
+  Pencil,
   PieChart,
   Search,
   Share2
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import FinEdgeArchitect from '../precificacao/app/page';
-
-const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
+import { scenarioService } from '../precificacao/services/scenario-service';
 
 const formatCurrency = (value) => {
   const number = Number(value || 0);
   return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-const normalizeSavedPricingProposals = (source) => {
-  if (Array.isArray(source)) return source;
-  if (source && typeof source === 'object') return Object.values(source);
-  return [];
+const formatPercent = (value) => {
+  const number = Number(value || 0);
+  return `${number.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 };
 
-const loadSavedPricingProposals = () => {
-  try {
-    const stored = localStorage.getItem(PRICING_PROPOSALS_STORAGE_KEY);
-    return normalizeSavedPricingProposals(stored ? JSON.parse(stored) : []);
-  } catch {
-    return [];
-  }
+const getScenarioDate = (scenario) => {
+  const rawDate = scenario?.createdAt?.toDate ? scenario.createdAt.toDate() : scenario?.createdAt;
+  const date = rawDate instanceof Date ? rawDate : rawDate ? new Date(rawDate) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+};
+
+const isMonthlyProratedPricing = (input) => {
+  if (!input) return false;
+  if (input.projectBillingMode === 'monthly') return true;
+  return (input.recurringItems || []).some((item) => (
+    String(item.description || '').toLowerCase().includes('rateado de')
+  ));
+};
+
+const isMonthlyProratedScenario = (scenario) => (
+  Boolean(scenario?.metadata?.allocation) || isMonthlyProratedPricing(scenario?.inputs)
+);
+
+const getScenarioClient = (scenario) => (
+  scenario?.metadata?.clientCompany || 'Cliente não informado'
+);
+
+const getScenarioContact = (scenario) => (
+  scenario?.metadata?.clientContact || ''
+);
+
+const getScenarioNumber = (scenario) => (
+  scenario?.metadata?.proposalNumber || scenario?.metadata?.opportunityNumber || scenario?.id || '-'
+);
+
+const getScenarioTimestamp = (scenario) => {
+  const date = getScenarioDate(scenario);
+  return date ? date.toLocaleString('pt-BR') : 'Data não informada';
 };
 
 export default function PrecificacaoHome() {
@@ -42,32 +68,50 @@ export default function PrecificacaoHome() {
     const params = new URLSearchParams(window.location.search);
     return params.has('cotacaoKey');
   });
-  const [savedPricingProposals, setSavedPricingProposals] = useState(() => loadSavedPricingProposals());
+  const [pricingHistory, setPricingHistory] = useState([]);
 
   useEffect(() => {
-    const refresh = () => setSavedPricingProposals(loadSavedPricingProposals());
+    let isMounted = true;
+    const refresh = async () => {
+      const scenarios = await scenarioService.getLatestScenarios();
+      if (isMounted) setPricingHistory(Array.isArray(scenarios) ? scenarios : []);
+    };
+
+    refresh();
     window.addEventListener('storage', refresh);
     window.addEventListener('focus', refresh);
     return () => {
+      isMounted = false;
       window.removeEventListener('storage', refresh);
       window.removeEventListener('focus', refresh);
     };
   }, []);
 
   const summary = useMemo(() => {
-    const totalContractValue = savedPricingProposals.reduce((sum, proposal) => (
-      sum + Number(proposal?.results?.totalContractValue || proposal?.result?.finalPrice || 0)
+    const totalContractValue = pricingHistory.reduce((sum, scenario) => (
+      sum + Number(scenario?.results?.totalContractValue || 0)
     ), 0);
-    const lastUpdated = savedPricingProposals[0]?.updatedAt
-      ? new Date(savedPricingProposals[0].updatedAt).toLocaleDateString('pt-BR')
+    const lastUpdatedDate = pricingHistory.map(getScenarioDate).filter(Boolean)[0];
+    const lastUpdated = lastUpdatedDate
+      ? lastUpdatedDate.toLocaleDateString('pt-BR')
       : '-';
 
     return {
-      total: savedPricingProposals.length,
+      total: pricingHistory.length,
       totalContractValue,
       lastUpdated
     };
-  }, [savedPricingProposals]);
+  }, [pricingHistory]);
+
+  const standardPricingHistory = useMemo(
+    () => pricingHistory.filter((item) => !isMonthlyProratedScenario(item)),
+    [pricingHistory]
+  );
+
+  const proratedPricingHistory = useMemo(
+    () => pricingHistory.filter((item) => isMonthlyProratedScenario(item)),
+    [pricingHistory]
+  );
 
   if (showArchitect) {
     return <FinEdgeArchitect />;
@@ -96,6 +140,105 @@ export default function PrecificacaoHome() {
       onClick: () => setShowArchitect(true)
     }
   ];
+
+  const renderHistoryCard = (scenario, variant = 'standard') => {
+    const margin = Number(scenario?.results?.metrics?.ebitdaMargin || 0);
+    const isProrated = variant === 'prorated';
+
+    return (
+      <button
+        key={scenario.id}
+        type="button"
+        onClick={() => setShowArchitect(true)}
+        className="group w-full rounded-xl border border-slate-700/70 bg-slate-900/70 p-4 text-left shadow-xl shadow-black/10 transition-all hover:border-cyan-400/50 hover:bg-slate-900"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-4">
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${isProrated ? 'bg-cyan-500/15 text-cyan-200' : 'bg-blue-500/15 text-blue-200'} border ${isProrated ? 'border-cyan-400/30' : 'border-blue-400/30'}`}>
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                  {getScenarioTimestamp(scenario)}
+                </p>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest ${isProrated ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}>
+                  {isProrated ? 'Com rateio' : 'Precificação'}
+                </span>
+              </div>
+              <p className="mt-1 text-lg font-bold text-white">
+                {formatCurrency(scenario?.results?.finalMonthlyPrice)}
+                <span className="text-sm font-normal text-slate-400"> /mês</span>
+              </p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-200">
+                Cliente: {getScenarioClient(scenario)}
+              </p>
+              {getScenarioContact(scenario) ? (
+                <p className="truncate text-xs font-semibold text-slate-400">
+                  Contato: {getScenarioContact(scenario)}
+                </p>
+              ) : null}
+              {scenario?.metadata?.allocation ? (
+                <p className="mt-1 truncate text-xs font-bold text-cyan-200">
+                  Rateio: {scenario.metadata.allocation.name} · {formatCurrency(scenario.metadata.allocation.totalMonthlyAllocated)}/mês
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 text-center sm:w-[260px]">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Setup</p>
+              <p className="text-sm font-bold text-slate-100">{scenario?.inputs?.upfrontItems?.length || 0}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Rec.</p>
+              <p className="text-sm font-bold text-slate-100">{scenario?.inputs?.recurringItems?.length || 0}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Margem</p>
+              <p className={`text-sm font-bold ${margin >= 20 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {formatPercent(margin)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+            <span className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 text-xs font-semibold text-sky-200">
+              <FileText className="h-3.5 w-3.5" />
+              PDF
+            </span>
+            <span className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-200">
+              <Pencil className="h-3.5 w-3.5" />
+              Editar
+            </span>
+          </div>
+        </div>
+        <p className="mt-3 text-xs font-semibold text-slate-500">
+          Número: {getScenarioNumber(scenario)}
+        </p>
+      </button>
+    );
+  };
+
+  const renderHistorySection = (title, description, items, variant) => {
+    if (items.length === 0) return null;
+
+    return (
+      <section className="space-y-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h4 className="text-base font-bold text-white">{title}</h4>
+            <p className="text-xs font-semibold text-slate-400">{description}</p>
+          </div>
+          <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{items.length} salvo(s)</span>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          {items.map((item) => renderHistoryCard(item, variant))}
+        </div>
+      </section>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -188,8 +331,8 @@ export default function PrecificacaoHome() {
             <div>
               <h3 className="text-lg font-bold text-white">Precificações Salvas</h3>
               <p className="text-sm text-slate-400">
-                {savedPricingProposals.length > 0
-                  ? `${savedPricingProposals.length} registro(s) disponíveis no FinEdge Architect`
+                {pricingHistory.length > 0
+                  ? `${pricingHistory.length} registro(s) disponíveis no Histórico do FinEdge Architect`
                   : 'Nenhuma precificação salva ainda'}
               </p>
             </div>
@@ -203,36 +346,25 @@ export default function PrecificacaoHome() {
             </button>
           </div>
 
-          {savedPricingProposals.length === 0 ? (
+          {pricingHistory.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-8 text-center">
               <FolderOpen className="mx-auto h-8 w-8 text-slate-500" />
               <p className="mt-3 text-sm text-slate-400">As próximas precificações salvas aparecerão aqui.</p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-700/70">
-              <div className="hidden grid-cols-5 gap-3 bg-slate-900 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid">
-                <span>Número</span>
-                <span className="col-span-2">Cliente</span>
-                <span>Contrato Total</span>
-                <span>Atualização</span>
-              </div>
-              <div className="divide-y divide-slate-800">
-                {savedPricingProposals.slice(0, 6).map((proposal) => (
-                  <button
-                    key={proposal.id || proposal.number}
-                    type="button"
-                    onClick={() => setShowArchitect(true)}
-                    className="grid w-full grid-cols-1 gap-1 px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-900 md:grid-cols-5 md:gap-3 md:items-center"
-                  >
-                    <span className="font-semibold text-white">{proposal.number || '-'}</span>
-                    <span className="col-span-2">{proposal.proposalForm?.clientCompany || 'Cliente não informado'}</span>
-                    <span className="font-semibold text-cyan-200">{formatCurrency(proposal.results?.totalContractValue)}</span>
-                    <span className="text-slate-400">
-                      {proposal.updatedAt ? new Date(proposal.updatedAt).toLocaleDateString('pt-BR') : '-'}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            <div className="space-y-6">
+              {renderHistorySection(
+                'Apenas precificação',
+                'Cenários sem aplicação de rateio mensal de produtos.',
+                standardPricingHistory,
+                'standard'
+              )}
+              {renderHistorySection(
+                'Precificação com rateio',
+                'Cenários em que os produtos foram rateados pelo prazo do contrato.',
+                proratedPricingHistory,
+                'prorated'
+              )}
             </div>
           )}
         </section>
