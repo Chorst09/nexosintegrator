@@ -136,12 +136,112 @@ const toCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', {
 
 const toDateBr = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
+  const date = parseLocalDate(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('pt-BR');
 };
 
+const toDateTimeBr = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR');
+};
+
 const asString = (value) => String(value || '').trim();
+
+const escapeHtml = (value) => asString(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const parseLocalDate = (value) => {
+  if (!value) return null;
+  const raw = String(value).slice(0, 10);
+  const parts = raw.split('-').map(Number);
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getValidityInfo = (value) => {
+  const validityDate = parseLocalDate(value);
+  if (!validityDate) {
+    return {
+      label: 'Sem validade informada',
+      detail: 'Informe a data de validade para controlar o risco de vencimento.',
+      tone: 'slate',
+      daysRemaining: null
+    };
+  }
+
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const validityStart = new Date(validityDate.getFullYear(), validityDate.getMonth(), validityDate.getDate());
+  const daysRemaining = Math.ceil((validityStart.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (daysRemaining < 0) {
+    return {
+      label: 'Oportunidade vencida',
+      detail: `Vencida há ${Math.abs(daysRemaining)} dia(s). Renove o registro ou arquive a oportunidade.`,
+      tone: 'red',
+      daysRemaining
+    };
+  }
+  if (daysRemaining === 0) {
+    return {
+      label: 'Vence hoje',
+      detail: 'A validade termina hoje. Priorize a renovação ou conclusão do atendimento.',
+      tone: 'red',
+      daysRemaining
+    };
+  }
+  if (daysRemaining <= 7) {
+    return {
+      label: `Vence em ${daysRemaining} dia(s)`,
+      detail: 'Alerta crítico: oportunidade próxima do vencimento em até 7 dias.',
+      tone: 'rose',
+      daysRemaining
+    };
+  }
+  if (daysRemaining <= 15) {
+    return {
+      label: `Vence em ${daysRemaining} dia(s)`,
+      detail: 'Alerta de atenção: acompanhe a renovação antes do prazo final.',
+      tone: 'amber',
+      daysRemaining
+    };
+  }
+  if (daysRemaining <= 30) {
+    return {
+      label: `Vence em ${daysRemaining} dia(s)`,
+      detail: 'Monitoramento preventivo: validade dentro dos próximos 30 dias.',
+      tone: 'yellow',
+      daysRemaining
+    };
+  }
+
+  return {
+    label: `Válida por ${daysRemaining} dia(s)`,
+    detail: 'Validade vigente, sem alerta de vencimento imediato.',
+    tone: 'emerald',
+    daysRemaining
+  };
+};
+
+const validityBadgeClass = (tone) => {
+  if (tone === 'red') return 'bg-red-500/20 text-red-300 border-red-500/30';
+  if (tone === 'rose') return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+  if (tone === 'amber') return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+  if (tone === 'yellow') return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
+  if (tone === 'emerald') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+  return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+};
 
 const normalizeRegistryPayload = (payload) => {
   if (!payload || typeof payload !== 'object') return defaultRegistry;
@@ -181,6 +281,15 @@ const priorityLabel = (value) => {
   if (key === 'HIGH') return 'Alta';
   if (key === 'URGENT') return 'Urgente';
   return 'Média';
+};
+
+const pdfValidityColors = {
+  red: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
+  rose: { bg: '#ffe4e6', border: '#f43f5e', text: '#9f1239' },
+  amber: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+  yellow: { bg: '#fef9c3', border: '#eab308', text: '#854d0e' },
+  emerald: { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
+  slate: { bg: '#f1f5f9', border: '#94a3b8', text: '#334155' }
 };
 
 export default function PrevendasCadastros({ forcedTab = null }) {
@@ -602,6 +711,324 @@ export default function PrevendasCadastros({ forcedTab = null }) {
       origem: selected?.clientType === 'B2G' ? 'B2G' : prev.origem,
       valorEstimado: Number.isFinite(Number(selected?.value)) ? String(selected.value) : prev.valorEstimado
     }));
+  };
+
+  const handleViewOpportunityPdf = (item) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Não foi possível abrir a visualização em PDF. Libere pop-ups e tente novamente.');
+      return;
+    }
+
+    const linkedDistributors = (item.distribuidorIds || []).map((id) => distMap.get(id)).filter(Boolean);
+    const linkedSuppliers = (item.fornecedorIds || []).map((id) => fornMap.get(id)).filter(Boolean);
+    const validity = getValidityInfo(item.dataValidade);
+    const validityColors = pdfValidityColors[validity.tone] || pdfValidityColors.slate;
+    const generatedAt = new Date().toLocaleString('pt-BR');
+
+    const renderRows = (rows) => rows
+      .map(([label, value]) => `
+        <div class="row">
+          <span class="label">${escapeHtml(label)}</span>
+          <span class="value">${escapeHtml(value || '-')}</span>
+        </div>
+      `)
+      .join('');
+
+    const renderList = (values, emptyText) => {
+      const list = Array.isArray(values) ? values.filter(Boolean) : [];
+      if (list.length === 0) return `<p class="empty-text">${escapeHtml(emptyText)}</p>`;
+      return `<div class="pills">${list.map((value) => `<span>${escapeHtml(value)}</span>`).join('')}</div>`;
+    };
+
+    const html = `
+      <!doctype html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Registro de Oportunidade - ${escapeHtml(item.titulo || item.numeroOportunidade || item.id || '')}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 24px;
+            color: #0f172a;
+            background: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .page {
+            max-width: 960px;
+            margin: 0 auto;
+          }
+          .toolbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 14px;
+          }
+          button {
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            background: #0284c7;
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            padding: 9px 14px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            border-bottom: 4px solid #0f172a;
+            padding-bottom: 18px;
+            margin-bottom: 18px;
+          }
+          .eyebrow {
+            color: #0369a1;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+          }
+          h1 {
+            margin: 5px 0 8px;
+            color: #0f172a;
+            font-size: 30px;
+            line-height: 1.15;
+          }
+          h2 {
+            margin: 0 0 12px;
+            color: #075985;
+            font-size: 17px;
+          }
+          .muted {
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.45;
+          }
+          .badge {
+            display: inline-block;
+            border: 1px solid #bae6fd;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #075985;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 800;
+            white-space: nowrap;
+          }
+          .validity-alert {
+            border: 2px solid ${validityColors.border};
+            border-left-width: 10px;
+            border-radius: 12px;
+            background: ${validityColors.bg};
+            color: ${validityColors.text};
+            padding: 16px 18px;
+            margin: 18px 0;
+          }
+          .validity-title {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            font-size: 20px;
+            font-weight: 900;
+          }
+          .validity-date {
+            white-space: nowrap;
+          }
+          .validity-detail {
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: 700;
+          }
+          .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 14px;
+          }
+          .card {
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
+            padding: 14px;
+          }
+          .card.accent {
+            border-color: #7dd3fc;
+            background: #f0f9ff;
+          }
+          .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 7px 0;
+            font-size: 13px;
+          }
+          .row:last-child { border-bottom: 0; }
+          .label { color: #475569; }
+          .value {
+            color: #0f172a;
+            font-weight: 800;
+            text-align: right;
+            overflow-wrap: anywhere;
+          }
+          .section {
+            margin-top: 18px;
+          }
+          .pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+          }
+          .pills span {
+            border: 1px solid #bae6fd;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #075985;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 6px 10px;
+          }
+          .notes {
+            min-height: 80px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 13px;
+            line-height: 1.55;
+            padding: 13px;
+            white-space: pre-wrap;
+          }
+          .empty-text {
+            margin: 0;
+            color: #64748b;
+            font-size: 13px;
+          }
+          .footer {
+            margin-top: 22px;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 11px;
+            padding-top: 10px;
+          }
+          @media print {
+            body { margin: 12mm; }
+            .toolbar { display: none; }
+            .page { max-width: none; }
+          }
+        </style>
+        <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              window.focus();
+              window.print();
+            }, 450);
+          }, { once: true });
+        </script>
+      </head>
+      <body>
+        <main class="page">
+          <div class="toolbar">
+            <button type="button" onclick="window.print()">Imprimir / Salvar PDF</button>
+          </div>
+
+          <section class="header">
+            <div>
+              <div class="eyebrow">Pré-Vendas · Registro de Oportunidade</div>
+              <h1>${escapeHtml(item.titulo || 'Oportunidade sem título')}</h1>
+              <div class="muted">Documento gerado em ${escapeHtml(generatedAt)}</div>
+            </div>
+            <div>
+              <span class="badge">${escapeHtml(item.status || 'ABERTA')}</span>
+            </div>
+          </section>
+
+          <section class="validity-alert">
+            <div class="validity-title">
+              <span>${escapeHtml(validity.label)}</span>
+              <span class="validity-date">Validade: ${escapeHtml(toDateBr(item.dataValidade))}</span>
+            </div>
+            <div class="validity-detail">${escapeHtml(validity.detail)}</div>
+          </section>
+
+          <section class="grid">
+            <article class="card accent">
+              <h2>Resumo Comercial</h2>
+              ${renderRows([
+                ['Cliente', item.cliente],
+                ['Origem', item.origem],
+                ['Modalidade', item.modalidade],
+                ['Valor estimado', toCurrency(item.valorEstimado)],
+                ['Prazo comercial', toDateBr(item.prazo)],
+                ['Prioridade', priorityLabel(item.prioridade)]
+              ])}
+            </article>
+
+            <article class="card">
+              <h2>Registro no Fornecedor</h2>
+              ${renderRows([
+                ['Número da oportunidade', item.numeroOportunidade],
+                ['Produto', item.produto],
+                ['Data de abertura', toDateBr(item.dataAbertura)],
+                ['Data de validade', toDateBr(item.dataValidade)],
+                ['Dias até vencimento', validity.daysRemaining === null ? '-' : String(validity.daysRemaining)]
+              ])}
+            </article>
+          </section>
+
+          <section class="grid">
+            <article class="card">
+              <h2>Vínculo com Pipeline</h2>
+              ${renderRows([
+                ['ID da oportunidade', item.oportunidadeId],
+                ['Status do registro', item.status],
+                ['Criado em', toDateTimeBr(item.createdAt)],
+                ['Atualizado em', toDateTimeBr(item.updatedAt)]
+              ])}
+            </article>
+
+            <article class="card">
+              <h2>Controle Operacional</h2>
+              ${renderRows([
+                ['Distribuidores vinculados', linkedDistributors.length],
+                ['Fornecedores vinculados', linkedSuppliers.length],
+                ['Alerta de validade', validity.label],
+                ['ID do registro', item.id]
+              ])}
+            </article>
+          </section>
+
+          <section class="section card">
+            <h2>Distribuidores Vinculados</h2>
+            ${renderList(linkedDistributors, 'Nenhum distribuidor vinculado.')}
+          </section>
+
+          <section class="section card">
+            <h2>Fornecedores Vinculados</h2>
+            ${renderList(linkedSuppliers, 'Nenhum fornecedor vinculado.')}
+          </section>
+
+          <section class="section">
+            <h2>Observações e Próximos Passos</h2>
+            <div class="notes">${escapeHtml(item.observacoes || 'Sem observações registradas.')}</div>
+          </section>
+
+          <section class="footer">
+            Documento gerado pelo Nexos Integrator · Pré-Vendas. Revise a validade antes de enviar, renovar ou arquivar a oportunidade.
+          </section>
+        </main>
+      </body>
+      </html>
+    `;
+
+    const htmlBlob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(htmlBlob);
+    printWindow.location.href = blobUrl;
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
   };
 
   const addSeller = () => {
@@ -1588,6 +2015,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         {activeRows.map((item) => {
           const linkedDistributors = (item.distribuidorIds || []).map((id) => distMap.get(id)).filter(Boolean);
           const linkedSuppliers = (item.fornecedorIds || []).map((id) => fornMap.get(id)).filter(Boolean);
+          const validity = getValidityInfo(item.dataValidade);
 
           return (
             <div key={item.id} className="rounded-xl border border-slate-600/40 bg-[#102540] p-4">
@@ -1620,25 +2048,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                   <p className="mt-1 text-xs text-slate-400">
                     {item.dataAbertura ? `Abertura: ${toDateBr(item.dataAbertura)}` : ''}
                     {item.dataValidade ? ` • Validade: ${toDateBr(item.dataValidade)}` : ''}
-                    {item.dataValidade && (() => {
-                      const val = new Date(item.dataValidade);
-                      const now = new Date();
-                      if (!Number.isFinite(val.getTime())) return null;
-                      const days = (n) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
-                      if (val < now) {
-                        return <span className="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] text-red-300 border border-red-500/30">Vencida</span>;
-                      }
-                      if (val <= days(7)) {
-                        return <span className="ml-2 rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] text-rose-300 border border-rose-500/30">Vence em 7 dias</span>;
-                      }
-                      if (val <= days(15)) {
-                        return <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300 border border-amber-500/30">Vence em 15 dias</span>;
-                      }
-                      if (val <= days(30)) {
-                        return <span className="ml-2 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] text-yellow-300 border border-yellow-500/30">Vence em 30 dias</span>;
-                      }
-                      return <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300 border border-emerald-500/30">Válida</span>;
-                    })()}
+                    <span className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] ${validityBadgeClass(validity.tone)}`}>
+                      {validity.label}
+                    </span>
                   </p>
 
                   {item.oportunidadeId && (
@@ -1658,6 +2070,13 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleViewOpportunityPdf(item)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-sky-500/50 px-3 py-2 text-xs text-sky-100 hover:bg-sky-500/20"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Visualizar PDF
+                  </button>
                   <button
                     type="button"
                     onClick={() => openEditModal(TAB_KEYS.OPORTUNIDADES, item)}
