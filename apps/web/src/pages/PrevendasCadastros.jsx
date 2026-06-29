@@ -8,6 +8,7 @@ import {
   Eye,
   ExternalLink,
   FileDown,
+  FileText,
   Globe2,
   Link2,
   Mail,
@@ -2069,13 +2070,14 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => handleViewOpportunityPdf(item)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-sky-500/50 px-3 py-2 text-xs text-sky-100 hover:bg-sky-500/20"
+                    title="Visualizar registro em PDF"
+                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
                   >
-                    <Eye className="h-3.5 w-3.5" /> Visualizar PDF
+                    <FileText className="h-3.5 w-3.5" /> PDF
                   </button>
                   <button
                     type="button"
