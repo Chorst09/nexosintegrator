@@ -38,6 +38,12 @@ import ModernTable from '../components/ModernTable';
 import GradientCard from '../components/GradientCard';
 import Modal from '../components/Modal';
 
+const detailCardClass = 'rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.68)] p-3';
+const detailLabelClass = 'text-[10px] font-bold text-[var(--crm-muted)] uppercase tracking-wider';
+const emptyIconClass = 'w-16 h-16 text-[var(--crm-muted)] opacity-45 mx-auto mb-4';
+const emptyTitleClass = 'text-lg font-semibold text-[var(--crm-ink)] mb-2';
+const emptyTextClass = 'text-[var(--crm-muted)]';
+
 const PosVenda = () => {
   const [activeTab, setActiveTab] = useState('onboarding');
   const [onboardings, setOnboardings] = useState([]);
@@ -164,9 +170,9 @@ const PosVenda = () => {
   };
 
   const getNPSCategory = (score) => {
-    if (score >= 9) return { label: 'Promotor', color: 'text-green-600', icon: ThumbsUp };
-    if (score >= 7) return { label: 'Neutro', color: 'text-yellow-600', icon: Meh };
-    return { label: 'Detrator', color: 'text-red-600', icon: ThumbsDown };
+    if (score >= 9) return { label: 'Promotor', color: 'text-emerald-700 dark:text-emerald-200', icon: ThumbsUp };
+    if (score >= 7) return { label: 'Neutro', color: 'text-amber-700 dark:text-amber-200', icon: Meh };
+    return { label: 'Detrator', color: 'text-red-700 dark:text-red-200', icon: ThumbsDown };
   };
 
   const getClientTypeLabel = (clientType) => {
@@ -180,7 +186,7 @@ const PosVenda = () => {
       B2G: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
       B2C: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
     };
-    return badges[clientType] || 'bg-gray-100 text-gray-800';
+    return badges[clientType] || 'bg-slate-500/10 text-slate-800 dark:text-slate-200';
   };
 
   const filterByClientType = (items) => {
@@ -472,13 +478,13 @@ const PosVenda = () => {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--crm-muted)] w-4 h-4" />
               <input
                 type="text"
                 placeholder="Buscar por cliente, ticket ou processo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#2d4a6f] shadow-sm"
+                className="crm-input w-full pl-10"
               />
             </div>
           </div>
@@ -486,7 +492,7 @@ const PosVenda = () => {
             <select
               value={clientTypeFilter}
               onChange={(e) => setClientTypeFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#2d4a6f] shadow-sm"
+              className="crm-input w-full"
             >
               <option value="">Todos os Tipos</option>
               <option value="B2B">B2B</option>
@@ -498,7 +504,7 @@ const PosVenda = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-[#2d4a6f] shadow-sm"
+              className="crm-input w-full"
             >
               <option value="">Todos os Status</option>
               <option value="PENDING">Pendente</option>
@@ -512,8 +518,8 @@ const PosVenda = () => {
       </GradientCard>
 
       <GradientCard gradient="gray" className="shadow-lg">
-        <div className="border-b border-gray-200 dark:border-blue-500/20">
-          <nav className="-mb-px flex space-x-8 px-6">
+        <div className="border-b border-[color:var(--crm-border)]">
+          <nav className="-mb-px flex gap-3 overflow-x-auto px-6 pt-1">
             {[
               { id: 'onboarding', label: 'Onboarding', icon: Users, count: onboardings.length, color: 'blue' },
               { id: 'support', label: 'Suporte', icon: HeadphonesIcon, count: tickets.length, color: 'green' },
@@ -527,22 +533,22 @@ const PosVenda = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`${
                     activeTab === tab.id
-                      ? (tab.color === 'blue' ? 'border-blue-500 text-blue-600 bg-blue-50' :
-                         tab.color === 'green' ? 'border-green-500 text-green-600 bg-green-50' :
-                         tab.color === 'yellow' ? 'border-yellow-500 text-yellow-600 bg-yellow-50' :
-                         'border-red-500 text-red-600 bg-red-50')
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:border-blue-500/30'
-                  } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm flex items-center gap-3 rounded-t-xl transition-all duration-200 hover:bg-gray-50`}
+                      ? (tab.color === 'blue' ? 'border-sky-400 text-sky-700 dark:text-sky-100 bg-sky-500/10' :
+                         tab.color === 'green' ? 'border-emerald-400 text-emerald-700 dark:text-emerald-100 bg-emerald-500/10' :
+                         tab.color === 'yellow' ? 'border-amber-400 text-amber-800 dark:text-amber-100 bg-amber-500/10' :
+                         'border-red-400 text-red-700 dark:text-red-100 bg-red-500/10')
+                      : 'border-transparent text-[var(--crm-muted)] hover:text-[var(--crm-ink)] hover:border-[color:var(--crm-border)]'
+                  } whitespace-nowrap py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-3 rounded-t-xl transition-all duration-200 hover:bg-black/5 dark:hover:bg-white/5`}
                 >
                   <Icon className="w-5 h-5" />
                   {tab.label}
                   <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                     activeTab === tab.id 
-                      ? (tab.color === 'blue' ? 'bg-blue-100 text-blue-700' :
-                         tab.color === 'green' ? 'bg-green-100 text-green-700' :
-                         tab.color === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
-                         'bg-red-100 text-red-700')
-                      : 'bg-gray-100 text-gray-600 dark:text-gray-300'
+                      ? (tab.color === 'blue' ? 'bg-sky-500/20 text-sky-800 dark:text-sky-100' :
+                         tab.color === 'green' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-100' :
+                         tab.color === 'yellow' ? 'bg-amber-500/20 text-amber-900 dark:text-amber-100' :
+                         'bg-red-500/20 text-red-800 dark:text-red-100')
+                      : 'bg-black/5 text-[var(--crm-muted)] dark:bg-white/10'
                   }`}>
                     {tab.count}
                   </span>
@@ -570,7 +576,7 @@ const PosVenda = () => {
                   render: (item) => (
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <span className="text-sm font-semibold text-[var(--crm-ink)]">
                           {item.company?.name}
                         </span>
                         {item.company?.clientType && (
@@ -579,7 +585,7 @@ const PosVenda = () => {
                           </span>
                         )}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="text-sm text-[var(--crm-muted)]">
                         {item.contract?.number}
                       </div>
                     </div>
@@ -601,10 +607,10 @@ const PosVenda = () => {
                     const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
                     return (
                       <div className="flex items-center">
-                        <div className="w-20 bg-gray-200 rounded-full h-2 mr-3">
+                        <div className="w-20 bg-black/10 dark:bg-white/10 rounded-full h-2 mr-3">
                           <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
                         </div>
-                        <span className="text-sm text-gray-600 font-medium">{completedSteps}/{totalSteps}</span>
+                        <span className="text-sm text-[var(--crm-muted)] font-semibold">{completedSteps}/{totalSteps}</span>
                       </div>
                     );
                   }
@@ -614,10 +620,10 @@ const PosVenda = () => {
                   label: 'Responsável',
                   render: (item) => (
                     <div className="flex items-center">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-xs font-medium text-blue-600">{item.assignedTo?.name?.charAt(0) || '?'}</span>
+                      <div className="w-8 h-8 bg-sky-500/20 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-xs font-bold text-sky-700 dark:text-sky-200">{item.assignedTo?.name?.charAt(0) || '?'}</span>
                       </div>
-                      <span className="text-sm text-gray-900 dark:text-gray-100">{item.assignedTo?.name || 'Não atribuído'}</span>
+                      <span className="text-sm text-[var(--crm-ink)]">{item.assignedTo?.name || 'Não atribuído'}</span>
                     </div>
                   )
                 },
@@ -626,8 +632,8 @@ const PosVenda = () => {
                   label: 'Data Prevista',
                   render: (item) => (
                     <div className="flex items-center">
-                      <Calendar className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
+                      <Calendar className="w-4 h-4 text-[var(--crm-muted)] mr-2" />
+                      <span className="text-sm text-[var(--crm-ink)]">
                         {item.expectedEndDate ? new Date(item.expectedEndDate).toLocaleDateString('pt-BR') : '-'}
                       </span>
                     </div>
@@ -646,9 +652,9 @@ const PosVenda = () => {
               ]}
               emptyState={
                 <div>
-                  <UserCheck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum onboarding encontrado</h3>
-                  <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">Comece criando um novo processo de onboarding</p>
+                  <UserCheck className={emptyIconClass} />
+                  <h3 className={emptyTitleClass}>Nenhum onboarding encontrado</h3>
+                  <p className={emptyTextClass}>Comece criando um novo processo de onboarding</p>
                 </div>
               }
             />
@@ -671,8 +677,8 @@ const PosVenda = () => {
                   label: 'Ticket',
                   render: (item) => (
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">#{item.number}</div>
-                      <div className="text-sm text-gray-500 max-w-xs truncate">{item.title}</div>
+                      <div className="text-sm font-semibold text-[var(--crm-ink)]">#{item.number}</div>
+                      <div className="text-sm text-[var(--crm-muted)] max-w-xs truncate">{item.title}</div>
                     </div>
                   )
                 },
@@ -682,10 +688,10 @@ const PosVenda = () => {
                   render: (item) => (
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-green-600">{item.company?.name?.charAt(0) || '?'}</span>
+                        <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-200">{item.company?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm text-gray-900 dark:text-gray-100">{item.company?.name}</span>
+                        <span className="text-sm text-[var(--crm-ink)]">{item.company?.name}</span>
                       </div>
                       {item.company?.clientType && (
                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded ${getClientTypeBadge(item.company.clientType)}`}>
@@ -715,12 +721,12 @@ const PosVenda = () => {
                   render: (item) => {
                     const slaExpired = item.slaDeadline && new Date(item.slaDeadline) < new Date();
                     return (
-                      <div className={`flex items-center ${slaExpired ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
-                        <Clock className={`w-4 h-4 mr-2 ${slaExpired ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                      <div className={`flex items-center ${slaExpired ? 'text-red-700 dark:text-red-200' : 'text-[var(--crm-ink)]'}`}>
+                        <Clock className={`w-4 h-4 mr-2 ${slaExpired ? 'text-red-500' : 'text-[var(--crm-muted)]'}`} />
                         <span className="text-sm font-medium">
                           {item.slaDeadline ? new Date(item.slaDeadline).toLocaleDateString('pt-BR') : '-'}
                         </span>
-                        {slaExpired && <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">Vencido</span>}
+                        {slaExpired && <span className="ml-2 px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-200 text-xs rounded-full">Vencido</span>}
                       </div>
                     );
                   }
@@ -730,10 +736,10 @@ const PosVenda = () => {
                   label: 'Responsável',
                   render: (item) => (
                     <div className="flex items-center">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-xs font-medium text-purple-600">{item.assignedTo?.name?.charAt(0) || '?'}</span>
+                      <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-200">{item.assignedTo?.name?.charAt(0) || '?'}</span>
                       </div>
-                      <span className="text-sm text-gray-900 dark:text-gray-100">{item.assignedTo?.name || 'Não atribuído'}</span>
+                      <span className="text-sm text-[var(--crm-ink)]">{item.assignedTo?.name || 'Não atribuído'}</span>
                     </div>
                   )
                 }
@@ -750,9 +756,9 @@ const PosVenda = () => {
               ]}
               emptyState={
                 <div>
-                  <HeadphonesIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum ticket encontrado</h3>
-                  <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">Todos os tickets foram resolvidos ou não há tickets no momento</p>
+                  <HeadphonesIcon className={emptyIconClass} />
+                  <h3 className={emptyTitleClass}>Nenhum ticket encontrado</h3>
+                  <p className={emptyTextClass}>Todos os tickets foram resolvidos ou não há tickets no momento</p>
                 </div>
               }
             />
@@ -774,10 +780,10 @@ const PosVenda = () => {
                   render: (item) => (
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-yellow-600">{item.company?.name?.charAt(0) || '?'}</span>
+                        <div className="w-8 h-8 bg-amber-500/20 rounded-full flex items-center justify-center">
+                          <span className="text-xs font-bold text-amber-800 dark:text-amber-200">{item.company?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.company?.name}</span>
+                        <span className="text-sm font-semibold text-[var(--crm-ink)]">{item.company?.name}</span>
                       </div>
                       {item.company?.clientType && (
                         <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded ${getClientTypeBadge(item.company.clientType)}`}>
@@ -793,10 +799,10 @@ const PosVenda = () => {
                   render: (item) => (
                     <div className="flex items-center">
                       <Star className="w-4 h-4 text-yellow-400 mr-2" />
-                      <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                      <span className="text-lg font-bold text-[var(--crm-ink)]">
                         {item.score !== null ? item.score : '-'}
                       </span>
-                      <span className="text-sm text-gray-500 ml-1">/10</span>
+                      <span className="text-sm text-[var(--crm-muted)] ml-1">/10</span>
                     </div>
                   )
                 },
@@ -804,14 +810,14 @@ const PosVenda = () => {
                   key: 'category',
                   label: 'Categoria',
                   render: (item) => {
-                    if (item.score === null) return <span className="text-sm text-gray-500">-</span>;
+                    if (item.score === null) return <span className="text-sm text-[var(--crm-muted)]">-</span>;
                     const category = getNPSCategory(item.score);
                     const CatIcon = category.icon;
                     return (
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full ${
-                        category.label === 'Promotor' ? 'bg-green-100 text-green-800' :
-                        category.label === 'Neutro' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+                        category.label === 'Promotor' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' :
+                        category.label === 'Neutro' ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200' :
+                        'bg-red-500/20 text-red-800 dark:text-red-200'
                       }`}>
                         <CatIcon className="w-3.5 h-3.5" /> {category.label}
                       </span>
@@ -823,7 +829,7 @@ const PosVenda = () => {
                   label: 'Status',
                   render: (item) => (
                     <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                      item.status === 'RESPONDED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      item.status === 'RESPONDED' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' : 'bg-amber-500/20 text-amber-900 dark:text-amber-200'
                     }`}>
                       {item.status === 'RESPONDED' ? 'Respondido' : 'Pendente'}
                     </span>
@@ -834,8 +840,8 @@ const PosVenda = () => {
                   label: 'Data Envio',
                   render: (item) => (
                     <div className="flex items-center">
-                      <Calendar className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
+                      <Calendar className="w-4 h-4 text-[var(--crm-muted)] mr-2" />
+                      <span className="text-sm text-[var(--crm-ink)]">
                         {new Date(item.sentAt).toLocaleDateString('pt-BR')}
                       </span>
                     </div>
@@ -847,10 +853,10 @@ const PosVenda = () => {
                   render: (item) => (
                     item.feedback ? (
                       <div className="max-w-xs">
-                        <p className="text-sm text-gray-900 truncate" title={item.feedback}>{item.feedback}</p>
+                        <p className="text-sm text-[var(--crm-ink)] truncate" title={item.feedback}>{item.feedback}</p>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-500">Sem feedback</span>
+                      <span className="text-sm text-[var(--crm-muted)]">Sem feedback</span>
                     )
                   )
                 }
@@ -867,9 +873,9 @@ const PosVenda = () => {
               ]}
               emptyState={
                 <div>
-                  <Star className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma pesquisa NPS encontrada</h3>
-                  <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">Comece enviando pesquisas de satisfação para seus clientes</p>
+                  <Star className={emptyIconClass} />
+                  <h3 className={emptyTitleClass}>Nenhuma pesquisa NPS encontrada</h3>
+                  <p className={emptyTextClass}>Comece enviando pesquisas de satisfação para seus clientes</p>
                 </div>
               }
             />
@@ -879,8 +885,8 @@ const PosVenda = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Alertas de Churn</h3>
-                  <p className="text-sm text-gray-600 mt-1">Identifique clientes com risco de cancelamento</p>
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)]">Alertas de Churn</h3>
+                  <p className="text-sm text-[var(--crm-muted)] mt-1">Identifique clientes com risco de cancelamento</p>
                 </div>
                 <button
                   onClick={handleDetectChurn}
@@ -906,10 +912,10 @@ const PosVenda = () => {
                     label: 'Cliente',
                     render: (item) => (
                       <div className="flex items-center">
-                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
-                          <span className="text-xs font-medium text-red-600">{item.company?.name?.charAt(0) || '?'}</span>
+                        <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center mr-3">
+                          <span className="text-xs font-bold text-red-700 dark:text-red-200">{item.company?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.company?.name}</span>
+                        <span className="text-sm font-semibold text-[var(--crm-ink)]">{item.company?.name}</span>
                       </div>
                     )
                   },
@@ -929,14 +935,14 @@ const PosVenda = () => {
                     label: 'Score de Risco',
                     render: (item) => (
                       <div className="flex items-center">
-                        <div className="w-20 bg-gray-200 rounded-full h-3 mr-3">
+                        <div className="w-20 bg-black/10 dark:bg-white/10 rounded-full h-3 mr-3">
                           <div className={`h-3 rounded-full transition-all duration-300 ${
                             item.score >= 80 ? 'bg-gradient-to-r from-red-500 to-red-600' : 
                             item.score >= 65 ? 'bg-gradient-to-r from-orange-500 to-orange-600' : 
                             'bg-gradient-to-r from-yellow-500 to-yellow-600'
                           }`} style={{ width: `${item.score}%` }} />
                         </div>
-                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{item.score}%</span>
+                        <span className="text-sm font-bold text-[var(--crm-ink)]">{item.score}%</span>
                       </div>
                     )
                   },
@@ -946,10 +952,10 @@ const PosVenda = () => {
                     render: (item) => (
                       <div className="max-w-xs">
                         {item.reasons?.slice(0, 2).map((reason, index) => (
-                          <span key={index} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full mb-1 inline-block mr-1">{reason}</span>
+                          <span key={index} className="text-xs bg-slate-500/10 text-[var(--crm-ink)] px-2 py-1 rounded-full mb-1 inline-block mr-1">{reason}</span>
                         ))}
                         {item.reasons?.length > 2 && (
-                          <div className="text-xs text-gray-500 mt-1">+{item.reasons.length - 2} outros fatores</div>
+                          <div className="text-xs text-[var(--crm-muted)] mt-1">+{item.reasons.length - 2} outros fatores</div>
                         )}
                       </div>
                     )
@@ -959,7 +965,7 @@ const PosVenda = () => {
                     label: 'Status',
                     render: (item) => (
                       <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                        item.status === 'ACTIVE' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                        item.status === 'ACTIVE' ? 'bg-red-500/20 text-red-800 dark:text-red-200' : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200'
                       }`}>
                         {item.status === 'ACTIVE' ? 'Ativo' : 'Resolvido'}
                       </span>
@@ -970,10 +976,10 @@ const PosVenda = () => {
                     label: 'Responsável',
                     render: (item) => (
                       <div className="flex items-center">
-                        <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
-                          <span className="text-xs font-medium text-indigo-600">{item.assignedTo?.name?.charAt(0) || '?'}</span>
+                        <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center mr-3">
+                          <span className="text-xs font-bold text-indigo-700 dark:text-indigo-200">{item.assignedTo?.name?.charAt(0) || '?'}</span>
                         </div>
-                        <span className="text-sm text-gray-900 dark:text-gray-100">{item.assignedTo?.name || 'Não atribuído'}</span>
+                        <span className="text-sm text-[var(--crm-ink)]">{item.assignedTo?.name || 'Não atribuído'}</span>
                       </div>
                     )
                   }
@@ -989,9 +995,9 @@ const PosVenda = () => {
                 }}
                 emptyState={
                   <div>
-                    <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum alerta de churn encontrado</h3>
-                    <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">Ótimo! Seus clientes estão satisfeitos ou execute a detecção de churn</p>
+                    <Shield className={emptyIconClass} />
+                    <h3 className={emptyTitleClass}>Nenhum alerta de churn encontrado</h3>
+                    <p className={emptyTextClass}>Ótimo! Seus clientes estão satisfeitos ou execute a detecção de churn</p>
                   </div>
                 }
               />
@@ -1279,7 +1285,7 @@ const NPSSurveyModal = ({ onClose, onSubmit, companies, contracts }) => {
           ))}
         </select>
       </div>
-      <p className="text-sm text-gray-500 bg-blue-50 p-3 rounded-lg">
+      <p className="rounded-lg border border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.08)] p-3 text-sm text-[var(--crm-muted)]">
         Uma pesquisa de satisfação (NPS) será enviada para o cliente selecionado. O cliente receberá um link para avaliar de 0 a 10.
       </p>
       <div className="flex justify-end space-x-3 pt-4">
@@ -1298,21 +1304,21 @@ const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClo
 
   return (
     <div className="space-y-6">
-      <div className="bg-blue-50 p-4 rounded-xl">
+      <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.08)] p-4">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-gray-700">Progresso</span>
-          <span className="text-sm font-bold text-blue-700">{completedSteps}/{totalSteps} etapas</span>
+          <span className="text-sm font-semibold text-[var(--crm-ink)]">Progresso</span>
+          <span className="text-sm font-bold text-[rgb(var(--crm-accent-rgb))]">{completedSteps}/{totalSteps} etapas</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-3">
+        <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-3">
           <div className="bg-blue-600 h-3 rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
       {allDone && (
-        <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center">
+        <div className="bg-emerald-500/10 border border-emerald-400/25 p-4 rounded-xl text-center">
           <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-          <p className="text-sm font-bold text-emerald-700">Onboarding concluído!</p>
-          <p className="text-xs text-emerald-600">Todas as etapas foram finalizadas.</p>
+          <p className="text-sm font-bold text-emerald-800 dark:text-emerald-200">Onboarding concluído!</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">Todas as etapas foram finalizadas.</p>
         </div>
       )}
 
@@ -1324,7 +1330,7 @@ const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClo
 
           return (
             <div key={step.id || index} className={`p-4 rounded-xl border-2 transition-all ${
-              isCompleted ? 'border-emerald-200 bg-emerald-50/50' : 'border-gray-200 bg-white hover:border-blue-200'
+              isCompleted ? 'border-emerald-400/25 bg-emerald-500/10' : 'border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.68)] hover:border-sky-400/35'
             }`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -1332,26 +1338,26 @@ const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClo
                     {isCompleted ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                     ) : (
-                      <div className="w-5 h-5 rounded-full border-2 border-gray-300 shrink-0 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-gray-400">{step.order || index + 1}</span>
+                      <div className="w-5 h-5 rounded-full border-2 border-[color:var(--crm-border)] shrink-0 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-[var(--crm-muted)]">{step.order || index + 1}</span>
                       </div>
                     )}
-                    <span className={`text-sm font-bold ${isCompleted ? 'text-emerald-700' : 'text-gray-800'}`}>
+                    <span className={`text-sm font-bold ${isCompleted ? 'text-emerald-800 dark:text-emerald-200' : 'text-[var(--crm-ink)]'}`}>
                       {step.title}
                     </span>
                   </div>
                   {step.description && (
-                    <p className="text-xs text-gray-500 mt-1 ml-7">{step.description}</p>
+                    <p className="text-xs text-[var(--crm-muted)] mt-1 ml-7">{step.description}</p>
                   )}
                 </div>
                 <div className="shrink-0">
                   {isCompleted ? (
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Concluída</span>
+                    <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-500/20 px-2 py-1 rounded-full">Concluída</span>
                   ) : (
                     <button
                       onClick={() => onAdvanceStep(onboarding.id, step)}
                       disabled={!!advancingStep}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-sky-800 dark:text-sky-100 bg-sky-500/20 hover:bg-sky-500/25 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
                     >
                       {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                       Concluir
@@ -1377,33 +1383,33 @@ const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendRespo
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Ticket</p>
-          <p className="text-sm font-bold text-gray-900">#{ticket.number}</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Ticket</p>
+          <p className="text-sm font-bold text-[var(--crm-ink)]">#{ticket.number}</p>
         </div>
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Status</p>
           <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
-            ticket.status === 'OPEN' ? 'bg-red-100 text-red-800' :
-            ticket.status === 'IN_PROGRESS' ? 'bg-sky-100 text-sky-800' :
-            ticket.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-800' :
-            'bg-gray-100 text-gray-800'
+            ticket.status === 'OPEN' ? 'bg-red-500/20 text-red-800 dark:text-red-200' :
+            ticket.status === 'IN_PROGRESS' ? 'bg-sky-500/20 text-sky-800 dark:text-sky-200' :
+            ticket.status === 'RESOLVED' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' :
+            'bg-slate-500/10 text-slate-800 dark:text-slate-200'
           }`}>{ticket.status}</span>
         </div>
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Prioridade</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Prioridade</p>
           <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
-            ticket.priority === 'URGENT' ? 'bg-red-100 text-red-800' :
-            ticket.priority === 'HIGH' ? 'bg-orange-100 text-orange-800' :
-            ticket.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-800' :
-            'bg-emerald-100 text-emerald-800'
+            ticket.priority === 'URGENT' ? 'bg-red-500/20 text-red-800 dark:text-red-200' :
+            ticket.priority === 'HIGH' ? 'bg-orange-500/20 text-orange-800 dark:text-orange-200' :
+            ticket.priority === 'MEDIUM' ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200' :
+            'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200'
           }`}>{ticket.priority}</span>
         </div>
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">SLA</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>SLA</p>
           <div className="flex items-center gap-1.5">
-            <Clock className={`w-3.5 h-3.5 ${slaExpired ? 'text-red-500' : 'text-gray-400'}`} />
-            <span className={`text-xs font-bold ${slaExpired ? 'text-red-600' : 'text-gray-700'}`}>
+            <Clock className={`w-3.5 h-3.5 ${slaExpired ? 'text-red-500' : 'text-[var(--crm-muted)]'}`} />
+            <span className={`text-xs font-bold ${slaExpired ? 'text-red-700 dark:text-red-200' : 'text-[var(--crm-ink)]'}`}>
               {ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleDateString('pt-BR') : '-'}
               {slaExpired && ' (Vencido)'}
             </span>
@@ -1411,30 +1417,30 @@ const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendRespo
         </div>
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-xl">
-        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição</p>
-        <p className="text-sm text-gray-800">{ticket.description}</p>
+      <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.68)] p-4">
+        <p className={`${detailLabelClass} mb-1`}>Descrição</p>
+        <p className="text-sm text-[var(--crm-ink)]">{ticket.description}</p>
       </div>
 
       {responses && responses.length > 0 && (
-        <div className="border-t border-gray-200 pt-4">
-          <p className="text-sm font-bold text-gray-700 mb-3">Respostas ({responses.length})</p>
+        <div className="border-t border-[color:var(--crm-border)] pt-4">
+          <p className="text-sm font-bold text-[var(--crm-ink)] mb-3">Respostas ({responses.length})</p>
           <div className="space-y-3 max-h-60 overflow-y-auto">
             {responses.map((resp, idx) => (
-              <div key={resp.id || idx} className="bg-gray-50 p-3 rounded-xl">
+              <div key={resp.id || idx} className={detailCardClass}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-gray-600">{resp.author?.name || 'Desconhecido'}</span>
-                  <span className="text-[10px] text-gray-400">{new Date(resp.createdAt).toLocaleString('pt-BR')}</span>
+                  <span className="text-xs font-bold text-[var(--crm-ink)]">{resp.author?.name || 'Desconhecido'}</span>
+                  <span className="text-[10px] text-[var(--crm-muted)]">{new Date(resp.createdAt).toLocaleString('pt-BR')}</span>
                 </div>
-                <p className="text-sm text-gray-800">{resp.message}</p>
+                <p className="text-sm text-[var(--crm-ink)]">{resp.message}</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="border-t border-gray-200 pt-4">
-        <p className="text-sm font-bold text-gray-700 mb-3">Adicionar Resposta</p>
+      <div className="border-t border-[color:var(--crm-border)] pt-4">
+        <p className="text-sm font-bold text-[var(--crm-ink)] mb-3">Adicionar Resposta</p>
         <textarea
           value={responseText}
           onChange={(e) => onResponseChange(e.target.value)}
@@ -1467,16 +1473,16 @@ const NPSDetailModal = ({ nps, onClose, getNPSCategory }) => {
 
   return (
     <div className="space-y-5">
-      <div className="text-center p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl">
+      <div className="text-center p-6 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/10 to-yellow-500/10">
         {nps.score !== null ? (
           <>
-            <div className="text-5xl font-bold text-gray-900 mb-2">{nps.score}</div>
-            <p className="text-sm text-gray-500">/ 10</p>
+            <div className="text-5xl font-bold text-[var(--crm-ink)] mb-2">{nps.score}</div>
+            <p className="text-sm text-[var(--crm-muted)]">/ 10</p>
             {category && (
               <span className={`inline-flex items-center gap-1.5 mt-3 px-4 py-2 rounded-full text-sm font-bold ${
-                category.label === 'Promotor' ? 'bg-green-100 text-green-800' :
-                category.label === 'Neutro' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-red-100 text-red-800'
+                category.label === 'Promotor' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' :
+                category.label === 'Neutro' ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200' :
+                'bg-red-500/20 text-red-800 dark:text-red-200'
               }`}>
                 <CatIcon className="w-4 h-4" /> {category.label}
               </span>
@@ -1485,45 +1491,45 @@ const NPSDetailModal = ({ nps, onClose, getNPSCategory }) => {
         ) : (
           <>
             <Star className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-gray-600">Pesquisa ainda não respondida</p>
+            <p className="text-sm font-semibold text-[var(--crm-muted)]">Pesquisa ainda não respondida</p>
           </>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cliente</p>
-          <p className="text-sm font-bold text-gray-900">{nps.company?.name}</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Cliente</p>
+          <p className="text-sm font-bold text-[var(--crm-ink)]">{nps.company?.name}</p>
         </div>
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Status</p>
           <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
-            nps.status === 'RESPONDED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+            nps.status === 'RESPONDED' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' : 'bg-amber-500/20 text-amber-900 dark:text-amber-200'
           }`}>{nps.status === 'RESPONDED' ? 'Respondido' : 'Pendente'}</span>
         </div>
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Enviada em</p>
-          <p className="text-sm font-bold text-gray-900">{new Date(nps.sentAt).toLocaleDateString('pt-BR')}</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Enviada em</p>
+          <p className="text-sm font-bold text-[var(--crm-ink)]">{new Date(nps.sentAt).toLocaleDateString('pt-BR')}</p>
         </div>
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Respondida em</p>
-          <p className="text-sm font-bold text-gray-900">
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Respondida em</p>
+          <p className="text-sm font-bold text-[var(--crm-ink)]">
             {nps.respondedAt ? new Date(nps.respondedAt).toLocaleDateString('pt-BR') : '-'}
           </p>
         </div>
       </div>
 
       {nps.feedback && (
-        <div className="bg-gray-50 p-4 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Feedback do Cliente</p>
-          <p className="text-sm text-gray-700 italic">"{nps.feedback}"</p>
+        <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.68)] p-4">
+          <p className={`${detailLabelClass} mb-1`}>Feedback do Cliente</p>
+          <p className="text-sm text-[var(--crm-ink)] italic">"{nps.feedback}"</p>
         </div>
       )}
 
       {nps.contract && (
-        <div className="bg-gray-50 p-3 rounded-xl">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Contrato</p>
-          <p className="text-sm font-bold text-gray-900">{nps.contract.number} - {nps.contract.title}</p>
+        <div className={detailCardClass}>
+          <p className={detailLabelClass}>Contrato</p>
+          <p className="text-sm font-bold text-[var(--crm-ink)]">{nps.contract.number} - {nps.contract.title}</p>
         </div>
       )}
 
