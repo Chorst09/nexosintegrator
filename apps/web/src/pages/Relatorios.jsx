@@ -152,6 +152,7 @@ export default function Relatorios() {
   });
 
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const [activeReport, setActiveReport] = useState("executive");
 
   const loadReports = async () => {
     setLoading(true);
@@ -515,6 +516,7 @@ export default function Relatorios() {
     ]);
   };
 
+  const executeReport = () => setActiveReport(filters.reportType);
   const selectedReport = REPORT_TYPES.find((item) => item.id === filters.reportType) || REPORT_TYPES[0];
   const reportHighlights = {
     executive: [
@@ -620,7 +622,7 @@ export default function Relatorios() {
                 return (
                   <button
                     key={report.id}
-                    onClick={() => setFilter("reportType", report.id)}
+                    onClick={() => { setFilter("reportType", report.id); setActiveReport(report.id); }}
                     className={[
                       "text-left rounded-2xl border p-3 transition-all",
                       active
@@ -637,6 +639,13 @@ export default function Relatorios() {
                 );
               })}
             </div>
+            <button
+              onClick={executeReport}
+              className="crm-btn crm-btn-primary w-full mt-3"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Executar Relatório
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 content-start">
@@ -698,19 +707,22 @@ export default function Relatorios() {
         </div>
       </GradientCard>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <AnimatedStats title="Pipeline Aberto" value={formatCurrency(analysis.kpis.pipelineValue)} subtitle={`${analysis.kpis.openCount} oportunidades abertas`} icon={Briefcase} color="blue" />
-        <AnimatedStats title="Forecast Ponderado" value={formatCurrency(analysis.kpis.weightedPipeline)} subtitle="Valor x probabilidade" icon={Target} color="purple" />
-        <AnimatedStats title="Receita Ganha" value={formatCurrency(analysis.kpis.wonValue)} subtitle={`${analysis.kpis.wonCount} negócios fechados`} icon={TrendingUp} color="green" />
-        <AnimatedStats title="Conversão" value={formatPercent(analysis.kpis.conversionRate)} subtitle={`${analysis.kpis.wonCount} ganhos / ${analysis.kpis.lostCount} perdas`} icon={CheckCircle2} color="orange" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <AnimatedStats title="Ticket Médio" value={formatCurrency(analysis.kpis.avgTicket)} subtitle="Base em ganhos" icon={PieChart} color="green" />
-        <AnimatedStats title="Clientes Filtrados" value={analysis.kpis.companiesCount} subtitle="Base de empresas" icon={Building2} color="blue" />
-        <AnimatedStats title="Atividades Atrasadas" value={analysis.kpis.overdueActivitiesCount} subtitle={`${analysis.kpis.activitiesCount} atividades no filtro`} icon={Activity} color="red" />
-        <AnimatedStats title="Contratos a Vencer" value={analysis.kpis.expiringContractsCount} subtitle={`${formatCurrency(analysis.kpis.contractValue)} ativos`} icon={CalendarDays} color="yellow" />
-      </div>
+      {activeReport === "executive" && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <AnimatedStats title="Pipeline Aberto" value={formatCurrency(analysis.kpis.pipelineValue)} subtitle={`${analysis.kpis.openCount} oportunidades abertas`} icon={Briefcase} color="blue" />
+            <AnimatedStats title="Forecast Ponderado" value={formatCurrency(analysis.kpis.weightedPipeline)} subtitle="Valor x probabilidade" icon={Target} color="purple" />
+            <AnimatedStats title="Receita Ganha" value={formatCurrency(analysis.kpis.wonValue)} subtitle={`${analysis.kpis.wonCount} negócios fechados`} icon={TrendingUp} color="green" />
+            <AnimatedStats title="Conversão" value={formatPercent(analysis.kpis.conversionRate)} subtitle={`${analysis.kpis.wonCount} ganhos / ${analysis.kpis.lostCount} perdas`} icon={CheckCircle2} color="orange" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <AnimatedStats title="Ticket Médio" value={formatCurrency(analysis.kpis.avgTicket)} subtitle="Base em ganhos" icon={PieChart} color="green" />
+            <AnimatedStats title="Clientes Filtrados" value={analysis.kpis.companiesCount} subtitle="Base de empresas" icon={Building2} color="blue" />
+            <AnimatedStats title="Atividades Atrasadas" value={analysis.kpis.overdueActivitiesCount} subtitle={`${analysis.kpis.activitiesCount} atividades no filtro`} icon={Activity} color="red" />
+            <AnimatedStats title="Contratos a Vencer" value={analysis.kpis.expiringContractsCount} subtitle={`${formatCurrency(analysis.kpis.contractValue)} ativos`} icon={CalendarDays} color="yellow" />
+          </div>
+        </>
+      )}
 
       <GradientCard gradient="indigo" className="p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
@@ -732,159 +744,225 @@ export default function Relatorios() {
         </div>
       </GradientCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <GradientCard gradient="blue" className="p-6">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Receita e Pipeline</h3>
-              <p className="text-sm text-[var(--crm-muted)]">Evolução por mês no período filtrado.</p>
+      {["executive", "pipeline"].includes(activeReport) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <GradientCard gradient="blue" className="p-6">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-[var(--crm-ink)]">Receita e Pipeline</h3>
+                <p className="text-sm text-[var(--crm-muted)]">Evolução por mês no período filtrado.</p>
+              </div>
+              <TrendingUp className="w-6 h-6 text-sky-300" />
             </div>
-            <TrendingUp className="w-6 h-6 text-sky-300" />
-          </div>
-          <div className="h-80">
-            <Line data={revenueData} options={chartOptions} />
-          </div>
-        </GradientCard>
-
-        <GradientCard gradient="purple" className="p-6">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Funil por Etapa</h3>
-              <p className="text-sm text-[var(--crm-muted)]">Valor consolidado por status comercial.</p>
+            <div className="h-80">
+              <Line data={revenueData} options={chartOptions} />
             </div>
-            <Layers3 className="w-6 h-6 text-indigo-300" />
-          </div>
-          <div className="h-80">
-            <Bar data={stageData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
-          </div>
-        </GradientCard>
-      </div>
+          </GradientCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <GradientCard gradient="green" className="p-6">
-          <div className="mb-5">
-            <h3 className="text-xl font-bold text-[var(--crm-ink)]">Origem dos Leads</h3>
-            <p className="text-sm text-[var(--crm-muted)]">Canais com maior volume.</p>
-          </div>
-          <div className="h-72">
-            <Doughnut data={sourceData} options={{ ...chartOptions, scales: undefined }} />
-          </div>
-        </GradientCard>
+          <GradientCard gradient="purple" className="p-6">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-[var(--crm-ink)]">Funil por Etapa</h3>
+                <p className="text-sm text-[var(--crm-muted)]">Valor consolidado por status comercial.</p>
+              </div>
+              <Layers3 className="w-6 h-6 text-indigo-300" />
+            </div>
+            <div className="h-80">
+              <Bar data={stageData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
+            </div>
+          </GradientCard>
+        </div>
+      )}
 
-        <GradientCard gradient="red" className="p-6">
-          <div className="mb-5">
-            <h3 className="text-xl font-bold text-[var(--crm-ink)]">Motivos de Perda</h3>
-            <p className="text-sm text-[var(--crm-muted)]">Causas mais recorrentes.</p>
-          </div>
-          <div className="h-72">
-            <Bar data={lossData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
-          </div>
-        </GradientCard>
+      {activeReport === "executive" && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <GradientCard gradient="green" className="p-6">
+            <div className="mb-5">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Origem dos Leads</h3>
+              <p className="text-sm text-[var(--crm-muted)]">Canais com maior volume.</p>
+            </div>
+            <div className="h-72">
+              <Doughnut data={sourceData} options={{ ...chartOptions, scales: undefined }} />
+            </div>
+          </GradientCard>
 
-        <GradientCard gradient="orange" className="p-6">
-          <div className="mb-5">
-            <h3 className="text-xl font-bold text-[var(--crm-ink)]">Insights de Gestão</h3>
-            <p className="text-sm text-[var(--crm-muted)]">Pontos de atenção automáticos.</p>
-          </div>
-          <div className="space-y-3">
-            <Insight title="Forecast" value={formatCurrency(analysis.kpis.weightedPipeline)} detail="Projeção baseada na probabilidade de fechamento." />
-            <Insight title="Risco operacional" value={`${analysis.kpis.overdueActivitiesCount} atrasos`} detail="Atividades vencidas em aberto exigem acompanhamento." tone={analysis.kpis.overdueActivitiesCount > 0 ? "red" : "green"} />
-            <Insight title="Renovações" value={`${analysis.kpis.expiringContractsCount} contratos`} detail="Contratos ativos com vencimento nos próximos 90 dias." tone={analysis.kpis.expiringContractsCount > 0 ? "amber" : "green"} />
-            <Insight title="Perdas no período" value={formatCurrency(analysis.kpis.lostValue)} detail="Valor total perdido dentro dos filtros atuais." tone={analysis.kpis.lostValue > 0 ? "red" : "green"} />
-          </div>
-        </GradientCard>
-      </div>
+          <GradientCard gradient="red" className="p-6">
+            <div className="mb-5">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Motivos de Perda</h3>
+              <p className="text-sm text-[var(--crm-muted)]">Causas mais recorrentes.</p>
+            </div>
+            <div className="h-72">
+              <Bar data={lossData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
+            </div>
+          </GradientCard>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <GradientCard gradient="gray" className="p-6">
-          <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Ranking de Vendedores</h3>
-          <p className="text-sm text-[var(--crm-muted)] mb-5">Receita, forecast e conversão por responsável.</p>
-          <div className="space-y-3">
-            {analysis.bySeller.slice(0, 6).map((seller, index) => (
-              <div key={seller.id} className="rounded-2xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.62)] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="h-9 w-9 rounded-2xl bg-[rgb(var(--crm-accent-rgb)_/_0.14)] text-[rgb(var(--crm-accent-rgb))] flex items-center justify-center font-bold">{index + 1}</span>
-                    <div className="min-w-0">
-                      <p className="font-bold text-[var(--crm-ink)] truncate">{seller.name}</p>
-                      <p className="text-xs text-[var(--crm-muted)]">{seller.won} ganhos · {seller.open} abertos · {formatPercent(seller.conversion)}</p>
+          <GradientCard gradient="orange" className="p-6">
+            <div className="mb-5">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Insights de Gestão</h3>
+              <p className="text-sm text-[var(--crm-muted)]">Pontos de atenção automáticos.</p>
+            </div>
+            <div className="space-y-3">
+              <Insight title="Forecast" value={formatCurrency(analysis.kpis.weightedPipeline)} detail="Projeção baseada na probabilidade de fechamento." />
+              <Insight title="Risco operacional" value={`${analysis.kpis.overdueActivitiesCount} atrasos`} detail="Atividades vencidas em aberto exigem acompanhamento." tone={analysis.kpis.overdueActivitiesCount > 0 ? "red" : "green"} />
+              <Insight title="Renovações" value={`${analysis.kpis.expiringContractsCount} contratos`} detail="Contratos ativos com vencimento nos próximos 90 dias." tone={analysis.kpis.expiringContractsCount > 0 ? "amber" : "green"} />
+              <Insight title="Perdas no período" value={formatCurrency(analysis.kpis.lostValue)} detail="Valor total perdido dentro dos filtros atuais." tone={analysis.kpis.lostValue > 0 ? "red" : "green"} />
+            </div>
+          </GradientCard>
+        </div>
+      )}
+
+      {activeReport === "losses" && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <GradientCard gradient="red" className="p-6">
+            <div className="mb-5">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Motivos de Perda</h3>
+              <p className="text-sm text-[var(--crm-muted)]">Causas mais recorrentes.</p>
+            </div>
+            <div className="h-72">
+              <Bar data={lossData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
+            </div>
+          </GradientCard>
+
+          <GradientCard gradient="orange" className="p-6">
+            <div className="mb-5">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Insights de Perdas</h3>
+              <p className="text-sm text-[var(--crm-muted)]">Análise automática de perdas.</p>
+            </div>
+            <div className="space-y-3">
+              <Insight title="Valor perdido" value={formatCurrency(analysis.kpis.lostValue)} detail={`${analysis.kpis.lostCount} oportunidades perdidas no filtro.`} tone="red" />
+              <Insight title="Principal motivo" value={analysis.byLoss[0]?.reason || "-"} detail={analysis.byLoss[0] ? `${analysis.byLoss[0].count} ocorrências` : "Nenhum motivo registrado."} tone="amber" />
+              <Insight title="Impacto no pipeline" value={formatPercent(analysis.kpis.conversionRate)} detail="Taxa de conversão geral do período." />
+              <Insight title="Oportunidades perdidas" value={analysis.kpis.lostCount} detail="Total de perdas no filtro aplicado." />
+            </div>
+          </GradientCard>
+        </div>
+      )}
+
+      {["pipeline", "clients", "activities", "contracts"].includes(activeReport) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <GradientCard gradient="orange" className="p-6">
+            <div className="mb-5">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)]">Insights de {selectedReport.label}</h3>
+              <p className="text-sm text-[var(--crm-muted)]">Pontos de atenção automáticos.</p>
+            </div>
+            <div className="space-y-3">
+              <Insight title="Forecast" value={formatCurrency(analysis.kpis.weightedPipeline)} detail="Projeção baseada na probabilidade de fechamento." />
+              <Insight title="Risco operacional" value={`${analysis.kpis.overdueActivitiesCount} atrasos`} detail="Atividades vencidas em aberto exigem acompanhamento." tone={analysis.kpis.overdueActivitiesCount > 0 ? "red" : "green"} />
+              <Insight title="Renovações" value={`${analysis.kpis.expiringContractsCount} contratos`} detail="Contratos ativos com vencimento nos próximos 90 dias." tone={analysis.kpis.expiringContractsCount > 0 ? "amber" : "green"} />
+              <Insight title="Perdas no período" value={formatCurrency(analysis.kpis.lostValue)} detail="Valor total perdido dentro dos filtros atuais." tone={analysis.kpis.lostValue > 0 ? "red" : "green"} />
+            </div>
+          </GradientCard>
+          {activeReport === "clients" && (
+            <GradientCard gradient="gray" className="p-6">
+              <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Clientes e Qualidade da Base</h3>
+              <p className="text-sm text-[var(--crm-muted)] mb-5">Distribuição por tipo e temperatura do lead score.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {analysis.byClientType.map((item) => (
+                  <Insight key={item.clientType} title={item.clientType} value={item.count} detail="empresas no filtro" />
+                ))}
+                {analysis.leadScoreBands.map((item) => (
+                  <Insight key={item.label} title={item.label} value={item.count} detail={`Lead score ${item.min}-${item.max}`} tone={item.min >= 80 ? "green" : item.min >= 60 ? "amber" : "slate"} />
+                ))}
+              </div>
+            </GradientCard>
+          )}
+        </div>
+      )}
+
+      {["executive", "sellers"].includes(activeReport) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <GradientCard gradient="gray" className="p-6">
+            <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Ranking de Vendedores</h3>
+            <p className="text-sm text-[var(--crm-muted)] mb-5">Receita, forecast e conversão por responsável.</p>
+            <div className="space-y-3">
+              {analysis.bySeller.slice(0, 6).map((seller, index) => (
+                <div key={seller.id} className="rounded-2xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.62)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="h-9 w-9 rounded-2xl bg-[rgb(var(--crm-accent-rgb)_/_0.14)] text-[rgb(var(--crm-accent-rgb))] flex items-center justify-center font-bold">{index + 1}</span>
+                      <div className="min-w-0">
+                        <p className="font-bold text-[var(--crm-ink)] truncate">{seller.name}</p>
+                        <p className="text-xs text-[var(--crm-muted)]">{seller.won} ganhos · {seller.open} abertos · {formatPercent(seller.conversion)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-emerald-300">{formatCurrency(seller.revenue)}</p>
+                      <p className="text-xs text-[var(--crm-muted)]">{formatCurrency(seller.weighted)} forecast</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-300">{formatCurrency(seller.revenue)}</p>
-                    <p className="text-xs text-[var(--crm-muted)]">{formatCurrency(seller.weighted)} forecast</p>
-                  </div>
                 </div>
-              </div>
-            ))}
-            {analysis.bySeller.length === 0 && <p className="text-sm text-[var(--crm-muted)]">Nenhum vendedor encontrado para os filtros atuais.</p>}
-          </div>
-        </GradientCard>
+              ))}
+              {analysis.bySeller.length === 0 && <p className="text-sm text-[var(--crm-muted)]">Nenhum vendedor encontrado para os filtros atuais.</p>}
+            </div>
+          </GradientCard>
 
-        <GradientCard gradient="gray" className="p-6">
-          <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Clientes e Qualidade da Base</h3>
-          <p className="text-sm text-[var(--crm-muted)] mb-5">Distribuição por tipo e temperatura do lead score.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {analysis.byClientType.map((item) => (
-              <Insight key={item.clientType} title={item.clientType} value={item.count} detail="empresas no filtro" />
-            ))}
-            {analysis.leadScoreBands.map((item) => (
-              <Insight key={item.label} title={item.label} value={item.count} detail={`Lead score ${item.min}-${item.max}`} tone={item.min >= 80 ? "green" : item.min >= 60 ? "amber" : "slate"} />
-            ))}
-          </div>
-        </GradientCard>
-      </div>
+          <GradientCard gradient="gray" className="p-6">
+            <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Clientes e Qualidade da Base</h3>
+            <p className="text-sm text-[var(--crm-muted)] mb-5">Distribuição por tipo e temperatura do lead score.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {analysis.byClientType.map((item) => (
+                <Insight key={item.clientType} title={item.clientType} value={item.count} detail="empresas no filtro" />
+              ))}
+              {analysis.leadScoreBands.map((item) => (
+                <Insight key={item.label} title={item.label} value={item.count} detail={`Lead score ${item.min}-${item.max}`} tone={item.min >= 80 ? "green" : item.min >= 60 ? "amber" : "slate"} />
+              ))}
+            </div>
+          </GradientCard>
+        </div>
+      )}
 
-      <ModernTable
-        title="Oportunidades do Relatório"
-        data={analysis.opportunities.slice(0, 200)}
-        columns={[
-          {
-            key: "opportunity",
-            label: "Oportunidade",
-            render: (item) => (
-              <div>
-                <div className="font-bold text-[var(--crm-ink)]">{item.title || item.projectName || "Sem título"}</div>
-                <div className="text-xs text-[var(--crm-muted)]">{item.number || "-"} · {item.company?.name || "Sem cliente"}</div>
-              </div>
-            )
-          },
-          {
-            key: "stage",
-            label: "Etapa",
-            render: (item) => <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-bold text-sky-200">{STAGE_LABELS[item.stage] || item.stage}</span>
-          },
-          {
-            key: "owner",
-            label: "Responsável",
-            render: (item) => <span className="text-sm text-[var(--crm-ink)]">{item.owner?.name || "Não atribuído"}</span>
-          },
-          {
-            key: "value",
-            label: "Valor",
-            render: (item) => <span className="font-bold text-[var(--crm-ink)]">{formatCurrency(item.value)}</span>
-          },
-          {
-            key: "probability",
-            label: "Prob.",
-            render: (item) => <span className="text-sm text-[var(--crm-muted)]">{numberValue(item.probability)}%</span>
-          },
-          {
-            key: "expectedCloseDate",
-            label: "Previsão",
-            render: (item) => <span className="text-sm text-[var(--crm-muted)]">{formatDate(item.expectedCloseDate)}</span>
+      {["executive", "pipeline", "sellers"].includes(activeReport) && (
+        <ModernTable
+          title="Oportunidades do Relatório"
+          data={analysis.opportunities.slice(0, 200)}
+          columns={[
+            {
+              key: "opportunity",
+              label: "Oportunidade",
+              render: (item) => (
+                <div>
+                  <div className="font-bold text-[var(--crm-ink)]">{item.title || item.projectName || "Sem título"}</div>
+                  <div className="text-xs text-[var(--crm-muted)]">{item.number || "-"} · {item.company?.name || "Sem cliente"}</div>
+                </div>
+              )
+            },
+            {
+              key: "stage",
+              label: "Etapa",
+              render: (item) => <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-bold text-sky-200">{STAGE_LABELS[item.stage] || item.stage}</span>
+            },
+            {
+              key: "owner",
+              label: "Responsável",
+              render: (item) => <span className="text-sm text-[var(--crm-ink)]">{item.owner?.name || "Não atribuído"}</span>
+            },
+            {
+              key: "value",
+              label: "Valor",
+              render: (item) => <span className="font-bold text-[var(--crm-ink)]">{formatCurrency(item.value)}</span>
+            },
+            {
+              key: "probability",
+              label: "Prob.",
+              render: (item) => <span className="text-sm text-[var(--crm-muted)]">{numberValue(item.probability)}%</span>
+            },
+            {
+              key: "expectedCloseDate",
+              label: "Previsão",
+              render: (item) => <span className="text-sm text-[var(--crm-muted)]">{formatDate(item.expectedCloseDate)}</span>
+            }
+          ]}
+          searchTerm={filters.search}
+          onSearchChange={(value) => setFilter("search", value)}
+          emptyState={
+            <div>
+              <Filter className="w-14 h-14 mx-auto mb-3 text-[var(--crm-muted)] opacity-50" />
+              <h3 className="text-lg font-bold text-[var(--crm-ink)]">Nenhuma oportunidade encontrada</h3>
+              <p className="text-[var(--crm-muted)]">Ajuste os filtros para ampliar a análise.</p>
+            </div>
           }
-        ]}
-        searchTerm={filters.search}
-        onSearchChange={(value) => setFilter("search", value)}
-        emptyState={
-          <div>
-            <Filter className="w-14 h-14 mx-auto mb-3 text-[var(--crm-muted)] opacity-50" />
-            <h3 className="text-lg font-bold text-[var(--crm-ink)]">Nenhuma oportunidade encontrada</h3>
-            <p className="text-[var(--crm-muted)]">Ajuste os filtros para ampliar a análise.</p>
-          </div>
-        }
-      />
+        />
+      )}
     </div>
   );
 }
