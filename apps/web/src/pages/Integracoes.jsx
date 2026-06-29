@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Edit,
   ExternalLink,
   Key,
   Link2,
@@ -17,6 +18,7 @@ import {
   Settings,
   ToggleLeft,
   ToggleRight,
+  Trash2,
   Webhook,
   XCircle,
   Zap
@@ -294,6 +296,7 @@ export default function Integracoes() {
   });
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingIntegration, setEditingIntegration] = useState(null);
   const [formData, setFormData] = useState({ name: '', type: 'WEBHOOK', apiKey: '', webhookUrl: '', isActive: true });
 
   const loadIntegracoes = async () => {
@@ -385,16 +388,65 @@ export default function Integracoes() {
     e.preventDefault();
     try {
       setSaving(true);
-      await fetch(API_ENDPOINTS.integrations, {
-        method: 'POST',
+      const res = await fetch(API_ENDPOINTS.integrations, {
+        method: editingIntegration ? 'PUT' : 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, id: editingIntegration?.id })
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || 'Não foi possível salvar a integração.');
+      }
+
       setShowForm(false);
+      setEditingIntegration(null);
       setFormData({ name: '', type: 'WEBHOOK', apiKey: '', webhookUrl: '', isActive: true });
       loadIntegracoes();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Erro ao salvar integração');
+    }
     finally { setSaving(false); }
+  };
+
+  const openCustomForm = (integration = null) => {
+    setEditingIntegration(integration);
+    setFormData(integration ? {
+      name: integration.name || '',
+      type: integration.type || 'WEBHOOK',
+      apiKey: integration.apiKey || '',
+      webhookUrl: integration.webhookUrl || '',
+      isActive: integration.isActive !== false
+    } : { name: '', type: 'WEBHOOK', apiKey: '', webhookUrl: '', isActive: true });
+    setShowForm(true);
+  };
+
+  const closeCustomForm = () => {
+    setShowForm(false);
+    setEditingIntegration(null);
+    setFormData({ name: '', type: 'WEBHOOK', apiKey: '', webhookUrl: '', isActive: true });
+  };
+
+  const deleteCustomIntegration = async (integration) => {
+    if (!window.confirm(`Excluir a integração "${integration.name}"?`)) return;
+
+    try {
+      const res = await fetch(`${API_ENDPOINTS.integrations}?id=${encodeURIComponent(integration.id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || 'Não foi possível excluir a integração.');
+      }
+
+      loadIntegracoes();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Erro ao excluir integração');
+    }
   };
 
   const connectedCount = CRM_PLATFORMS.filter(p => crmConfigs[p.id]?.status === 'connected').length;
@@ -413,7 +465,7 @@ export default function Integracoes() {
         icon={Link2}
         gradient="blue"
         breadcrumbs={['Home', 'Automação / Integrações', 'Integrações']}
-        actions={activeTab === 'custom' ? [{ label: 'Nova Integração', onClick: () => setShowForm(true), icon: Plus, variant: 'primary' }] : []}
+        actions={activeTab === 'custom' ? [{ label: 'Nova Integração', onClick: () => openCustomForm(), icon: Plus, variant: 'primary' }] : []}
       />
 
       {/* KPIs */}
@@ -453,7 +505,7 @@ export default function Integracoes() {
             <div>
               <p className="text-sm font-semibold text-amber-300">Integrações com backend ativo</p>
               <p className="text-xs text-amber-400/80 mt-0.5">
-                As credenciais são persistidas no servidor e já é possível testar conexão real (incluindo IXC).
+                As credenciais são persistidas no servidor e o teste valida a configuração antes de marcar o card como conectado.
                 A sincronização automática completa continua em evolução por conector.
               </p>
             </div>
@@ -519,7 +571,7 @@ export default function Integracoes() {
               <Link2 className="mx-auto h-10 w-10 text-[var(--crm-muted)] mb-3" />
               <p className="font-semibold text-[var(--crm-ink)]">Nenhuma integração customizada</p>
               <p className="text-sm text-[var(--crm-muted)] mt-1">Crie webhooks e APIs externas personalizadas</p>
-              <button onClick={() => setShowForm(true)} className="crm-btn crm-btn-primary mt-4 text-sm">
+              <button onClick={() => openCustomForm()} className="crm-btn crm-btn-primary mt-4 text-sm">
                 <Plus className="h-4 w-4" /> Nova Integração
               </button>
             </div>
@@ -545,6 +597,24 @@ export default function Integracoes() {
                     {item.webhookUrl && (
                       <p className="mt-2 text-xs text-[var(--crm-muted)] truncate">{item.webhookUrl}</p>
                     )}
+                    <div className="mt-4 flex justify-end gap-2 border-t border-[color:var(--crm-border)] pt-3">
+                      <button
+                        type="button"
+                        onClick={() => openCustomForm(item)}
+                        className="crm-btn crm-btn-secondary px-3 py-2 text-xs"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteCustomIntegration(item)}
+                        className="crm-btn crm-btn-danger px-3 py-2 text-xs"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Excluir
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -554,7 +624,7 @@ export default function Integracoes() {
       )}
 
       {/* Modal Nova Integração Customizada */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="Nova Integração Customizada">
+      <Modal isOpen={showForm} onClose={closeCustomForm} title={editingIntegration ? 'Editar Integração Customizada' : 'Nova Integração Customizada'}>
         <form onSubmit={handleSubmitCustom} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
@@ -583,8 +653,8 @@ export default function Integracoes() {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setShowForm(false)} className="crm-btn crm-btn-secondary">Cancelar</button>
-            <button type="submit" disabled={saving} className="crm-btn crm-btn-primary">{saving ? 'Salvando...' : 'Criar'}</button>
+            <button type="button" onClick={closeCustomForm} className="crm-btn crm-btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="crm-btn crm-btn-primary">{saving ? 'Salvando...' : editingIntegration ? 'Atualizar' : 'Criar'}</button>
           </div>
         </form>
       </Modal>

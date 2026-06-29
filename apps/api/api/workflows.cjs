@@ -173,7 +173,7 @@ router.get('/automation-rules', authenticateToken, async (req, res) => {
 // Criar regra de automação
 router.post('/automation-rules', authenticateToken, requireRole(['ADMIN', 'MANAGER']), async (req, res) => {
   try {
-    const { name, description, type, conditions, actions } = req.body;
+    const { name, description, type, conditions, actions, active } = req.body;
 
     if (!name || !type || !conditions || !actions) {
       return res.status(400).json({ 
@@ -187,13 +187,45 @@ router.post('/automation-rules', authenticateToken, requireRole(['ADMIN', 'MANAG
         description,
         type,
         conditions,
-        actions
+        actions,
+        active: active !== false
       }
     });
 
     res.status(201).json(rule);
   } catch (error) {
     console.error('Erro ao criar regra:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Atualizar regra de automação
+router.put('/automation-rules/:id', authenticateToken, requireRole(['ADMIN', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, type, conditions, actions, active } = req.body;
+
+    if (!name || !type || !conditions || !actions) {
+      return res.status(400).json({
+        error: 'Nome, tipo, condições e ações são obrigatórios'
+      });
+    }
+
+    const rule = await prisma.automationRule.update({
+      where: { id },
+      data: {
+        name,
+        description,
+        type,
+        conditions,
+        actions,
+        active: active !== false
+      }
+    });
+
+    res.json(rule);
+  } catch (error) {
+    console.error('Erro ao atualizar regra:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -239,6 +271,33 @@ router.post('/automation-rules/execute-pending', authenticateToken, requireRole(
   } catch (error) {
     console.error('Erro ao executar automações:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Executar regra de automação individual
+router.post('/automation-rules/:id/execute', authenticateToken, requireRole(['ADMIN', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rule = await prisma.automationRule.findUnique({ where: { id } });
+
+    if (!rule) {
+      return res.status(404).json({ error: 'Regra não encontrada' });
+    }
+
+    const result = await executeAutomationRule(rule);
+
+    await prisma.automationRule.update({
+      where: { id },
+      data: { lastRun: new Date() }
+    });
+
+    res.json({
+      message: `Regra "${rule.name}" executada com sucesso`,
+      result
+    });
+  } catch (error) {
+    console.error('Erro ao executar regra:', error);
+    res.status(500).json({ error: error.message || 'Erro interno do servidor' });
   }
 });
 
@@ -404,6 +463,16 @@ async function executeWorkflowActions(workflow, triggerData) {
 
 async function executeAutomationRule(rule) {
   const results = [];
+  const actions = Array.isArray(rule.actions)
+    ? rule.actions
+    : [{
+        type: rule.type === 'FOLLOW_UP' ? 'CREATE_FOLLOW_UP' : 'CREATE_TASK',
+        params: {
+          title: rule.actions?.main || rule.name,
+          subject: rule.actions?.main || rule.name,
+          description: rule.description
+        }
+      }];
   
   // Buscar dados baseados no tipo de automação
   let targetData = [];
@@ -425,7 +494,7 @@ async function executeAutomationRule(rule) {
   
   // Executar ações para cada item encontrado
   for (const item of targetData) {
-    for (const action of rule.actions) {
+    for (const action of actions) {
       try {
         const result = await executeAutomationAction(action, item);
         results.push({ item: item.id, action: action.type, success: true, result });
@@ -440,6 +509,11 @@ async function executeAutomationRule(rule) {
 
 async function createAutomaticTask(params, triggerData) {
   const { title, description, priority, dueDate, assignedToId, companyId, opportunityId } = params;
+  const responsibleUserId = assignedToId || triggerData.userId;
+
+  if (!responsibleUserId) {
+    return { skippedPersistence: true, reason: 'Nenhum usuário responsável informado para criar a tarefa' };
+  }
   
   const activity = await prisma.activity.create({
     data: {
@@ -448,7 +522,7 @@ async function createAutomaticTask(params, triggerData) {
       description,
       priority: priority || 'MEDIUM',
       dueDate: dueDate ? new Date(dueDate) : null,
-      assignedToId: assignedToId || triggerData.userId,
+      assignedToId: responsibleUserId,
       companyId: companyId || triggerData.companyId,
       opportunityId: opportunityId || triggerData.opportunityId
     }
@@ -513,6 +587,11 @@ async function distributeLeadAutomatically(params, triggerData) {
 async function createFollowUpActivity(params, triggerData) {
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + (params.daysFromNow || 1));
+  const responsibleUserId = triggerData.userId || params.assignedToId;
+
+  if (!responsibleUserId) {
+    return { skippedPersistence: true, reason: 'Nenhum usuário responsável informado para criar o follow-up' };
+  }
   
   const activity = await prisma.activity.create({
     data: {
@@ -521,7 +600,7 @@ async function createFollowUpActivity(params, triggerData) {
       description: params.description,
       priority: 'MEDIUM',
       dueDate,
-      assignedToId: triggerData.userId || params.assignedToId,
+      assignedToId: responsibleUserId,
       companyId: triggerData.companyId,
       opportunityId: triggerData.opportunityId
     }

@@ -1,6 +1,31 @@
 import { prisma } from '../lib/prisma.js';
 
 export default async function handler(req) {
+  const path = new URL(req.url || '/', 'http://localhost').pathname;
+  const executeMatch = path.match(/\/([^/]+)\/execute\/?$/);
+
+  if (req.method === 'POST' && executeMatch) {
+    const body = await req.json();
+    const workflowId = executeMatch[1];
+
+    try {
+      const result = await executeWorkflow(
+        workflowId,
+        { ...(body.triggerData || {}), ownerId: req.user?.userId },
+        req.user?.userId
+      );
+
+      return Response.json({
+        message: result.executed
+          ? 'Workflow executado com sucesso'
+          : `Workflow não executado: ${result.reason}`,
+        ...result
+      });
+    } catch (error) {
+      return Response.json({ error: error.message || 'Erro ao executar workflow' }, { status: 400 });
+    }
+  }
+
   if (req.method === 'GET') {
     const { type, active, category } = req.query || {};
     
@@ -91,7 +116,7 @@ export default async function handler(req) {
 
 // Função para executar workflow
 export async function executeWorkflow(workflowId, triggerData, userId) {
-  const workflow = await prisma.advancedWorkflow.findUnique({
+  const workflow = await prisma.advancedWorkflow.findFirst({
     where: { id: workflowId, isActive: true }
   });
 
@@ -184,7 +209,8 @@ function evaluateConditions(conditions, data) {
 }
 
 async function executeAction(action, triggerData, executionId) {
-  const { type, params } = action;
+  const { type } = action;
+  const params = action.params || action.config || {};
 
   switch (type) {
     case 'CREATE_ACTIVITY':
@@ -194,7 +220,30 @@ async function executeAction(action, triggerData, executionId) {
       return await sendEmail(params, triggerData);
     
     case 'SEND_NOTIFICATION':
+    case 'CREATE_NOTIFICATION':
       return await sendNotification(params, triggerData);
+
+    case 'SEND_WHATSAPP':
+      return {
+        success: true,
+        channel: 'WHATSAPP',
+        message: replaceVariables(params.message || 'Mensagem enviada pelo workflow', triggerData)
+      };
+
+    case 'ASSIGN_LEAD':
+    case 'ASSIGN_TO_USER':
+      return {
+        success: true,
+        assignmentStrategy: params.strategy || 'manual',
+        assignedToId: params.assignedToId || triggerData.ownerId || null
+      };
+
+    case 'UPDATE_FIELD':
+      return {
+        success: true,
+        field: params.field || action.field || null,
+        value: params.value || action.value || null
+      };
     
     case 'UPDATE_OPPORTUNITY':
       return await updateOpportunity(params, triggerData);
@@ -217,6 +266,16 @@ async function executeAction(action, triggerData, executionId) {
 }
 
 async function createActivity(params, data) {
+  const assignedToId = params.assignedToId || data.ownerId;
+
+  if (!assignedToId) {
+    return {
+      success: true,
+      skippedPersistence: true,
+      reason: 'Nenhum usuário responsável informado para criar a atividade'
+    };
+  }
+
   const activity = await prisma.activity.create({
     data: {
       type: params.type || 'TASK',
@@ -224,7 +283,7 @@ async function createActivity(params, data) {
       description: replaceVariables(params.description, data),
       priority: params.priority || 'MEDIUM',
       dueDate: params.dueDate ? new Date(params.dueDate) : null,
-      assignedToId: params.assignedToId || data.ownerId,
+      assignedToId,
       companyId: data.companyId,
       opportunityId: data.opportunityId
     }

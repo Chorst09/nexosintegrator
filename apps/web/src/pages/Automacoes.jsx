@@ -17,7 +17,8 @@ import {
   Settings as Workflow,
   Zap as Bot,
   TrendingUp,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -67,14 +68,14 @@ const Automacoes = () => {
     try {
       setLoading(true);
       const [workflowsRes, rulesRes, notificationsRes] = await Promise.all([
-        fetch(buildApiUrl('/workflows'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/advanced-workflows'), { headers: getAuthHeaders() }),
         fetch(buildApiUrl('/workflows/automation-rules'), { headers: getAuthHeaders() }),
         fetch(buildApiUrl('/workflows/notifications'), { headers: getAuthHeaders() })
       ]);
 
       if (workflowsRes.ok) {
         const data = await workflowsRes.json();
-        setWorkflows(data.workflows || []);
+        setWorkflows(Array.isArray(data) ? data : data.workflows || []);
       }
 
       if (rulesRes.ok) {
@@ -99,17 +100,19 @@ const Automacoes = () => {
 
   const executeWorkflow = async (workflowId) => {
     try {
-      const response = await fetch(buildApiUrl(`/workflows/${workflowId}/execute`), {
+      const response = await fetch(buildApiUrl(`/advanced-workflows/${workflowId}/execute`), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ triggerData: {} })
       });
 
       if (response.ok) {
-        alert('Workflow executado com sucesso!');
+        const data = await response.json().catch(() => ({}));
+        alert(data.message || 'Workflow executado com sucesso!');
         fetchData();
       } else {
-        alert('Erro ao executar workflow');
+        const error = await response.json().catch(() => ({}));
+        alert(error.error || 'Erro ao executar workflow');
       }
     } catch (error) {
       console.error('Erro ao executar workflow:', error);
@@ -149,11 +152,11 @@ const Automacoes = () => {
         PENDING: 'bg-yellow-100 text-yellow-800',
         SENT: 'bg-green-100 text-green-800',
         DELIVERED: 'bg-blue-100 text-blue-800',
-        READ: 'bg-gray-100 text-gray-800 dark:text-gray-100',
+        READ: 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border border-slate-500/20',
         FAILED: 'bg-red-100 text-red-800'
       }
     };
-    return colors[type]?.[status] || 'bg-gray-100 text-gray-800 dark:text-gray-100';
+    return colors[type]?.[status] || 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border border-slate-500/20';
   };
 
   const getTriggerIcon = (trigger) => {
@@ -178,6 +181,112 @@ const Automacoes = () => {
       IN_APP: Bell
     };
     return icons[channel] || Bell;
+  };
+
+  const isWorkflowActive = (workflow) => workflow?.isActive ?? workflow?.active ?? false;
+
+  const getWorkflowTriggerValue = (trigger) => {
+    if (!trigger) return 'LEAD_CREATED';
+    if (typeof trigger === 'string') return trigger;
+    return trigger.event || trigger.type || 'LEAD_CREATED';
+  };
+
+  const openWorkflowEdit = (workflow) => {
+    setEditingWorkflow(workflow);
+    setWorkflowForm({
+      name: workflow.name || '',
+      description: workflow.description || '',
+      trigger: getWorkflowTriggerValue(workflow.trigger),
+      conditions: Array.isArray(workflow.conditions) ? workflow.conditions : [],
+      actions: Array.isArray(workflow.actions) ? workflow.actions : [],
+      active: isWorkflowActive(workflow),
+      priority: workflow.priority || 'MEDIUM'
+    });
+    setShowWorkflowModal(true);
+  };
+
+  const deleteWorkflow = async (workflow) => {
+    if (!window.confirm(`Excluir o workflow "${workflow.name}"?`)) return;
+
+    try {
+      const response = await fetch(buildApiUrl('/advanced-workflows'), {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id: workflow.id })
+      });
+
+      if (response.ok) {
+        fetchData();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        alert(error.error || 'Erro ao excluir workflow');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir workflow:', error);
+      alert('Erro de conexão');
+    }
+  };
+
+  const openRuleEdit = (rule) => {
+    setEditingRule(rule);
+    setRuleForm({
+      name: rule.name || '',
+      description: rule.description || '',
+      type: rule.type || 'LEAD_DISTRIBUTION',
+      schedule: rule.schedule || 'IMMEDIATE',
+      conditions: rule.conditions && typeof rule.conditions === 'object' ? rule.conditions : {},
+      actions: rule.actions && typeof rule.actions === 'object' ? rule.actions : {},
+      active: rule.active ?? true
+    });
+    setShowRuleModal(true);
+  };
+
+  const executeRule = async (rule) => {
+    try {
+      const response = await fetch(buildApiUrl(`/workflows/automation-rules/${rule.id}/execute`), {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        alert(data.message || `Regra "${rule.name}" executada com sucesso!`);
+        fetchData();
+      } else {
+        alert(data.error || 'Erro ao executar regra');
+      }
+    } catch (error) {
+      console.error('Erro ao executar regra:', error);
+      alert('Erro de conexão');
+    }
+  };
+
+  const duplicateRule = async (rule) => {
+    try {
+      const response = await fetch(buildApiUrl('/workflows/automation-rules'), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: `${rule.name} - Cópia`,
+          description: rule.description,
+          type: rule.type,
+          conditions: rule.conditions || {},
+          actions: rule.actions || {},
+          active: false
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        alert('Regra duplicada com sucesso!');
+        fetchData();
+      } else {
+        alert(data.error || 'Erro ao duplicar regra');
+      }
+    } catch (error) {
+      console.error('Erro ao duplicar regra:', error);
+      alert('Erro de conexão');
+    }
   };
 
   const openModal = (type) => {
@@ -227,7 +336,7 @@ const Automacoes = () => {
 
     try {
       const url = editingWorkflow 
-        ? buildApiUrl(`/advanced-workflows/${editingWorkflow.id}`)
+        ? buildApiUrl('/advanced-workflows')
         : buildApiUrl('/advanced-workflows');
       const method = editingWorkflow ? 'PUT' : 'POST';
 
@@ -236,6 +345,8 @@ const Automacoes = () => {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...workflowForm,
+          id: editingWorkflow?.id,
+          isActive: workflowForm.active,
           type: 'CONDITIONAL',
           category: 'SALES'
         })
@@ -272,7 +383,10 @@ const Automacoes = () => {
       const response = await fetch(url, {
         method,
         headers: getAuthHeaders(),
-        body: JSON.stringify(ruleForm)
+        body: JSON.stringify({
+          ...ruleForm,
+          id: editingRule?.id
+        })
       });
 
       if (response.ok) {
@@ -499,7 +613,7 @@ const Automacoes = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <AnimatedStats
           title="Workflows Ativos"
-          value={workflows.filter(w => w.active).length}
+          value={workflows.filter(w => isWorkflowActive(w)).length}
           subtitle={`${workflows.length} total`}
           icon={Workflow}
           color="blue"
@@ -540,7 +654,7 @@ const Automacoes = () => {
 
       {/* Tabs */}
       <GradientCard gradient="gray" className="shadow-lg">
-        <div className="border-b border-gray-200 dark:border-blue-500/20">
+        <div className="border-b border-[color:var(--crm-border)]">
           <nav className="-mb-px flex space-x-8 px-6">
             {[
               { id: 'workflows', label: 'Workflows', icon: Workflow, count: workflows.length, color: 'blue' },
@@ -554,11 +668,11 @@ const Automacoes = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`${
                     activeTab === tab.id
-                      ? (tab.color === 'blue' ? 'border-blue-500 text-blue-600 bg-blue-50' :
-                         tab.color === 'green' ? 'border-green-500 text-green-600 bg-green-50' :
-                         'border-yellow-500 text-yellow-600 bg-yellow-50')
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:border-blue-500/30'
-                  } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm flex items-center gap-3 rounded-t-xl transition-all duration-200 hover:bg-gray-50`}
+                      ? (tab.color === 'blue' ? 'border-blue-400 text-blue-700 bg-blue-500/10 dark:text-blue-200' :
+                         tab.color === 'green' ? 'border-emerald-400 text-emerald-700 bg-emerald-500/10 dark:text-emerald-200' :
+                         'border-amber-400 text-amber-700 bg-amber-500/10 dark:text-amber-200')
+                      : 'border-transparent text-[var(--crm-muted)] hover:text-[var(--crm-ink)] hover:border-[var(--crm-border)]'
+                  } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm flex items-center gap-3 rounded-t-xl transition-all duration-200 hover:bg-black/5 dark:hover:bg-white/5`}
                 >
                   <Icon className="w-5 h-5" />
                   {tab.label}
@@ -567,7 +681,7 @@ const Automacoes = () => {
                       ? (tab.color === 'blue' ? 'bg-blue-100 text-blue-700' :
                          tab.color === 'green' ? 'bg-green-100 text-green-700' :
                          'bg-yellow-100 text-yellow-700')
-                      : 'bg-gray-100 text-gray-600 dark:text-gray-300'
+                      : 'bg-black/5 dark:bg-white/10 text-[var(--crm-muted)]'
                   }`}>
                     {tab.count}
                   </span>
@@ -583,9 +697,9 @@ const Automacoes = () => {
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Workflows Automatizados</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {workflows.filter(w => w.active).length} de {workflows.length} workflows ativos
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)]">Workflows Automatizados</h3>
+                  <p className="text-sm text-[var(--crm-muted)] mt-1">
+                    {workflows.filter(w => isWorkflowActive(w)).length} de {workflows.length} workflows ativos
                   </p>
                 </div>
               </div>
@@ -606,41 +720,41 @@ const Automacoes = () => {
                             <TriggerIcon className="w-6 h-6 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h4 className="text-lg font-bold text-gray-900 mb-1">{workflow.name}</h4>
-                            <p className="text-sm text-gray-600 leading-relaxed">{workflow.description}</p>
+                            <h4 className="text-lg font-bold text-[var(--crm-ink)] mb-1">{workflow.name}</h4>
+                            <p className="text-sm text-[var(--crm-muted)] leading-relaxed">{workflow.description}</p>
                           </div>
                         </div>
                         <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                          workflow.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 dark:text-gray-100'
+                          isWorkflowActive(workflow) ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border border-emerald-500/20' : 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border border-slate-500/20'
                         }`}>
-                          {workflow.active ? 'Ativo' : 'Inativo'}
+                          {isWorkflowActive(workflow) ? 'Ativo' : 'Inativo'}
                         </span>
                       </div>
                       
                       <div className="space-y-3 mb-6">
-                        <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
-                          <span className="text-sm text-gray-600 dark:text-gray-300">Trigger:</span>
+                        <div className="flex items-center justify-between p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
+                          <span className="text-sm text-[var(--crm-muted)]">Trigger:</span>
                           <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
-                            {workflow.trigger}
+                            {getWorkflowTriggerValue(workflow.trigger)}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="text-center p-3 bg-white/50 rounded-lg">
-                            <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          <div className="text-center p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
+                            <div className="text-lg font-bold text-[var(--crm-ink)]">
                               {workflow._count?.executions || 0}
                             </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-300">Execuções</div>
+                            <div className="text-xs text-[var(--crm-muted)]">Execuções</div>
                           </div>
-                          <div className="text-center p-3 bg-white/50 rounded-lg">
-                            <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          <div className="text-center p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
+                            <div className="text-lg font-bold text-[var(--crm-ink)]">
                               {workflow.actions?.length || 0}
                             </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-300">Ações</div>
+                            <div className="text-xs text-[var(--crm-muted)]">Ações</div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => executeWorkflow(workflow.id)}
                           className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-xl text-sm font-medium hover:from-blue-700 hover:to-blue-800 flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
@@ -648,9 +762,19 @@ const Automacoes = () => {
                           <Play className="w-4 h-4" />
                           Executar
                         </button>
-                        <button className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 text-white px-4 py-3 rounded-xl text-sm font-medium hover:from-gray-700 hover:to-gray-800 flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl">
+                        <button
+                          onClick={() => openWorkflowEdit(workflow)}
+                          className="flex-1 bg-gradient-to-r from-slate-600 to-slate-700 text-white px-4 py-3 rounded-xl text-sm font-medium hover:from-slate-700 hover:to-slate-800 flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+                        >
                           <Settings className="w-4 h-4" />
                           Editar
+                        </button>
+                        <button
+                          onClick={() => deleteWorkflow(workflow)}
+                          className="bg-rose-600/90 text-white px-4 py-3 rounded-xl text-sm font-medium hover:bg-rose-700 flex items-center justify-center gap-2 transition-all duration-200 shadow-lg hover:shadow-xl"
+                          title="Excluir workflow"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </GradientCard>
@@ -663,8 +787,8 @@ const Automacoes = () => {
                   <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Workflow className="w-10 h-10 text-blue-600" />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Nenhum workflow encontrado</h3>
-                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-2">Nenhum workflow encontrado</h3>
+                  <p className="text-[var(--crm-muted)] mb-6 max-w-md mx-auto">
                     Comece criando seu primeiro workflow automatizado para otimizar seus processos
                   </p>
                   <button
@@ -693,8 +817,8 @@ const Automacoes = () => {
                   label: 'Nome',
                   render: (item) => (
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.name}</div>
-                      <div className="text-sm text-gray-500 max-w-xs truncate">{item.description}</div>
+                      <div className="text-sm font-medium text-[var(--crm-ink)]">{item.name}</div>
+                      <div className="text-sm text-[var(--crm-muted)] max-w-xs truncate">{item.description}</div>
                     </div>
                   )
                 },
@@ -712,7 +836,7 @@ const Automacoes = () => {
                   label: 'Status',
                   render: (item) => (
                     <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                      item.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 dark:text-gray-100'
+                      item.active ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border border-emerald-500/20' : 'bg-slate-500/15 text-slate-700 dark:text-slate-200 border border-slate-500/20'
                     }`}>
                       {item.active ? 'Ativo' : 'Inativo'}
                     </span>
@@ -724,7 +848,7 @@ const Automacoes = () => {
                   render: (item) => (
                     <div className="flex items-center">
                       <Activity className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
+                      <span className="text-sm text-[var(--crm-ink)]">
                         {item.lastRun 
                           ? new Date(item.lastRun).toLocaleString('pt-BR')
                           : 'Nunca'
@@ -739,7 +863,7 @@ const Automacoes = () => {
                   render: (item) => (
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
+                      <span className="text-sm text-[var(--crm-ink)]">
                         {item.nextRun 
                           ? new Date(item.nextRun).toLocaleString('pt-BR')
                           : 'Sob demanda'
@@ -751,25 +875,24 @@ const Automacoes = () => {
               ]}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onView={(item) => alert(`Ver detalhes da regra: ${item.name}`)}
-              onEdit={(item) => alert(`Editar regra: ${item.name}`)}
+              onEdit={openRuleEdit}
               customActions={[
                 {
                   label: 'Executar Agora',
                   icon: Play,
-                  onClick: (item) => alert(`Executar regra: ${item.name}`)
+                  onClick: executeRule
                 },
                 {
                   label: 'Duplicar',
                   icon: Settings,
-                  onClick: (item) => alert(`Duplicar regra: ${item.name}`)
+                  onClick: duplicateRule
                 }
               ]}
               emptyState={
                 <div>
                   <Settings className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma regra encontrada</h3>
-                  <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500">Crie regras de automação para otimizar seus processos</p>
+                  <h3 className="text-lg font-medium text-[var(--crm-ink)] mb-2">Nenhuma regra encontrada</h3>
+                  <p className="text-[var(--crm-muted)]">Crie regras de automação para otimizar seus processos</p>
                 </div>
               }
             />
@@ -779,8 +902,8 @@ const Automacoes = () => {
           {activeTab === 'notifications' && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Central de Notificações</h3>
-                <p className="text-sm text-gray-600 mt-1">Histórico de todas as notificações enviadas pelo sistema</p>
+                <h3 className="text-xl font-bold text-[var(--crm-ink)]">Central de Notificações</h3>
+                <p className="text-sm text-[var(--crm-muted)] mt-1">Histórico de todas as notificações enviadas pelo sistema</p>
               </div>
               
               <div className="space-y-4">
@@ -800,7 +923,7 @@ const Automacoes = () => {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center mb-2">
-                              <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{notification.title}</h4>
+                              <h4 className="text-lg font-semibold text-[var(--crm-ink)]">{notification.title}</h4>
                               <span className={`ml-3 inline-flex px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(notification.status, 'notification')}`}>
                                 {notification.status === 'SENT' ? 'Enviado' :
                                  notification.status === 'DELIVERED' ? 'Entregue' :
@@ -808,8 +931,8 @@ const Automacoes = () => {
                                  notification.status === 'FAILED' ? 'Falhou' : 'Pendente'}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600 mb-3 leading-relaxed">{notification.message}</p>
-                            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                            <p className="text-sm text-[var(--crm-muted)] mb-3 leading-relaxed">{notification.message}</p>
+                            <div className="flex items-center gap-4 text-xs text-[var(--crm-muted)]">
                               <div className="flex items-center">
                                 <span className="font-medium">Canal:</span>
                                 <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
@@ -818,7 +941,7 @@ const Automacoes = () => {
                               </div>
                               <div className="flex items-center">
                                 <span className="font-medium">Tipo:</span>
-                                <span className="ml-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
+                                <span className="ml-1 px-2 py-1 bg-slate-500/15 text-slate-700 dark:text-slate-200 rounded-full">
                                   {notification.type}
                                 </span>
                               </div>
@@ -854,8 +977,8 @@ const Automacoes = () => {
                   <div className="w-20 h-20 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Bell className="w-10 h-10 text-yellow-600" />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Nenhuma notificação encontrada</h3>
-                  <p className="text-gray-500 max-w-md mx-auto">
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-2">Nenhuma notificação encontrada</h3>
+                  <p className="text-[var(--crm-muted)] max-w-md mx-auto">
                     As notificações enviadas pelo sistema aparecerão aqui
                   </p>
                 </div>
@@ -866,13 +989,13 @@ const Automacoes = () => {
       </GradientCard>
 
       {/* Seção de Automações Pré-configuradas */}
-      <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-indigo-50 rounded-2xl p-8 border border-blue-200 shadow-lg">
+      <div className="rounded-2xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.72)] p-8 shadow-lg">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Zap className="w-8 h-8 text-white" />
           </div>
-          <h3 className="text-3xl font-bold text-gray-900 mb-3">Automações Pré-configuradas</h3>
-          <p className="text-gray-600 text-lg">Templates prontos para usar - configure em poucos cliques</p>
+          <h3 className="text-3xl font-bold text-[var(--crm-ink)] mb-3">Automações Pré-configuradas</h3>
+          <p className="text-[var(--crm-muted)] text-lg">Templates prontos para usar - configure em poucos cliques</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -951,15 +1074,15 @@ const Automacoes = () => {
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="text-lg font-bold text-gray-900 mb-2">{automation.title}</h4>
-                    <p className="text-sm text-gray-600 leading-relaxed">{automation.description}</p>
+                    <h4 className="text-lg font-bold text-[var(--crm-ink)] mb-2">{automation.title}</h4>
+                    <p className="text-sm text-[var(--crm-muted)] leading-relaxed">{automation.description}</p>
                   </div>
                 </div>
                 
                 <div className="mb-6">
                   <div className="flex flex-wrap gap-2">
                     {automation.features.map((feature, idx) => (
-                      <span key={idx} className="px-3 py-1 bg-white/70 text-gray-700 text-xs font-medium rounded-full border border-gray-200 dark:border-blue-500/20">
+                      <span key={idx} className="px-3 py-1 bg-black/5 dark:bg-white/10 text-[var(--crm-ink)] text-xs font-medium rounded-full border border-[color:var(--crm-border)]">
                         {feature}
                       </span>
                     ))}
@@ -1134,14 +1257,14 @@ const Automacoes = () => {
           <form onSubmit={handleWorkflowSubmit} className="space-y-6">
               {/* Informações Básicas */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
                   <Settings className="w-5 h-5 mr-2 text-blue-500" />
                   Informações Básicas
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                       Nome do Workflow *
                     </label>
                     <input
@@ -1155,7 +1278,7 @@ const Automacoes = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                       Prioridade
                     </label>
                     <select
@@ -1172,7 +1295,7 @@ const Automacoes = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                     Descrição *
                   </label>
                   <textarea
@@ -1193,7 +1316,7 @@ const Automacoes = () => {
                     onChange={(e) => setWorkflowForm(prev => ({ ...prev, active: e.target.checked }))}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="workflowActive" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                  <label htmlFor="workflowActive" className="ml-2 block text-sm text-[var(--crm-ink)]">
                     Ativar workflow imediatamente
                   </label>
                 </div>
@@ -1201,13 +1324,13 @@ const Automacoes = () => {
 
               {/* Trigger */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
                   <Zap className="w-5 h-5 mr-2 text-yellow-500" />
                   Evento Disparador
                 </h3>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                     Quando executar este workflow?
                   </label>
                   <select
@@ -1229,7 +1352,7 @@ const Automacoes = () => {
               {/* Condições */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
                     <AlertCircle className="w-5 h-5 mr-2 text-orange-500" />
                     Condições (Opcional)
                   </h3>
@@ -1244,9 +1367,9 @@ const Automacoes = () => {
                 </div>
 
                 {workflowForm.conditions.map((condition, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 bg-orange-50 rounded-lg">
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end rounded-2xl border border-orange-500/20 bg-orange-500/10 p-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Campo</label>
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Campo</label>
                       <select
                         value={condition.field}
                         onChange={(e) => updateCondition('workflow', index, 'field', e.target.value)}
@@ -1261,7 +1384,7 @@ const Automacoes = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Operador</label>
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Operador</label>
                       <select
                         value={condition.operator}
                         onChange={(e) => updateCondition('workflow', index, 'operator', e.target.value)}
@@ -1276,7 +1399,7 @@ const Automacoes = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Valor</label>
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Valor</label>
                       <input
                         type="text"
                         value={condition.value}
@@ -1300,7 +1423,7 @@ const Automacoes = () => {
               {/* Ações */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
                     <Play className="w-5 h-5 mr-2 text-green-500" />
                     Ações a Executar
                   </h3>
@@ -1315,9 +1438,9 @@ const Automacoes = () => {
                 </div>
 
                 {workflowForm.actions.map((action, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end p-4 bg-green-50 rounded-lg">
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Ação</label>
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Tipo de Ação</label>
                       <select
                         value={action.type}
                         onChange={(e) => updateAction('workflow', index, 'type', e.target.value)}
@@ -1333,7 +1456,7 @@ const Automacoes = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Configuração</label>
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Configuração</label>
                       <input
                         type="text"
                         value={action.config?.message || ''}
@@ -1397,14 +1520,14 @@ const Automacoes = () => {
           <form onSubmit={handleRuleSubmit} className="space-y-6">
               {/* Informações Básicas */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
                   <Settings className="w-5 h-5 mr-2 text-green-500" />
                   Informações Básicas
                 </h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                       Nome da Regra *
                     </label>
                     <input
@@ -1418,7 +1541,7 @@ const Automacoes = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                       Tipo de Regra
                     </label>
                     <select
@@ -1436,7 +1559,7 @@ const Automacoes = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                     Descrição *
                   </label>
                   <textarea
@@ -1450,7 +1573,7 @@ const Automacoes = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                     Agendamento
                   </label>
                   <select
@@ -1474,7 +1597,7 @@ const Automacoes = () => {
                     onChange={(e) => setRuleForm(prev => ({ ...prev, active: e.target.checked }))}
                     className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="ruleActive" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                  <label htmlFor="ruleActive" className="ml-2 block text-sm text-[var(--crm-ink)]">
                     Ativar regra imediatamente
                   </label>
                 </div>
@@ -1482,19 +1605,19 @@ const Automacoes = () => {
 
               {/* Configurações Específicas */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
                   <Target className="w-5 h-5 mr-2 text-purple-500" />
                   Configurações Específicas
                 </h3>
                 
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <p className="text-sm text-purple-700 mb-3">
+                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4">
+                  <p className="text-sm text-purple-700 dark:text-purple-200 mb-3">
                     Configure as condições e ações específicas para esta regra:
                   </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                         Condição Principal
                       </label>
                       <input
@@ -1510,7 +1633,7 @@ const Automacoes = () => {
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-2">
                         Ação Principal
                       </label>
                       <input
