@@ -28,6 +28,12 @@ const PRICING_PROPOSALS_STORAGE_KEY = 'precificacao_propostas_v1';
 
 type SimulatorStep = 'start' | 'proposal' | 'calculation';
 type DistributorCostMode = 'SETUP' | 'RECORRENTE';
+type InitialScenarioAction = 'history' | 'view' | 'edit' | null;
+
+interface FinEdgeAppProps {
+  initialScenarioId?: string | null;
+  initialAction?: InitialScenarioAction;
+}
 
 interface DistributorSummary {
   id: string;
@@ -464,7 +470,7 @@ const buildMonthlyProratedParams = (input: PricingInput): PricingInput => {
   };
 };
 
-export default function FinEdgeApp() {
+export default function FinEdgeApp({ initialScenarioId = null, initialAction = null }: FinEdgeAppProps = {}) {
   const { toast } = useToast();
   const calculatorPricingSettings = loadCalculatorPricingSettings();
   const [params, setParams] = useState<PricingInput>(() => buildEmptyPricingInput(calculatorPricingSettings));
@@ -489,6 +495,7 @@ export default function FinEdgeApp() {
   const [viewingScenario, setViewingScenario] = useState<SavedScenario | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('simulator');
+  const [initialScenarioApplied, setInitialScenarioApplied] = useState<string | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -1210,6 +1217,34 @@ export default function FinEdgeApp() {
       toast({ title: "Erro", description: "Não foi possível excluir o cenário.", variant: "destructive" });
     }
   };
+
+  useEffect(() => {
+    if (!initialAction) return;
+
+    const marker = `${initialAction}:${initialScenarioId || 'all'}`;
+    if (initialScenarioApplied === marker) return;
+
+    if (initialAction === 'history' && !initialScenarioId) {
+      setActiveTab('history');
+      setInitialScenarioApplied(marker);
+      return;
+    }
+
+    if (!initialScenarioId) return;
+    const scenario = history.find((item) => item.id === initialScenarioId);
+    if (!scenario) return;
+
+    if (initialAction === 'view') {
+      setViewingScenario(scenario);
+      setActiveTab('history');
+    } else if (initialAction === 'edit') {
+      handleEditScenario(scenario);
+    } else {
+      setActiveTab('history');
+    }
+
+    setInitialScenarioApplied(marker);
+  }, [history, initialAction, initialScenarioApplied, initialScenarioId]);
 
   const emptyResults = useMemo(
     () => PricingEngine.calculate(buildEmptyPricingInput(calculatorPricingSettings)),

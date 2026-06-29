@@ -11,7 +11,9 @@ import {
   Pencil,
   PieChart,
   Search,
-  Share2
+  Share2,
+  Trash2,
+  X
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import FinEdgeArchitect from '../precificacao/app/page';
@@ -69,6 +71,9 @@ export default function PrecificacaoHome() {
     return params.has('cotacaoKey');
   });
   const [pricingHistory, setPricingHistory] = useState([]);
+  const [architectLaunch, setArchitectLaunch] = useState({ action: null, scenarioId: null, key: 0 });
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [historyFeedback, setHistoryFeedback] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,8 +118,35 @@ export default function PrecificacaoHome() {
     [pricingHistory]
   );
 
+  const openArchitect = (action = null, scenarioId = null) => {
+    setArchitectLaunch((prev) => ({
+      action,
+      scenarioId,
+      key: prev.key + 1
+    }));
+    setShowArchitect(true);
+  };
+
+  const deleteScenarioFromHome = async (scenarioId) => {
+    try {
+      await scenarioService.deleteScenario(scenarioId);
+      setPricingHistory((prev) => prev.filter((item) => item.id !== scenarioId));
+      setDeleteConfirmId(null);
+      setHistoryFeedback({ type: 'success', text: 'Precificação excluída do histórico.' });
+    } catch (error) {
+      console.error('Erro ao excluir precificação salva:', error);
+      setHistoryFeedback({ type: 'error', text: 'Não foi possível excluir esta precificação.' });
+    }
+  };
+
   if (showArchitect) {
-    return <FinEdgeArchitect />;
+    return (
+      <FinEdgeArchitect
+        key={architectLaunch.key}
+        initialAction={architectLaunch.action}
+        initialScenarioId={architectLaunch.scenarioId}
+      />
+    );
   }
 
   const modules = [
@@ -123,21 +155,21 @@ export default function PrecificacaoHome() {
       description: 'Abrir o simulador de DRE, custos, margem, impostos e preço final.',
       icon: Calculator,
       iconBg: 'bg-blue-500',
-      onClick: () => setShowArchitect(true)
+      onClick: () => openArchitect()
     },
     {
       title: 'Rateio de Produtos',
       description: 'Distribuir custos mensais por produto e salvar rateios por cenário.',
       icon: Share2,
       iconBg: 'bg-cyan-500',
-      onClick: () => setShowArchitect(true)
+      onClick: () => openArchitect()
     },
     {
       title: 'DRE Gerencial',
       description: 'Conferir receita, impostos, CPV, comissão, despesas e EBITDA.',
       icon: PieChart,
       iconBg: 'bg-emerald-500',
-      onClick: () => setShowArchitect(true)
+      onClick: () => openArchitect()
     }
   ];
 
@@ -146,14 +178,16 @@ export default function PrecificacaoHome() {
     const isProrated = variant === 'prorated';
 
     return (
-      <button
+      <div
         key={scenario.id}
-        type="button"
-        onClick={() => setShowArchitect(true)}
         className="group w-full rounded-xl border border-slate-700/70 bg-slate-900/70 p-4 text-left shadow-xl shadow-black/10 transition-all hover:border-cyan-400/50 hover:bg-slate-900"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-4">
+          <button
+            type="button"
+            onClick={() => openArchitect('edit', scenario.id)}
+            className="flex min-w-0 flex-1 items-center gap-4 text-left"
+          >
             <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${isProrated ? 'bg-cyan-500/15 text-cyan-200' : 'bg-blue-500/15 text-blue-200'} border ${isProrated ? 'border-cyan-400/30' : 'border-blue-400/30'}`}>
               <Clock className="h-5 w-5" />
             </div>
@@ -184,7 +218,7 @@ export default function PrecificacaoHome() {
                 </p>
               ) : null}
             </div>
-          </div>
+          </button>
 
           <div className="grid grid-cols-3 gap-4 text-center sm:w-[260px]">
             <div>
@@ -203,21 +237,58 @@ export default function PrecificacaoHome() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 sm:justify-end">
-            <span className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 text-xs font-semibold text-sky-200">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => openArchitect('view', scenario.id)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 text-xs font-semibold text-sky-200 transition hover:bg-sky-400/20"
+            >
               <FileText className="h-3.5 w-3.5" />
               PDF
-            </span>
-            <span className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-200">
+            </button>
+            <button
+              type="button"
+              onClick={() => openArchitect('edit', scenario.id)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-200 transition hover:bg-blue-400/20"
+            >
               <Pencil className="h-3.5 w-3.5" />
               Editar
-            </span>
+            </button>
+            {deleteConfirmId === scenario.id ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => deleteScenarioFromHome(scenario.id)}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-red-300/60 bg-red-500/20 px-3 text-xs font-bold text-red-100 transition hover:bg-red-500/30"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-600/70 bg-slate-900 text-slate-300 transition hover:bg-slate-800"
+                  title="Cancelar exclusão"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmId(scenario.id)}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-red-400/30 bg-red-400/10 px-3 text-xs font-semibold text-red-200 transition hover:bg-red-400/20"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Excluir
+              </button>
+            )}
           </div>
         </div>
         <p className="mt-3 text-xs font-semibold text-slate-500">
           Número: {getScenarioNumber(scenario)}
         </p>
-      </button>
+      </div>
     );
   };
 
@@ -253,7 +324,7 @@ export default function PrecificacaoHome() {
             label: 'Abrir FinEdge',
             icon: Calculator,
             variant: 'primary',
-            onClick: () => setShowArchitect(true)
+            onClick: () => openArchitect()
           },
           {
             label: 'Orçamentos',
@@ -287,7 +358,7 @@ export default function PrecificacaoHome() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => setShowArchitect(true)}
+                onClick={() => openArchitect()}
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-blue-400/60 bg-blue-500/85 px-4 font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
               >
                 <FilePlus2 className="h-4 w-4" />
@@ -295,7 +366,7 @@ export default function PrecificacaoHome() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowArchitect(true)}
+                onClick={() => openArchitect()}
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
               >
                 <Search className="h-4 w-4" />
@@ -338,13 +409,23 @@ export default function PrecificacaoHome() {
             </div>
             <button
               type="button"
-              onClick={() => setShowArchitect(true)}
+              onClick={() => openArchitect('history')}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-600/70 bg-slate-900 px-4 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
             >
               <History className="h-4 w-4" />
               Ver histórico
             </button>
           </div>
+
+          {historyFeedback ? (
+            <div className={`mb-4 rounded-xl border px-4 py-3 text-sm font-semibold ${
+              historyFeedback.type === 'error'
+                ? 'border-red-400/30 bg-red-400/10 text-red-100'
+                : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
+            }`}>
+              {historyFeedback.text}
+            </div>
+          ) : null}
 
           {pricingHistory.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 px-4 py-8 text-center">
