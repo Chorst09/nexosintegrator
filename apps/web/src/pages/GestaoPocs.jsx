@@ -61,6 +61,15 @@ const priorityLabel = (value) => PRIORITY_OPTIONS.find((item) => item.value === 
 const inputClass = 'w-full rounded-[8px] border border-[#2a4260] bg-[#09182a] px-4 py-3 text-[15px] text-slate-100 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/60 placeholder:text-slate-500';
 const selectClass = `${inputClass} appearance-none pr-10`;
 const labelClass = 'mb-2 block text-[15px] font-medium text-slate-100';
+const REQUIRED_FIELDS = [
+  ['title', 'Título da POC'],
+  ['client', 'Cliente'],
+  ['solution', 'Solução / Produto'],
+  ['objective', 'Objetivo'],
+  ['successCriteria', 'Critérios de sucesso'],
+  ['commercialOwner', 'Responsável comercial'],
+  ['technicalOwner', 'Responsável técnico']
+];
 
 const toDateInput = (value) => {
   if (!value) return '';
@@ -124,6 +133,7 @@ export default function GestaoPocs() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPoc, setEditingPoc] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -203,12 +213,16 @@ export default function GestaoPocs() {
   }, []);
 
   const openNewModal = () => {
+    setError('');
+    setFormError('');
     setEditingPoc(null);
     setForm(EMPTY_FORM);
     setModalOpen(true);
   };
 
   const openEditModal = (poc) => {
+    setError('');
+    setFormError('');
     setEditingPoc(poc);
     setForm({
       ...EMPTY_FORM,
@@ -225,9 +239,11 @@ export default function GestaoPocs() {
     setModalOpen(false);
     setEditingPoc(null);
     setForm(EMPTY_FORM);
+    setFormError('');
   };
 
   const updateForm = (field, value) => {
+    setFormError('');
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -261,8 +277,18 @@ export default function GestaoPocs() {
 
   const savePoc = async (event) => {
     event.preventDefault();
+    const missing = REQUIRED_FIELDS
+      .filter(([field]) => !String(form[field] || '').trim())
+      .map(([, label]) => label);
+
+    if (missing.length) {
+      setFormError(`${missing.join(', ')} são obrigatórios.`);
+      return;
+    }
+
     setSaving(true);
     setError('');
+    setFormError('');
     try {
       const endpoint = editingPoc ? `/pre-sales-pocs/${editingPoc.id}` : '/pre-sales-pocs';
       const response = await fetch(buildApiUrl(endpoint), {
@@ -278,6 +304,7 @@ export default function GestaoPocs() {
       await loadPocs();
     } catch (err) {
       setError(err.message || 'Erro ao salvar POC');
+      setFormError(err.message || 'Erro ao salvar POC');
     } finally {
       setSaving(false);
     }
@@ -448,6 +475,12 @@ export default function GestaoPocs() {
               </button>
             </div>
 
+            {formError && (
+              <div className="mb-6 rounded-[8px] border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {formError}
+              </div>
+            )}
+
             <div className="grid gap-7">
               <Field label="Registro de Oportunidade relacionado">
                 <SelectShell>
@@ -464,11 +497,11 @@ export default function GestaoPocs() {
 
               <div className="grid gap-7 lg:grid-cols-2">
                 <Field label="Título da POC" required>
-                  <input value={form.title} onChange={(event) => updateForm('title', event.target.value)} className={inputClass} />
+                  <input required value={form.title} onChange={(event) => updateForm('title', event.target.value)} className={inputClass} />
                 </Field>
                 <Field label="Cliente" required>
                   <SelectShell>
-                    <select value={clients.find((item) => item.name === form.client)?.id || form.client} onChange={(event) => handleClientChange(event.target.value)} className={selectClass}>
+                    <select required value={clients.find((item) => item.name === form.client)?.id || form.client} onChange={(event) => handleClientChange(event.target.value)} className={selectClass}>
                       <option value="">Selecione um cliente cadastrado</option>
                       {form.client && !clients.some((item) => item.name === form.client) && (
                         <option value={form.client}>{form.client}</option>
@@ -482,7 +515,7 @@ export default function GestaoPocs() {
                   </SelectShell>
                 </Field>
                 <Field label="Solução / Produto" required>
-                  <input value={form.solution} onChange={(event) => updateForm('solution', event.target.value)} className={inputClass} />
+                  <input required value={form.solution} onChange={(event) => updateForm('solution', event.target.value)} className={inputClass} />
                 </Field>
                 <Field label="Ambiente">
                   <input value={form.environment || ''} onChange={(event) => updateForm('environment', event.target.value)} className={inputClass} placeholder="Cloud, laboratório, cliente..." />
@@ -490,21 +523,21 @@ export default function GestaoPocs() {
               </div>
 
               <Field label="Objetivo" required>
-                <textarea value={form.objective} onChange={(event) => updateForm('objective', event.target.value)} className={`${inputClass} min-h-[112px]`} />
+                <textarea required value={form.objective} onChange={(event) => updateForm('objective', event.target.value)} className={`${inputClass} min-h-[112px]`} />
               </Field>
               <Field label="Escopo">
                 <textarea value={form.scope || ''} onChange={(event) => updateForm('scope', event.target.value)} className={`${inputClass} min-h-[112px]`} />
               </Field>
               <Field label="Critérios de sucesso" required>
-                <textarea value={form.successCriteria} onChange={(event) => updateForm('successCriteria', event.target.value)} className={`${inputClass} min-h-[112px]`} placeholder="Defina critérios objetivos e mensuráveis." />
+                <textarea required value={form.successCriteria} onChange={(event) => updateForm('successCriteria', event.target.value)} className={`${inputClass} min-h-[112px]`} placeholder="Defina critérios objetivos e mensuráveis." />
               </Field>
 
               <div className="grid gap-7 lg:grid-cols-2">
                 <Field label="Responsável comercial" required>
-                  <input value={form.commercialOwner} onChange={(event) => updateForm('commercialOwner', event.target.value)} className={inputClass} />
+                  <input required value={form.commercialOwner} onChange={(event) => updateForm('commercialOwner', event.target.value)} className={inputClass} />
                 </Field>
                 <Field label="Responsável técnico" required>
-                  <input value={form.technicalOwner} onChange={(event) => updateForm('technicalOwner', event.target.value)} className={inputClass} />
+                  <input required value={form.technicalOwner} onChange={(event) => updateForm('technicalOwner', event.target.value)} className={inputClass} />
                 </Field>
                 <Field label="Data de início">
                   <input type="date" value={form.startDate || ''} onChange={(event) => updateForm('startDate', event.target.value)} className={inputClass} />

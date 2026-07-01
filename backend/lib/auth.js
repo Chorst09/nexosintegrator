@@ -31,7 +31,14 @@ const authenticateToken = async (req, res, next) => {
           id: true,
           name: true,
           email: true,
-          role: true
+          role: true,
+          regionId: true,
+          tenantCompanyId: true,
+          accessB2B: true,
+          accessB2G: true,
+          accessPreSales: true,
+          permissionOverrides: true,
+          isCompanyOwner: true
         }
       });
 
@@ -39,11 +46,23 @@ const authenticateToken = async (req, res, next) => {
         return res.status(401).json({ error: 'Usuário não encontrado' });
       }
 
+      const actualRole = String(user.role || 'USER').toUpperCase();
+      const legacyRole = actualRole === 'USER' ? 'SELLER' : actualRole;
+
       req.user = {
         userId: user.id,
+        id: user.id,
         email: user.email,
-        role: user.role,
-        name: user.name
+        role: legacyRole,
+        actualRole,
+        name: user.name,
+        regionId: user.regionId,
+        tenantCompanyId: user.tenantCompanyId,
+        accessB2B: Boolean(user.accessB2B),
+        accessB2G: Boolean(user.accessB2G),
+        accessPreSales: Boolean(user.accessPreSales),
+        permissionOverrides: user.permissionOverrides || {},
+        isCompanyOwner: Boolean(user.isCompanyOwner)
       };
       next();
     });
