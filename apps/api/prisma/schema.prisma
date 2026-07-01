@@ -1081,11 +1081,27 @@ model PreSalesPoc {
   discardedAt              DateTime?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+  followUps                PreSalesPocFollowUp[]
 
   @@index([status])
   @@index([priority])
   @@index([dueDate])
   @@index([relatedOpportunityId])
+}
+
+model PreSalesPocFollowUp {
+  id            String      @id @default(uuid())
+  pocId         String
+  poc           PreSalesPoc @relation(fields: [pocId], references: [id], onDelete: Cascade)
+  note          String
+  nextStep      String?
+  status        String?
+  progress      Int?
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime    @default(now())
+
+  @@index([pocId, createdAt])
 }
 
 // === B2G: EDITAIS, TR E ATAS ===

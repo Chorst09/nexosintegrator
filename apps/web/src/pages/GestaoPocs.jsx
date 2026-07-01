@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Beaker,
@@ -6,8 +6,10 @@ import {
   CheckCircle2,
   ChevronDown,
   Edit3,
+  MessageSquare,
   Plus,
   Search,
+  Send,
   Trash2,
   X,
   XCircle
@@ -83,6 +85,21 @@ const formatDate = (value) => {
   return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 };
 
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const getFollowUps = (poc) => Array.isArray(poc?.followUps) ? poc.followUps : [];
+
 const normalizeOpportunity = (item) => ({
   id: item.id || item.numeroOportunidade || item.numero || '',
   number: item.numeroOportunidade || item.numero || '',
@@ -137,6 +154,9 @@ export default function GestaoPocs() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPoc, setEditingPoc] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [expandedPocId, setExpandedPocId] = useState(null);
+  const [followUpForms, setFollowUpForms] = useState({});
+  const [followUpSaving, setFollowUpSaving] = useState({});
 
   const apiUrl = useMemo(() => {
     const params = new URLSearchParams();
@@ -247,6 +267,19 @@ export default function GestaoPocs() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const updateFollowUpForm = (pocId, field, value) => {
+    setError('');
+    setFollowUpForms((current) => ({
+      ...current,
+      [pocId]: {
+        note: '',
+        nextStep: '',
+        ...current[pocId],
+        [field]: value
+      }
+    }));
+  };
+
   const handleClientChange = (value) => {
     const client = clients.find((item) => item.id === value);
     updateForm('client', client?.name || value);
@@ -341,6 +374,58 @@ export default function GestaoPocs() {
     }
   };
 
+  const saveFollowUp = async (poc) => {
+    const current = followUpForms[poc.id] || {};
+    const note = String(current.note || '').trim();
+    if (!note) {
+      setError('Informe o acompanhamento antes de salvar.');
+      setExpandedPocId(poc.id);
+      return;
+    }
+
+    setFollowUpSaving((state) => ({ ...state, [poc.id]: true }));
+    setError('');
+
+    try {
+      const response = await fetch(buildApiUrl(`/pre-sales-pocs/${poc.id}/follow-ups`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          note,
+          nextStep: current.nextStep || '',
+          status: poc.status,
+          progress: poc.progress
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Erro ao salvar acompanhamento');
+      setFollowUpForms((state) => ({ ...state, [poc.id]: { note: '', nextStep: '' } }));
+      setExpandedPocId(poc.id);
+      await loadPocs();
+    } catch (err) {
+      setError(err.message || 'Erro ao salvar acompanhamento');
+    } finally {
+      setFollowUpSaving((state) => ({ ...state, [poc.id]: false }));
+    }
+  };
+
+  const deleteFollowUp = async (poc, followUp) => {
+    if (!window.confirm('Deseja excluir este acompanhamento?')) return;
+
+    try {
+      const response = await fetch(buildApiUrl(`/pre-sales-pocs/${poc.id}/follow-ups/${followUp.id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Erro ao excluir acompanhamento');
+      setExpandedPocId(poc.id);
+      await loadPocs();
+    } catch (err) {
+      setError(err.message || 'Erro ao excluir acompanhamento');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#07182b] px-6 py-8 text-slate-100">
       <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -415,48 +500,129 @@ export default function GestaoPocs() {
                 <tr><td colSpan="6" className="px-5 py-10 text-center text-slate-400">Carregando POCs...</td></tr>
               ) : pocs.length === 0 ? (
                 <tr><td colSpan="6" className="px-5 py-10 text-center text-slate-400">Nenhuma POC registrada.</td></tr>
-              ) : pocs.map((poc) => (
-                <tr key={poc.id} className="align-middle">
-                  <td className="max-w-[430px] px-5 py-6">
-                    <p className="font-semibold text-slate-50">{poc.title}</p>
-                    <p className="mt-1 text-sm text-slate-400">{poc.client}</p>
-                    <p className="text-sm text-slate-400">{poc.solution}</p>
-                    {poc.relatedOpportunityNumber && <p className="mt-2 text-sm font-medium text-sky-400">{poc.relatedOpportunityNumber}</p>}
-                  </td>
-                  <td className="px-5 py-6 text-sm text-slate-300">
-                    <p>{poc.technicalOwner}</p>
-                    <p className="text-slate-400">Comercial:</p>
-                    <p>{poc.commercialOwner}</p>
-                  </td>
-                  <td className="px-5 py-6">
-                    <p className="text-sm text-slate-100">{formatDate(poc.dueDate)}</p>
-                    <span className="mt-2 inline-flex rounded-full border border-[#38506b] px-3 py-1 text-xs font-medium text-slate-100">{priorityLabel(poc.priority)}</span>
-                  </td>
-                  <td className="px-5 py-6">
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-28 overflow-hidden rounded-full bg-[#2a4260]">
-                        <div className="h-full rounded-full bg-sky-400" style={{ width: `${Number(poc.progress || 0)}%` }} />
-                      </div>
-                      <span className="text-sm text-slate-200">{Number(poc.progress || 0)}%</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-6">
-                    <span className="inline-flex rounded-full border border-[#38506b] bg-slate-400/10 px-4 py-1 text-sm text-slate-200">{statusLabel(poc.status)}</span>
-                  </td>
-                  <td className="px-5 py-6">
-                    <div className="flex items-center justify-end gap-5">
-                      <button type="button" onClick={() => actionPoc(poc, 'approve')} className="text-sm font-medium text-emerald-400 hover:text-emerald-300">Aprovar</button>
-                      <button type="button" onClick={() => actionPoc(poc, 'discard')} className="text-sm font-medium text-rose-400 hover:text-rose-300">Descartar</button>
-                      <button type="button" onClick={() => openEditModal(poc)} className="text-slate-100 hover:text-sky-300" aria-label="Editar POC">
-                        <Edit3 className="h-5 w-5" />
-                      </button>
-                      <button type="button" onClick={() => deletePoc(poc)} className="text-rose-400 hover:text-rose-300" aria-label="Excluir POC">
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              ) : pocs.map((poc) => {
+                const followUps = getFollowUps(poc);
+                const isExpanded = expandedPocId === poc.id;
+                const followUpForm = followUpForms[poc.id] || { note: '', nextStep: '' };
+
+                return (
+                  <Fragment key={poc.id}>
+                    <tr className="align-middle">
+                      <td className="max-w-[430px] px-5 py-6">
+                        <p className="font-semibold text-slate-50">{poc.title}</p>
+                        <p className="mt-1 text-sm text-slate-400">{poc.client}</p>
+                        <p className="text-sm text-slate-400">{poc.solution}</p>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPocId(isExpanded ? null : poc.id)}
+                          className="mt-3 inline-flex items-center gap-2 rounded-[8px] border border-[#38506b] px-3 py-1 text-xs font-medium text-sky-200 hover:border-sky-400 hover:text-sky-100"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          {followUps.length} acompanhamento{followUps.length === 1 ? '' : 's'}
+                        </button>
+                        {poc.relatedOpportunityNumber && <p className="mt-2 text-sm font-medium text-sky-400">{poc.relatedOpportunityNumber}</p>}
+                      </td>
+                      <td className="px-5 py-6 text-sm text-slate-300">
+                        <p>{poc.technicalOwner}</p>
+                        <p className="text-slate-400">Comercial:</p>
+                        <p>{poc.commercialOwner}</p>
+                      </td>
+                      <td className="px-5 py-6">
+                        <p className="text-sm text-slate-100">{formatDate(poc.dueDate)}</p>
+                        <span className="mt-2 inline-flex rounded-full border border-[#38506b] px-3 py-1 text-xs font-medium text-slate-100">{priorityLabel(poc.priority)}</span>
+                      </td>
+                      <td className="px-5 py-6">
+                        <div className="flex items-center gap-3">
+                          <div className="h-2 w-28 overflow-hidden rounded-full bg-[#2a4260]">
+                            <div className="h-full rounded-full bg-sky-400" style={{ width: `${Number(poc.progress || 0)}%` }} />
+                          </div>
+                          <span className="text-sm text-slate-200">{Number(poc.progress || 0)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-6">
+                        <span className="inline-flex rounded-full border border-[#38506b] bg-slate-400/10 px-4 py-1 text-sm text-slate-200">{statusLabel(poc.status)}</span>
+                      </td>
+                      <td className="px-5 py-6">
+                        <div className="flex flex-wrap items-center justify-end gap-4">
+                          <button type="button" onClick={() => setExpandedPocId(isExpanded ? null : poc.id)} className="text-sm font-medium text-sky-300 hover:text-sky-200">
+                            {isExpanded ? 'Ocultar' : 'Acompanhar'}
+                          </button>
+                          <button type="button" onClick={() => actionPoc(poc, 'approve')} className="text-sm font-medium text-emerald-400 hover:text-emerald-300">Aprovar</button>
+                          <button type="button" onClick={() => actionPoc(poc, 'discard')} className="text-sm font-medium text-rose-400 hover:text-rose-300">Descartar</button>
+                          <button type="button" onClick={() => openEditModal(poc)} className="text-slate-100 hover:text-sky-300" aria-label="Editar POC">
+                            <Edit3 className="h-5 w-5" />
+                          </button>
+                          <button type="button" onClick={() => deletePoc(poc)} className="text-rose-400 hover:text-rose-300" aria-label="Excluir POC">
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan="6" className="bg-[#102137] px-5 py-6">
+                          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
+                            <div>
+                              <div className="mb-4 flex items-center justify-between gap-4">
+                                <h3 className="text-lg font-semibold text-slate-50">Acompanhamentos</h3>
+                                <span className="text-sm text-slate-400">{followUps.length} registro{followUps.length === 1 ? '' : 's'}</span>
+                              </div>
+                              {followUps.length === 0 ? (
+                                <p className="rounded-[8px] border border-dashed border-[#38506b] px-4 py-6 text-sm text-slate-400">Nenhum acompanhamento registrado para esta POC.</p>
+                              ) : (
+                                <div className="grid gap-3">
+                                  {followUps.map((item) => (
+                                    <div key={item.id} className="rounded-[8px] border border-[#294764] bg-[#09182a] p-4">
+                                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                          <p className="text-sm font-medium text-slate-100">{item.createdByName || 'Usuário'}</p>
+                                          <p className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</p>
+                                        </div>
+                                        <button type="button" onClick={() => deleteFollowUp(poc, item)} className="text-xs font-medium text-rose-300 hover:text-rose-200">Excluir</button>
+                                      </div>
+                                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{item.note}</p>
+                                      {item.nextStep && <p className="mt-3 text-sm text-sky-200"><span className="font-medium">Próximo passo:</span> {item.nextStep}</p>}
+                                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                                        {item.status && <span className="rounded-full border border-[#38506b] px-3 py-1">{statusLabel(item.status)}</span>}
+                                        {item.progress !== null && item.progress !== undefined && <span className="rounded-full border border-[#38506b] px-3 py-1">{Number(item.progress)}%</span>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="rounded-[8px] border border-[#294764] bg-[#09182a] p-4">
+                              <h4 className="mb-4 text-base font-semibold text-slate-50">Novo acompanhamento</h4>
+                              <textarea
+                                value={followUpForm.note}
+                                onChange={(event) => updateFollowUpForm(poc.id, 'note', event.target.value)}
+                                className={`${inputClass} min-h-[132px]`}
+                                placeholder="Descreva contato, validação realizada, pendência ou decisão técnica..."
+                              />
+                              <textarea
+                                value={followUpForm.nextStep}
+                                onChange={(event) => updateFollowUpForm(poc.id, 'nextStep', event.target.value)}
+                                className={`${inputClass} mt-3 min-h-[86px]`}
+                                placeholder="Próximo passo..."
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveFollowUp(poc)}
+                                disabled={Boolean(followUpSaving[poc.id])}
+                                className="mt-4 inline-flex h-11 items-center justify-center gap-3 rounded-[8px] bg-sky-400 px-5 text-sm font-medium text-[#082036] hover:bg-sky-300 disabled:cursor-wait disabled:opacity-70"
+                              >
+                                <Send className="h-4 w-4" />
+                                {followUpSaving[poc.id] ? 'Salvando...' : 'Salvar acompanhamento'}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

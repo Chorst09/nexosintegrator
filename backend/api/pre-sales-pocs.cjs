@@ -89,6 +89,12 @@ const validatePayload = (payload) => {
   return missing;
 };
 
+const getPocInclude = () => ({
+  followUps: {
+    orderBy: { createdAt: 'desc' }
+  }
+});
+
 const buildWhere = (query = {}) => {
   const where = {};
   const status = String(query.status || '').trim();
@@ -138,6 +144,7 @@ router.get('/', async (req, res) => {
     const [pocs, stats] = await Promise.all([
       prisma.preSalesPoc.findMany({
         where,
+        include: getPocInclude(),
         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
       }),
       getStats()
@@ -163,7 +170,8 @@ router.post('/', async (req, res) => {
         ...payload,
         createdById: req.user?.userId || req.user?.id || null,
         createdByName: req.user?.name || req.user?.email || null
-      }
+      },
+      include: getPocInclude()
     });
 
     res.status(201).json({ success: true, data: poc, poc });
@@ -183,7 +191,8 @@ router.put('/:id', async (req, res) => {
 
     const poc = await prisma.preSalesPoc.update({
       where: { id: req.params.id },
-      data: payload
+      data: payload,
+      include: getPocInclude()
     });
 
     res.json({ success: true, data: poc, poc });
@@ -200,7 +209,8 @@ router.post('/:id/approve', async (req, res) => {
   try {
     const poc = await prisma.preSalesPoc.update({
       where: { id: req.params.id },
-      data: { status: 'APROVADA', progress: 100, approvedAt: new Date(), discardedAt: null }
+      data: { status: 'APROVADA', progress: 100, approvedAt: new Date(), discardedAt: null },
+      include: getPocInclude()
     });
     res.json({ success: true, data: poc, poc });
   } catch (error) {
@@ -216,7 +226,8 @@ router.post('/:id/discard', async (req, res) => {
   try {
     const poc = await prisma.preSalesPoc.update({
       where: { id: req.params.id },
-      data: { status: 'DESCARTADA', discardedAt: new Date() }
+      data: { status: 'DESCARTADA', discardedAt: new Date() },
+      include: getPocInclude()
     });
     res.json({ success: true, data: poc, poc });
   } catch (error) {
@@ -224,6 +235,75 @@ router.post('/:id/discard', async (req, res) => {
       return res.status(404).json({ success: false, message: 'POC não encontrada' });
     }
     console.error('Erro ao descartar POC:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+});
+
+router.post('/:id/follow-ups', async (req, res) => {
+  try {
+    const note = requiredText(req.body?.note);
+    if (!note) {
+      return res.status(400).json({ success: false, message: 'Acompanhamento é obrigatório' });
+    }
+
+    const existing = await prisma.preSalesPoc.findUnique({
+      where: { id: req.params.id },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'POC não encontrada' });
+    }
+
+    const followUp = await prisma.preSalesPocFollowUp.create({
+      data: {
+        pocId: req.params.id,
+        note,
+        nextStep: cleanText(req.body?.nextStep),
+        status: req.body?.status ? normalizeStatus(req.body.status) : null,
+        progress: req.body?.progress === undefined || req.body?.progress === null || req.body?.progress === ''
+          ? null
+          : normalizeProgress(req.body.progress),
+        createdById: req.user?.userId || req.user?.id || null,
+        createdByName: req.user?.name || req.user?.email || null
+      }
+    });
+
+    await prisma.preSalesPoc.update({
+      where: { id: req.params.id },
+      data: { updatedAt: new Date() }
+    });
+
+    res.status(201).json({ success: true, data: followUp, followUp });
+  } catch (error) {
+    console.error('Erro ao criar acompanhamento da POC:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
+  }
+});
+
+router.delete('/:id/follow-ups/:followUpId', async (req, res) => {
+  try {
+    const existing = await prisma.preSalesPocFollowUp.findFirst({
+      where: {
+        id: req.params.followUpId,
+        pocId: req.params.id
+      },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Acompanhamento não encontrado' });
+    }
+
+    await prisma.preSalesPocFollowUp.delete({ where: { id: req.params.followUpId } });
+    await prisma.preSalesPoc.update({
+      where: { id: req.params.id },
+      data: { updatedAt: new Date() }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao excluir acompanhamento da POC:', error);
     res.status(500).json({ success: false, message: 'Erro interno do servidor', error: error.message });
   }
 });
