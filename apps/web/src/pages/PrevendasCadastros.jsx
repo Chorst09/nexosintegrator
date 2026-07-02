@@ -133,6 +133,8 @@ const defaultOpportunityForm = {
   dataValidade: ''
 };
 
+const OPPORTUNITY_TERM_OPTIONS = ['12', '24', '36', '48', '60'];
+
 const toCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
 const toDateBr = (value) => {
@@ -140,6 +142,13 @@ const toDateBr = (value) => {
   const date = parseLocalDate(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('pt-BR');
+};
+
+const formatOpportunityTerm = (value) => {
+  if (!value) return '-';
+  const normalized = String(value).trim();
+  if (OPPORTUNITY_TERM_OPTIONS.includes(normalized)) return `${normalized} meses`;
+  return toDateBr(value);
 };
 
 const toDateTimeBr = (value) => {
@@ -486,7 +495,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         origem: item.origem || 'B2B',
         modalidade: item.modalidade || 'VENDA',
         valorEstimado: item.valorEstimado ?? '',
-        prazo: item.prazo ? String(item.prazo).slice(0, 10) : '',
+        prazo: OPPORTUNITY_TERM_OPTIONS.includes(String(item.prazo || '').trim()) ? String(item.prazo).trim() : '',
         status: item.status || 'ABERTA',
         prioridade: item.prioridade || 'MEDIUM',
         distribuidorIds: Array.isArray(item.distribuidorIds) ? item.distribuidorIds : [],
@@ -964,7 +973,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                 ['Origem', item.origem],
                 ['Modalidade', item.modalidade],
                 ['Valor estimado', toCurrency(item.valorEstimado)],
-                ['Prazo comercial', toDateBr(item.prazo)],
+                ['Prazo comercial', formatOpportunityTerm(item.prazo)],
                 ['Prioridade', priorityLabel(item.prioridade)]
               ])}
             </article>
@@ -2037,7 +2046,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                   </p>
 
                   <p className="mt-1 text-sm text-slate-300">
-                    Valor estimado: {toCurrency(item.valorEstimado)} • Prazo: {toDateBr(item.prazo)}
+                    Valor estimado: {toCurrency(item.valorEstimado)} • Prazo: {formatOpportunityTerm(item.prazo)}
                   </p>
 
                   {item.numeroOportunidade && (
@@ -2456,12 +2465,16 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
               <label className="space-y-1">
                 <span className="text-sm text-slate-300">Prazo</span>
-                <input
-                  type="date"
+                <select
                   value={opportunityForm.prazo}
                   onChange={(event) => setOpportunityForm((prev) => ({ ...prev, prazo: event.target.value }))}
                   className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white"
-                />
+                >
+                  <option value="">Selecionar prazo</option>
+                  {OPPORTUNITY_TERM_OPTIONS.map((months) => (
+                    <option key={months} value={months}>{months} meses</option>
+                  ))}
+                </select>
               </label>
 
               <label className="space-y-1">

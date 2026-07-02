@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 
 const SETTINGS_KEY = 'pre_sales_registry_v1';
+const VALID_OPPORTUNITY_TERMS = new Set(['12', '24', '36', '48', '60']);
 
 const toString = (value, fallback = '') => {
   if (value === null || value === undefined) return fallback;
@@ -19,6 +20,13 @@ const toDateOrNull = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
+};
+
+const toOpportunityTermOrNull = (value, preserve = null) => {
+  if (value === '' && preserve) return preserve;
+  if (value === '' || value === null || value === undefined) return null;
+  const normalized = toString(value);
+  return VALID_OPPORTUNITY_TERMS.has(normalized) ? normalized : null;
 };
 
 const toStringArray = (value) => {
@@ -113,7 +121,7 @@ const normalizeOpportunityRegistry = (input = {}, preserve = {}) => {
     origem: toString(input.origem, preserve.origem || 'B2B').toUpperCase() || 'B2B',
     modalidade: toString(input.modalidade, preserve.modalidade || 'VENDA').toUpperCase() || 'VENDA',
     valorEstimado: toNumberOrNull(input.valorEstimado ?? preserve.valorEstimado),
-    prazo: toDateOrNull(input.prazo || preserve.prazo),
+    prazo: toOpportunityTermOrNull(input.prazo, preserve.prazo),
     status: toString(input.status, preserve.status || 'ABERTA').toUpperCase() || 'ABERTA',
     prioridade: toString(input.prioridade, preserve.prioridade || 'MEDIUM').toUpperCase() || 'MEDIUM',
     distribuidorIds: toStringArray(input.distribuidorIds ?? preserve.distribuidorIds),
