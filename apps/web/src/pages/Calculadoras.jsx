@@ -337,6 +337,12 @@ const normalizeCalculatorTypeFromModalidade = (modalidade) => {
   return tabMap[normalized] || 'vendas';
 };
 
+const modalidadeFromCalculatorType = (calculatorType) => {
+  if (calculatorType === 'locacao') return 'LOCACAO';
+  if (calculatorType === 'servicos') return 'SERVICO';
+  return 'VENDA';
+};
+
 const normalizeQuotedItem = (item = {}) => ({
   descricao: item.descricao || item.description || '',
   quantidade: Math.max(1, toNumber(item.quantidade ?? item.quantity, 1)),
@@ -1389,6 +1395,13 @@ export default function Calculadoras({
     setDesiredMargin(margemDesejada);
     setVendasData((prev) => ({ ...prev, regimeTributario: regimeAtivoId }));
     setCurrentTab(targetTab);
+    setCurrentCost({
+      modalidade: modalidadeFromCalculatorType(targetTab),
+      item: '',
+      quantidade: 1,
+      custoUnitario: 0,
+      observacoes: ''
+    });
 
     // Pré-preencher itens da cotação
     if (cotacaoData?.itens && Array.isArray(cotacaoData.itens) && cotacaoData.itens.length > 0) {
@@ -1410,6 +1423,16 @@ export default function Calculadoras({
         distribuidor: cotacaoCosts[0]?.distribuidor || '',
         numeroOrcamento: cotacaoCosts[0]?.numeroOrcamento || cotacaoData.numeroOrcamento || ''
       });
+      setCurrentCost((prev) => ({
+        ...prev,
+        modalidade: cotacaoCosts[0]?.modalidade
+          ? normalizeModalidadeKey(cotacaoCosts[0].modalidade)
+          : modalidadeFromCalculatorType(targetTab),
+        item: '',
+        quantidade: 1,
+        custoUnitario: 0,
+        observacoes: ''
+      }));
       setProposalFeedback({
         type: 'success',
         text: `Cotação ${cotacaoData.numeroOrcamento || ''} carregada com ${quotedItems.length} item(ns).`
@@ -1852,6 +1875,13 @@ export default function Calculadoras({
     setShowCotacaoModal(false);
     resetForm();
     setCurrentTab(tabId);
+    setCurrentCost({
+      modalidade: modalidadeFromCalculatorType(tabId),
+      item: '',
+      quantidade: 1,
+      custoUnitario: 0,
+      observacoes: ''
+    });
     const nextNumber = generateProposalNumber(savedProposals);
     const managerDefaults = getManagerDefaults();
     setProposalForm(buildProposalForm(nextNumber, managerDefaults));
@@ -1937,6 +1967,16 @@ export default function Calculadoras({
       distribuidor: custosDistribuidores[0]?.distribuidor || '',
       numeroOrcamento: solicitacao.__matchedBudgetNumber || custosDistribuidores[0]?.numeroOrcamento || solicitacao.numero || ''
     });
+    setCurrentCost((prev) => ({
+      ...prev,
+      modalidade: custosDistribuidores[0]?.modalidade
+        ? normalizeModalidadeKey(custosDistribuidores[0].modalidade)
+        : modalidadeFromCalculatorType(targetTab),
+      item: '',
+      quantidade: 1,
+      custoUnitario: 0,
+      observacoes: ''
+    }));
     
     // Mapear itens para o formato correto baseado na modalidade
     const mappedItems = mapQuotedItemsToOperationItems(todosItens, targetTab);
@@ -3749,7 +3789,7 @@ export default function Calculadoras({
                         >
                           <option value="VENDA">Venda</option>
                           <option value="LOCACAO">Locação</option>
-                          <option value="SERVICOS">Serviços</option>
+                          <option value="SERVICO">Serviços</option>
                         </select>
                       </div>
                       <div>
