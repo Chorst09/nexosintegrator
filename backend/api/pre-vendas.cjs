@@ -225,7 +225,7 @@ router.get('/:id', async (req, res) => {
           select: { id: true, name: true, email: true }
         },
         lead: {
-          select: { id: true, name: true, email: true, phone: true }
+          select: { id: true, name: true }
         },
         opportunity: {
           select: { id: true, title: true, value: true, stage: true }
