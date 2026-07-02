@@ -187,7 +187,13 @@ export default function GestaoPocs() {
     try {
       const response = await fetch(buildApiUrl('/prevendas-cadastros/oportunidades'), { headers: getAuthHeaders() });
       const payload = await response.json().catch(() => ({}));
-      const list = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.oportunidades) ? payload.oportunidades : [];
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload.data)
+          ? payload.data
+          : Array.isArray(payload.oportunidades)
+            ? payload.oportunidades
+            : [];
       setOpportunities(list.map(normalizeOpportunity).filter((item) => item.id || item.number || item.title));
     } catch {
       setOpportunities([]);
