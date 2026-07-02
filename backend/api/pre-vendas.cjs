@@ -59,6 +59,31 @@ const resolveExistingOpportunityId = async (opportunityId) => {
   return opportunity?.id || null;
 };
 
+const sanitizePreSalesItems = (items = []) => (
+  Array.isArray(items)
+    ? items
+        .filter((item) => String(item?.descricao || item?.description || '').trim())
+        .map((item) => {
+          const icmsCompra = item?.icmsCompra === null || item?.icmsCompra === undefined || item?.icmsCompra === ''
+            ? null
+            : Number(item.icmsCompra) || 0;
+
+          return {
+            productId: item.productId || null,
+            descricao: String(item.descricao || item.description || '').trim(),
+            quantidade: Math.max(1, parseInt(item.quantidade ?? item.quantity ?? 1, 10) || 1),
+            custoUnitario: Number(item.custoUnitario ?? item.unitCost ?? item.assetValueBRL ?? 0) || 0,
+            precoSugerido: Number(item.precoSugerido ?? 0) || 0,
+            margemLucro: Number(item.margemLucro ?? 0) || 0,
+            observacoes: icmsCompra === null ? (item.observacoes || null) : JSON.stringify({
+              ...(item.observacoes && typeof item.observacoes === 'object' ? item.observacoes : {}),
+              icmsCompra
+            })
+          };
+        })
+    : []
+);
+
 // GET /api/pre-vendas - Listar todas as solicitações de precificação
 router.get('/', async (req, res) => {
   try {
@@ -250,6 +275,8 @@ router.post('/', async (req, res) => {
     const {
       titulo,
       descricao,
+      nomeCliente,
+      modalidade,
       prioridade = 'MEDIUM',
       leadId,
       opportunityId,
@@ -277,26 +304,7 @@ router.post('/', async (req, res) => {
     const numeroFormatado = await generateBudgetNumber();
     const validLeadId = await resolveExistingCompanyId(leadId);
     const validOpportunityId = await resolveExistingOpportunityId(opportunityId);
-    const requestItems = Array.isArray(items)
-      ? items
-          .filter((item) => String(item?.descricao || '').trim())
-          .map((item) => {
-            const icmsCompra = item?.icmsCompra === null || item?.icmsCompra === undefined || item?.icmsCompra === ''
-              ? null
-              : Number(item.icmsCompra) || 0;
-
-            return {
-              descricao: String(item.descricao || '').trim(),
-              quantidade: Math.max(1, parseInt(item.quantidade, 10) || 1),
-              custoUnitario: Number(item.custoUnitario) || 0,
-              precoSugerido: Number(item.precoSugerido) || 0,
-              margemLucro: Number(item.margemLucro) || 0,
-              observacoes: icmsCompra === null
-                ? null
-                : JSON.stringify({ icmsCompra })
-            };
-          })
-      : [];
+    const requestItems = sanitizePreSalesItems(items);
 
     // Criar solicitação
     const solicitacao = await prisma.preSalesRequest.create({
@@ -304,6 +312,8 @@ router.post('/', async (req, res) => {
         numero: numeroFormatado,
         titulo,
         descricao,
+        nomeCliente: nomeCliente || null,
+        modalidade: modalidade || null,
         prioridade,
         status: 'NOVA',
         tiposPrecificacao,
@@ -341,6 +351,8 @@ router.put('/:id', async (req, res) => {
     const {
       titulo,
       descricao,
+      nomeCliente,
+      modalidade,
       prioridade,
       status,
       tiposPrecificacao,
@@ -381,26 +393,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const shouldReplaceItems = Object.prototype.hasOwnProperty.call(req.body, 'items');
-    const requestItems = shouldReplaceItems && Array.isArray(items)
-      ? items
-          .filter((item) => String(item?.descricao || '').trim())
-          .map((item) => {
-            const icmsCompra = item?.icmsCompra === null || item?.icmsCompra === undefined || item?.icmsCompra === ''
-              ? null
-              : Number(item.icmsCompra) || 0;
-
-            return {
-              descricao: String(item.descricao || '').trim(),
-              quantidade: Math.max(1, parseInt(item.quantidade, 10) || 1),
-              custoUnitario: Number(item.custoUnitario) || 0,
-              precoSugerido: Number(item.precoSugerido) || 0,
-              margemLucro: Number(item.margemLucro) || 0,
-              observacoes: icmsCompra === null
-                ? null
-                : JSON.stringify({ icmsCompra })
-            };
-          })
-      : [];
+    const requestItems = shouldReplaceItems ? sanitizePreSalesItems(items) : [];
     const validLeadId = Object.prototype.hasOwnProperty.call(req.body, 'leadId')
       ? await resolveExistingCompanyId(leadId)
       : undefined;
@@ -417,21 +410,23 @@ router.put('/:id', async (req, res) => {
       return tx.preSalesRequest.update({
         where: { id },
         data: {
-        titulo,
-        descricao,
-        prioridade,
-        status,
-        tiposPrecificacao,
-        regimeTributario,
-        leadId: validLeadId,
-        opportunityId: validOpportunityId,
-        valorSugerido: valorSugerido === '' || valorSugerido === undefined || valorSugerido === null ? null : parseFloat(valorSugerido),
-        custoTotal: custoTotal === '' || custoTotal === undefined || custoTotal === null ? null : parseFloat(custoTotal),
-        margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? null : parseFloat(margemLucro),
-        calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
-        observacoes,
-        updatedAt: new Date(),
-        ...(shouldReplaceItems && requestItems.length > 0 ? { items: { create: requestItems } } : {})
+          titulo,
+          descricao,
+          nomeCliente: nomeCliente === undefined ? undefined : nomeCliente || null,
+          modalidade: modalidade === undefined ? undefined : modalidade || null,
+          prioridade,
+          status,
+          tiposPrecificacao,
+          regimeTributario,
+          leadId: validLeadId,
+          opportunityId: validOpportunityId,
+          valorSugerido: valorSugerido === '' || valorSugerido === undefined || valorSugerido === null ? undefined : parseFloat(valorSugerido),
+          custoTotal: custoTotal === '' || custoTotal === undefined || custoTotal === null ? undefined : parseFloat(custoTotal),
+          margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? undefined : parseFloat(margemLucro),
+          calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
+          observacoes,
+          updatedAt: new Date(),
+          ...(shouldReplaceItems && requestItems.length > 0 ? { items: { create: requestItems } } : {})
         },
         include: {
           solicitante: {

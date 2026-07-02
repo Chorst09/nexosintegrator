@@ -8,6 +8,31 @@ const router = express.Router();
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);
 
+const sanitizePreSalesItems = (items = []) => (
+  Array.isArray(items)
+    ? items
+        .filter((item) => String(item?.descricao || item?.description || '').trim())
+        .map((item) => {
+          const icmsCompra = item.icmsCompra === '' || item.icmsCompra === undefined || item.icmsCompra === null
+            ? null
+            : Number(item.icmsCompra) || 0;
+
+          return {
+            productId: item.productId || null,
+            descricao: String(item.descricao || item.description || '').trim(),
+            quantidade: Math.max(1, parseInt(item.quantidade ?? item.quantity ?? 1, 10) || 1),
+            custoUnitario: Number(item.custoUnitario ?? item.unitCost ?? item.assetValueBRL ?? 0) || 0,
+            precoSugerido: Number(item.precoSugerido ?? 0) || 0,
+            margemLucro: Number(item.margemLucro ?? 0) || 0,
+            observacoes: icmsCompra === null ? (item.observacoes || null) : JSON.stringify({
+              ...(item.observacoes && typeof item.observacoes === 'object' ? item.observacoes : {}),
+              icmsCompra
+            })
+          };
+        })
+    : []
+);
+
 // GET /api/pre-vendas - Listar todas as solicitações de precificação
 router.get('/', async (req, res) => {
   try {
@@ -199,6 +224,8 @@ router.post('/', async (req, res) => {
     const {
       titulo,
       descricao,
+      nomeCliente,
+      modalidade,
       prioridade = 'MEDIUM',
       leadId,
       opportunityId,
@@ -250,6 +277,8 @@ router.post('/', async (req, res) => {
         numero: numeroFormatado,
         titulo,
         descricao,
+        nomeCliente: nomeCliente || null,
+        modalidade: modalidade || null,
         prioridade,
         status: 'NOVA',
         tiposPrecificacao,
@@ -257,7 +286,28 @@ router.post('/', async (req, res) => {
         observacoes,
         solicitanteId: req.user.userId, // Usar req.user.userId em vez de req.user.id
         leadId: leadId || null,
-        opportunityId: opportunityId || null
+        opportunityId: opportunityId || null,
+        items: {
+          create: sanitizePreSalesItems(items)
+        }
+      },
+      include: {
+        solicitante: {
+          select: { id: true, name: true, email: true }
+        },
+        lead: {
+          select: { id: true, name: true }
+        },
+        opportunity: {
+          select: { id: true, title: true }
+        },
+        items: {
+          include: {
+            product: {
+              select: { id: true, name: true, price: true }
+            }
+          }
+        }
       }
     });
 
@@ -283,10 +333,14 @@ router.put('/:id', async (req, res) => {
     const {
       titulo,
       descricao,
+      nomeCliente,
+      modalidade,
       prioridade,
       status,
       tiposPrecificacao,
       regimeTributario,
+      leadId,
+      opportunityId,
       valorSugerido,
       custoTotal,
       margemLucro,
@@ -320,26 +374,45 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    const updateData = {
+      titulo,
+      descricao,
+      nomeCliente: nomeCliente === undefined ? undefined : nomeCliente || null,
+      modalidade: modalidade === undefined ? undefined : modalidade || null,
+      prioridade,
+      status,
+      tiposPrecificacao,
+      regimeTributario,
+      leadId: leadId === undefined ? undefined : leadId || null,
+      opportunityId: opportunityId === undefined ? undefined : opportunityId || null,
+      valorSugerido: valorSugerido === '' || valorSugerido === undefined || valorSugerido === null ? undefined : parseFloat(valorSugerido),
+      custoTotal: custoTotal === '' || custoTotal === undefined || custoTotal === null ? undefined : parseFloat(custoTotal),
+      margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? undefined : parseFloat(margemLucro),
+      calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
+      observacoes,
+      updatedAt: new Date()
+    };
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'items')) {
+      updateData.items = {
+        deleteMany: {},
+        create: sanitizePreSalesItems(items)
+      };
+    }
+
     // Atualizar solicitação
     const solicitacao = await prisma.preSalesRequest.update({
       where: { id },
-      data: {
-        titulo,
-        descricao,
-        prioridade,
-        status,
-        tiposPrecificacao,
-        regimeTributario,
-        valorSugerido: valorSugerido === '' || valorSugerido === undefined || valorSugerido === null ? null : parseFloat(valorSugerido),
-        custoTotal: custoTotal === '' || custoTotal === undefined || custoTotal === null ? null : parseFloat(custoTotal),
-        margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? null : parseFloat(margemLucro),
-        calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
-        observacoes,
-        updatedAt: new Date()
-      },
+      data: updateData,
       include: {
         solicitante: {
           select: { id: true, name: true, email: true }
+        },
+        lead: {
+          select: { id: true, name: true }
+        },
+        opportunity: {
+          select: { id: true, title: true }
         },
         items: {
           include: {

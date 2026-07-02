@@ -320,14 +320,18 @@ const normalizeSavedProposals = (source) => {
   return [];
 };
 
+const normalizeModalidadeKey = (modalidade) => {
+  const normalized = String(modalidade || '').trim().toUpperCase();
+  if (normalized === 'LOCAÇÃO') return 'LOCACAO';
+  if (normalized === 'SERVIÇOS' || normalized === 'SERVICOS') return 'SERVICO';
+  return normalized || 'VENDA';
+};
+
 const normalizeCalculatorTypeFromModalidade = (modalidade) => {
-  const normalized = String(modalidade || '').toUpperCase();
+  const normalized = normalizeModalidadeKey(modalidade);
   const tabMap = {
     VENDA: 'vendas',
     LOCACAO: 'locacao',
-    LOCAÇÃO: 'locacao',
-    SERVICOS: 'servicos',
-    SERVIÇOS: 'servicos',
     SERVICO: 'servicos'
   };
   return tabMap[normalized] || 'vendas';
@@ -361,10 +365,20 @@ const getItemsFromSolicitacao = (solicitacao) => (
 );
 
 const getBudgetItemCount = (solicitacao) => {
-  const quoteItems = getCotacoesFromSolicitacao(solicitacao).reduce((sum, cotacao) => (
+  const cotacoes = getCotacoesByModalidade(solicitacao);
+  const quoteItems = cotacoes.reduce((sum, cotacao) => (
     sum + (Array.isArray(cotacao?.itens) ? cotacao.itens.length : 0)
   ), 0);
   return quoteItems || getItemsFromSolicitacao(solicitacao).length;
+};
+
+const getCotacoesByModalidade = (solicitacao = {}) => {
+  const cotacoes = getCotacoesFromSolicitacao(solicitacao);
+  const modalidade = normalizeModalidadeKey(solicitacao?.modalidade || cotacoes[0]?.modalidade || 'VENDA');
+  const matching = cotacoes.filter((cotacao) => (
+    normalizeModalidadeKey(cotacao?.modalidade || modalidade) === modalidade
+  ));
+  return matching.length > 0 ? matching : [];
 };
 
 const buildCotacaoItems = (cotacoes = []) => {
@@ -415,9 +429,15 @@ const buildDistributorCostsFromSolicitacaoItems = (solicitacao = {}) => (
 );
 
 const buildDistributorCostsFromCotacaoPayload = (cotacaoData = {}) => {
-  const fromCotacoes = buildDistributorCostsFromCotacoes(cotacaoData.todosCustos || [], {
+  const modalidade = normalizeModalidadeKey(cotacaoData.modalidade || 'VENDA');
+  const matchingCotacoes = Array.isArray(cotacaoData.todosCustos)
+    ? cotacaoData.todosCustos.filter((cotacao) => (
+        normalizeModalidadeKey(cotacao?.modalidade || modalidade) === modalidade
+      ))
+    : [];
+  const fromCotacoes = buildDistributorCostsFromCotacoes(matchingCotacoes, {
     numero: cotacaoData.numeroOrcamento,
-    modalidade: cotacaoData.modalidade
+    modalidade
   });
   if (fromCotacoes.length > 0) return fromCotacoes;
 
@@ -1347,7 +1367,7 @@ export default function Calculadoras({
     const quantidade = toNumber(urlParams.get('quantidade'), 1);
     const margemDesejada = toNumber(urlParams.get('margemDesejada'), 20);
 
-    const tipoNorm = String(tipo || '').toUpperCase();
+    const tipoNorm = normalizeModalidadeKey(tipo);
     const targetTab = normalizeCalculatorTypeFromModalidade(tipoNorm);
 
     const nextProposalNumber = generateProposalNumber(savedProposals);
@@ -1372,7 +1392,11 @@ export default function Calculadoras({
 
     // Pré-preencher itens da cotação
     if (cotacaoData?.itens && Array.isArray(cotacaoData.itens) && cotacaoData.itens.length > 0) {
-      const quotedItems = cotacaoData.itens.map(normalizeQuotedItem);
+      const itemsDaModalidade = cotacaoData.itens.filter((item) => (
+        normalizeModalidadeKey(item?.modalidade || tipoNorm) === tipoNorm
+      ));
+      const quotedItems = (itemsDaModalidade.length > 0 ? itemsDaModalidade : cotacaoData.itens)
+        .map((item) => normalizeQuotedItem({ ...item, modalidade: item.modalidade || tipoNorm }));
       const mappedItems = mapQuotedItemsToOperationItems(quotedItems, targetTab);
       const cotacaoCosts = buildDistributorCostsFromCotacaoPayload(cotacaoData);
 
@@ -1875,7 +1899,7 @@ export default function Calculadoras({
     setShowCotacaoModal(false);
     
     // Preparar dados da cotação
-    const todosCustos = getCotacoesFromSolicitacao(solicitacao);
+    const todosCustos = getCotacoesByModalidade(solicitacao);
     const todosItensCotacao = buildCotacaoItems(todosCustos);
     const todosItens = todosItensCotacao.length > 0 ? todosItensCotacao : getItemsFromSolicitacao(solicitacao);
     const custosCotacao = buildDistributorCostsFromCotacoes(todosCustos, solicitacao);
@@ -2004,7 +2028,7 @@ export default function Calculadoras({
     
     // Limpar formulário
     setCurrentCost({
-      modalidade: 'VENDA',
+      modalidade: normalizeModalidadeKey(currentCost.modalidade || (currentTab === 'locacao' ? 'LOCACAO' : currentTab === 'servicos' ? 'SERVICO' : 'VENDA')),
       item: '',
       quantidade: 1,
       custoUnitario: 0,
@@ -2021,12 +2045,12 @@ export default function Calculadoras({
   };
 
   const applyDistributorCostToCalculator = (cost) => {
-    const modalidade = String(cost?.modalidade || 'VENDA').toUpperCase();
+    const modalidade = normalizeModalidadeKey(cost?.modalidade || 'VENDA');
     const quantity = Math.max(1, toNumber(cost?.quantidade, 1));
     const unitCost = Math.max(0, toNumber(cost?.custoUnitario, 0));
     const description = cost?.item || '';
 
-    if (modalidade === 'LOCACAO' || modalidade === 'LOCAÇÃO') {
+    if (modalidade === 'LOCACAO') {
       setCurrentTab('locacao');
       setRentalItems((prev) => {
         const base = prev.length > 0 ? prev : [{ ...DEFAULT_RENTAL_ITEM, id: createItemId('rental') }];
@@ -2044,7 +2068,7 @@ export default function Calculadoras({
       return;
     }
 
-    if (modalidade === 'SERVICOS' || modalidade === 'SERVIÇOS' || modalidade === 'SERVICO') {
+    if (modalidade === 'SERVICO') {
       setCurrentTab('servicos');
       setServiceItems((prev) => {
         const base = prev.length > 0 ? prev : [{

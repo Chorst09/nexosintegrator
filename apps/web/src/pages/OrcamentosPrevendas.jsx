@@ -66,6 +66,17 @@ const parseItemIcmsCompra = (item) => {
   }
 };
 
+const normalizeModalidadeKey = (modalidade) => {
+  const normalized = String(modalidade || '').trim().toUpperCase();
+  if (normalized === 'LOCAÇÃO') return 'LOCACAO';
+  if (normalized === 'SERVIÇOS' || normalized === 'SERVICOS') return 'SERVICO';
+  return normalized || 'VENDA';
+};
+
+const normalizeTipoPrecificacaoKey = (modalidade) => (
+  normalizeModalidadeKey(modalidade) === 'SERVICO' ? 'SERVICOS' : normalizeModalidadeKey(modalidade)
+);
+
 const formFromRequest = (request, currentUser = {}) => ({
   titulo: request?.titulo || '',
   descricao: request?.descricao || '',
@@ -121,16 +132,21 @@ const normalizeItemsFromRequest = (solicitacao) => (
 
 const buildPrecificacaoPayload = (solicitacao) => {
   const todosCustos = normalizeCotacoesFromRequest(solicitacao);
+  const modalidade = normalizeModalidadeKey(solicitacao?.modalidade || todosCustos[0]?.modalidade || 'VENDA');
+  const cotacoesDaModalidade = todosCustos.filter((cotacao) => (
+    normalizeModalidadeKey(cotacao?.modalidade || modalidade) === modalidade
+  ));
+  const custosParaCalculo = cotacoesDaModalidade.length > 0 ? cotacoesDaModalidade : [];
   const itens = [];
 
-  todosCustos.forEach((cotacao) => {
+  custosParaCalculo.forEach((cotacao) => {
     if (!Array.isArray(cotacao.itens)) return;
     cotacao.itens.forEach((item) => {
       itens.push({
         descricao: item.descricao || '',
         quantidade: Number(item.quantidade) || 1,
         custoUnitario: Number(item.custoUnitario) || 0,
-        modalidade: cotacao.modalidade || solicitacao?.modalidade || 'VENDA',
+        modalidade: cotacao.modalidade || modalidade,
         distribuidor: cotacao.distribuidor || cotacao.fornecedor || '',
         numeroOrcamento: cotacao.numeroOrcamento || solicitacao?.numero || '',
         observacoes: cotacao.observacoesCotacao || cotacao.observacoes || ''
@@ -142,7 +158,7 @@ const buildPrecificacaoPayload = (solicitacao) => {
     normalizeItemsFromRequest(solicitacao).forEach((item) => {
       itens.push({
         ...item,
-        modalidade: solicitacao?.modalidade || 'VENDA',
+        modalidade,
         distribuidor: 'Solicitação',
         numeroOrcamento: solicitacao?.numero || '',
         observacoes: ''
@@ -150,8 +166,7 @@ const buildPrecificacaoPayload = (solicitacao) => {
     });
   }
 
-  const modalidade = solicitacao?.modalidade || todosCustos[0]?.modalidade || 'VENDA';
-  const numeroOrcamento = todosCustos[0]?.numeroOrcamento || solicitacao?.numero || '';
+  const numeroOrcamento = custosParaCalculo[0]?.numeroOrcamento || solicitacao?.numero || '';
   const nomeCliente = solicitacao?.nomeCliente || solicitacao?.lead?.name || solicitacao?.cliente?.nome || '';
 
   return {
@@ -168,7 +183,7 @@ const buildPrecificacaoPayload = (solicitacao) => {
       telefone: solicitacao?.telefoneCliente || '',
       email: solicitacao?.emailCliente || ''
     },
-    todosCustos
+    todosCustos: custosParaCalculo
   };
 };
 
@@ -235,7 +250,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
         nomeCliente: form.nomeCliente.trim() || null,
         modalidade: form.modalidade || null,
         prioridade: form.prioridade,
-        tiposPrecificacao: ['VENDA'],
+        tiposPrecificacao: [normalizeTipoPrecificacaoKey(form.modalidade)],
         leadId: form.clientId.trim() || null,
         opportunityId: form.opportunityId.trim() || null,
         assignedToId: form.encaminhadoParaId || null,
