@@ -3229,7 +3229,7 @@ export default function B2GEditais() {
         return [data.opportunity, ...next];
       });
       setFeedback({ type: 'success', message: 'Resumo convertido com sucesso. Redirecionando para Oportunidades...' });
-      navigate(`/oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data.opportunity.id)}&mode=edit`);
+      navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data.opportunity.id)}&mode=edit`);
     } catch (error) {
       console.error('Erro ao converter resumo em oportunidade:', error);
       setFeedback({ type: 'error', message: error.message || 'Erro ao converter resumo em oportunidade.' });
@@ -3450,7 +3450,7 @@ export default function B2GEditais() {
         return [data.opportunity, ...next];
       });
       setFeedback({ type: 'success', message: 'Resumo convertido com sucesso. Redirecionando...' });
-      navigate(`/oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data.opportunity.id)}&mode=edit`);
+      navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data.opportunity.id)}&mode=edit`);
     } catch (error) {
       console.error('Erro ao converter resumo do histórico em oportunidade:', error);
       setFeedback({ type: 'error', message: error.message || 'Erro ao converter resumo.' });
@@ -3529,7 +3529,7 @@ export default function B2GEditais() {
   const handleEditOpportunity = (opportunity) => {
     if (!opportunity?.id) return;
     closeOpportunityDetails();
-    navigate(`/oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(opportunity.id)}&mode=edit`);
+    navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(opportunity.id)}&mode=edit`);
   };
 
   const handleDeleteOpportunity = async (opportunity) => {
@@ -5158,7 +5158,7 @@ export default function B2GEditais() {
 
               <button
                 type="button"
-                onClick={() => navigate('/oportunidades?clientType=B2G')}
+                onClick={() => navigate('/b2g-oportunidades?clientType=B2G')}
                 className="crm-btn crm-btn-primary h-10 px-4"
               >
                 <Plus className="h-4 w-4" />
