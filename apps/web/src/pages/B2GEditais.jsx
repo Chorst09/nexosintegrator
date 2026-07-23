@@ -49,7 +49,13 @@ import {
   User,
   Users,
   X,
-  Workflow
+  Workflow,
+  MessageSquare,
+  Send,
+  Phone,
+  Mail,
+  MessageCircle,
+  StickyNote
 } from 'lucide-react';
 
 import {
@@ -1247,6 +1253,13 @@ export default function B2GEditais() {
   const [movingOpportunityId, setMovingOpportunityId] = useState('');
   const [selectedOpportunityId, setSelectedOpportunityId] = useState('');
   const [deletingLeadId, setDeletingLeadId] = useState('');
+  // Estados para acompanhamentos de oportunidades B2G
+  const [b2gFollowUps, setB2gFollowUps] = useState([]);
+  const [b2gFollowUpText, setB2gFollowUpText] = useState('');
+  const [b2gFollowUpType, setB2gFollowUpType] = useState('NOTE');
+  const [b2gFollowUpSubmitting, setB2gFollowUpSubmitting] = useState(false);
+  const [b2gFollowUpError, setB2gFollowUpError] = useState('');
+  const [b2gLoadingFollowUps, setB2gLoadingFollowUps] = useState(false);
   const [selectedLeadAnalysisId, setSelectedLeadAnalysisId] = useState('');
   const [leadAnalysisDecision, setLeadAnalysisDecision] = useState('ANALISE');
   const [leadAnalysisNotes, setLeadAnalysisNotes] = useState('');
@@ -3446,13 +3459,71 @@ export default function B2GEditais() {
     }
   };
 
-  const openOpportunityDetails = (opportunity) => {
+  const openOpportunityDetails = async (opportunity) => {
     if (!opportunity?.id) return;
     setSelectedOpportunityId(opportunity.id);
+    setB2gFollowUpText('');
+    setB2gFollowUpType('NOTE');
+    setB2gFollowUpError('');
+    setB2gFollowUps([]);
+    // Carregar follow-ups
+    setB2gLoadingFollowUps(true);
+    try {
+      const res = await fetch(buildApiUrl(`/opportunity-followups/${opportunity.id}`), { headers: getAuthHeaders() });
+      if (res.ok) setB2gFollowUps(await res.json());
+    } catch (e) {
+      console.error('Erro ao carregar acompanhamentos B2G:', e);
+    } finally {
+      setB2gLoadingFollowUps(false);
+    }
   };
 
   const closeOpportunityDetails = () => {
     setSelectedOpportunityId('');
+    setB2gFollowUps([]);
+    setB2gFollowUpText('');
+    setB2gFollowUpError('');
+  };
+
+  const handleAddB2GFollowUp = async () => {
+    const content = b2gFollowUpText.trim();
+    if (!selectedOpportunityId || !content) {
+      setB2gFollowUpError('Informe o acompanhamento antes de salvar.');
+      return;
+    }
+    setB2gFollowUpSubmitting(true);
+    setB2gFollowUpError('');
+    try {
+      const res = await fetch(buildApiUrl('/opportunity-followups'), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ opportunityId: selectedOpportunityId, type: b2gFollowUpType, content })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.error || 'Erro ao salvar acompanhamento.');
+      }
+      const created = await res.json();
+      setB2gFollowUps(prev => [created, ...prev]);
+      setB2gFollowUpText('');
+      setB2gFollowUpType('NOTE');
+    } catch (e) {
+      setB2gFollowUpError(e.message);
+    } finally {
+      setB2gFollowUpSubmitting(false);
+    }
+  };
+
+  const handleDeleteB2GFollowUp = async (followUpId) => {
+    if (!window.confirm('Deseja remover este acompanhamento?')) return;
+    try {
+      const res = await fetch(buildApiUrl(`/opportunity-followups/${followUpId}`), {
+        method: 'DELETE', headers: getAuthHeaders()
+      });
+      if (res.ok) setB2gFollowUps(prev => prev.filter(f => f.id !== followUpId));
+    } catch (e) {
+      console.error('Erro ao remover acompanhamento:', e);
+    }
   };
 
   const handleEditOpportunity = (opportunity) => {
@@ -7647,6 +7718,124 @@ export default function B2GEditais() {
                 </div>
               )}
             </div>
+
+            {/* ===== SEÇÃO DE ACOMPANHAMENTOS B2G ===== */}
+            <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.65)] p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--crm-ink)]">Acompanhamentos</h3>
+                  <p className="mt-1 text-sm text-[var(--crm-muted)]">
+                    Registre interações e próximos passos sem alterar a fase da oportunidade.
+                  </p>
+                </div>
+                <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl border border-[rgb(var(--crm-accent-rgb)_/_0.25)] bg-[rgb(var(--crm-accent-rgb)_/_0.1)] text-[rgb(var(--crm-accent-rgb))]">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {/* Seletor de tipo */}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: 'NOTE',     label: 'Nota',      icon: StickyNote    },
+                    { value: 'CALL',     label: 'Ligação',   icon: Phone         },
+                    { value: 'EMAIL',    label: 'Email',     icon: Mail          },
+                    { value: 'MEETING',  label: 'Reunião',   icon: Users         },
+                    { value: 'WHATSAPP', label: 'WhatsApp',  icon: MessageCircle }
+                  ].map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setB2gFollowUpType(t.value)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        b2gFollowUpType === t.value
+                          ? 'bg-cyan-500 text-white'
+                          : 'border border-[color:var(--crm-border)] text-[var(--crm-muted)] hover:bg-[var(--crm-surface)]'
+                      }`}
+                    >
+                      <t.icon className="h-3.5 w-3.5" />
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Textarea */}
+                <textarea
+                  value={b2gFollowUpText}
+                  onChange={e => { setB2gFollowUpText(e.target.value); if (b2gFollowUpError) setB2gFollowUpError(''); }}
+                  placeholder="Ex: reunião com o órgão realizada, pendência documental, resultado da habilitação..."
+                  rows={4}
+                  className="crm-input min-h-[100px] !px-4 !py-3 text-sm w-full"
+                />
+
+                {b2gFollowUpError && (
+                  <p className="text-sm font-semibold text-red-400">{b2gFollowUpError}</p>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleAddB2GFollowUp}
+                    disabled={b2gFollowUpSubmitting || !b2gFollowUpText.trim()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" />
+                    {b2gFollowUpSubmitting ? 'Salvando...' : 'Salvar acompanhamento'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Timeline de acompanhamentos */}
+              <div className="mt-5 border-t border-[color:var(--crm-border)] pt-5">
+                {b2gLoadingFollowUps ? (
+                  <div className="text-center text-sm text-[var(--crm-muted)] py-4">Carregando...</div>
+                ) : b2gFollowUps.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-[color:var(--crm-border)] p-5 text-center text-sm text-[var(--crm-muted)]">
+                    Nenhum acompanhamento registrado nesta oportunidade.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {b2gFollowUps.map(fu => {
+                      const ICONS = { NOTE: StickyNote, CALL: Phone, EMAIL: Mail, MEETING: Users, WHATSAPP: MessageCircle };
+                      const LABELS = { NOTE: 'Nota', CALL: 'Ligação', EMAIL: 'Email', MEETING: 'Reunião', WHATSAPP: 'WhatsApp' };
+                      const Icon = ICONS[fu.type] || StickyNote;
+                      return (
+                        <div key={fu.id} className="crm-panel-muted rounded-xl p-3 relative group">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400">
+                                <Icon className="h-4 w-4" />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <span className="text-xs font-semibold text-cyan-400">{LABELS[fu.type] || fu.type}</span>
+                                <span className="text-xs text-[var(--crm-muted)]">•</span>
+                                <span className="text-xs text-[var(--crm-muted)]">{fu.user?.name}</span>
+                                <span className="text-xs text-[var(--crm-muted)]">•</span>
+                                <span className="text-xs text-[var(--crm-muted)]">
+                                  {new Date(fu.createdAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-sm text-[var(--crm-ink)] whitespace-pre-wrap">{fu.content}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteB2GFollowUp(fu.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-red-400 hover:text-red-300"
+                              title="Remover"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* ===== FIM ACOMPANHAMENTOS ===== */}
 
             <div className="flex flex-wrap justify-end gap-2 border-t border-[color:var(--crm-border)] pt-4">
               <button
