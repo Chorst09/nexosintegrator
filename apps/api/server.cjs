@@ -366,6 +366,9 @@ app.use('/api/prevendas-cadastros', handleLegacyAPI('./api/prevendas-cadastros.j
 // API de Atividades Simples (CommonJS)
 app.use('/api/activities-simple', require('./api/activities-simple.cjs'));
 
+// API de Acompanhamentos de Oportunidades (CommonJS)
+app.use('/api/opportunity-followups', require('./api/opportunity-followups.cjs'));
+
 // API de Geração de PDF (CommonJS)
 app.use('/api/pdf-generator', require('./api/pdf-generator.cjs'));
 

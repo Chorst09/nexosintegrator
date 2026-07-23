@@ -17,7 +17,14 @@ import {
   Search,
   BarChart3,
   Filter,
-  Trash2
+  Trash2,
+  MessageSquare,
+  Send,
+  Phone,
+  Mail,
+  Users,
+  MessageCircle,
+  StickyNote
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -79,6 +86,12 @@ export default function Oportunidades() {
   const [showLossModal, setShowLossModal] = useState(false);
   const [lossReason, setLossReason] = useState('');
   const [pendingLossId, setPendingLossId] = useState(null);
+  const [followUpText, setFollowUpText] = useState('');
+  const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
+  const [followUpError, setFollowUpError] = useState('');
+  const [followUpType, setFollowUpType] = useState('NOTE'); // NOTE, CALL, EMAIL, MEETING, WHATSAPP
+  const [followUps, setFollowUps] = useState([]);
+  const [loadingFollowUps, setLoadingFollowUps] = useState(false);
   const [searchParams] = useSearchParams();
 
   const LOSS_REASONS = [
@@ -104,12 +117,15 @@ export default function Oportunidades() {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
 
-  // Verificar se usuário é admin/master
-  const currentUserRole = (() => {
+  // Verificar se usuário é admin/master e extrair userId
+  const { currentUserRole, userId } = (() => {
     try {
       const u = JSON.parse(localStorage.getItem('user') || '{}');
-      return String(u?.role || '').toUpperCase();
-    } catch { return ''; }
+      return {
+        currentUserRole: String(u?.role || '').toUpperCase(),
+        userId: u?.id || ''
+      };
+    } catch { return { currentUserRole: '', userId: '' }; }
   })();
   const isAdmin = currentUserRole === 'ADMIN' || currentUserRole === 'MASTER';
   const scopedClientTypeQuery = `clientType=${encodeURIComponent(pipelineClientType)}`;
@@ -489,9 +505,89 @@ export default function Oportunidades() {
     }
   };
 
-  const handleViewDetails = (opportunity) => {
+  const handleViewDetails = async (opportunity) => {
     setSelectedOpportunity(opportunity);
+    setFollowUpText('');
+    setFollowUpError('');
+    setFollowUpType('NOTE');
     setShowDetailsModal(true);
+    
+    // Carregar follow-ups
+    await fetchFollowUps(opportunity.id);
+  };
+
+  const fetchFollowUps = async (opportunityId) => {
+    setLoadingFollowUps(true);
+    try {
+      const response = await fetch(buildApiUrl(`/opportunity-followups/${opportunityId}`), {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setFollowUps(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar acompanhamentos:', error);
+    } finally {
+      setLoadingFollowUps(false);
+    }
+  };
+
+  const handleAddOpportunityFollowUp = async () => {
+    const description = followUpText.trim();
+    if (!selectedOpportunity?.id || !description) {
+      setFollowUpError('Informe o acompanhamento antes de salvar.');
+      return;
+    }
+
+    setFollowUpSubmitting(true);
+    setFollowUpError('');
+
+    try {
+      const response = await fetch(buildApiUrl('/opportunity-followups'), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          opportunityId: selectedOpportunity.id,
+          type: followUpType,
+          content: description
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error || errorData?.message || 'Erro ao salvar acompanhamento.');
+      }
+
+      const createdFollowUp = await response.json();
+      setFollowUps([createdFollowUp, ...followUps]);
+      setFollowUpText('');
+      setFollowUpType('NOTE');
+    } catch (error) {
+      console.error('Erro ao salvar acompanhamento:', error);
+      setFollowUpError(error.message || 'Erro ao salvar acompanhamento.');
+    } finally {
+      setFollowUpSubmitting(false);
+    }
+  };
+
+  const handleDeleteFollowUp = async (followUpId) => {
+    if (!confirm('Deseja remover este acompanhamento?')) return;
+
+    try {
+      const response = await fetch(buildApiUrl(`/opportunity-followups/${followUpId}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        setFollowUps(followUps.filter(f => f.id !== followUpId));
+      }
+    } catch (error) {
+      console.error('Erro ao remover acompanhamento:', error);
+      alert('Erro ao remover acompanhamento.');
+    }
   };
 
   const formatCurrency = (value) => {
@@ -885,13 +981,14 @@ export default function Oportunidades() {
                 <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Status</th>
                 <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Data Fechamento</th>
                 <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Motivo</th>
+                <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Acompanhamentos</th>
                 <th className="text-left p-4 font-semibold text-[var(--crm-ink)]">Responsável</th>
               </tr>
             </thead>
             <tbody>
               {filteredOpportunities.filter(o => o.stage === 'WON' || o.stage === 'LOST').length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-[var(--crm-muted)]">
+                  <td colSpan={8} className="text-center py-12 text-[var(--crm-muted)]">
                     <Target className="w-12 h-12 mx-auto mb-2 opacity-40" />
                     <p>Nenhuma oportunidade ganha ou perdida ainda.</p>
                   </td>
@@ -927,6 +1024,12 @@ export default function Oportunidades() {
                       </td>
                       <td className="p-4 text-[var(--crm-muted)] max-w-[200px] truncate" title={opp.lossReason || ''}>
                         {opp.stage === 'LOST' ? (opp.lossReason || '—') : '—'}
+                      </td>
+                      <td className="p-4 text-[var(--crm-muted)]">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.72)] px-2.5 py-1 text-xs font-semibold text-[var(--crm-ink)]">
+                          <MessageSquare className="h-3.5 w-3.5 text-[rgb(var(--crm-accent-rgb))]" />
+                          {(opp.activities || []).length}
+                        </span>
                       </td>
                       <td className="p-4 text-[var(--crm-muted)]">{opp.owner?.name || 'N/I'}</td>
                     </tr>
@@ -973,6 +1076,8 @@ export default function Oportunidades() {
           onClose={() => {
             setShowDetailsModal(false);
             setSelectedOpportunity(null);
+            setFollowUpText('');
+            setFollowUpError('');
           }}
           title={selectedOpportunity.title}
           size="large"
@@ -1109,21 +1214,150 @@ export default function Oportunidades() {
               </div>
             )}
 
-            {selectedOpportunity.activities && selectedOpportunity.activities.length > 0 && (
-              <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.65)] p-5">
-                <h3 className="text-lg font-semibold text-[var(--crm-ink)] mb-4">Atividades Recentes</h3>
-                <div className="space-y-3">
-                  {selectedOpportunity.activities.slice(0, 5).map(activity => (
-                    <div key={activity.id} className="crm-panel-muted rounded-xl p-3">
-                      <div className="font-medium text-[var(--crm-ink)]">{activity.subject}</div>
-                      <div className="text-sm text-[var(--crm-muted)] mt-1">
-                        {activity.assignedTo?.name} - {new Date(activity.createdAt).toLocaleDateString('pt-BR')}
-                      </div>
-                    </div>
-                  ))}
+            <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.65)] p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--crm-ink)]">Acompanhamentos</h3>
+                  <p className="mt-1 text-sm text-[var(--crm-muted)]">
+                    Registre interações, próximos passos e decisões desta oportunidade.
+                  </p>
+                </div>
+                <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl border border-[rgb(var(--crm-accent-rgb)_/_0.25)] bg-[rgb(var(--crm-accent-rgb)_/_0.1)] text-[rgb(var(--crm-accent-rgb))]">
+                  <MessageSquare className="h-5 w-5" />
                 </div>
               </div>
-            )}
+
+              <div className="space-y-3">
+                {/* Botões de Tipo de Interação */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {[
+                    { value: 'NOTE', label: 'Nota', icon: StickyNote },
+                    { value: 'CALL', label: 'Ligação', icon: Phone },
+                    { value: 'EMAIL', label: 'Email', icon: Mail },
+                    { value: 'MEETING', label: 'Reunião', icon: Users },
+                    { value: 'WHATSAPP', label: 'WhatsApp', icon: MessageCircle }
+                  ].map(type => (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => setFollowUpType(type.value)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        followUpType === type.value
+                          ? 'bg-cyan-500 text-white'
+                          : 'border border-slate-700 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <type.icon className="h-3.5 w-3.5" />
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={followUpText}
+                  onChange={(event) => {
+                    setFollowUpText(event.target.value);
+                    if (followUpError) setFollowUpError('');
+                  }}
+                  placeholder="Ex: contato realizado com o órgão, retorno previsto, pendência documental, decisão do comitê..."
+                  className="crm-input min-h-[110px] !px-4 !py-3 text-base"
+                  rows={4}
+                />
+
+                {followUpError && (
+                  <p className="text-sm font-semibold text-red-300">{followUpError}</p>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleAddOpportunityFollowUp}
+                    disabled={followUpSubmitting || !followUpText.trim()}
+                    className="crm-btn min-w-[190px] text-white border border-cyan-300/45 bg-[linear-gradient(135deg,#2563eb_0%,#0891b2_100%)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Send className="h-4 w-4" />
+                    {followUpSubmitting ? 'Salvando...' : 'Salvar acompanhamento'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-[color:var(--crm-border)] pt-5">
+                {loadingFollowUps ? (
+                  <div className="rounded-xl border border-dashed border-[color:var(--crm-border)] p-5 text-center text-sm text-[var(--crm-muted)]">
+                    Carregando acompanhamentos...
+                  </div>
+                ) : followUps && followUps.length > 0 ? (
+                <div className="space-y-3">
+                  {followUps.map(followUp => {
+                    const typeIcons = {
+                      NOTE: StickyNote,
+                      CALL: Phone,
+                      EMAIL: Mail,
+                      MEETING: Users,
+                      WHATSAPP: MessageCircle
+                    };
+                    const TypeIcon = typeIcons[followUp.type] || StickyNote;
+                    const typeLabels = {
+                      NOTE: 'Nota',
+                      CALL: 'Ligação',
+                      EMAIL: 'Email',
+                      MEETING: 'Reunião',
+                      WHATSAPP: 'WhatsApp'
+                    };
+                    
+                    return (
+                      <div key={followUp.id} className="crm-panel-muted rounded-xl p-3 relative group">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 mt-0.5">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400">
+                              <TypeIcon className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-cyan-400">
+                                {typeLabels[followUp.type] || followUp.type}
+                              </span>
+                              <span className="text-xs text-[var(--crm-muted)]">•</span>
+                              <span className="text-xs text-[var(--crm-muted)]">
+                                {followUp.user?.name}
+                              </span>
+                              <span className="text-xs text-[var(--crm-muted)]">•</span>
+                              <span className="text-xs text-[var(--crm-muted)]">
+                                {new Date(followUp.createdAt).toLocaleString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <div className="text-sm text-[var(--crm-ink)] whitespace-pre-wrap">
+                              {followUp.content}
+                            </div>
+                          </div>
+                          {(isAdmin || followUp.userId === userId) && (
+                            <button
+                              onClick={() => handleDeleteFollowUp(followUp.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-red-400 hover:text-red-300"
+                              title="Remover acompanhamento"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[color:var(--crm-border)] p-5 text-center text-sm text-[var(--crm-muted)]">
+                    Nenhum acompanhamento registrado nesta oportunidade.
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className={modalActionsClass}>
               <button

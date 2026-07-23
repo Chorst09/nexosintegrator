@@ -52,6 +52,7 @@ model User {
   preSalesApproved    PreSalesRequest[] @relation("PreSalesApprover")
   preSalesRejected    PreSalesRequest[] @relation("PreSalesRejecter")
   preSalesApprovals   PreSalesApproval[] @relation("PreSalesApprovalApprover")
+  opportunityFollowUps OpportunityFollowUp[] @relation("OpportunityFollowUps")
 
   @@index([tenantCompanyId])
   @@index([role])
@@ -154,11 +155,30 @@ model Opportunity {
   competitors CompetitorComparison[]
   preSalesRequests PreSalesRequest[]
   integrationOrders IntegrationOrder[]
+  followUps   OpportunityFollowUp[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([b2gStage])
+}
+
+model OpportunityFollowUp {
+  id            String   @id @default(uuid())
+  type          String   // CALL, EMAIL, MEETING, NOTE, WHATSAPP, etc
+  content       String
+  attachments   String?  // JSON com URLs de anexos
+  
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation("OpportunityFollowUps", fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+  
+  @@index([opportunityId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model OpportunityProduct {
