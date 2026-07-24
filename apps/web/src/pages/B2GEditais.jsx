@@ -5355,18 +5355,21 @@ export default function B2GEditais() {
                                       {!isOutcomeColumn && (
                                         <span className="mt-0.5 shrink-0 text-xs text-[var(--crm-muted)]">⋮⋮</span>
                                       )}
-                                      <div className="min-w-0">
-                                        <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--crm-ink)]">
+                                      <div className="min-w-0 w-full">
+                                        {/* 1º — Nome do cliente/órgão */}
+                                        {item.company?.name && (
+                                          <p className="line-clamp-2 text-sm font-bold leading-snug text-[var(--crm-ink)]">
+                                            {item.company.name}
+                                          </p>
+                                        )}
+                                        {/* 2º — Nome do projeto */}
+                                        <p className={`line-clamp-1 leading-snug ${item.company?.name ? 'mt-0.5 text-xs text-[var(--crm-muted)]' : 'text-sm font-bold text-[var(--crm-ink)]'}`}>
                                           {item.projectName || item.title || 'Oportunidade sem título'}
                                         </p>
+                                        {/* Número */}
                                         {item.number && (
                                           <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--crm-accent)]">
                                             {item.number}
-                                          </p>
-                                        )}
-                                        {item.projectName && item.title && item.title !== item.projectName && (
-                                          <p className="mt-0.5 line-clamp-1 text-xs text-[var(--crm-muted)]">
-                                            Oportunidade: {item.title}
                                           </p>
                                         )}
                                       </div>
