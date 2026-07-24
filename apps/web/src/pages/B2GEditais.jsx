@@ -82,6 +82,7 @@ import AnimatedStats from '../components/AnimatedStats';
 import B2GFunnelStrategic from '../components/B2GFunnelStrategic';
 import Modal from '../components/Modal';
 import OpportunityForm from '../components/OpportunityForm';
+import { B2GOpportunityDetailModal, B2GOpportunityEditModal } from '../components/B2GOpportunityModal';
 import PresentationControls from '../components/PresentationControls';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { isCompanyInClientType, isOpportunityInClientType } from '../utils/businessModel';
@@ -7779,394 +7780,34 @@ export default function B2GEditais() {
         )}
       </Modal>
 
-      <Modal
+      <B2GOpportunityDetailModal
         isOpen={Boolean(selectedOpportunityId && selectedOpportunity)}
         onClose={closeOpportunityDetails}
-        title={selectedOpportunity?.title || 'Detalhes da oportunidade'}
-        size="large"
-      >
-        {selectedOpportunity && (
-          <div className="space-y-4">
-            {selectedOpportunity.number && (
-              <div className="inline-flex rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.35)] bg-[rgb(var(--crm-accent-rgb)_/_0.1)] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[var(--crm-accent)]">
-                Nº {selectedOpportunity.number}
-              </div>
-            )}
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="crm-card p-4">
-                <div className="text-xs text-[var(--crm-muted)]">Valor</div>
-                <div className="mt-1 text-lg font-bold text-[var(--crm-ink)]">
-                  {formatCurrency(selectedOpportunity.value)}
-                </div>
-              </div>
-              <div className="crm-card p-4">
-                <div className="text-xs text-[var(--crm-muted)]">Probabilidade</div>
-                <div className="mt-1 text-lg font-bold text-[var(--crm-ink)]">
-                  {Number(selectedOpportunity.probability || 0)}%
-                </div>
-              </div>
-              <div className="crm-card p-4">
-                <div className="text-xs text-[var(--crm-muted)]">Fase B2G</div>
-                <div className="mt-1 text-lg font-bold text-[var(--crm-ink)]">
-                  {selectedOpportunityKanban?.label || OPPORTUNITY_STAGE_LABELS[selectedOpportunity.stage] || '-'}
-                </div>
-              </div>
-              <div className="crm-card p-4">
-                <div className="text-xs text-[var(--crm-muted)]">Previsão de fechamento</div>
-                <div className="mt-1 text-lg font-bold text-[var(--crm-ink)]">
-                  {formatDate(selectedOpportunity.expectedCloseDate)}
-                </div>
-              </div>
-            </div>
+        opportunity={selectedOpportunity}
+        onEdit={handleEditOpportunity}
+        onDecision={(updated) => {
+          setOpportunities(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+        }}
+        isAdmin={isAdmin}
+      />
 
-            <div className="crm-panel p-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <div className="text-xs font-semibold text-[var(--crm-muted)]">Cliente</div>
-                  <div className="mt-1 text-sm font-semibold text-[var(--crm-ink)]">
-                    {selectedOpportunity.company?.name || 'Não informado'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-[var(--crm-muted)]">Responsável</div>
-                  <div className="mt-1 text-sm font-semibold text-[var(--crm-ink)]">
-                    {selectedOpportunity.owner?.name || '-'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-[var(--crm-muted)]">Pipeline padrão</div>
-                  <div className="mt-1 text-sm font-semibold text-[var(--crm-ink)]">
-                    {OPPORTUNITY_STAGE_LABELS[selectedOpportunity.stage] || selectedOpportunity.stage || '-'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-[var(--crm-muted)]">Atualizado em</div>
-                  <div className="mt-1 text-sm font-semibold text-[var(--crm-ink)]">
-                    {formatDateTime(selectedOpportunity.updatedAt || selectedOpportunity.createdAt)}
-                  </div>
-                </div>
-              </div>
-
-              {selectedOpportunity.description && (
-                <div className="mt-4 rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.62)] p-3">
-                  <div className="text-xs font-semibold text-[var(--crm-muted)]">Descrição</div>
-                  <p className="mt-1 text-sm text-[var(--crm-muted)] whitespace-pre-wrap">
-                    {selectedOpportunity.description}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* ===== SEÇÃO DE ACOMPANHAMENTOS B2G ===== */}
-            <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.65)] p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-[var(--crm-ink)]">Acompanhamentos</h3>
-                  <p className="mt-1 text-sm text-[var(--crm-muted)]">
-                    Registre interações e próximos passos sem alterar a fase da oportunidade.
-                  </p>
-                </div>
-                <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl border border-[rgb(var(--crm-accent-rgb)_/_0.25)] bg-[rgb(var(--crm-accent-rgb)_/_0.1)] text-[rgb(var(--crm-accent-rgb))]">
-                  <MessageSquare className="h-5 w-5" />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {/* Seletor de tipo */}
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { value: 'NOTE',     label: 'Nota',      icon: StickyNote    },
-                    { value: 'CALL',     label: 'Ligação',   icon: Phone         },
-                    { value: 'EMAIL',    label: 'Email',     icon: Mail          },
-                    { value: 'MEETING',  label: 'Reunião',   icon: Users         },
-                    { value: 'WHATSAPP', label: 'WhatsApp',  icon: MessageCircle }
-                  ].map(t => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => setB2gFollowUpType(t.value)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                        b2gFollowUpType === t.value
-                          ? 'bg-cyan-500 text-white'
-                          : 'border border-[color:var(--crm-border)] text-[var(--crm-muted)] hover:bg-[var(--crm-surface)]'
-                      }`}
-                    >
-                      <t.icon className="h-3.5 w-3.5" />
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Textarea */}
-                <textarea
-                  value={b2gFollowUpText}
-                  onChange={e => { setB2gFollowUpText(e.target.value); if (b2gFollowUpError) setB2gFollowUpError(''); }}
-                  placeholder="Ex: reunião com o órgão realizada, pendência documental, resultado da habilitação..."
-                  rows={4}
-                  className="crm-input min-h-[100px] !px-4 !py-3 text-sm w-full"
-                />
-
-                {b2gFollowUpError && (
-                  <p className="text-sm font-semibold text-red-400">{b2gFollowUpError}</p>
-                )}
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleAddB2GFollowUp}
-                    disabled={b2gFollowUpSubmitting || !b2gFollowUpText.trim()}
-                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Send className="h-4 w-4" />
-                    {b2gFollowUpSubmitting ? 'Salvando...' : 'Salvar acompanhamento'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Timeline de acompanhamentos */}
-              <div className="mt-5 border-t border-[color:var(--crm-border)] pt-5">
-                {b2gLoadingFollowUps ? (
-                  <div className="text-center text-sm text-[var(--crm-muted)] py-4">Carregando...</div>
-                ) : b2gFollowUps.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[color:var(--crm-border)] p-5 text-center text-sm text-[var(--crm-muted)]">
-                    Nenhum acompanhamento registrado nesta oportunidade.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {b2gFollowUps.map(fu => {
-                      const ICONS = { NOTE: StickyNote, CALL: Phone, EMAIL: Mail, MEETING: Users, WHATSAPP: MessageCircle };
-                      const LABELS = { NOTE: 'Nota', CALL: 'Ligação', EMAIL: 'Email', MEETING: 'Reunião', WHATSAPP: 'WhatsApp' };
-                      const Icon = ICONS[fu.type] || StickyNote;
-                      return (
-                        <div key={fu.id} className="crm-panel-muted rounded-xl p-3 relative group">
-                          <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 mt-0.5">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400">
-                                <Icon className="h-4 w-4" />
-                              </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <span className="text-xs font-semibold text-cyan-400">{LABELS[fu.type] || fu.type}</span>
-                                <span className="text-xs text-[var(--crm-muted)]">•</span>
-                                <span className="text-xs text-[var(--crm-muted)]">{fu.user?.name}</span>
-                                <span className="text-xs text-[var(--crm-muted)]">•</span>
-                                <span className="text-xs text-[var(--crm-muted)]">
-                                  {new Date(fu.createdAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
-                                </span>
-                              </div>
-                              <p className="text-sm text-[var(--crm-ink)] whitespace-pre-wrap">{fu.content}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteB2GFollowUp(fu.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-red-400 hover:text-red-300"
-                              title="Remover"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* ===== FIM ACOMPANHAMENTOS ===== */}
-
-            <div className="flex flex-wrap justify-end gap-2 border-t border-[color:var(--crm-border)] pt-4">
-              <button
-                type="button"
-                onClick={closeOpportunityDetails}
-                className="crm-btn crm-btn-secondary h-10 px-4"
-              >
-                Fechar
-              </button>
-              <button
-                type="button"
-                onClick={() => handleEditOpportunity(selectedOpportunity)}
-                className="crm-btn crm-btn-primary h-10 px-4"
-              >
-                <Pencil className="h-4 w-4" />
-                Editar
-              </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => handleDeleteOpportunity(selectedOpportunity)}
-                  disabled={deletingOpportunityId === selectedOpportunity.id}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-500/35 px-4 text-sm font-semibold text-red-600 transition-all hover:bg-red-500/12 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {deletingOpportunityId === selectedOpportunity.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Excluir
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal de Edição/Criação de Oportunidade B2G */}
-      <Modal
+      {/* Modal de Edição/Criação de Oportunidade B2G - novo componente com 6 abas */}
+      <B2GOpportunityEditModal
         isOpen={showOpportunityEditModal}
-        onClose={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); setOpportunityEditError(''); }}
-        title={opportunityModalMode === 'create'
-          ? 'Nova Oportunidade B2G'
-          : `Editar — ${editingOpportunity?.number || editingOpportunity?.title || ''}`}
-        size="large"
-      >
-        <div className="space-y-5 p-1">
-          {/* Empresa/Órgão */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Empresa / Órgão <span className="text-red-400">*</span></label>
-            <select
-              value={opportunityEditForm.companyId}
-              onChange={e => setOpportunityEditForm(p => ({ ...p, companyId: e.target.value }))}
-              className="crm-input w-full"
-            >
-              <option value="">Selecione uma empresa/órgão</option>
-              {leads.map(lead => (
-                <option key={lead.id} value={lead.id}>{lead.name}</option>
-              ))}
-            </select>
-          </div>
-          {/* Título */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Título da Oportunidade <span className="text-red-400">*</span></label>
-            <input
-              type="text"
-              value={opportunityEditForm.title}
-              onChange={e => setOpportunityEditForm(p => ({ ...p, title: e.target.value }))}
-              placeholder="Ex: Licitação PE/007/2026 — Equipamentos de TI"
-              className="crm-input w-full"
-            />
-          </div>
-          {/* Projeto e Tipo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Nome do Projeto</label>
-              <input
-                type="text"
-                value={opportunityEditForm.projectName}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, projectName: e.target.value }))}
-                className="crm-input w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Tipo de Cliente</label>
-              <select
-                value={opportunityEditForm.projectClientType}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, projectClientType: e.target.value }))}
-                className="crm-input w-full"
-              >
-                <option value="NEW_CLIENT">Cliente Novo</option>
-                <option value="BASE_CLIENT">Cliente da Base</option>
-                <option value="RENEWAL">Renovação</option>
-              </select>
-            </div>
-          </div>
-          {/* Valor e Probabilidade */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Valor Estimado (R$)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={opportunityEditForm.value}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, value: e.target.value }))}
-                placeholder="0,00"
-                className="crm-input w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Probabilidade (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={opportunityEditForm.probability}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, probability: e.target.value }))}
-                className="crm-input w-full"
-              />
-            </div>
-          </div>
-          {/* Etapa e Data */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Etapa</label>
-              <select
-                value={opportunityEditForm.stage}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, stage: e.target.value }))}
-                className="crm-input w-full"
-              >
-                <option value="LEAD">Lead</option>
-                <option value="QUALIFICATION">Qualificação</option>
-                <option value="DIAGNOSIS">Diagnóstico</option>
-                <option value="PROPOSAL">Proposta</option>
-                <option value="NEGOTIATION">Negociação</option>
-                <option value="WON">Ganhou</option>
-                <option value="LOST">Perdeu</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Data Prevista de Fechamento</label>
-              <input
-                type="date"
-                value={opportunityEditForm.expectedCloseDate}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, expectedCloseDate: e.target.value }))}
-                className="crm-input w-full"
-              />
-            </div>
-          </div>
-          {/* Descrição */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Descrição / Observações</label>
-            <textarea
-              value={opportunityEditForm.description}
-              onChange={e => setOpportunityEditForm(p => ({ ...p, description: e.target.value }))}
-              rows={4}
-              placeholder="Informações relevantes sobre o edital, objeto, condições..."
-              className="crm-input w-full min-h-[100px]"
-            />
-          </div>
-
-          {opportunityEditError && (
-            <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {opportunityEditError}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 border-t border-[color:var(--crm-border)] pt-4">
-            <button
-              type="button"
-              onClick={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); setOpportunityEditError(''); }}
-              className="crm-btn crm-btn-secondary h-10 px-5"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmitOpportunityEdit}
-              disabled={opportunityEditSubmitting}
-              className="crm-btn crm-btn-primary h-10 px-5 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {opportunityEditSubmitting ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-              ) : opportunityModalMode === 'create' ? (
-                <><Plus className="h-4 w-4" /> Criar Oportunidade</>
-              ) : (
-                <><Check className="h-4 w-4" /> Salvar Alterações</>
-              )}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); }}
+        opportunity={editingOpportunity}
+        leads={leads}
+        mode={opportunityModalMode}
+        onSaved={(data, mode) => {
+          if (mode === 'create') {
+            setOpportunities(prev => [data, ...prev]);
+            setFeedback({ type: 'success', message: 'Oportunidade criada com sucesso!' });
+          } else {
+            setOpportunities(prev => prev.map(o => o.id === data.id ? { ...o, ...data } : o));
+            setFeedback({ type: 'success', message: 'Oportunidade atualizada com sucesso!' });
+          }
+        }}
+      />
     </div>
   );
 }
