@@ -1264,6 +1264,8 @@ export default function B2GEditais() {
   });
   const [opportunityEditSubmitting, setOpportunityEditSubmitting] = useState(false);
   const [opportunityEditError, setOpportunityEditError] = useState('');
+  // Estado para modo de criação vs edição no modal de oportunidade
+  const [opportunityModalMode, setOpportunityModalMode] = useState('edit'); // 'edit' | 'create'
   // Estados para acompanhamentos de oportunidades B2G
   const [b2gFollowUps, setB2gFollowUps] = useState([]);
   const [b2gFollowUpText, setB2gFollowUpText] = useState('');
@@ -3569,47 +3571,100 @@ export default function B2GEditais() {
   };
 
   const handleSubmitOpportunityEdit = async () => {
-    if (!editingOpportunity?.id) return;
+    const isCreating = opportunityModalMode === 'create';
+
+    if (!isCreating && !editingOpportunity?.id) return;
+
+    if (!opportunityEditForm.title.trim()) {
+      setOpportunityEditError('Informe o título da oportunidade.');
+      return;
+    }
+    if (!opportunityEditForm.companyId) {
+      setOpportunityEditError('Selecione uma empresa/órgão.');
+      return;
+    }
+
     setOpportunityEditSubmitting(true);
     setOpportunityEditError('');
+
+    const userRaw = localStorage.getItem('user');
+    const user = userRaw ? JSON.parse(userRaw) : null;
+
+    const payload = {
+      title: opportunityEditForm.title.trim(),
+      projectName: opportunityEditForm.projectName.trim() || opportunityEditForm.title.trim(),
+      projectClientType: opportunityEditForm.projectClientType,
+      projectType: opportunityEditForm.projectType,
+      projectMonths: parseInt(opportunityEditForm.projectMonths) || 12,
+      description: opportunityEditForm.description,
+      value: parseFloat(opportunityEditForm.value) || 0,
+      probability: parseInt(opportunityEditForm.probability) || 50,
+      stage: opportunityEditForm.stage,
+      source: opportunityEditForm.source || 'MANUAL',
+      expectedCloseDate: opportunityEditForm.expectedCloseDate || null,
+      companyId: opportunityEditForm.companyId,
+      ownerId: opportunityEditForm.ownerId || user?.id || '',
+      clientType: 'B2G'
+    };
+
     try {
-      const response = await fetch(
-        buildApiUrl(`/opportunities/${encodeURIComponent(editingOpportunity.id)}?clientType=B2G`),
-        {
-          method: 'PUT',
+      let response;
+      if (isCreating) {
+        response = await fetch(buildApiUrl('/opportunities?clientType=B2G'), {
+          method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({
-            id: editingOpportunity.id,
-            title: opportunityEditForm.title,
-            projectName: opportunityEditForm.projectName,
-            projectClientType: opportunityEditForm.projectClientType,
-            projectType: opportunityEditForm.projectType,
-            projectMonths: parseInt(opportunityEditForm.projectMonths) || 12,
-            description: opportunityEditForm.description,
-            value: parseFloat(opportunityEditForm.value) || 0,
-            probability: parseInt(opportunityEditForm.probability) || 50,
-            stage: opportunityEditForm.stage,
-            source: opportunityEditForm.source || undefined,
-            expectedCloseDate: opportunityEditForm.expectedCloseDate || null,
-            companyId: opportunityEditForm.companyId,
-            ownerId: opportunityEditForm.ownerId,
-            clientType: 'B2G'
-          })
-        }
-      );
+          body: JSON.stringify(payload)
+        });
+      } else {
+        payload.id = editingOpportunity.id;
+        response = await fetch(
+          buildApiUrl(`/opportunities/${encodeURIComponent(editingOpportunity.id)}?clientType=B2G`),
+          { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) }
+        );
+      }
+
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || data?.message || 'Erro ao salvar oportunidade.');
 
-      // Atualizar a lista local
-      setOpportunities(prev => prev.map(o => o.id === editingOpportunity.id ? { ...o, ...data } : o));
+      if (isCreating) {
+        setOpportunities(prev => [data, ...prev]);
+        setFeedback({ type: 'success', message: 'Oportunidade criada com sucesso!' });
+      } else {
+        setOpportunities(prev => prev.map(o => o.id === editingOpportunity.id ? { ...o, ...data } : o));
+        setFeedback({ type: 'success', message: 'Oportunidade atualizada com sucesso!' });
+      }
+
       setShowOpportunityEditModal(false);
       setEditingOpportunity(null);
-      setFeedback({ type: 'success', message: 'Oportunidade atualizada com sucesso!' });
     } catch (err) {
       setOpportunityEditError(err.message || 'Erro ao salvar oportunidade.');
     } finally {
       setOpportunityEditSubmitting(false);
     }
+  };
+
+  const handleNewOpportunity = () => {
+    const userRaw = localStorage.getItem('user');
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    setOpportunityModalMode('create');
+    setEditingOpportunity(null);
+    setOpportunityEditForm({
+      title: '',
+      projectName: '',
+      projectClientType: 'NEW_CLIENT',
+      projectType: 'SINGLE',
+      projectMonths: '12',
+      description: '',
+      value: '',
+      probability: 50,
+      stage: 'QUALIFICATION',
+      source: 'MANUAL',
+      expectedCloseDate: '',
+      companyId: leads.length > 0 ? leads[0].id : '',
+      ownerId: user?.id || ''
+    });
+    setOpportunityEditError('');
+    setShowOpportunityEditModal(true);
   };
 
   const handleDeleteOpportunity = async (opportunity) => {
@@ -5238,7 +5293,7 @@ export default function B2GEditais() {
 
               <button
                 type="button"
-                onClick={() => navigate('/b2g-oportunidades?clientType=B2G')}
+                onClick={handleNewOpportunity}
                 className="crm-btn crm-btn-primary h-10 px-4"
               >
                 <Plus className="h-4 w-4" />
@@ -7956,142 +8011,161 @@ export default function B2GEditais() {
         )}
       </Modal>
 
-      {/* Modal de Edição de Oportunidade B2G */}
+      {/* Modal de Edição/Criação de Oportunidade B2G */}
       <Modal
         isOpen={showOpportunityEditModal}
         onClose={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); setOpportunityEditError(''); }}
-        title={`Editar Oportunidade — ${editingOpportunity?.number || editingOpportunity?.title || ''}`}
+        title={opportunityModalMode === 'create'
+          ? 'Nova Oportunidade B2G'
+          : `Editar — ${editingOpportunity?.number || editingOpportunity?.title || ''}`}
         size="large"
       >
-        {editingOpportunity && (
-          <div className="space-y-5 p-1">
-            {/* Título */}
+        <div className="space-y-5 p-1">
+          {/* Empresa/Órgão */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Empresa / Órgão <span className="text-red-400">*</span></label>
+            <select
+              value={opportunityEditForm.companyId}
+              onChange={e => setOpportunityEditForm(p => ({ ...p, companyId: e.target.value }))}
+              className="crm-input w-full"
+            >
+              <option value="">Selecione uma empresa/órgão</option>
+              {leads.map(lead => (
+                <option key={lead.id} value={lead.id}>{lead.name}</option>
+              ))}
+            </select>
+          </div>
+          {/* Título */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Título da Oportunidade <span className="text-red-400">*</span></label>
+            <input
+              type="text"
+              value={opportunityEditForm.title}
+              onChange={e => setOpportunityEditForm(p => ({ ...p, title: e.target.value }))}
+              placeholder="Ex: Licitação PE/007/2026 — Equipamentos de TI"
+              className="crm-input w-full"
+            />
+          </div>
+          {/* Projeto e Tipo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Título da Oportunidade</label>
+              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Nome do Projeto</label>
               <input
                 type="text"
-                value={opportunityEditForm.title}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, title: e.target.value }))}
+                value={opportunityEditForm.projectName}
+                onChange={e => setOpportunityEditForm(p => ({ ...p, projectName: e.target.value }))}
                 className="crm-input w-full"
               />
             </div>
-            {/* Projeto e Tipo */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Nome do Projeto</label>
-                <input
-                  type="text"
-                  value={opportunityEditForm.projectName}
-                  onChange={e => setOpportunityEditForm(p => ({ ...p, projectName: e.target.value }))}
-                  className="crm-input w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Tipo de Cliente</label>
-                <select
-                  value={opportunityEditForm.projectClientType}
-                  onChange={e => setOpportunityEditForm(p => ({ ...p, projectClientType: e.target.value }))}
-                  className="crm-input w-full"
-                >
-                  <option value="NEW_CLIENT">Cliente Novo</option>
-                  <option value="BASE_CLIENT">Cliente da Base</option>
-                  <option value="RENEWAL">Renovação</option>
-                </select>
-              </div>
-            </div>
-            {/* Valor e Probabilidade */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Valor (R$)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={opportunityEditForm.value}
-                  onChange={e => setOpportunityEditForm(p => ({ ...p, value: e.target.value }))}
-                  className="crm-input w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Probabilidade (%)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={opportunityEditForm.probability}
-                  onChange={e => setOpportunityEditForm(p => ({ ...p, probability: e.target.value }))}
-                  className="crm-input w-full"
-                />
-              </div>
-            </div>
-            {/* Etapa e Data */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Etapa</label>
-                <select
-                  value={opportunityEditForm.stage}
-                  onChange={e => setOpportunityEditForm(p => ({ ...p, stage: e.target.value }))}
-                  className="crm-input w-full"
-                >
-                  <option value="LEAD">Lead</option>
-                  <option value="QUALIFICATION">Qualificação</option>
-                  <option value="DIAGNOSIS">Diagnóstico</option>
-                  <option value="PROPOSAL">Proposta</option>
-                  <option value="NEGOTIATION">Negociação</option>
-                  <option value="WON">Ganhou</option>
-                  <option value="LOST">Perdeu</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Data Prevista de Fechamento</label>
-                <input
-                  type="date"
-                  value={opportunityEditForm.expectedCloseDate}
-                  onChange={e => setOpportunityEditForm(p => ({ ...p, expectedCloseDate: e.target.value }))}
-                  className="crm-input w-full"
-                />
-              </div>
-            </div>
-            {/* Descrição */}
             <div>
-              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Descrição / Observações</label>
-              <textarea
-                value={opportunityEditForm.description}
-                onChange={e => setOpportunityEditForm(p => ({ ...p, description: e.target.value }))}
-                rows={4}
-                className="crm-input w-full min-h-[100px]"
-              />
-            </div>
-
-            {opportunityEditError && (
-              <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {opportunityEditError}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 border-t border-[color:var(--crm-border)] pt-4">
-              <button
-                type="button"
-                onClick={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); setOpportunityEditError(''); }}
-                className="crm-btn crm-btn-secondary h-10 px-5"
+              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Tipo de Cliente</label>
+              <select
+                value={opportunityEditForm.projectClientType}
+                onChange={e => setOpportunityEditForm(p => ({ ...p, projectClientType: e.target.value }))}
+                className="crm-input w-full"
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmitOpportunityEdit}
-                disabled={opportunityEditSubmitting}
-                className="crm-btn crm-btn-primary h-10 px-5 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {opportunityEditSubmitting ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-                ) : (
-                  <><Check className="h-4 w-4" /> Salvar Alterações</>
-                )}
-              </button>
+                <option value="NEW_CLIENT">Cliente Novo</option>
+                <option value="BASE_CLIENT">Cliente da Base</option>
+                <option value="RENEWAL">Renovação</option>
+              </select>
             </div>
           </div>
-        )}
+          {/* Valor e Probabilidade */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Valor Estimado (R$)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={opportunityEditForm.value}
+                onChange={e => setOpportunityEditForm(p => ({ ...p, value: e.target.value }))}
+                placeholder="0,00"
+                className="crm-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Probabilidade (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={opportunityEditForm.probability}
+                onChange={e => setOpportunityEditForm(p => ({ ...p, probability: e.target.value }))}
+                className="crm-input w-full"
+              />
+            </div>
+          </div>
+          {/* Etapa e Data */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Etapa</label>
+              <select
+                value={opportunityEditForm.stage}
+                onChange={e => setOpportunityEditForm(p => ({ ...p, stage: e.target.value }))}
+                className="crm-input w-full"
+              >
+                <option value="LEAD">Lead</option>
+                <option value="QUALIFICATION">Qualificação</option>
+                <option value="DIAGNOSIS">Diagnóstico</option>
+                <option value="PROPOSAL">Proposta</option>
+                <option value="NEGOTIATION">Negociação</option>
+                <option value="WON">Ganhou</option>
+                <option value="LOST">Perdeu</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Data Prevista de Fechamento</label>
+              <input
+                type="date"
+                value={opportunityEditForm.expectedCloseDate}
+                onChange={e => setOpportunityEditForm(p => ({ ...p, expectedCloseDate: e.target.value }))}
+                className="crm-input w-full"
+              />
+            </div>
+          </div>
+          {/* Descrição */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Descrição / Observações</label>
+            <textarea
+              value={opportunityEditForm.description}
+              onChange={e => setOpportunityEditForm(p => ({ ...p, description: e.target.value }))}
+              rows={4}
+              placeholder="Informações relevantes sobre o edital, objeto, condições..."
+              className="crm-input w-full min-h-[100px]"
+            />
+          </div>
+
+          {opportunityEditError && (
+            <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {opportunityEditError}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 border-t border-[color:var(--crm-border)] pt-4">
+            <button
+              type="button"
+              onClick={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); setOpportunityEditError(''); }}
+              className="crm-btn crm-btn-secondary h-10 px-5"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitOpportunityEdit}
+              disabled={opportunityEditSubmitting}
+              className="crm-btn crm-btn-primary h-10 px-5 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {opportunityEditSubmitting ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+              ) : opportunityModalMode === 'create' ? (
+                <><Plus className="h-4 w-4" /> Criar Oportunidade</>
+              ) : (
+                <><Check className="h-4 w-4" /> Salvar Alterações</>
+              )}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
