@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   ArrowLeft, Save, Info, DollarSign, Calendar, Users,
   ShieldAlert, FileCheck, Check, X, Loader2, Pencil,
-  FileText, Trash2, Plus, ChevronRight
+  FileText, Trash2, Plus, ChevronRight,
+  Phone, Mail, MessageCircle, StickyNote, Send, MessageSquare
 } from 'lucide-react';
 import Modal from './Modal';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
@@ -66,9 +67,10 @@ function TabBtn({ active, onClick, icon: Icon, label }) {
 // ============================================================
 // MODAL DE DETALHES DA OPORTUNIDADE B2G
 // ============================================================
-export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit, onDecision, isAdmin, getAuthHeaders: getAuth }) {
+export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit, onDecision, isAdmin }) {
   const [savingDecision, setSavingDecision] = useState(null);
   const [followUpText, setFollowUpText] = useState('');
+  const [followUpType, setFollowUpType] = useState('NOTE');
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [followUps, setFollowUps] = useState([]);
   const [loadingFollowUps, setLoadingFollowUps] = useState(false);
@@ -130,12 +132,13 @@ export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit
       const res = await fetch(buildApiUrl('/opportunity-followups'), {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ opportunityId: opportunity.id, type: 'NOTE', content })
+        body: JSON.stringify({ opportunityId: opportunity.id, type: followUpType, content })
       });
       if (res.ok) {
         const created = await res.json();
         setFollowUps(prev => [created, ...prev]);
         setFollowUpText('');
+        setFollowUpType('NOTE');
       }
     } catch (e) { console.error(e); }
     finally { setSavingFollowUp(false); }
@@ -238,59 +241,116 @@ export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit
                 </div>
               </div>
 
-              {/* Acompanhamentos */}
-              <div className="rounded-2xl border border-slate-700/60 bg-slate-900/80 p-5 space-y-4">
-                <div>
-                  <h2 className="text-lg font-bold text-white">Acompanhamentos</h2>
-                  <p className="text-sm text-slate-400">Registre acompanhamentos diários ou semanais da oportunidade</p>
+              {/* Acompanhamentos — idêntico ao B2B */}
+              <div className="rounded-2xl border border-[color:var(--crm-border,#334155)] bg-[rgb(var(--crm-surface-rgb,15_23_42)_/_0.65)] p-5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Acompanhamentos</h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Registre interações, próximos passos e decisões desta oportunidade.
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-500/10 text-cyan-400">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
                 </div>
-                <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 space-y-3">
-                  <label className="text-sm font-medium text-slate-300">Novo Acompanhamento</label>
-                  <textarea
-                    rows={3}
-                    value={followUpText}
-                    onChange={e => setFollowUpText(e.target.value)}
-                    placeholder="Descreva o andamento, atualizações de status, contatos realizados, pendências..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 resize-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddFollowUp}
-                    disabled={!followUpText.trim() || savingFollowUp}
-                    className="inline-flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    {savingFollowUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    {savingFollowUp ? 'Salvando...' : 'Adicionar Acompanhamento'}
-                  </button>
-                </div>
-                {loadingFollowUps ? (
-                  <div className="py-6 text-center text-sm text-slate-500">Carregando...</div>
-                ) : followUps.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Histórico</div>
-                    {followUps.map(fu => (
-                      <div key={fu.id} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4 space-y-2 group relative">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <FileText className="h-3 w-3" />
-                            <span>{new Date(fu.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                            {fu.user?.name && <><span>•</span><span>{fu.user.name}</span></>}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFollowUp(fu.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <p className="text-sm text-slate-300 whitespace-pre-wrap">{fu.content || fu.description}</p>
-                      </div>
+
+                <div className="space-y-3">
+                  {/* Seletor de tipo */}
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 'NOTE',     label: 'Nota',     icon: StickyNote    },
+                      { value: 'CALL',     label: 'Ligação',  icon: Phone         },
+                      { value: 'EMAIL',    label: 'Email',    icon: Mail          },
+                      { value: 'MEETING',  label: 'Reunião',  icon: Users         },
+                      { value: 'WHATSAPP', label: 'WhatsApp', icon: MessageCircle }
+                    ].map(t => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setFollowUpType(t.value)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          followUpType === t.value
+                            ? 'bg-cyan-500 text-white'
+                            : 'border border-slate-700 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <t.icon className="h-3.5 w-3.5" />
+                        {t.label}
+                      </button>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm text-slate-500 text-center py-6">Nenhum acompanhamento registrado ainda.</p>
-                )}
+
+                  <textarea
+                    value={followUpText}
+                    onChange={e => setFollowUpText(e.target.value)}
+                    placeholder="Ex: contato realizado com o órgão, retorno previsto, pendência documental, decisão do comitê..."
+                    rows={4}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 resize-none min-h-[110px]"
+                  />
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleAddFollowUp}
+                      disabled={savingFollowUp || !followUpText.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/45 bg-[linear-gradient(135deg,#2563eb,#0891b2)] px-5 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 transition-all"
+                    >
+                      <Send className="h-4 w-4" />
+                      {savingFollowUp ? 'Salvando...' : 'Salvar acompanhamento'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Timeline */}
+                <div className="mt-5 border-t border-slate-700/50 pt-5">
+                  {loadingFollowUps ? (
+                    <div className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">Carregando...</div>
+                  ) : followUps.length > 0 ? (
+                    <div className="space-y-3">
+                      {followUps.map(fu => {
+                        const TYPE_ICONS = { NOTE: StickyNote, CALL: Phone, EMAIL: Mail, MEETING: Users, WHATSAPP: MessageCircle };
+                        const TYPE_LABELS = { NOTE: 'Nota', CALL: 'Ligação', EMAIL: 'Email', MEETING: 'Reunião', WHATSAPP: 'WhatsApp' };
+                        const Icon = TYPE_ICONS[fu.type] || StickyNote;
+                        return (
+                          <div key={fu.id} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-3 relative group">
+                            <div className="flex items-start gap-3">
+                              <div className="flex-shrink-0 mt-0.5">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/20 text-cyan-400">
+                                  <Icon className="h-4 w-4" />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 mb-1">
+                                  <span className="text-xs font-semibold text-cyan-400">{TYPE_LABELS[fu.type] || fu.type}</span>
+                                  <span className="text-xs text-slate-500">•</span>
+                                  <span className="text-xs text-slate-500">{fu.user?.name}</span>
+                                  <span className="text-xs text-slate-500">•</span>
+                                  <span className="text-xs text-slate-500">
+                                    {new Date(fu.createdAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-300 whitespace-pre-wrap">{fu.content || fu.description}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFollowUp(fu.id)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-red-400 hover:text-red-300"
+                                title="Remover"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">
+                      Nenhum acompanhamento registrado nesta oportunidade.
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Dados Financeiros */}
