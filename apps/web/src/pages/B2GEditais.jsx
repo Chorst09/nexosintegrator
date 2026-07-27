@@ -3551,22 +3551,8 @@ export default function B2GEditais() {
   const handleEditOpportunity = (opportunity) => {
     if (!opportunity?.id) return;
     closeOpportunityDetails();
+    setOpportunityModalMode('edit');
     setEditingOpportunity(opportunity);
-    setOpportunityEditForm({
-      title: opportunity.title || '',
-      projectName: opportunity.projectName || opportunity.title || '',
-      projectClientType: opportunity.projectClientType || 'NEW_CLIENT',
-      projectType: opportunity.projectType || 'SINGLE',
-      projectMonths: opportunity.projectMonths ? String(opportunity.projectMonths) : '12',
-      description: opportunity.description || '',
-      value: opportunity.value?.toString() || '',
-      probability: opportunity.probability || 50,
-      stage: opportunity.stage || 'LEAD',
-      source: opportunity.source || 'MANUAL',
-      expectedCloseDate: opportunity.expectedCloseDate ? opportunity.expectedCloseDate.split('T')[0] : '',
-      companyId: opportunity.companyId || opportunity.company?.id || '',
-      ownerId: opportunity.ownerId || opportunity.owner?.id || ''
-    });
     setOpportunityEditError('');
     setShowOpportunityEditModal(true);
   };
