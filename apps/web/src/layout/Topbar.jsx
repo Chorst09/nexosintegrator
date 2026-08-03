@@ -8,6 +8,7 @@ const ROUTE_META = {
   '/empresas': { title: 'Empresas', subtitle: 'Clientes, prospects e contatos' },
   '/oportunidades': { title: 'Oportunidades', subtitle: 'Kanban, negociacoes e previsao' },
   '/atividades': { title: 'Atividades', subtitle: 'Tarefas, follow-ups e agenda' },
+  '/kickoff': { title: 'Gestão de Kickoff', subtitle: 'Ciclo de reuniões estratégicas do projeto' },
   '/produtos': { title: 'Produtos', subtitle: 'Catalogo e precificacao' },
   '/propostas': { title: 'Propostas', subtitle: 'Cotas, templates e aprovacao' },
   '/contratos': { title: 'Contratos', subtitle: 'SLA, anexos e ciclo de vida' },

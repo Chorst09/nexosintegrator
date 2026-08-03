@@ -200,6 +200,9 @@ app.use('/api/prevendas-cadastros', authenticateToken, handleLegacyAPI('./api/pr
 app.use('/api/analyses', authenticateToken, require('./api/saved-analyses.cjs'));
 app.use('/api/ai-analysis', authenticateToken, require('./api/ai-analysis.cjs'));
 
+// Gestão de Kickoff
+app.use('/api/kickoff', require('./api/kickoff'));
+
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {
   console.error('Error:', error);
@@ -256,6 +259,7 @@ app.listen(PORT, () => {
   console.log(`   📋 /api/pre-vendas - Pré-Vendas (NEW)`);
   console.log(`   📊 /api/analyses - Análises Salvas (NEW)`);
   console.log(`   🤖 /api/ai-analysis - Análise IA (NEW)`);
+  console.log(`   🚀 /api/kickoff - Gestão de Kickoff (NEW)`);
 });
 
 module.exports = app;

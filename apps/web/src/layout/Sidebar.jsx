@@ -172,6 +172,7 @@ export default function Sidebar({ open = false, onOpenChange = () => {} }) {
         { path: '/vendedores', label: 'Vendedores', icon: Users, description: 'Equipe e cadastro' },
         { path: '/comissoes', label: 'Comissoes', icon: Coins, description: 'Pagamentos e regras' },
         { path: '/metas-performance', label: 'Metas & Performance', icon: Trophy, description: 'Metas e indicadores' },
+        { path: '/kickoff', label: 'Gestão de Kickoff', icon: CalendarCheck2, description: 'Reuniões estratégicas do projeto' },
         { path: '/pos-venda', label: 'Pos-Venda', icon: Handshake, description: 'Relacionamento e suporte' },
         { path: '/relatorios', label: 'Relatorios', icon: BarChart3, description: 'Analises e metricas' }
       ]

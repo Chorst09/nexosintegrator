@@ -113,6 +113,34 @@ export const apiService = {
   dashboard: {
     getStats: () => api.get('/api/dashboard/stats'),
     getCharts: () => api.get('/api/dashboard/charts')
+  },
+
+  // Kickoff
+  kickoff: {
+    getStats: () => api.get('/api/kickoff/stats'),
+    getMeetings: (params) => api.get('/api/kickoff/meetings', { params }),
+    getMeeting: (id) => api.get(`/api/kickoff/meetings/${id}`),
+    createMeeting: (data) => api.post('/api/kickoff/meetings', data),
+    updateMeeting: (id, data) => api.put(`/api/kickoff/meetings/${id}`, data),
+    deleteMeeting: (id) => api.delete(`/api/kickoff/meetings/${id}`),
+    updateStatus: (id, data) => api.patch(`/api/kickoff/meetings/${id}/status`, data),
+    saveNotes: (id, data) => api.put(`/api/kickoff/meetings/${id}/notes`, data),
+    getOpportunityPreview: (id) => api.get(`/api/kickoff/opportunities/${id}/preview`),
+    getTemplates: (params) => api.get('/api/kickoff/templates', { params }),
+    createTemplate: (data) => api.post('/api/kickoff/templates', data),
+    updateTemplate: (id, data) => api.put(`/api/kickoff/templates/${id}`, data),
+    deleteTemplate: (id) => api.delete(`/api/kickoff/templates/${id}`),
+    addParticipant: (meetingId, data) => api.post(`/api/kickoff/meetings/${meetingId}/participants`, data),
+    updateParticipant: (id, data) => api.patch(`/api/kickoff/participants/${id}`, data),
+    deleteParticipant: (id) => api.delete(`/api/kickoff/participants/${id}`),
+    addAgendaItem: (meetingId, data) => api.post(`/api/kickoff/meetings/${meetingId}/agenda`, data),
+    deleteAgendaItem: (id) => api.delete(`/api/kickoff/agenda/${id}`),
+    addChecklistItem: (meetingId, data) => api.post(`/api/kickoff/meetings/${meetingId}/checklist`, data),
+    toggleChecklistItem: (id, data) => api.patch(`/api/kickoff/checklist/${id}`, data),
+    deleteChecklistItem: (id) => api.delete(`/api/kickoff/checklist/${id}`),
+    addActionItem: (meetingId, data) => api.post(`/api/kickoff/meetings/${meetingId}/action-items`, data),
+    updateActionItem: (id, data) => api.patch(`/api/kickoff/action-items/${id}`, data),
+    deleteActionItem: (id) => api.delete(`/api/kickoff/action-items/${id}`)
   }
 };
 

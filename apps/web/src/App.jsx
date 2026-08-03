@@ -28,6 +28,7 @@ import Relatorios from './pages/Relatorios';
 import Integracoes from './pages/Integracoes';
 import FuncionalidadesAvancadas from './pages/FuncionalidadesAvancadas';
 import MetasPerformance from './pages/MetasPerformance';
+import Kickoff from './pages/Kickoff';
 import VendedoresFixed from './pages/VendedoresFixed';
 import Solicitacoes from './pages/Solicitacoes';
 import Administracao from './pages/Administracao';
@@ -211,6 +212,15 @@ export default function App() {
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
                 <Atividades />
+              </RoleGuard>
+            }
+          />
+
+          <Route
+            path="kickoff"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+                <Kickoff />
               </RoleGuard>
             }
           />
