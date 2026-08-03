@@ -44,33 +44,33 @@ const PHASES = [
 const PHASE_MAP = PHASES.reduce((acc, phase) => { acc[phase.id] = phase; return acc; }, {});
 
 const STATUS = {
-  AGENDADA: { label: 'Agendada', color: 'bg-blue-100 text-blue-800' },
-  REALIZADA: { label: 'Realizada', color: 'bg-green-100 text-green-800' },
-  CANCELADA: { label: 'Cancelada', color: 'bg-red-100 text-red-800' },
-  REAGENDADA: { label: 'Reagendada', color: 'bg-yellow-100 text-yellow-800' }
+  AGENDADA: { label: 'Agendada', color: 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-300' },
+  REALIZADA: { label: 'Realizada', color: 'bg-green-100 dark:bg-green-500/15 text-green-800 dark:text-emerald-300' },
+  CANCELADA: { label: 'Cancelada', color: 'bg-red-100 dark:bg-red-500/15 text-red-800 dark:text-red-300' },
+  REAGENDADA: { label: 'Reagendada', color: 'bg-yellow-100 dark:bg-yellow-500/15 text-yellow-800 dark:text-yellow-300' }
 };
 
 const PLATFORMS = {
-  MEET: { label: 'Google Meet', icon: Video, color: 'bg-green-100 text-green-700' },
-  TEAMS: { label: 'Microsoft Teams', icon: Video, color: 'bg-purple-100 text-purple-700' },
-  ZOOM: { label: 'Zoom', icon: Video, color: 'bg-blue-100 text-blue-700' },
-  PRESENCIAL: { label: 'Presencial', icon: MapPin, color: 'bg-orange-100 text-orange-700' },
-  TELEFONE: { label: 'Telefone', icon: Phone, color: 'bg-gray-100 text-gray-700' },
-  OUTRO: { label: 'Outro', icon: CircleDot, color: 'bg-gray-100 text-gray-700' }
+  MEET: { label: 'Google Meet', icon: Video, color: 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-emerald-300' },
+  TEAMS: { label: 'Microsoft Teams', icon: Video, color: 'bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300' },
+  ZOOM: { label: 'Zoom', icon: Video, color: 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300' },
+  PRESENCIAL: { label: 'Presencial', icon: MapPin, color: 'bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300' },
+  TELEFONE: { label: 'Telefone', icon: Phone, color: 'bg-gray-100 dark:bg-slate-500/20 text-gray-700 dark:text-slate-300' },
+  OUTRO: { label: 'Outro', icon: CircleDot, color: 'bg-gray-100 dark:bg-slate-500/20 text-gray-700 dark:text-slate-300' }
 };
 
 const ACTION_STATUS = {
-  PENDENTE: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800' },
-  EM_ANDAMENTO: { label: 'Em Andamento', color: 'bg-blue-100 text-blue-800' },
-  CONCLUIDO: { label: 'Concluído', color: 'bg-green-100 text-green-800' },
-  CANCELADO: { label: 'Cancelado', color: 'bg-red-100 text-red-800' }
+  PENDENTE: { label: 'Pendente', color: 'bg-yellow-100 dark:bg-yellow-500/15 text-yellow-800 dark:text-yellow-300' },
+  EM_ANDAMENTO: { label: 'Em Andamento', color: 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-300' },
+  CONCLUIDO: { label: 'Concluído', color: 'bg-green-100 dark:bg-green-500/15 text-green-800 dark:text-emerald-300' },
+  CANCELADO: { label: 'Cancelado', color: 'bg-red-100 dark:bg-red-500/15 text-red-800 dark:text-red-300' }
 };
 
 const PARTICIPANT_STATUS = {
-  CONVIDADO: { label: 'Convidado', color: 'bg-gray-100 text-gray-700' },
-  CONFIRMADO: { label: 'Confirmado', color: 'bg-blue-100 text-blue-700' },
-  RECUSADO: { label: 'Recusado', color: 'bg-red-100 text-red-700' },
-  PRESENTE: { label: 'Presente', color: 'bg-green-100 text-green-700' }
+  CONVIDADO: { label: 'Convidado', color: 'bg-gray-100 dark:bg-slate-500/20 text-gray-700 dark:text-slate-300' },
+  CONFIRMADO: { label: 'Confirmado', color: 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300' },
+  RECUSADO: { label: 'Recusado', color: 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300' },
+  PRESENTE: { label: 'Presente', color: 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-emerald-300' }
 };
 
 const Kickoff = () => {
@@ -234,13 +234,13 @@ const Kickoff = () => {
         <div className="flex flex-col lg:flex-row gap-4 items-end">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-slate-500 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Buscar por reunião, cliente ou oportunidade..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white shadow-sm"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-[color:var(--crm-border)] rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-[var(--crm-surface)] shadow-sm"
               />
             </div>
           </div>
@@ -248,7 +248,7 @@ const Kickoff = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white shadow-sm"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-[color:var(--crm-border)] rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-[var(--crm-surface)] shadow-sm"
             >
               <option value="">Todos os Status</option>
               <option value="AGENDADA">Agendada</option>
@@ -261,7 +261,7 @@ const Kickoff = () => {
             <select
               value={phaseFilter}
               onChange={(e) => setPhaseFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white shadow-sm"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-[color:var(--crm-border)] rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-[var(--crm-surface)] shadow-sm"
             >
               <option value="">Todas as Fases</option>
               {PHASES.map((phase) => (
@@ -269,11 +269,11 @@ const Kickoff = () => {
               ))}
             </select>
           </div>
-          <div className="flex rounded-xl border border-gray-300 bg-white shadow-sm overflow-hidden">
+          <div className="flex rounded-xl border border-gray-300 dark:border-[color:var(--crm-border)] bg-white dark:bg-[var(--crm-surface)] shadow-sm overflow-hidden">
             <button
               onClick={() => setViewMode('pipeline')}
               className={`px-4 py-3 flex items-center gap-2 text-sm font-medium transition-colors ${
-                viewMode === 'pipeline' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                viewMode === 'pipeline' ? 'bg-indigo-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white dark:hover:bg-white/10/5'
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
@@ -282,7 +282,7 @@ const Kickoff = () => {
             <button
               onClick={() => setViewMode('list')}
               className={`px-4 py-3 flex items-center gap-2 text-sm font-medium transition-colors ${
-                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white dark:hover:bg-white/10/5'
               }`}
             >
               <List className="w-4 h-4" />
@@ -298,11 +298,11 @@ const Kickoff = () => {
           {PHASES.map((phase) => {
             const phaseMeetings = getPhaseMeetings(phase.id);
             const colorMap = {
-              blue: 'border-blue-200 bg-blue-50/50',
-              purple: 'border-purple-200 bg-purple-50/50',
-              green: 'border-green-200 bg-green-50/50',
-              orange: 'border-orange-200 bg-orange-50/50',
-              indigo: 'border-indigo-200 bg-indigo-50/50'
+              blue: 'border-blue-200 bg-blue-50/50 dark:border-blue-500/25 dark:bg-blue-900/20',
+              purple: 'border-purple-200 bg-purple-50/50 dark:border-purple-500/25 dark:bg-purple-900/20',
+              green: 'border-green-200 bg-green-50/50 dark:border-emerald-500/25 dark:bg-emerald-900/20',
+              orange: 'border-orange-200 bg-orange-50/50 dark:border-orange-500/25 dark:bg-orange-900/20',
+              indigo: 'border-indigo-200 bg-indigo-50/50 dark:border-indigo-500/25 dark:bg-indigo-900/20'
             };
             return (
               <div key={phase.id} className={`rounded-2xl border ${colorMap[phase.color]} p-4 min-h-[400px]`}>
@@ -310,8 +310,8 @@ const Kickoff = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{phase.icon}</span>
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 leading-tight">{phase.label}</h3>
-                      <p className="text-xs text-gray-500">{phaseMeetings.length} reuniões</p>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 leading-tight">{phase.label}</h3>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{phaseMeetings.length} reuniões</p>
                     </div>
                   </div>
                 </div>
@@ -326,8 +326,8 @@ const Kickoff = () => {
                     />
                   ))}
                   {phaseMeetings.length === 0 && (
-                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
-                      <p className="text-xs text-gray-400">Nenhuma reunião nesta fase</p>
+                    <div className="border-2 border-dashed border-gray-200 dark:border-[color:var(--crm-border)] rounded-xl p-6 text-center">
+                      <p className="text-xs text-gray-400 dark:text-slate-500">Nenhuma reunião nesta fase</p>
                     </div>
                   )}
                 </div>
@@ -347,12 +347,12 @@ const Kickoff = () => {
                   label: 'Reunião',
                   render: (item) => (
                     <div className="flex items-center">
-                      <div className="w-9 h-9 bg-indigo-100 rounded-lg flex items-center justify-center mr-3 text-base">
+                      <div className="w-9 h-9 bg-indigo-100 dark:bg-indigo-500/15 rounded-lg flex items-center justify-center mr-3 text-base">
                         {PHASE_MAP[item.phase]?.icon || '📅'}
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{item.title}</div>
-                        <div className="text-xs text-gray-500">{item.number}</div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{item.title}</div>
+                        <div className="text-xs text-gray-500 dark:text-slate-400">{item.number}</div>
                       </div>
                     </div>
                   )
@@ -362,8 +362,8 @@ const Kickoff = () => {
                   label: 'Cliente / Oportunidade',
                   render: (item) => (
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{item.company?.name}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{item.company?.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-slate-400">
                         {item.opportunity?.title}
                         {item.opportunity?.value ? ` • R$ ${Number(item.opportunity.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
                       </div>
@@ -374,7 +374,7 @@ const Kickoff = () => {
                   key: 'phase',
                   label: 'Fase',
                   render: (item) => (
-                    <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+                    <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 dark:bg-slate-500/20 text-gray-700 dark:text-slate-300">
                       {PHASE_MAP[item.phase]?.short || item.phase}
                     </span>
                   )
@@ -384,12 +384,12 @@ const Kickoff = () => {
                   label: 'Agendamento',
                   render: (item) => (
                     <div>
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Calendar className="w-4 h-4 text-gray-400 mr-2" />
+                      <div className="flex items-center text-sm text-gray-900 dark:text-slate-100">
+                        <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500 mr-2" />
                         {new Date(item.scheduledDate).toLocaleDateString('pt-BR')}
                       </div>
                       {(item.startTime || item.endTime) && (
-                        <div className="flex items-center text-xs text-gray-500 mt-1 ml-6">
+                        <div className="flex items-center text-xs text-gray-500 dark:text-slate-400 mt-1 ml-6">
                           <Clock className="w-3 h-3 mr-1" />
                           {item.startTime}{item.endTime ? ` – ${item.endTime}` : ''}
                         </div>
@@ -401,7 +401,7 @@ const Kickoff = () => {
                   key: 'status',
                   label: 'Status',
                   render: (item) => (
-                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${STATUS[item.status]?.color || 'bg-gray-100 text-gray-800'}`}>
+                    <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${STATUS[item.status]?.color || 'bg-gray-100 dark:bg-slate-500/20 text-gray-800 dark:text-slate-200'}`}>
                       {STATUS[item.status]?.label || item.status}
                     </span>
                   )
@@ -410,17 +410,17 @@ const Kickoff = () => {
                   key: 'meta',
                   label: 'Detalhes',
                   render: (item) => (
-                    <div className="flex items-center gap-3 text-xs text-gray-600">
+                    <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-slate-300">
                       <span className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-gray-400" />
+                        <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                         {item._count?.participants || 0}
                       </span>
                       <span className="flex items-center gap-1">
-                        <ListChecks className="w-3.5 h-3.5 text-gray-400" />
+                        <ListChecks className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                         {item._count?.checklistItems || 0}
                       </span>
                       <span className="flex items-center gap-1">
-                        <ClipboardList className="w-3.5 h-3.5 text-gray-400" />
+                        <ClipboardList className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                         {item._count?.actionItems || 0}
                       </span>
                     </div>
@@ -432,9 +432,9 @@ const Kickoff = () => {
               onDelete={(item) => handleDelete(item)}
               emptyState={
                 <div>
-                  <Rocket className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma reunião encontrada</h3>
-                  <p className="text-gray-500">Crie a primeira reunião de kickoff do projeto</p>
+                  <Rocket className="w-16 h-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-slate-100 mb-2">Nenhuma reunião encontrada</h3>
+                  <p className="text-gray-500 dark:text-slate-400">Crie a primeira reunião de kickoff do projeto</p>
                 </div>
               }
             />
@@ -473,7 +473,7 @@ const MeetingCard = ({ meeting, onView, onEdit }) => {
 
   return (
     <div
-      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 p-4 cursor-pointer group"
+      className="bg-white dark:bg-[var(--crm-surface)] rounded-xl border border-gray-200 dark:border-[color:var(--crm-border)] shadow-sm hover:shadow-md transition-all duration-200 p-4 cursor-pointer group"
       onClick={onView}
     >
       <div className="flex items-start justify-between mb-2">
@@ -485,34 +485,34 @@ const MeetingCard = ({ meeting, onView, onEdit }) => {
             e.stopPropagation();
             onEdit();
           }}
-          className="text-gray-300 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100"
+          className="text-gray-300 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors opacity-0 group-hover:opacity-100"
           title="Editar"
         >
           <Edit className="w-4 h-4" />
         </button>
       </div>
 
-      <h4 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-2">{meeting.title}</h4>
-      <p className="text-xs text-gray-500 mb-3 line-clamp-1">{meeting.company?.name}</p>
+      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-1 line-clamp-2">{meeting.title}</h4>
+      <p className="text-xs text-gray-500 dark:text-slate-400 mb-3 line-clamp-1">{meeting.company?.name}</p>
 
-      <div className="space-y-1.5 text-xs text-gray-600">
+      <div className="space-y-1.5 text-xs text-gray-600 dark:text-slate-300">
         <div className="flex items-center">
-          <Calendar className="w-3.5 h-3.5 text-gray-400 mr-2" />
+          <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mr-2" />
           {new Date(meeting.scheduledDate).toLocaleDateString('pt-BR')}
-          {meeting.startTime && <span className="ml-1 text-gray-400">• {meeting.startTime}</span>}
+          {meeting.startTime && <span className="ml-1 text-gray-400 dark:text-slate-500">• {meeting.startTime}</span>}
         </div>
         <div className="flex items-center">
           {PLATFORMS[meeting.platform]?.icon ? (() => {
             const Icon = PLATFORMS[meeting.platform].icon;
-            return <Icon className="w-3.5 h-3.5 text-gray-400 mr-2" />;
-          })() : <CircleDot className="w-3.5 h-3.5 text-gray-400 mr-2" />}
+            return <Icon className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mr-2" />;
+          })() : <CircleDot className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mr-2" />}
           {PLATFORMS[meeting.platform]?.label || meeting.platform}
         </div>
-        <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-          <span className="flex items-center gap-1 text-gray-400">
+        <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-[color:var(--crm-border)]">
+          <span className="flex items-center gap-1 text-gray-400 dark:text-slate-500">
             <Users className="w-3.5 h-3.5" /> {meeting._count?.participants || 0}
           </span>
-          <span className="flex items-center gap-1 text-gray-400">
+          <span className="flex items-center gap-1 text-gray-400 dark:text-slate-500">
             <ListChecks className="w-3.5 h-3.5" /> {meeting._count?.actionItems || 0} ações
           </span>
           <span className="text-indigo-500">{phase?.icon}</span>
@@ -718,16 +718,16 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
     }
   };
 
-  const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
+  const inputClass = "w-full px-3 py-2 border border-gray-300 dark:border-[color:var(--crm-border)] rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">
+      <div className="bg-white dark:bg-[var(--crm-surface)] rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">
             {meeting ? `Editar Reunião ${meeting.number}` : 'Nova Reunião de Kickoff'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100">
+          <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:hover:bg-white/10/10">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -736,7 +736,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
           {/* Identificação */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Título *</label>
               <input
                 type="text"
                 name="title"
@@ -748,7 +748,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fase *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Fase *</label>
               <select name="phase" value={formData.phase} onChange={handleChange} className={inputClass} required>
                 {PHASES.map((phase) => (
                   <option key={phase.id} value={phase.id}>{phase.icon} {phase.label}</option>
@@ -756,7 +756,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Oportunidade / Projeto *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Oportunidade / Projeto *</label>
               <select name="opportunityId" value={formData.opportunityId} onChange={handleChange} className={inputClass} required>
                 <option value="">Selecione a oportunidade</option>
                 {opportunities.map((opp) => (
@@ -771,30 +771,30 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
 
           {/* Dados herdados do cliente */}
           {preview && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+            <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/25 rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-300 flex items-center gap-2">
                   <Download className="w-4 h-4" /> Dados herdados da oportunidade
                 </h4>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-indigo-400 font-medium">Razão Social</p>
-                  <p className="text-indigo-900 font-semibold">{preview.company?.name}</p>
+                  <p className="text-xs text-indigo-400 dark:text-indigo-300 font-medium">Razão Social</p>
+                  <p className="text-indigo-900 dark:text-indigo-300 font-semibold">{preview.company?.name}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-indigo-400 font-medium">CNPJ</p>
-                  <p className="text-indigo-900 font-semibold">{preview.company?.document || '—'}</p>
+                  <p className="text-xs text-indigo-400 dark:text-indigo-300 font-medium">CNPJ</p>
+                  <p className="text-indigo-900 dark:text-indigo-300 font-semibold">{preview.company?.document || '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-indigo-400 font-medium">Valor do Projeto</p>
-                  <p className="text-indigo-900 font-semibold">
+                  <p className="text-xs text-indigo-400 dark:text-indigo-300 font-medium">Valor do Projeto</p>
+                  <p className="text-indigo-900 dark:text-indigo-300 font-semibold">
                     R$ {Number(preview.opportunity?.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-indigo-400 font-medium">Segmento</p>
-                  <p className="text-indigo-900 font-semibold">{preview.company?.segment || '—'}</p>
+                  <p className="text-xs text-indigo-400 dark:text-indigo-300 font-medium">Segmento</p>
+                  <p className="text-indigo-900 dark:text-indigo-300 font-semibold">{preview.company?.segment || '—'}</p>
                 </div>
               </div>
             </div>
@@ -802,24 +802,24 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
 
           {/* Agendamento */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-indigo-500" /> Agendamento
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data *</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Data *</label>
                 <input type="date" name="scheduledDate" value={formData.scheduledDate} onChange={handleChange} className={inputClass} required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hora Início</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Hora Início</label>
                 <input type="time" name="startTime" value={formData.startTime} onChange={handleChange} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hora Fim</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Hora Fim</label>
                 <input type="time" name="endTime" value={formData.endTime} onChange={handleChange} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Plataforma</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Plataforma</label>
                 <select name="platform" value={formData.platform} onChange={handleChange} className={inputClass}>
                   {Object.entries(PLATFORMS).map(([value, pf]) => (
                     <option key={value} value={value}>{pf.label}</option>
@@ -829,7 +829,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
             </div>
             {formData.platform !== 'PRESENCIAL' && (
               <div className="mt-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1 flex items-center gap-1">
                   <LinkIcon className="w-3.5 h-3.5" /> Link da Reunião
                 </label>
                 <input
@@ -846,7 +846,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
 
           {/* Template de Pauta */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3 flex items-center gap-2">
               <FileText className="w-4 h-4 text-indigo-500" /> Template de Pauta
             </h4>
             <select value={formData.templateId} onChange={(e) => handleTemplateSelect(e.target.value)} className={inputClass}>
@@ -860,10 +860,10 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
           {/* Pauta Dinâmica */}
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-indigo-500" /> Pauta da Reunião
               </h4>
-              <button type="button" onClick={addAgendaItem} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+              <button type="button" onClick={addAgendaItem} className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm font-medium">
                 + Adicionar item
               </button>
             </div>
@@ -888,7 +888,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
                   <button
                     type="button"
                     onClick={() => removeAgendaItem(index)}
-                    className="text-red-500 hover:text-red-700 p-2"
+                    className="text-red-500 hover:text-red-700 dark:hover:text-red-300 p-2"
                     title="Remover"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -896,7 +896,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
                 </div>
               ))}
               {agendaItems.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-2 border border-dashed border-gray-200 rounded-lg">
+                <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2 border border-dashed border-gray-200 dark:border-[color:var(--crm-border)] rounded-lg">
                   Nenhum item de pauta
                 </p>
               )}
@@ -906,17 +906,17 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
           {/* Checklist */}
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
                 <ListChecks className="w-4 h-4 text-indigo-500" /> Checklist de Verificação
               </h4>
-              <button type="button" onClick={addChecklistItem} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+              <button type="button" onClick={addChecklistItem} className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm font-medium">
                 + Adicionar item
               </button>
             </div>
             <div className="space-y-2">
               {checklistItems.map((item, index) => (
                 <div key={index} className="flex gap-2 items-center">
-                  <CheckCircle2 className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-gray-300 dark:text-slate-600 flex-shrink-0" />
                   <input
                     type="text"
                     value={item}
@@ -927,7 +927,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
                   <button
                     type="button"
                     onClick={() => removeChecklistItem(index)}
-                    className="text-red-500 hover:text-red-700 p-2"
+                    className="text-red-500 hover:text-red-700 dark:hover:text-red-300 p-2"
                     title="Remover"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -935,7 +935,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
                 </div>
               ))}
               {checklistItems.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-2 border border-dashed border-gray-200 rounded-lg">
+                <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-2 border border-dashed border-gray-200 dark:border-[color:var(--crm-border)] rounded-lg">
                   Nenhum item de checklist
                 </p>
               )}
@@ -944,53 +944,53 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
 
           {/* Participantes */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3 flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-500" /> Participantes
             </h4>
 
             <div className="mb-4">
-              <p className="text-sm font-medium text-gray-700 mb-2">Time Interno (usuários do CRM)</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-gray-50 rounded-lg p-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Time Interno (usuários do CRM)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-lg p-3">
                 {users.map((user) => (
-                  <label key={user.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-1.5 rounded-md transition-colors">
+                  <label key={user.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white dark:hover:bg-white/10 p-1.5 rounded-md transition-colors">
                     <input
                       type="checkbox"
                       checked={selectedInternal.includes(user.id)}
                       onChange={() => toggleInternal(user.id)}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      className="rounded border-gray-300 dark:border-[color:var(--crm-border)] text-indigo-600 dark:text-indigo-300 focus:ring-indigo-500"
                     />
-                    <span className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center text-[10px] font-bold text-indigo-700">
+                    <span className="w-6 h-6 bg-indigo-100 dark:bg-indigo-500/15 rounded-full flex items-center justify-center text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
                       {user.name?.charAt(0) || '?'}
                     </span>
-                    <span className="text-gray-700">{user.name}</span>
+                    <span className="text-gray-700 dark:text-slate-300">{user.name}</span>
                   </label>
                 ))}
-                {users.length === 0 && <p className="text-xs text-gray-400 col-span-2">Nenhum usuário disponível</p>}
+                {users.length === 0 && <p className="text-xs text-gray-400 dark:text-slate-500 col-span-2">Nenhum usuário disponível</p>}
               </div>
             </div>
 
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">Contatos do Cliente (externos)</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-gray-50 rounded-lg p-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Contatos do Cliente (externos)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-lg p-3">
                 {(preview?.contacts || []).map((contact) => (
-                  <label key={contact.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-1.5 rounded-md transition-colors">
+                  <label key={contact.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white dark:hover:bg-white/10 p-1.5 rounded-md transition-colors">
                     <input
                       type="checkbox"
                       checked={selectedExternal.includes(contact.id)}
                       onChange={() => toggleExternal(contact.id)}
-                      className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      className="rounded border-gray-300 dark:border-[color:var(--crm-border)] text-green-600 dark:text-emerald-300 focus:ring-green-500"
                     />
-                    <span className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-[10px] font-bold text-green-700">
+                    <span className="w-6 h-6 bg-green-100 dark:bg-green-500/15 rounded-full flex items-center justify-center text-[10px] font-bold text-green-700 dark:text-emerald-300">
                       {contact.name?.charAt(0) || '?'}
                     </span>
-                    <span className="text-gray-700">
+                    <span className="text-gray-700 dark:text-slate-300">
                       {contact.name}
-                      <span className="block text-[10px] text-gray-400">{contact.position || contact.email}</span>
+                      <span className="block text-[10px] text-gray-400 dark:text-slate-500">{contact.position || contact.email}</span>
                     </span>
                   </label>
                 ))}
                 {(!preview || (preview.contacts || []).length === 0) && (
-                  <p className="text-xs text-gray-400 col-span-2">
+                  <p className="text-xs text-gray-400 dark:text-slate-500 col-span-2">
                     {formData.opportunityId ? 'Nenhum contato cadastrado para este cliente' : 'Selecione uma oportunidade para carregar os contatos'}
                   </p>
                 )}
@@ -1000,7 +1000,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
 
           {/* Descrição */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Observações / Objetivo</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Observações / Objetivo</label>
             <textarea
               name="description"
               value={formData.description}
@@ -1012,11 +1012,11 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
           </div>
         </form>
 
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 flex-shrink-0">
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-4 py-2 text-gray-700 dark:text-slate-300 bg-gray-200 dark:bg-slate-600 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors"
           >
             Cancelar
           </button>
@@ -1186,7 +1186,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
     if (res.ok) await refresh();
   };
 
-  const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm";
+  const inputClass = "w-full px-3 py-2 border border-gray-300 dark:border-[color:var(--crm-border)] rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm";
   const phase = PHASE_MAP[meeting.phase];
   const completedChecklist = meeting.checklistItems?.filter((c) => c.isCompleted).length || 0;
   const totalChecklist = meeting.checklistItems?.length || 0;
@@ -1203,41 +1203,41 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
+      <div className="bg-white dark:bg-[var(--crm-surface)] rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex-shrink-0">
+        <div className="p-6 border-b border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0">
           <div className="flex justify-between items-start">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-2xl">
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-500/15 rounded-xl flex items-center justify-center text-2xl">
                 {phase?.icon || '📅'}
               </div>
               <div>
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-gray-900">{meeting.title}</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">{meeting.title}</h2>
                   <span className={`inline-flex px-2.5 py-0.5 text-xs font-semibold rounded-full ${STATUS[meeting.status]?.color}`}>
                     {STATUS[meeting.status]?.label}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
                   {meeting.number} • {meeting.company?.name}
                   {meeting.company?.document ? ` • CNPJ ${meeting.company.document}` : ''}
                 </p>
-                <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-600">
+                <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-600 dark:text-slate-300">
                   <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                     {new Date(meeting.scheduledDate).toLocaleDateString('pt-BR')}
                   </span>
                   {(meeting.startTime || meeting.endTime) && (
                     <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                      <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                       {meeting.startTime}{meeting.endTime ? ` – ${meeting.endTime}` : ''}
                     </span>
                   )}
                   <span className="flex items-center gap-1">
                     {PLATFORMS[meeting.platform]?.icon ? (() => {
                       const Icon = PLATFORMS[meeting.platform].icon;
-                      return <Icon className="w-3.5 h-3.5 text-gray-400" />;
-                    })() : <CircleDot className="w-3.5 h-3.5 text-gray-400" />}
+                      return <Icon className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />;
+                    })() : <CircleDot className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />}
                     {PLATFORMS[meeting.platform]?.label || meeting.platform}
                   </span>
                   {meeting.meetingLink && (
@@ -1245,7 +1245,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                       href={meeting.meetingLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1 text-indigo-600 hover:underline"
+                      className="flex items-center gap-1 text-indigo-600 dark:text-indigo-300 hover:underline"
                     >
                       <LinkIcon className="w-3.5 h-3.5" /> Entrar na reunião
                     </a>
@@ -1253,7 +1253,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                 </div>
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100">
+            <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:hover:bg-white/10/10">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1271,7 +1271,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
             {meeting.status !== 'CANCELADA' && meeting.status !== 'REALIZADA' && (
               <button
                 onClick={() => changeStatus('CANCELADA')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 text-xs font-medium rounded-lg hover:bg-red-200 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 text-xs font-medium rounded-lg hover:bg-red-200 dark:hover:bg-red-500/25 transition-colors"
               >
                 <X className="w-3.5 h-3.5" /> Cancelar
               </button>
@@ -1279,7 +1279,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
             {meeting.status !== 'REALIZADA' && meeting.status !== 'CANCELADA' && (
               <button
                 onClick={() => changeStatus('REAGENDADA')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100 text-yellow-700 text-xs font-medium rounded-lg hover:bg-yellow-200 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 text-xs font-medium rounded-lg hover:bg-yellow-200 dark:hover:bg-yellow-500/25 transition-colors"
               >
                 <Clock className="w-3.5 h-3.5" /> Reagendar
               </button>
@@ -1287,7 +1287,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
             {meeting.status !== 'AGENDADA' && meeting.status !== 'REALIZADA' && (
               <button
                 onClick={() => changeStatus('AGENDADA')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-lg hover:bg-blue-200 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg hover:bg-blue-200 dark:hover:bg-blue-500/25 transition-colors"
               >
                 <Calendar className="w-3.5 h-3.5" /> Reabrir
               </button>
@@ -1296,7 +1296,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 flex-shrink-0 px-6">
+        <div className="border-b border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0 px-6">
           <nav className="-mb-px flex space-x-2 overflow-x-auto">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -1306,14 +1306,14 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                   onClick={() => setActiveTab(tab.id)}
                   className={`${
                     activeTab === tab.id
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-300'
+                      : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 hover:border-gray-300 dark:hover:border-slate-600'
                   } whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm flex items-center gap-2 transition-all`}
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
                   {tab.id === 'checklist' && totalChecklist > 0 && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700">
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300">
                       {completedChecklist}/{totalChecklist}
                     </span>
                   )}
@@ -1329,56 +1329,56 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           {activeTab === 'overview' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-indigo-50 rounded-xl p-4">
-                  <p className="text-xs text-indigo-400 font-medium mb-1">Oportunidade</p>
-                  <p className="text-sm font-semibold text-indigo-900">{meeting.opportunity?.title}</p>
-                  <p className="text-xs text-indigo-600 mt-1">
+                <div className="bg-indigo-50 dark:bg-indigo-500/10 rounded-xl p-4">
+                  <p className="text-xs text-indigo-400 dark:text-indigo-300 font-medium mb-1">Oportunidade</p>
+                  <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-300">{meeting.opportunity?.title}</p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-300 mt-1">
                     {meeting.opportunity?.number} • Valor R$ {Number(meeting.opportunity?.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <div className="bg-green-50 rounded-xl p-4">
-                  <p className="text-xs text-green-400 font-medium mb-1">Cliente</p>
-                  <p className="text-sm font-semibold text-green-900">{meeting.company?.name}</p>
-                  <p className="text-xs text-green-600 mt-1">CNPJ: {meeting.company?.document || '—'}</p>
+                <div className="bg-green-50 dark:bg-green-500/10 rounded-xl p-4">
+                  <p className="text-xs text-green-400 dark:text-emerald-300 font-medium mb-1">Cliente</p>
+                  <p className="text-sm font-semibold text-green-900 dark:text-emerald-300">{meeting.company?.name}</p>
+                  <p className="text-xs text-green-600 dark:text-emerald-300 mt-1">CNPJ: {meeting.company?.document || '—'}</p>
                 </div>
-                <div className="bg-purple-50 rounded-xl p-4">
-                  <p className="text-xs text-purple-400 font-medium mb-1">Responsável</p>
-                  <p className="text-sm font-semibold text-purple-900">{meeting.owner?.name}</p>
-                  <p className="text-xs text-purple-600 mt-1">{meeting.owner?.email}</p>
+                <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-4">
+                  <p className="text-xs text-purple-400 dark:text-purple-300 font-medium mb-1">Responsável</p>
+                  <p className="text-sm font-semibold text-purple-900 dark:text-purple-300">{meeting.owner?.name}</p>
+                  <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">{meeting.owner?.email}</p>
                 </div>
               </div>
 
               {meeting.description && (
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Objetivo</h4>
-                  <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-4">{meeting.description}</p>
+                  <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2">Objetivo</h4>
+                  <p className="text-sm text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-4">{meeting.description}</p>
                 </div>
               )}
 
               <div>
-                <h4 className="text-sm font-semibold text-gray-800 mb-3">Resumo</h4>
+                <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-3">Resumo</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="border border-gray-200 rounded-xl p-3 text-center">
+                  <div className="border border-gray-200 dark:border-[color:var(--crm-border)] rounded-xl p-3 text-center">
                     <Users className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-gray-900">{meeting.participants?.length || 0}</p>
-                    <p className="text-xs text-gray-500">Participantes</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{meeting.participants?.length || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Participantes</p>
                   </div>
-                  <div className="border border-gray-200 rounded-xl p-3 text-center">
+                  <div className="border border-gray-200 dark:border-[color:var(--crm-border)] rounded-xl p-3 text-center">
                     <ClipboardList className="w-5 h-5 text-purple-500 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-gray-900">{meeting.agendaItems?.length || 0}</p>
-                    <p className="text-xs text-gray-500">Itens de pauta</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{meeting.agendaItems?.length || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Itens de pauta</p>
                   </div>
-                  <div className="border border-gray-200 rounded-xl p-3 text-center">
+                  <div className="border border-gray-200 dark:border-[color:var(--crm-border)] rounded-xl p-3 text-center">
                     <ListChecks className="w-5 h-5 text-green-500 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-gray-900">{completedChecklist}/{totalChecklist}</p>
-                    <p className="text-xs text-gray-500">Checklist</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-slate-100">{completedChecklist}/{totalChecklist}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Checklist</p>
                   </div>
-                  <div className="border border-gray-200 rounded-xl p-3 text-center">
+                  <div className="border border-gray-200 dark:border-[color:var(--crm-border)] rounded-xl p-3 text-center">
                     <MessageSquare className="w-5 h-5 text-orange-500 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-gray-900">
+                    <p className="text-lg font-bold text-gray-900 dark:text-slate-100">
                       {meeting.actionItems?.filter((a) => a.status !== 'CONCLUIDO' && a.status !== 'CANCELADO').length || 0}
                     </p>
-                    <p className="text-xs text-gray-500">Ações abertas</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Ações abertas</p>
                   </div>
                 </div>
               </div>
@@ -1389,21 +1389,21 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           {activeTab === 'agenda' && (
             <div className="space-y-3">
               {meeting.agendaItems?.map((item, index) => (
-                <div key={item.id} className="flex items-start gap-3 bg-gray-50 rounded-xl p-4">
-                  <span className="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                <div key={item.id} className="flex items-start gap-3 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-4">
+                  <span className="w-7 h-7 bg-indigo-100 dark:bg-indigo-500/15 rounded-lg flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300 flex-shrink-0">
                     {index + 1}
                   </span>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                    {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{item.title}</p>
+                    {item.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.description}</p>}
                   </div>
-                  <span className="flex items-center gap-1 text-xs text-gray-500 flex-shrink-0">
+                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 flex-shrink-0">
                     <Clock className="w-3.5 h-3.5" /> {item.durationMinutes} min
                   </span>
                 </div>
               ))}
               {(!meeting.agendaItems || meeting.agendaItems.length === 0) && (
-                <p className="text-sm text-gray-400 text-center py-6">Nenhum item de pauta definido</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Nenhum item de pauta definido</p>
               )}
             </div>
           )}
@@ -1412,34 +1412,34 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           {activeTab === 'checklist' && (
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+                <div className="flex-1 bg-gray-200 dark:bg-slate-600 rounded-full h-2.5">
                   <div className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${checklistProgress}%` }}></div>
                 </div>
-                <span className="text-sm font-semibold text-gray-700">{checklistProgress}%</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">{checklistProgress}%</span>
               </div>
               <div className="space-y-2">
                 {meeting.checklistItems?.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => toggleChecklist(item)}>
+                  <div key={item.id} className="flex items-center gap-3 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-white dark:hover:bg-white/10/10 transition-colors" onClick={() => toggleChecklist(item)}>
                     <button className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${
-                      item.isCompleted ? 'bg-green-600 border-green-600' : 'border-gray-300 bg-white'
+                      item.isCompleted ? 'bg-green-600 border-green-600' : 'border-gray-300 dark:border-[color:var(--crm-border)] bg-white dark:bg-[var(--crm-surface)]'
                     }`}>
                       {item.isCompleted && <CheckCircle2 className="w-4 h-4 text-white" />}
                     </button>
-                    <span className={`text-sm flex-1 ${item.isCompleted ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                    <span className={`text-sm flex-1 ${item.isCompleted ? 'text-gray-400 dark:text-slate-500 line-through' : 'text-gray-800 dark:text-slate-200'}`}>
                       {item.title}
                     </span>
                     {item.completedBy && (
-                      <span className="text-xs text-gray-400">por {item.completedBy.name}</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500">por {item.completedBy.name}</span>
                     )}
                   </div>
                 ))}
                 {(!meeting.checklistItems || meeting.checklistItems.length === 0) && (
-                  <p className="text-sm text-gray-400 text-center py-6">Nenhum item de checklist</p>
+                  <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Nenhum item de checklist</p>
                 )}
               </div>
               <button
                 onClick={addChecklist}
-                className="mt-4 w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-600 text-sm font-medium rounded-xl hover:bg-indigo-50 transition-colors"
+                className="mt-4 w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-500/15 transition-colors"
               >
                 + Adicionar item de verificação
               </button>
@@ -1455,23 +1455,23 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                   const name = isInternal ? participant.user?.name : participant.contact?.name;
                   const detail = isInternal ? participant.user?.email : `${participant.contact?.position || 'Contato'} • ${participant.contact?.email || participant.contact?.phone || ''}`;
                   return (
-                    <div key={participant.id} className="bg-gray-50 rounded-xl p-4">
+                    <div key={participant.id} className="bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                            isInternal ? 'bg-indigo-100 text-indigo-700' : 'bg-green-100 text-green-700'
+                            isInternal ? 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300' : 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-emerald-300'
                           }`}>
                             {name?.charAt(0) || '?'}
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{name}</p>
-                            <p className="text-xs text-gray-500">{detail}</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{name}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-400">{detail}</p>
                             <span className={`inline-flex mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full ${PARTICIPANT_STATUS[participant.status]?.color}`}>
                               {PARTICIPANT_STATUS[participant.status]?.label}
                             </span>
                           </div>
                         </div>
-                        <button onClick={() => removeParticipant(participant)} className="text-gray-300 hover:text-red-600 transition-colors" title="Remover">
+                        <button onClick={() => removeParticipant(participant)} className="text-gray-300 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-300 transition-colors" title="Remover">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1481,7 +1481,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                             key={status}
                             onClick={() => updateParticipantStatus(participant, status)}
                             className={`px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors ${
-                              participant.status === status ? PARTICIPANT_STATUS[status].color : 'bg-white text-gray-400 border border-gray-200 hover:border-gray-300'
+                              participant.status === status ? PARTICIPANT_STATUS[status].color : 'bg-white dark:bg-[var(--crm-surface)] text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-[color:var(--crm-border)] hover:border-gray-300 dark:hover:border-slate-600'
                             }`}
                           >
                             {PARTICIPANT_STATUS[status].label}
@@ -1494,7 +1494,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
               </div>
 
               {showParticipantForm ? (
-                <form onSubmit={addParticipant} className="mt-4 bg-indigo-50 rounded-xl p-4 space-y-3">
+                <form onSubmit={addParticipant} className="mt-4 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl p-4 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <select
                       value={newParticipant.userId}
@@ -1525,14 +1525,14 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                       Adicionar
                     </button>
                   </div>
-                  <button type="button" onClick={() => setShowParticipantForm(false)} className="text-xs text-gray-500 hover:text-gray-700">
+                  <button type="button" onClick={() => setShowParticipantForm(false)} className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300">
                     Cancelar
                   </button>
                 </form>
               ) : (
                 <button
                   onClick={() => setShowParticipantForm(true)}
-                  className="mt-4 w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-600 text-sm font-medium rounded-xl hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
+                  className="mt-4 w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-500/15 transition-colors flex items-center justify-center gap-2"
                 >
                   <UserPlus className="w-4 h-4" /> Adicionar participante
                 </button>
@@ -1544,7 +1544,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           {activeTab === 'minutes' && (
             <div className="space-y-6">
               <div>
-                <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2 flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-indigo-500" /> Ata da Reunião
                 </h4>
                 <textarea
@@ -1566,19 +1566,19 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
 
               <div>
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
                     <ClipboardList className="w-4 h-4 text-indigo-500" /> Tarefas / Ações Pós-Reunião
                   </h4>
                   <button
                     onClick={() => setShowActionForm((prev) => !prev)}
-                    className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                    className="text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm font-medium"
                   >
                     + Nova ação
                   </button>
                 </div>
 
                 {showActionForm && (
-                  <form onSubmit={addActionItem} className="bg-indigo-50 rounded-xl p-4 space-y-3 mb-4">
+                  <form onSubmit={addActionItem} className="bg-indigo-50 dark:bg-indigo-500/10 rounded-xl p-4 space-y-3 mb-4">
                     <input
                       type="text"
                       value={actionForm.title}
@@ -1626,7 +1626,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                       <button
                         type="button"
                         onClick={() => setShowActionForm(false)}
-                        className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                        className="px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 hover:text-gray-800 dark:hover:text-slate-200"
                       >
                         Cancelar
                       </button>
@@ -1639,7 +1639,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
 
                 <div className="space-y-2">
                   {meeting.actionItems?.map((item) => (
-                    <div key={item.id} className="bg-gray-50 rounded-xl p-4">
+                    <div key={item.id} className="bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1647,21 +1647,21 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                               {ACTION_STATUS[item.status]?.label}
                             </span>
                             <span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full ${
-                              item.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
-                              item.priority === 'HIGH' ? 'bg-orange-100 text-orange-700' :
-                              item.priority === 'LOW' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                              item.priority === 'URGENT' ? 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300' :
+                              item.priority === 'HIGH' ? 'bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300' :
+                              item.priority === 'LOW' ? 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-emerald-300' : 'bg-yellow-100 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-300'
                             }`}>
                               {item.priority}
                             </span>
                             {item.taskId && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-purple-100 text-purple-700">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300">
                                 <CheckCircle2 className="w-3 h-3" /> Tarefa vinculada
                               </span>
                             )}
                           </div>
-                          <p className="text-sm font-medium text-gray-900 mt-1.5">{item.title}</p>
-                          {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
-                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                          <p className="text-sm font-medium text-gray-900 dark:text-slate-100 mt-1.5">{item.title}</p>
+                          {item.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.description}</p>}
+                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-slate-400">
                             {item.dueDate && (
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" /> {new Date(item.dueDate).toLocaleDateString('pt-BR')}
@@ -1678,7 +1678,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                           {item.status !== 'CONCLUIDO' && (
                             <button
                               onClick={() => updateActionItem(item, { status: 'CONCLUIDO' })}
-                              className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                              className="text-[10px] px-2 py-1 bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-emerald-300 rounded-md hover:bg-green-200 dark:hover:bg-green-500/25 transition-colors"
                             >
                               Concluir
                             </button>
@@ -1686,14 +1686,14 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                           {item.status === 'PENDENTE' && (
                             <button
                               onClick={() => updateActionItem(item, { status: 'EM_ANDAMENTO' })}
-                              className="text-[10px] px-2 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                              className="text-[10px] px-2 py-1 bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-500/25 transition-colors"
                             >
                               Iniciar
                             </button>
                           )}
                           <button
                             onClick={() => deleteActionItem(item)}
-                            className="text-[10px] px-2 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+                            className="text-[10px] px-2 py-1 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-500/25 transition-colors"
                           >
                             Excluir
                           </button>
@@ -1702,7 +1702,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                     </div>
                   ))}
                   {(!meeting.actionItems || meeting.actionItems.length === 0) && (
-                    <p className="text-sm text-gray-400 text-center py-6">Nenhuma ação pós-reunião definida</p>
+                    <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Nenhuma ação pós-reunião definida</p>
                   )}
                 </div>
               </div>
@@ -1714,31 +1714,31 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
             <div className="space-y-4">
               {meeting.history?.map((event) => (
                 <div key={event.id} className="flex gap-3">
-                  <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <History className="w-4 h-4 text-indigo-600" />
+                  <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-500/15 rounded-full flex items-center justify-center flex-shrink-0">
+                    <History className="w-4 h-4 text-indigo-600 dark:text-indigo-300" />
                   </div>
-                  <div className="flex-1 bg-gray-50 rounded-xl p-3">
+                  <div className="flex-1 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-3">
                     <div className="flex justify-between items-start gap-2">
-                      <p className="text-sm font-medium text-gray-900">{event.title}</p>
-                      <span className="text-xs text-gray-400 flex-shrink-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{event.title}</p>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">
                         {new Date(event.createdAt).toLocaleString('pt-BR')}
                       </span>
                     </div>
-                    {event.description && <p className="text-xs text-gray-500 mt-1">{event.description}</p>}
-                    {event.user && <p className="text-xs text-gray-400 mt-1">por {event.user.name}</p>}
+                    {event.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{event.description}</p>}
+                    {event.user && <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">por {event.user.name}</p>}
                   </div>
                 </div>
               ))}
               {(!meeting.history || meeting.history.length === 0) && (
-                <p className="text-sm text-gray-400 text-center py-6">Nenhum evento no histórico</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Nenhum evento no histórico</p>
               )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 flex-shrink-0 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">
+        <div className="p-4 border-t border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-slate-300 bg-gray-200 dark:bg-slate-600 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors">
             Fechar
           </button>
         </div>
