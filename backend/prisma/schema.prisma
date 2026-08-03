@@ -1075,6 +1075,7 @@ model KickoffAgendaItem {
   meeting         KickoffMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   title           String
   description     String?
+  tratativa       String?
   durationMinutes Int    @default(15)
   order           Int    @default(0)
   createdAt       DateTime @default(now())

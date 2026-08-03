@@ -692,11 +692,17 @@ router.delete('/participants/:id', authenticateToken, async (req, res) => {
 router.post('/meetings/:id/agenda', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, durationMinutes } = req.body;
+    const { title, description, tratativa, durationMinutes } = req.body;
 
     if (!title) {
       return res.status(400).json({ error: 'Título é obrigatório' });
     }
+
+    const meeting = await prisma.kickoffMeeting.findUnique({
+      where: { id },
+      select: { id: true, number: true }
+    });
+    if (!meeting) return res.status(404).json({ error: 'Reunião não encontrada' });
 
     const count = await prisma.kickoffAgendaItem.count({ where: { meetingId: id } });
 
@@ -705,9 +711,14 @@ router.post('/meetings/:id/agenda', authenticateToken, async (req, res) => {
         meetingId: id,
         title,
         description,
+        tratativa,
         durationMinutes: durationMinutes || 15,
         order: count + 1
       }
+    });
+
+    await prisma.kickoffHistory.create({
+      data: buildHistoryEntry('PAUTA', 'Item de pauta adicionado', `${title} foi adicionado à pauta`, null, req.user.userId, id)
     });
 
     res.status(201).json(item);
@@ -717,11 +728,59 @@ router.post('/meetings/:id/agenda', authenticateToken, async (req, res) => {
   }
 });
 
+// PATCH /api/kickoff/agenda/:id  { title?, description?, tratativa?, durationMinutes? }
+router.patch('/agenda/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, tratativa, durationMinutes } = req.body;
+
+    const existing = await prisma.kickoffAgendaItem.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Item de pauta não encontrado' });
+
+    const data = {};
+    if (title) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (tratativa !== undefined) data.tratativa = tratativa;
+    if (durationMinutes !== undefined) data.durationMinutes = Number(durationMinutes) || 15;
+
+    const item = await prisma.kickoffAgendaItem.update({
+      where: { id },
+      data
+    });
+
+    if (tratativa !== undefined) {
+      await prisma.kickoffHistory.create({
+        data: buildHistoryEntry(
+          'TRATATIVA',
+          'Tratativa registrada',
+          `${tratativa ? `Tratativa registrada no item "${existing.title}"` : `Tratativa removida do item "${existing.title}"`}`,
+          null,
+          req.user.userId,
+          existing.meetingId
+        )
+      });
+    }
+
+    res.json(item);
+  } catch (error) {
+    console.error('Erro ao atualizar item de pauta:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 // DELETE /api/kickoff/agenda/:id
 router.delete('/agenda/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const existing = await prisma.kickoffAgendaItem.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Item de pauta não encontrado' });
+
     await prisma.kickoffAgendaItem.delete({ where: { id } });
+
+    await prisma.kickoffHistory.create({
+      data: buildHistoryEntry('PAUTA', 'Item de pauta removido', `"${existing.title}" foi removido da pauta`, null, req.user.userId, existing.meetingId)
+    });
+
     res.json({ success: true });
   } catch (error) {
     console.error('Erro ao remover item de pauta:', error);

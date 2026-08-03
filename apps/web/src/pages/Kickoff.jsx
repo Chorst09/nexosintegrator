@@ -273,7 +273,7 @@ const Kickoff = () => {
             <button
               onClick={() => setViewMode('pipeline')}
               className={`px-4 py-3 flex items-center gap-2 text-sm font-medium transition-colors ${
-                viewMode === 'pipeline' ? 'bg-indigo-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white dark:hover:bg-white/10/5'
+                viewMode === 'pipeline' ? 'bg-indigo-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white/5'
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
@@ -282,7 +282,7 @@ const Kickoff = () => {
             <button
               onClick={() => setViewMode('list')}
               className={`px-4 py-3 flex items-center gap-2 text-sm font-medium transition-colors ${
-                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white dark:hover:bg-white/10/5'
+                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white/5'
               }`}
             >
               <List className="w-4 h-4" />
@@ -578,9 +578,8 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
 
   useEffect(() => {
     const loadTemplates = async () => {
-      if (!formData.phase) return;
       try {
-        const res = await fetch(buildApiUrl(`/kickoff/templates?phase=${formData.phase}`), { headers: getAuthHeaders() });
+        const res = await fetch(buildApiUrl('/kickoff/templates'), { headers: getAuthHeaders() });
         if (res.ok) {
           const data = await res.json();
           setTemplates(data.templates || []);
@@ -590,7 +589,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
       }
     };
     loadTemplates();
-  }, [formData.phase]);
+  }, []);
 
   useEffect(() => {
     const loadPreview = async () => {
@@ -727,7 +726,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
           <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">
             {meeting ? `Editar Reunião ${meeting.number}` : 'Nova Reunião de Kickoff'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:hover:bg-white/10/10">
+          <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -851,9 +850,17 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
             </h4>
             <select value={formData.templateId} onChange={(e) => handleTemplateSelect(e.target.value)} className={inputClass}>
               <option value="">Padrão da fase</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
+              {PHASES.map((phase) => {
+                const phaseTemplates = templates.filter((t) => t.phase === phase.id);
+                if (phaseTemplates.length === 0) return null;
+                return (
+                  <optgroup key={phase.id} label={`${phase.icon} ${phase.label}`}>
+                    {phaseTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}{t.isDefault ? ' (padrão)' : ''}</option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </select>
           </div>
 
@@ -1045,6 +1052,11 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
   const [showActionForm, setShowActionForm] = useState(false);
   const [newParticipant, setNewParticipant] = useState({ userId: '', contactId: '', role: 'INTERNO' });
   const [showParticipantForm, setShowParticipantForm] = useState(false);
+  const [newAgenda, setNewAgenda] = useState({ title: '', description: '', durationMinutes: 15 });
+  const [showAgendaForm, setShowAgendaForm] = useState(false);
+  const [tratativaDraft, setTratativaDraft] = useState('');
+  const [editingTratativaId, setEditingTratativaId] = useState(null);
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -1112,13 +1124,72 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
     if (res.ok) await refresh();
   };
 
-  const addChecklist = async () => {
-    const title = window.prompt('Novo item de checklist:');
+  const addAgendaItem = async (e) => {
+    e.preventDefault();
+    if (!newAgenda.title.trim()) return;
+    const res = await fetch(buildApiUrl(`/kickoff/meetings/${meeting.id}/agenda`), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        title: newAgenda.title.trim(),
+        description: newAgenda.description,
+        durationMinutes: parseInt(newAgenda.durationMinutes) || 15
+      })
+    });
+    if (res.ok) {
+      setNewAgenda({ title: '', description: '', durationMinutes: 15 });
+      setShowAgendaForm(false);
+      await refresh();
+    }
+  };
+
+  const deleteAgendaItem = async (item) => {
+    if (!window.confirm(`Remover "${item.title}" da pauta?`)) return;
+    const res = await fetch(buildApiUrl(`/kickoff/agenda/${item.id}`), {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (res.ok) await refresh();
+  };
+
+  const startTratativa = (item) => {
+    setEditingTratativaId(item.id);
+    setTratativaDraft(item.tratativa || '');
+  };
+
+  const saveTratativa = async (item) => {
+    const res = await fetch(buildApiUrl(`/kickoff/agenda/${item.id}`), {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ tratativa: tratativaDraft.trim() })
+    });
+    if (res.ok) {
+      setEditingTratativaId(null);
+      setTratativaDraft('');
+      await refresh();
+    }
+  };
+
+  const addChecklist = async (e) => {
+    e.preventDefault();
+    const title = newChecklistTitle.trim();
     if (!title) return;
     const res = await fetch(buildApiUrl(`/kickoff/meetings/${meeting.id}/checklist`), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ title })
+    });
+    if (res.ok) {
+      setNewChecklistTitle('');
+      await refresh();
+    }
+  };
+
+  const deleteChecklist = async (item) => {
+    if (!window.confirm(`Remover "${item.title}" do checklist?`)) return;
+    const res = await fetch(buildApiUrl(`/kickoff/checklist/${item.id}`), {
+      method: 'DELETE',
+      headers: getAuthHeaders()
     });
     if (res.ok) await refresh();
   };
@@ -1253,7 +1324,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                 </div>
               </div>
             </div>
-            <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:hover:bg-white/10/10">
+            <button onClick={onClose} className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400 transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1389,21 +1460,110 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           {activeTab === 'agenda' && (
             <div className="space-y-3">
               {meeting.agendaItems?.map((item, index) => (
-                <div key={item.id} className="flex items-start gap-3 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-4">
-                  <span className="w-7 h-7 bg-indigo-100 dark:bg-indigo-500/15 rounded-lg flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300 flex-shrink-0">
-                    {index + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{item.title}</p>
-                    {item.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.description}</p>}
+                <div key={item.id} className="bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="w-7 h-7 bg-indigo-100 dark:bg-indigo-500/15 rounded-lg flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300 flex-shrink-0">
+                      {index + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{item.title}</p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                            <Clock className="w-3.5 h-3.5" /> {item.durationMinutes} min
+                          </span>
+                          <button onClick={() => deleteAgendaItem(item)} className="text-gray-300 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-300 transition-colors" title="Remover item">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      {item.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{item.description}</p>}
+
+                      {editingTratativaId === item.id ? (
+                        <div className="mt-3 space-y-2">
+                          <textarea
+                            value={tratativaDraft}
+                            onChange={(e) => setTratativaDraft(e.target.value)}
+                            rows={3}
+                            className={inputClass}
+                            placeholder="Registre a tratativa / discussão deste item..."
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => setEditingTratativaId(null)} className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300">
+                              Cancelar
+                            </button>
+                            <button onClick={() => saveTratativa(item)} className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+                              Salvar tratativa
+                            </button>
+                          </div>
+                        </div>
+                      ) : item.tratativa ? (
+                        <div className="mt-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Tratativa</p>
+                            <button onClick={() => startTratativa(item)} className="text-xs text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300">
+                              Editar
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{item.tratativa}</p>
+                        </div>
+                      ) : (
+                        <button onClick={() => startTratativa(item)} className="mt-2 text-xs text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors">
+                          <MessageSquare className="w-3.5 h-3.5" /> Adicionar tratativa
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 flex-shrink-0">
-                    <Clock className="w-3.5 h-3.5" /> {item.durationMinutes} min
-                  </span>
                 </div>
               ))}
               {(!meeting.agendaItems || meeting.agendaItems.length === 0) && (
                 <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Nenhum item de pauta definido</p>
+              )}
+
+              {showAgendaForm ? (
+                <form onSubmit={addAgendaItem} className="bg-indigo-50 dark:bg-indigo-500/10 rounded-xl p-4 space-y-3">
+                  <input
+                    type="text"
+                    value={newAgenda.title}
+                    onChange={(e) => setNewAgenda((prev) => ({ ...prev, title: e.target.value }))}
+                    className={inputClass}
+                    placeholder="Título do item de pauta *"
+                    required
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      type="number"
+                      value={newAgenda.durationMinutes}
+                      onChange={(e) => setNewAgenda((prev) => ({ ...prev, durationMinutes: e.target.value }))}
+                      className={inputClass}
+                      placeholder="Duração (min)"
+                      min="1"
+                    />
+                  </div>
+                  <textarea
+                    value={newAgenda.description}
+                    onChange={(e) => setNewAgenda((prev) => ({ ...prev, description: e.target.value }))}
+                    className={inputClass}
+                    rows={2}
+                    placeholder="Descrição (opcional)"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowAgendaForm(false)} className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300">
+                      Cancelar
+                    </button>
+                    <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+                      Adicionar à pauta
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setShowAgendaForm(true)}
+                  className="mt-1 w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-500/15 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Adicionar item de pauta
+                </button>
               )}
             </div>
           )}
@@ -1419,7 +1579,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
               </div>
               <div className="space-y-2">
                 {meeting.checklistItems?.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-white dark:hover:bg-white/10/10 transition-colors" onClick={() => toggleChecklist(item)}>
+                  <div key={item.id} className="flex items-center gap-3 bg-gray-50 dark:bg-[var(--crm-surface-2)] rounded-xl p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors" onClick={() => toggleChecklist(item)}>
                     <button className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${
                       item.isCompleted ? 'bg-green-600 border-green-600' : 'border-gray-300 dark:border-[color:var(--crm-border)] bg-white dark:bg-[var(--crm-surface)]'
                     }`}>
@@ -1429,20 +1589,29 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                       {item.title}
                     </span>
                     {item.completedBy && (
-                      <span className="text-xs text-gray-400 dark:text-slate-500">por {item.completedBy.name}</span>
+                      <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">por {item.completedBy.name}</span>
                     )}
+                    <button onClick={(e) => { e.stopPropagation(); deleteChecklist(item); }} className="text-gray-300 dark:text-slate-600 hover:text-red-600 dark:hover:text-red-300 transition-colors flex-shrink-0" title="Remover item">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
                 {(!meeting.checklistItems || meeting.checklistItems.length === 0) && (
                   <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">Nenhum item de checklist</p>
                 )}
               </div>
-              <button
-                onClick={addChecklist}
-                className="mt-4 w-full py-2.5 border-2 border-dashed border-indigo-200 text-indigo-600 dark:text-indigo-300 text-sm font-medium rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-500/15 transition-colors"
-              >
-                + Adicionar item de verificação
-              </button>
+              <form onSubmit={addChecklist} className="mt-4 flex gap-2">
+                <input
+                  type="text"
+                  value={newChecklistTitle}
+                  onChange={(e) => setNewChecklistTitle(e.target.value)}
+                  className={`${inputClass} flex-1`}
+                  placeholder="Novo item de verificação..."
+                />
+                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1 flex-shrink-0">
+                  <Plus className="w-4 h-4" /> Adicionar
+                </button>
+              </form>
             </div>
           )}
 
