@@ -396,7 +396,7 @@ router.post('/meetings', authenticateToken, async (req, res) => {
         opportunityId,
         companyId: opportunity.companyId,
         ownerId: req.user.userId,
-        templateId: finalTemplateId,
+        templateId: finalTemplateId || null,
         agendaItems: {
           create: resolvedAgenda.map((item, index) => ({
             title: item.title || item,
