@@ -1703,7 +1703,10 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
       opportunityData.projectName = title;
     }
     if (prismaModelHasField('Opportunity', 'projectClientType')) {
-      opportunityData.projectClientType = 'B2G';
+      opportunityData.projectClientType = 'NEW_CLIENT'; // Tipo de relacionamento com o cliente
+    }
+    if (prismaModelHasField('Opportunity', 'clientType')) {
+      opportunityData.clientType = 'B2G'; // CRÍTICO: define que é oportunidade B2G
     }
     if (prismaModelHasField('Opportunity', 'b2gStage')) {
       opportunityData.b2gStage = b2gStage;
