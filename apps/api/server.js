@@ -156,7 +156,13 @@ app.use('/api/companies', handleLegacyAPI('./api/companies.js'));
 app.use('/api/opportunities', handleLegacyAPI('./api/opportunities.js'));
 app.use('/api/activities', handleLegacyAPI('./api/activities.js'));
 app.use('/api/activities-simple', authenticateToken, require('./api/activities-simple.cjs'));
-app.use('/api/opportunity-followups', authenticateToken, require('./api/opportunity-followups.cjs'));
+try {
+  const followupsRouter = require('./api/opportunity-followups.cjs');
+  app.use('/api/opportunity-followups', followupsRouter);  // SEM authenticateToken - rota cuida de sua própria autenticação
+  console.log('✅ /api/opportunity-followups carregado com sucesso');
+} catch (err) {
+  console.error('❌ Erro ao carregar /api/opportunity-followups:', err.message);
+}
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
 // app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
 app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));

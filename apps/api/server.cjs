@@ -230,7 +230,7 @@ app.use('/api/checkout', require('./api/checkout.cjs'));
 
 // Auth + RBAC para todo o restante da API (exceto /auth e /health)
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth') || req.path === '/health') return next();
+  if (req.path.startsWith('/auth') || req.path === '/health' || req.path.startsWith('/opportunity-followups')) return next();
   return authenticateToken(req, res, next);
 });
 app.use('/api', enforceRolePolicies);
@@ -367,7 +367,18 @@ app.use('/api/prevendas-cadastros', handleLegacyAPI('./api/prevendas-cadastros.j
 app.use('/api/activities-simple', require('./api/activities-simple.cjs'));
 
 // API de Acompanhamentos de Oportunidades (CommonJS)
-app.use('/api/opportunity-followups', require('./api/opportunity-followups.cjs'));
+console.log('📝 Carregando /api/opportunity-followups...');
+try {
+  console.log('📂 Tentando require("./api/opportunity-followups.cjs")');
+  const followupsRouter = require('./api/opportunity-followups.cjs');
+  console.log('✅ Módulo carregado, tipo:', typeof followupsRouter);
+  app.use('/api/opportunity-followups', followupsRouter);
+  console.log('✅ /api/opportunity-followups registrado com sucesso');
+} catch (err) {
+  console.error('❌ Erro ao carregar /api/opportunity-followups:');
+  console.error('   Mensagem:', err.message);
+  console.error('   Stack:', err.stack);
+}
 
 // API de Geração de PDF (CommonJS)
 app.use('/api/pdf-generator', require('./api/pdf-generator.cjs'));
