@@ -83,6 +83,7 @@ import B2GFunnelStrategic from '../components/B2GFunnelStrategic';
 import Modal from '../components/Modal';
 import OpportunityForm from '../components/OpportunityForm';
 import { B2GOpportunityDetailModal, B2GOpportunityEditModal } from '../components/B2GOpportunityModal';
+import B2GOpportunityAlerts from '../components/B2GOpportunityAlerts';
 import PresentationControls from '../components/PresentationControls';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { isCompanyInClientType, isOpportunityInClientType } from '../utils/businessModel';
@@ -1289,6 +1290,7 @@ export default function B2GEditais() {
   const [convertingSavedSummaryId, setConvertingSavedSummaryId] = useState('');
   const [dashboardPresentationMode, setDashboardPresentationMode] = useState(false);
   const [dashboardPresentationProgress, setDashboardPresentationProgress] = useState({ current: 1, total: 1 });
+  const [showOpportunityAlertsModal, setShowOpportunityAlertsModal] = useState(false);
   const analysisFileInputRef = useRef(null);
   const repositoryFileInputRef = useRef(null);
   const dashboardPresentationRef = useRef(null);
@@ -5280,6 +5282,14 @@ export default function B2GEditais() {
 
               <button
                 type="button"
+                onClick={() => setShowOpportunityAlertsModal(true)}
+                className="crm-btn crm-btn-secondary h-10 px-4"
+              >
+                <AlertTriangle className="h-4 w-4" />
+                Alertas
+              </button>
+              <button
+                type="button"
                 onClick={handleNewOpportunity}
                 className="crm-btn crm-btn-primary h-10 px-4"
               >
@@ -7780,11 +7790,16 @@ export default function B2GEditais() {
       {/* Modal de Edição/Criação de Oportunidade B2G - novo componente com 6 abas */}
       <B2GOpportunityEditModal
         isOpen={showOpportunityEditModal}
-        onClose={() => { setShowOpportunityEditModal(false); setEditingOpportunity(null); }}
+        onClose={() => { 
+          console.log('[B2GEditais] Modal de edição fechando, aba atual:', activeTab, 'URL:', location.pathname);
+          setShowOpportunityEditModal(false); 
+          setEditingOpportunity(null); 
+        }}
         opportunity={editingOpportunity}
         leads={leads}
         mode={opportunityModalMode}
         onSaved={(data, mode) => {
+          console.log('[B2GEditais] Oportunidade salva, mode:', mode, 'id:', data?.id);
           if (mode === 'create') {
             setOpportunities(prev => [data, ...prev]);
             setFeedback({ type: 'success', message: 'Oportunidade criada com sucesso!' });
@@ -7793,6 +7808,12 @@ export default function B2GEditais() {
             setFeedback({ type: 'success', message: 'Oportunidade atualizada com sucesso!' });
           }
         }}
+      />
+
+      {/* Modal de Alertas de Abertura de Edital */}
+      <B2GOpportunityAlerts
+        isOpen={showOpportunityAlertsModal}
+        onClose={() => setShowOpportunityAlertsModal(false)}
       />
     </div>
   );

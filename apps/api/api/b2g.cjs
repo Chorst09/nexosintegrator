@@ -1764,4 +1764,85 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
   }
 });
 
+// ============================================================
+// ALERTAS DE ABERTURA DE EDITAL (5 DIAS ANTES)
+// ============================================================
+
+/**
+ * GET /b2g/oportunidades/alertas/abertura
+ * Retorna oportunidades em "Proposta Enviada" com openingDate a 5 dias
+ */
+router.get('/oportunidades/alertas/abertura', requireRole(['USER', 'ADMIN', 'MASTER']), async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(400).json({ error: 'Usuário inválido' });
+    }
+
+    // Buscar oportunidades B2G em "Proposta Enviada" (stage: PROPOSAL)
+    const opportunities = await prisma.opportunity.findMany({
+      where: {
+        clientType: 'B2G',
+        stage: 'PROPOSAL' // Proposta Enviada
+      },
+      include: {
+        company: true,
+        owner: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    // Processar e filtrar por data de abertura nos próximos 5 dias
+    const now = new Date();
+    const fiveDaysFromNow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+    
+    const alerts = opportunities
+      .map((opp) => {
+        let b2gData = {};
+        try {
+          b2gData = opp.description ? JSON.parse(opp.description) : {};
+        } catch (e) {
+          // descrição não é JSON válido
+        }
+
+        const openingDate = b2gData.openingDate ? new Date(b2gData.openingDate) : null;
+        
+        if (!openingDate) return null;
+
+        const daysUntilOpening = Math.ceil((openingDate - now) / (1000 * 60 * 60 * 24));
+        
+        // Filtrar: deve estar a 5 dias ou menos (e não estar no passado)
+        if (daysUntilOpening > 5 || daysUntilOpening < 0) return null;
+
+        return {
+          opportunityId: opp.id,
+          title: opp.title,
+          projectName: opp.projectName,
+          company: opp.company,
+          owner: opp.owner,
+          value: opp.value,
+          probability: opp.probability,
+          openingDate,
+          daysUntilOpening,
+          stage: opp.stage,
+          b2gStage: opp.b2gStage,
+          description: b2gData,
+          alertType: daysUntilOpening === 0 ? 'TODAY' : daysUntilOpening === 1 ? 'TOMORROW' : 'UPCOMING'
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.daysUntilOpening - b.daysUntilOpening);
+
+    return res.json({
+      success: true,
+      count: alerts.length,
+      alerts
+    });
+  } catch (error) {
+    console.error('Erro ao buscar alertas de abertura:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 module.exports = router;
