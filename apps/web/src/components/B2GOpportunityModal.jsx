@@ -134,23 +134,37 @@ export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit
         headers: getAuthHeaders(),
         body: JSON.stringify({ opportunityId: opportunity.id, type: followUpType, content })
       });
-      if (res.ok) {
-        const created = await res.json();
-        setFollowUps(prev => [created, ...prev]);
-        setFollowUpText('');
-        setFollowUpType('NOTE');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || errorData?.message || 'Erro ao salvar acompanhamento');
       }
-    } catch (e) { console.error(e); }
+      const created = await res.json();
+      setFollowUps(prev => [created, ...prev]);
+      setFollowUpText('');
+      setFollowUpType('NOTE');
+    } catch (e) { 
+      console.error('Erro ao salvar acompanhamento B2G:', e);
+      alert(e.message || 'Erro ao salvar acompanhamento');
+    }
     finally { setSavingFollowUp(false); }
   };
 
   const handleDeleteFollowUp = async (id) => {
+    if (!window.confirm('Deseja remover este acompanhamento?')) return;
     try {
       const res = await fetch(buildApiUrl(`/opportunity-followups/${id}`), {
-        method: 'DELETE', headers: getAuthHeaders()
+        method: 'DELETE', 
+        headers: getAuthHeaders()
       });
-      if (res.ok) setFollowUps(prev => prev.filter(f => f.id !== id));
-    } catch (e) { console.error(e); }
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData?.error || errorData?.message || 'Erro ao remover acompanhamento');
+      }
+      setFollowUps(prev => prev.filter(f => f.id !== id));
+    } catch (e) { 
+      console.error('Erro ao remover acompanhamento B2G:', e);
+      alert(e.message || 'Erro ao remover acompanhamento');
+    }
   };
 
   if (!opportunity) return null;
@@ -634,6 +648,7 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
         companyId, ownerId: user?.id || '', clientType: 'B2G',
         b2gStage: form.currentPhase ? String(form.currentPhase).toUpperCase().replace(/ /g,'_') : undefined
       };
+      console.log('[B2GOpportunityEditModal] Salvando oportunidade:', { mode, id: opportunity?.id, clientType: 'B2G' });
       if (mode === 'create') {
         response = await fetch(buildApiUrl('/opportunities?clientType=B2G'), {
           method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
@@ -645,10 +660,13 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
         });
       }
       const data = await response.json().catch(() => ({}));
+      console.log('[B2GOpportunityEditModal] Resposta:', { ok: response.ok, data });
       if (!response.ok) throw new Error(data?.error || data?.message || 'Erro ao salvar.');
       if (onSaved) onSaved(data, mode);
+      console.log('[B2GOpportunityEditModal] Chamando onClose()');
       onClose();
     } catch (err) {
+      console.error('[B2GOpportunityEditModal] Erro:', err);
       setError(err.message || 'Erro ao salvar oportunidade.');
     } finally {
       setSaving(false);
