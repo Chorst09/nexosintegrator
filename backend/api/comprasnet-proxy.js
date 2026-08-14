@@ -7,7 +7,7 @@
  * netlify/functions/comprasnet-proxy.js (redirect /api/* => /.netlify/functions/*).
  * Ambos retornam o mesmo shape: { data, total, erro }.
  *
- * Parâmetros: tipo=licitacao|dispensas|contratacoes14133 (padrão: licitacao)
+ * Parâmetros: tipo=licitacao|dispensas|contratacoes14133|arp|pregoes (padrão: licitacao)
  */
 
 const express = require('express');
@@ -64,6 +64,27 @@ const ENDPOINTS = {
       if (qs.uf) p.unidadeOrgaoUfSigla = qs.uf;
       if (qs.codigoOrgao) p.codigoOrgao = qs.codigoOrgao;
       return p;
+    }
+  },
+  arp: {
+    path: '/modulo-arp/1_consultarARP',
+    params: (qs) => ({
+      dataVigenciaInicialMin: qs.dataInicio || diasAtras(30),
+      dataVigenciaInicialMax: qs.dataFim || hoje(),
+      pagina: clamp(qs.pagina, 1, 500),
+      tamanhoPagina: clamp(qs.tamanhoPagina, 10, 500)
+    })
+  },
+  pregoes: {
+    path: '/modulo-legado/3_consultarPregoes',
+    params: (qs) => {
+      const ano = Number(qs.dataInicio ? qs.dataInicio.slice(0, 4) : new Date().getFullYear() - 1);
+      return {
+        dt_data_edital_inicial: `${ano}-01-01`,
+        dt_data_edital_final: `${ano}-12-31`,
+        pagina: clamp(qs.pagina, 1, 500),
+        tamanhoPagina: clamp(qs.tamanhoPagina, 10, 500)
+      };
     }
   }
 };

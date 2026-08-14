@@ -30,7 +30,9 @@ const FONTES_CONFIG = [
   { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
   { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Licitações do Compras.gov.br (SIASG / Lei 8.666)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' },
   { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄' },
-  { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️' }
+  { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️' },
+  { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋' },
+  { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢' }
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
@@ -329,6 +331,70 @@ async function buscarContratacoes14133({ objeto, uf, dataInicio, dataFim, tamanh
   } catch { return []; }
 }
 
+async function buscarAtasRegistroPreco({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('arp', { dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.nomeOrgao} ${item.nomeModalidadeCompra} ${item.objeto ? item.objeto : ''}`, objeto))
+      .map(item => {
+        const itemUf = extrairUfEndereco(item.nomeOrgaoGerenciador || item.nomeOrgao || '') || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `arp-${item.numeroAtaRegistroPreco}-${item.anoCompra || item.numeroCompra || Math.random()}`,
+          fonte: 'Atas de Registro de Preço',
+          fonteLogo: '📋',
+          titulo: `Ata de Registro de Preço ${item.numeroAtaRegistroPreco || ''} — ${item.objeto || 'Compras compartilhadas'}`,
+          orgao: item.nomeOrgaoGerenciador || item.nomeOrgao || '',
+          modalidade: item.nomeModalidadeCompra || '',
+          uf: itemUf,
+          municipio: extrairMunicipioEndereco(item.nomeOrgaoGerenciador || item.nomeOrgao || ''),
+          valor: null,
+          dataPublicacao: item.dataAssinatura || null,
+          dataAbertura: item.dataVigenciaInicial || null,
+          dataEncerramento: item.dataVigenciaFinal || null,
+          numero: String(item.numeroAtaRegistroPreco || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkAtaPNCP || item.linkCompraPNCP || `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes?numeroAta=${encodeURIComponent(item.numeroAtaRegistroPreco || '')}`,
+          status: 'Ata vigente'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarPregoes({ objeto, uf, dataInicio, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('pregoes', { dataInicio, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.tx_objeto} ${item.no_orgao}`, objeto))
+      .map(item => {
+        const itemUf = extrairUfEndereco(item.no_ausg || item.no_orgao || '') || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `pregao-${item.id_compra || Math.random()}`,
+          fonte: 'Pregões (SIASG)',
+          fonteLogo: '📢',
+          titulo: item.tx_objeto || 'Sem descrição',
+          orgao: item.no_orgao || item.no_ausg || '',
+          modalidade: [item.ds_tipo_pregao, item.ds_tipo_pregao_compra].filter(Boolean).join(' '),
+          uf: itemUf,
+          municipio: extrairMunicipioEndereco(item.no_ausg || item.no_orgao || ''),
+          valor: Number(item.valor_estimado_total) || null,
+          dataPublicacao: item.dt_data_edital || null,
+          dataAbertura: item.dt_inicio_proposta || null,
+          dataEncerramento: item.dt_fim_proposta || null,
+          numero: String(item.numero || item.co_processo || ''),
+          ano: String(item.dt_data_edital || '').slice(0, 4),
+          link: `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes?numeroAviso=${encodeURIComponent(String(item.numero || ''))}`,
+          status: item.ds_situacao_pregao || 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
 
 const formatCurrency = (value) => {
@@ -367,6 +433,8 @@ const getFonteBadgeClass = (fonte) => {
     'ComprasNet': 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700',
     'Compras.gov.br Dispensas': 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700',
     'Contratações Lei 14.133': 'bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-700',
+    'Atas de Registro de Preço': 'bg-indigo-100 text-indigo-800 border border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700',
+    'Pregões (SIASG)': 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700',
     'BLL': 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
     'BNC': 'bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
     'ConLicitação': 'bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700',
@@ -774,9 +842,9 @@ export default function PortalBusca() {
   const [fontesAtivas, setFontesAtivas] = useState(() => {
     try {
       const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
-      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
+      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133', 'arp', 'pregoes', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
     } catch {
-      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133'];
+      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133', 'arp', 'pregoes'];
     }
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
@@ -898,6 +966,12 @@ export default function PortalBusca() {
       }
       if (fontesAtivas.includes('contratacoes14133')) {
         promises.push(buscarContratacoes14133(params));
+      }
+      if (fontesAtivas.includes('arp')) {
+        promises.push(buscarAtasRegistroPreco(params));
+      }
+      if (fontesAtivas.includes('pregoes')) {
+        promises.push(buscarPregoes(params));
       }
       fontesIntegradas
         .filter(fonte => fonte.ativa && fontesAtivas.includes(fonte.id))
