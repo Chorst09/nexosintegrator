@@ -28,7 +28,9 @@ const ESTADOS_BR = [
 
 const FONTES_CONFIG = [
   { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
-  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Portal de Compras do Governo Federal (SIASG)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' }
+  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Licitações do Compras.gov.br (SIASG / Lei 8.666)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' },
+  { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄' },
+  { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️' }
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
@@ -193,6 +195,140 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
   } catch { return []; }
 }
 
+// ─── ComprasNet API (dadosabertos.compras.gov.br, via proxy) ─────────────────
+
+const UFS_BR_SET = new Set([
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+]);
+
+const extrairUfEndereco = (endereco) => {
+  const match = String(endereco || '').match(/(?:\/|\s*-\s*)\s*([A-Z]{2})\s*$/);
+  return match && UFS_BR_SET.has(match[1]) ? match[1] : '';
+};
+
+const extrairMunicipioEndereco = (endereco) => {
+  const match = String(endereco || '').match(/([^\/-]+?)(?:\/\s*|\s*-\s*)\s*[A-Z]{2}\s*$/);
+  if (!match) return '';
+  const parts = match[1].trim().split(/\s*-\s*/);
+  return parts[parts.length - 1].trim();
+};
+
+async function buscarComprasGovProxy(tipo, params) {
+  const url = new URL(buildApiUrl('/comprasnet-proxy'), window.location.origin);
+  if (tipo) url.searchParams.set('tipo', tipo);
+  if (params.dataInicio) url.searchParams.set('dataInicio', params.dataInicio);
+  if (params.dataFim) url.searchParams.set('dataFim', params.dataFim);
+  if (params.uf) url.searchParams.set('uf', params.uf);
+  if (params.modalidadeId) url.searchParams.set('modalidadeId', params.modalidadeId);
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(params.tamanhoPagina || 20), 500)));
+
+  const res = await fetch(url.toString(), {
+    headers: { 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(25000)
+  });
+  if (!res.ok) return [];
+  const payload = await res.json().catch(() => null);
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+async function buscarComprasNet({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('licitacao', { dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.objeto} ${item.informacoes_gerais}`, objeto))
+      .map(item => {
+        const itemUf = extrairUfEndereco(item.endereco_entrega_edital) || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `comprasnet-${item.id_compra || item.identificador || Math.random()}`,
+          fonte: 'ComprasNet',
+          fonteLogo: '🇧🇷',
+          titulo: item.objeto || 'Sem descrição',
+          orgao: `UASG ${item.uasg || ''}`.trim() || 'ComprasNet',
+          modalidade: item.nome_modalidade || '',
+          uf: itemUf,
+          municipio: extrairMunicipioEndereco(item.endereco_entrega_edital),
+          valor: (item.valor_estimado_total || item.valor_homologado_total) ? Number(item.valor_estimado_total || item.valor_homologado_total) : null,
+          dataPublicacao: item.data_publicacao || null,
+          dataAbertura: item.data_abertura_proposta || null,
+          dataEncerramento: null,
+          numero: String(item.numero_aviso || ''),
+          ano: String(item.id_compra || '').slice(-4),
+          link: 'https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes',
+          status: item.situacao_aviso || 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarComprasGovDispensas({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('dispensas', { dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.ds_objeto_licitacao} ${item.ds_justificativa}`, objeto))
+      .map(item => {
+        const itemUf = extrairUfEndereco(item.no_ausg || '') || uf || '';
+        if (uf && itemUf !== uf) return null;
+        const modalidadeMap = { 6: 'Dispensa de Licitação', 7: 'Inexigibilidade' };
+        return {
+          id: `dispensa-${item.id_compra || item.nu_aviso_licitacao || Math.random()}`,
+          fonte: 'Compras.gov.br Dispensas',
+          fonteLogo: '📄',
+          titulo: item.ds_objeto_licitacao || 'Sem descrição',
+          orgao: item.no_ausg || `UASG ${item.co_uasg || ''}`.trim() || 'Compras.gov.br',
+          modalidade: modalidadeMap[String(item.co_modalidade_licitacao)] || (item.co_modalidade_licitacao ? `Modalidade ${item.co_modalidade_licitacao}` : ''),
+          uf: itemUf,
+          municipio: extrairMunicipioEndereco(item.no_ausg || ''),
+          valor: item.vr_estimado ? Number(item.vr_estimado) : null,
+          dataPublicacao: item.dt_publicacao || item.dt_declaracao_dispensa || null,
+          dataAbertura: null,
+          dataEncerramento: null,
+          numero: String(item.nu_aviso_licitacao || ''),
+          ano: String(item.dt_ano_aviso || item.id_compra || '').slice(-4),
+          link: `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes?numeroAviso=${encodeURIComponent(item.nu_aviso_licitacao || '')}`,
+          status: item.pertence14133 ? 'Lei 14.133' : 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarContratacoes14133({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('contratacoes14133', { uf, dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+      .map(item => {
+        const itemUf = item.unidadeOrgaoUfSigla || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `cn14133-${item.idCompra || item.numeroControlePNCP || Math.random()}`,
+          fonte: 'Contratações Lei 14.133',
+          fonteLogo: '⚖️',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidadeRazaoSocial || item.unidadeOrgaoNomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
+          uf: itemUf,
+          municipio: item.unidadeOrgaoMunicipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaPropostaPncp || null,
+          dataEncerramento: item.dataEncerramentoPropostaPncp || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompraPncp || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidadeCnpj}/${item.anoCompraPncp}/${item.sequencialCompraPncp}`,
+          status: item.situacaoCompraNomePncp || 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
 
 const formatCurrency = (value) => {
@@ -229,6 +365,8 @@ const getFonteBadgeClass = (fonte) => {
   const map = {
     'PNCP': 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
     'ComprasNet': 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700',
+    'Compras.gov.br Dispensas': 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700',
+    'Contratações Lei 14.133': 'bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-700',
     'BLL': 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
     'BNC': 'bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
     'ConLicitação': 'bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700',
@@ -636,9 +774,9 @@ export default function PortalBusca() {
   const [fontesAtivas, setFontesAtivas] = useState(() => {
     try {
       const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
-      return ['pncp', 'comprasnet', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
+      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
     } catch {
-      return ['pncp', 'comprasnet'];
+      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133'];
     }
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
@@ -751,6 +889,15 @@ export default function PortalBusca() {
       if (fontesAtivas.includes('pncp')) {
         promises.push(buscarPNCPPublicacao(params));
         if (incluirPropostas) promises.push(buscarPNCPProposta(params));
+      }
+      if (fontesAtivas.includes('comprasnet')) {
+        promises.push(buscarComprasNet(params));
+      }
+      if (fontesAtivas.includes('dispensas')) {
+        promises.push(buscarComprasGovDispensas(params));
+      }
+      if (fontesAtivas.includes('contratacoes14133')) {
+        promises.push(buscarContratacoes14133(params));
       }
       fontesIntegradas
         .filter(fonte => fonte.ativa && fontesAtivas.includes(fonte.id))

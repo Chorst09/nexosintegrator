@@ -196,46 +196,69 @@ async function buscarPNCPProposta({ objeto, uf, pagina = 1, tamanhoPagina = 20, 
   return { resultados, errors };
 }
 
-// ─── ComprasNet (dados.gov.br) ────────────────────────────────────────────────
+// ─── ComprasNet (dadosabertos.compras.gov.br) ─────────────────────────────────
 
-async function buscarComprasNet({ objeto, uf, pagina = 1, tamanhoPagina = 20 }) {
+const UFS_BR = new Set([
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+]);
+
+const extractUfFromAddress = (address) => {
+  const match = String(address || '').match(/\/\s*([A-Z]{2})\s*$/);
+  return match && UFS_BR.has(match[1]) ? match[1] : '';
+};
+
+const extractMunicipioFromAddress = (address) => {
+  const match = String(address || '').match(/([^\/]+?)\/\s*[A-Z]{2}\s*$/);
+  if (!match) return '';
+  const parts = match[1].trim().split(/\s*-\s*/);
+  return parts[parts.length - 1].trim();
+};
+
+async function buscarComprasNet({ objeto, uf, pagina = 1, tamanhoPagina = 20, dataInicio, dataFim }) {
   const resultados = [];
   const errors = [];
 
   try {
-    const url = new URL('https://compras.dados.gov.br/licitacoes/v1/licitacoes.json');
-    if (objeto) url.searchParams.set('descricao_objeto', objeto);
-    if (uf) url.searchParams.set('uf_nome', uf);
-    url.searchParams.set('_offset', (Number(pagina) - 1) * Number(tamanhoPagina));
-    url.searchParams.set('_limit', Math.min(Number(tamanhoPagina), 50));
+    const url = new URL('https://dadosabertos.compras.gov.br/modulo-legado/1_consultarLicitacao');
+    url.searchParams.set('data_publicacao_inicial', toISODate(dataInicio || diasAtras(30)) || toISODate(diasAtras(30)));
+    url.searchParams.set('data_publicacao_final', toISODate(dataFim || hoje()) || toISODate(hoje()));
+    url.searchParams.set('pagina', String(Math.max(1, Math.min(Number(pagina) || 1, 500))));
+    url.searchParams.set('tamanhoPagina', String(Math.max(10, Math.min(Number(tamanhoPagina) || 20, 500))));
 
     const res = await fetch(url.toString(), {
       headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(15000)
     });
 
-    if (!res.ok) return { resultados, errors };
+    if (!res.ok) return { resultados, errors: [`ComprasNet: HTTP ${res.status}`] };
 
     const data = await safeJson(res);
-    const items = Array.isArray(data?._embedded?.licitacoes) ? data._embedded.licitacoes : [];
+    const items = Array.isArray(data?.resultado) ? data.resultado : [];
 
     for (const item of items) {
+      const itemUf = extractUfFromAddress(item.endereco_entrega_edital) || uf || '';
+      if (uf && itemUf !== uf) continue;
+      if (!matchObjeto(`${item.objeto} ${item.informacoes_gerais}`, objeto)) continue;
+
       resultados.push({
-        id: `comprasnet-${item.id_licitacao || item.numero_licitacao || Math.random()}`,
+        id: `comprasnet-${item.id_compra || item.identificador || Math.random()}`,
         fonte: 'ComprasNet',
         fonteLogo: '🇧🇷',
-        titulo: item.objeto_licitacao || item.descricao_objeto || 'Sem descrição',
-        orgao: item.nome_orgao || '',
-        cnpjOrgao: item.cnpj_orgao || '',
-        modalidade: item.modalidade_licitacao || '',
-        uf: item.uf || uf || '',
-        municipio: item.municipio || '',
-        valor: formatCurrency(item.valor_estimado || item.valor_licitacao),
+        titulo: item.objeto || 'Sem descrição',
+        orgao: item.nome_orgao || `UASG ${item.uasg || ''}`.trim(),
+        cnpjOrgao: '',
+        modalidade: item.nome_modalidade || '',
+        uf: itemUf,
+        municipio: extractMunicipioFromAddress(item.endereco_entrega_edital),
+        valor: formatCurrency(item.valor_estimado_total || item.valor_homologado_total),
         dataPublicacao: item.data_publicacao || null,
         dataAbertura: item.data_abertura_proposta || null,
-        numero: item.numero_licitacao || '',
-        link: `https://comprasnet.gov.br/acesso.asp?url=/ConsultaLicitacoes/ConsLicitacao_Filtro.asp`,
-        status: item.situacao || 'Publicado'
+        dataEncerramento: null,
+        numero: String(item.numero_aviso || ''),
+        ano: String(item.id_compra || '').slice(-4),
+        link: item.linkSistemaOrigem || `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes`,
+        status: item.situacao_aviso || 'Publicado'
       });
     }
   } catch (err) {
@@ -341,7 +364,7 @@ router.get('/search', auth, async (req, res) => {
 
     if (fontesAtivas.includes('comprasnet')) {
       promises.push(
-        buscarComprasNet({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina) })
+        buscarComprasNet({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
           .catch(err => ({ resultados: [], errors: [`ComprasNet: ${err.message}`] }))
       );
     }

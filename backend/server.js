@@ -191,6 +191,7 @@ app.use('/api/licensing', require('./api/licensing.cjs'));
 // B2G - Busca de Licitações e Editais
 app.use('/api/b2g-search', require('./api/b2g-search'));
 app.use('/api/bll-proxy', require('./api/bll-proxy'));
+app.use('/api/comprasnet-proxy', require('./api/comprasnet-proxy'));
 
 // Novas rotas CommonJS - migradas do apps/api
 app.use('/api/b2g', authenticateToken, require('./api/b2g.cjs'));
