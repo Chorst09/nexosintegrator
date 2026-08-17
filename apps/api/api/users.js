@@ -303,7 +303,7 @@ export default async function handler(req) {
       name: body.name,
       email: body.email ? normalizeEmail(body.email) : undefined,
       role: nextRole,
-      regionId: body.regionId,
+      regionId: body.regionId || null,
       quota: body.quota,
       commissionSalePercentage: body.commissionSalePercentage ?? null,
       commissionProject12: body.commissionProject12 ?? null,

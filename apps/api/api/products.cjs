@@ -101,7 +101,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Verificar permissão
-    if (!['ADMIN', 'MANAGER'].includes(req.user.role)) {
+    if (!['ADMIN', 'MANAGER', 'MASTER', 'DIRECTOR'].includes(req.user.role) && !['ADMIN', 'MANAGER', 'MASTER', 'DIRECTOR'].includes(req.user.actualRole || '')) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -130,7 +130,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { name, description, category, price, margin, active } = req.body;
 
     // Verificar permissão
-    if (!['ADMIN', 'MANAGER'].includes(req.user.role)) {
+    if (!['ADMIN', 'MANAGER', 'MASTER', 'DIRECTOR'].includes(req.user.role) && !['ADMIN', 'MANAGER', 'MASTER', 'DIRECTOR'].includes(req.user.actualRole || '')) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -160,7 +160,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // Verificar permissão
-    if (!['ADMIN', 'MANAGER'].includes(req.user.role)) {
+    if (!['ADMIN', 'MANAGER', 'MASTER', 'DIRECTOR'].includes(req.user.role) && !['ADMIN', 'MANAGER', 'MASTER', 'DIRECTOR'].includes(req.user.actualRole || '')) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 

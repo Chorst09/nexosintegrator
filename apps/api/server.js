@@ -166,7 +166,7 @@ try {
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
 // app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
 app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));
-app.use('/api/users', handleLegacyAPI('./api/users.js'));
+app.use('/api/users', authenticateToken, handleLegacyAPI('./api/users.js'));
 app.use('/api/dashboard', handleLegacyAPI('./api/dashboard.js'));
 app.use('/api/leadScoring', handleLegacyAPI('./api/leadScoring.js'));
 app.use('/api/leadDistribution', handleLegacyAPI('./api/leadDistribution.js'));

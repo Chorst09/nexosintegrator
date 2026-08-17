@@ -24,6 +24,7 @@ const contractsRoutes = require('./api/contracts');
 const postSalesRoutes = require('./api/postSales');
 const workflowsRoutes = require('./api/workflows');
 const proposalsRoutes = require('./api/proposals');
+const simulatorProposalsRoutes = require('./api/simulator-proposals');
 const productsRoutes = require('./api/products');
 
 const app = express();
@@ -98,6 +99,7 @@ app.use('/api/contracts', contractsRoutes);
 app.use('/api/post-sales', postSalesRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/proposals', proposalsRoutes);
+app.use('/api/simulator/proposals', simulatorProposalsRoutes);
 app.use('/api/proposal-templates', require('./api/proposal-templates'));
 app.use('/api/products', productsRoutes);
 app.use('/api/settings', require('./api/settings'));
@@ -159,7 +161,7 @@ app.use('/api/activities-simple', authenticateToken, require('./api/activities-s
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
 // app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
 app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));
-app.use('/api/users', handleLegacyAPI('./api/users.js'));
+app.use('/api/users', authenticateToken, handleLegacyAPI('./api/users.js'));
 app.use('/api/dashboard', handleLegacyAPI('./api/dashboard.js'));
 app.use('/api/leadScoring', handleLegacyAPI('./api/leadScoring.js'));
 app.use('/api/leadDistribution', handleLegacyAPI('./api/leadDistribution.js'));
