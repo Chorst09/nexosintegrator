@@ -270,6 +270,7 @@ export default async function handler(req) {
       where: { id: body.id },
       select: {
         id: true,
+        email: true,
         role: true,
         tenantCompanyId: true,
         isCompanyOwner: true
@@ -301,7 +302,6 @@ export default async function handler(req) {
 
     const updateData = {
       name: body.name,
-      email: body.email ? normalizeEmail(body.email) : undefined,
       role: nextRole,
       regionId: body.regionId || null,
       quota: body.quota,
@@ -327,6 +327,23 @@ export default async function handler(req) {
 
     if (body.password) {
       updateData.password = await bcrypt.hash(body.password, 10);
+    }
+
+    if (body.email) {
+      const normalizedEmail = normalizeEmail(body.email);
+      if (normalizedEmail !== current.email) {
+        const emailTaken = await prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            id: { not: body.id }
+          },
+          select: { id: true }
+        });
+        if (emailTaken) {
+          return Response.json({ error: 'Email já está em uso' }, { status: 409 });
+        }
+        updateData.email = normalizedEmail;
+      }
     }
 
     Object.keys(updateData).forEach((key) => {
