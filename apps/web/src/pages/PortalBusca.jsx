@@ -239,27 +239,27 @@ async function buscarComprasNet({ objeto, uf, dataInicio, dataFim, tamanhoPagina
     const items = await buscarComprasGovProxy('licitacao', { dataInicio, dataFim, tamanhoPagina });
 
     return items
-      .filter(item => matchObjeto(`${item.objeto} ${item.informacoes_gerais}`, objeto))
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
       .map(item => {
-        const itemUf = extrairUfEndereco(item.endereco_entrega_edital) || uf || '';
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
         if (uf && itemUf !== uf) return null;
         return {
-          id: `comprasnet-${item.id_compra || item.identificador || Math.random()}`,
+          id: `comprasnet-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
           fonte: 'ComprasNet',
           fonteLogo: '🇧🇷',
-          titulo: item.objeto || 'Sem descrição',
-          orgao: `UASG ${item.uasg || ''}`.trim() || 'ComprasNet',
-          modalidade: item.nome_modalidade || '',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || 'ComprasNet',
+          modalidade: item.modalidadeNome || '',
           uf: itemUf,
-          municipio: extrairMunicipioEndereco(item.endereco_entrega_edital),
-          valor: (item.valor_estimado_total || item.valor_homologado_total) ? Number(item.valor_estimado_total || item.valor_homologado_total) : null,
-          dataPublicacao: item.data_publicacao || null,
-          dataAbertura: item.data_abertura_proposta || null,
-          dataEncerramento: null,
-          numero: String(item.numero_aviso || ''),
-          ano: String(item.id_compra || '').slice(-4),
-          link: 'https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes',
-          status: item.situacao_aviso || 'Publicado'
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
         };
       })
       .filter(Boolean);
@@ -271,28 +271,27 @@ async function buscarComprasGovDispensas({ objeto, uf, dataInicio, dataFim, tama
     const items = await buscarComprasGovProxy('dispensas', { dataInicio, dataFim, tamanhoPagina });
 
     return items
-      .filter(item => matchObjeto(`${item.ds_objeto_licitacao} ${item.ds_justificativa}`, objeto))
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
       .map(item => {
-        const itemUf = extrairUfEndereco(item.no_ausg || '') || uf || '';
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
         if (uf && itemUf !== uf) return null;
-        const modalidadeMap = { 6: 'Dispensa de Licitação', 7: 'Inexigibilidade' };
         return {
-          id: `dispensa-${item.id_compra || item.nu_aviso_licitacao || Math.random()}`,
+          id: `dispensa-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
           fonte: 'Compras.gov.br Dispensas',
           fonteLogo: '📄',
-          titulo: item.ds_objeto_licitacao || 'Sem descrição',
-          orgao: item.no_ausg || `UASG ${item.co_uasg || ''}`.trim() || 'Compras.gov.br',
-          modalidade: modalidadeMap[String(item.co_modalidade_licitacao)] || (item.co_modalidade_licitacao ? `Modalidade ${item.co_modalidade_licitacao}` : ''),
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || 'Compras.gov.br',
+          modalidade: item.modalidadeNome || '',
           uf: itemUf,
-          municipio: extrairMunicipioEndereco(item.no_ausg || ''),
-          valor: item.vr_estimado ? Number(item.vr_estimado) : null,
-          dataPublicacao: item.dt_publicacao || item.dt_declaracao_dispensa || null,
-          dataAbertura: null,
-          dataEncerramento: null,
-          numero: String(item.nu_aviso_licitacao || ''),
-          ano: String(item.dt_ano_aviso || item.id_compra || '').slice(-4),
-          link: `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes?numeroAviso=${encodeURIComponent(item.nu_aviso_licitacao || '')}`,
-          status: item.pertence14133 ? 'Lei 14.133' : 'Publicado'
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
         };
       })
       .filter(Boolean);
@@ -306,25 +305,25 @@ async function buscarContratacoes14133({ objeto, uf, dataInicio, dataFim, tamanh
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
       .map(item => {
-        const itemUf = item.unidadeOrgaoUfSigla || uf || '';
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
         if (uf && itemUf !== uf) return null;
         return {
-          id: `cn14133-${item.idCompra || item.numeroControlePNCP || Math.random()}`,
+          id: `cn14133-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
           fonte: 'Contratações Lei 14.133',
           fonteLogo: '⚖️',
           titulo: item.objetoCompra || 'Sem descrição',
-          orgao: item.orgaoEntidadeRazaoSocial || item.unidadeOrgaoNomeUnidade || '',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
           modalidade: item.modalidadeNome || '',
           uf: itemUf,
-          municipio: item.unidadeOrgaoMunicipioNome || '',
+          municipio: item.unidadeOrgao?.municipioNome || '',
           valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
           dataPublicacao: item.dataPublicacaoPncp || null,
-          dataAbertura: item.dataAberturaPropostaPncp || null,
-          dataEncerramento: item.dataEncerramentoPropostaPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
           numero: String(item.numeroCompra || ''),
-          ano: String(item.anoCompraPncp || ''),
-          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidadeCnpj}/${item.anoCompraPncp}/${item.sequencialCompraPncp}`,
-          status: item.situacaoCompraNomePncp || 'Publicado'
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
         };
       })
       .filter(Boolean);
@@ -336,27 +335,27 @@ async function buscarAtasRegistroPreco({ objeto, uf, dataInicio, dataFim, tamanh
     const items = await buscarComprasGovProxy('arp', { dataInicio, dataFim, tamanhoPagina });
 
     return items
-      .filter(item => matchObjeto(`${item.nomeOrgao} ${item.nomeModalidadeCompra} ${item.objeto ? item.objeto : ''}`, objeto))
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidade?.razaoSocial}`, objeto))
       .map(item => {
-        const itemUf = extrairUfEndereco(item.nomeOrgaoGerenciador || item.nomeOrgao || '') || uf || '';
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
         if (uf && itemUf !== uf) return null;
         return {
-          id: `arp-${item.numeroAtaRegistroPreco}-${item.anoCompra || item.numeroCompra || Math.random()}`,
+          id: `arp-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
           fonte: 'Atas de Registro de Preço',
           fonteLogo: '📋',
-          titulo: `Ata de Registro de Preço ${item.numeroAtaRegistroPreco || ''} — ${item.objeto || 'Compras compartilhadas'}`,
-          orgao: item.nomeOrgaoGerenciador || item.nomeOrgao || '',
-          modalidade: item.nomeModalidadeCompra || '',
+          titulo: item.objetoCompra || 'Ata de Registro de Preço',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
           uf: itemUf,
-          municipio: extrairMunicipioEndereco(item.nomeOrgaoGerenciador || item.nomeOrgao || ''),
-          valor: null,
-          dataPublicacao: item.dataAssinatura || null,
-          dataAbertura: item.dataVigenciaInicial || null,
-          dataEncerramento: item.dataVigenciaFinal || null,
-          numero: String(item.numeroAtaRegistroPreco || ''),
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
           ano: String(item.anoCompra || ''),
-          link: item.linkAtaPNCP || item.linkCompraPNCP || `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes?numeroAta=${encodeURIComponent(item.numeroAtaRegistroPreco || '')}`,
-          status: 'Ata vigente'
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Ata vigente'
         };
       })
       .filter(Boolean);
@@ -368,27 +367,27 @@ async function buscarPregoes({ objeto, uf, dataInicio, tamanhoPagina = 20 }) {
     const items = await buscarComprasGovProxy('pregoes', { dataInicio, tamanhoPagina });
 
     return items
-      .filter(item => matchObjeto(`${item.tx_objeto} ${item.no_orgao}`, objeto))
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.orgaoEntidade?.razaoSocial}`, objeto))
       .map(item => {
-        const itemUf = extrairUfEndereco(item.no_ausg || item.no_orgao || '') || uf || '';
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
         if (uf && itemUf !== uf) return null;
         return {
-          id: `pregao-${item.id_compra || Math.random()}`,
+          id: `pregao-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
           fonte: 'Pregões (SIASG)',
           fonteLogo: '📢',
-          titulo: item.tx_objeto || 'Sem descrição',
-          orgao: item.no_orgao || item.no_ausg || '',
-          modalidade: [item.ds_tipo_pregao, item.ds_tipo_pregao_compra].filter(Boolean).join(' '),
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
           uf: itemUf,
-          municipio: extrairMunicipioEndereco(item.no_ausg || item.no_orgao || ''),
-          valor: Number(item.valor_estimado_total) || null,
-          dataPublicacao: item.dt_data_edital || null,
-          dataAbertura: item.dt_inicio_proposta || null,
-          dataEncerramento: item.dt_fim_proposta || null,
-          numero: String(item.numero || item.co_processo || ''),
-          ano: String(item.dt_data_edital || '').slice(0, 4),
-          link: `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes?numeroAviso=${encodeURIComponent(String(item.numero || ''))}`,
-          status: item.ds_situacao_pregao || 'Publicado'
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
         };
       })
       .filter(Boolean);
