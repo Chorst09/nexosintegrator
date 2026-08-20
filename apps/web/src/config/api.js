@@ -105,6 +105,7 @@ export const API_ENDPOINTS = {
   pdfGenerator: `${API_BASE_URL}/pdf-generator`,
   settings: `${API_BASE_URL}/settings`,
   settingsLogo: `${API_BASE_URL}/settings/logo`,
+  projetos: `${API_BASE_URL}/projetos`,
   integration: {
     openapi: `${API_BASE_URL}/integration/openapi`,
     partners: `${API_BASE_URL}/integration/admin/partners`,

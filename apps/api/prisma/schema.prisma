@@ -51,6 +51,17 @@ model User {
   preSalesRejected    PreSalesRequest[] @relation("PreSalesRejecter")
   preSalesApprovals   PreSalesApproval[] @relation("PreSalesApprovalApprover")
   opportunityFollowUps OpportunityFollowUp[] @relation("OpportunityFollowUps")
+  managedProjects    Project[] @relation("ProjectManager")
+  createdProjects    Project[] @relation("ProjectCreator")
+  projectTasks       ProjectTask[]
+  projectTeams       ProjectTeam[]
+  projectTimelogs    ProjectTimelog[]
+  projectRisks       ProjectRisk[]
+  issueReported      ProjectIssue[] @relation("IssueReporter")
+  issueAssigned      ProjectIssue[] @relation("IssueAssignee")
+  crRequested        ProjectChangeRequest[] @relation("CRRequester")
+  crApproved         ProjectChangeRequest[] @relation("CRApprover")
+  acceptancesApproved ProjectAcceptance[] @relation("AcceptanceApprover")
 
   @@index([tenantCompanyId])
   @@index([role])
@@ -93,6 +104,7 @@ model Company {
   churnAlerts   ChurnAlert[]
   preSalesLeads PreSalesRequest[] @relation("PreSalesLead")
   integrationOrders IntegrationOrder[]
+  projects          Project[]
 }
 
 model Contact {
@@ -162,6 +174,7 @@ model Opportunity {
   preSalesRequests PreSalesRequest[]
   integrationOrders IntegrationOrder[]
   followUps   OpportunityFollowUp[]
+  project     Project?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -940,8 +953,132 @@ model ChurnAlert {
   assignedToId String?
   assignedTo   User?       @relation(fields: [assignedToId], references: [id])
   status       AlertStatus @default(ACTIVE)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// === ENUMS DO MÓDULO DE PROJETOS ===
+enum ProjectType {
+  B2B
+  B2G
+}
+
+enum ProjectPhaseType {
+  SETUP
+  KICKOFF_INTERNO
+  KICKOFF_EXTERNO
+  EXECUCAO
+  MONITORAMENTO
+  ENCERRAMENTO
+}
+
+enum ProjectStatus {
+  PLANEJADO
+  EM_ANDAMENTO
+  PAUSADO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum ProjectPhaseStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+  AT_RISK
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  BLOCKED
+}
+
+enum ProjectRole {
+  PROJECT_MANAGER
+  TECH_LEAD
+  DEVELOPER
+  ANALYST
+  QA
+  ARCHITECT
+  CONSULTANT
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskStatus {
+  IDENTIFIED
+  MITIGATING
+  RESOLVED
+  ACCEPTED
+  ESCALATED
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+enum AttachmentCategory {
+  CONTRACT
+  DELIVERABLE
+  MINUTES
+  CHANGE_REQUEST
+  ACCEPTANCE
+  OTHER
+}
+
+enum ChangeRequestType {
+  SCOPE
+  SCHEDULE
+  BUDGET
+  QUALITY
+  RESOURCE
+}
+
+enum ChangeRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+}
+
+enum BillingStatus {
+  PENDING
+  INVOICED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum AcceptanceType {
+  PROVISIONAL
+  FINAL
+}
+
+enum AcceptanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CONDITIONALLY_APPROVED
 }
 
 // === CONTRATOS ===
@@ -970,6 +1107,7 @@ model Contract {
   customerOnboardings CustomerOnboarding[]
   npsSurveys         NPSSurvey[]
   attachments        ContractAttachment[]
+  projects           Project[]
 }
 
 model ContractAttachment {
@@ -1551,4 +1689,356 @@ model PendingSubscription {
 
   @@index([status])
   @@index([responsibleEmail])
+}
+
+// === MÓDULO DE PROJETOS ===
+model Project {
+  id              String   @id @default(uuid())
+  number          String   @unique
+  name            String
+  description     String?
+  type            ProjectType
+  phase           ProjectPhaseType @default(SETUP)
+  status          ProjectStatus @default(PLANEJADO)
+  budget          Float    @default(0)
+  actualCost      Float    @default(0)
+  margin          Float    @default(0)
+  plannedStartDate DateTime?
+  plannedEndDate  DateTime?
+  actualStartDate DateTime?
+  actualEndDate   DateTime?
+  healthScore     Int      @default(100)
+  progressPercent Int      @default(0)
+  metadata        Json     @default("{}")
+
+  opportunityId   String?  @unique
+  contractId      String?
+  companyId       String
+  projectManagerId String
+  createdBy       String
+
+  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  contract        Contract?    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  company         Company      @relation(fields: [companyId], references: [id])
+  projectManager  User         @relation("ProjectManager", fields: [projectManagerId], references: [id])
+  creator         User         @relation("ProjectCreator", fields: [createdBy], references: [id])
+
+  phases          ProjectPhase[]
+  milestones      ProjectMilestone[]
+  tasks           ProjectTask[]
+  team            ProjectTeam[]
+  timelogs        ProjectTimelog[]
+  risks           ProjectRisk[]
+  issues          ProjectIssue[]
+  attachments     ProjectAttachment[]
+  changeRequests  ProjectChangeRequest[]
+  billings        ProjectBilling[]
+  acceptances     ProjectAcceptance[]
+  b2gConfig       ProjectB2GConfig?
+  b2bConfig       ProjectB2BConfig?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([projectManagerId])
+  @@index([status])
+  @@index([phase])
+  @@index([type])
+}
+
+model ProjectPhase {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  order           Int
+  status          ProjectPhaseStatus @default(PENDING)
+  plannedStartDate DateTime?
+  plannedEndDate  DateTime?
+  actualStartDate DateTime?
+  actualEndDate   DateTime?
+  progressPercent Int      @default(0)
+
+  milestones      ProjectMilestone[]
+  tasks           ProjectTask[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([order])
+}
+
+model ProjectMilestone {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseId         String?
+  phase           ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  name            String
+  description     String?
+  status          MilestoneStatus @default(PENDING)
+  plannedDate     DateTime?
+  actualDate      DateTime?
+  billingTrigger  Boolean  @default(false)
+  billingValue    Float    @default(0)
+  deliverables    Json     @default("[]")
+
+  tasks           ProjectTask[]
+  billings        ProjectBilling[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([phaseId])
+  @@index([status])
+}
+
+model ProjectTask {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseId         String?
+  phase           ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  milestoneId     String?
+  milestone       ProjectMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  title           String
+  description     String?
+  status          TaskStatus @default(TODO)
+  priority        Priority @default(MEDIUM)
+  dueDate         DateTime?
+  completedAt     DateTime?
+  assignedToId    String?
+  assignedTo      User?    @relation(fields: [assignedToId], references: [id])
+  estimatedHours  Float    @default(0)
+  actualHours     Float    @default(0)
+  dependencyId    String?
+  dependency      ProjectTask? @relation("TaskDependency", fields: [dependencyId], references: [id])
+  dependents      ProjectTask[] @relation("TaskDependency")
+
+  timelogs        ProjectTimelog[]
+  issues          ProjectIssue[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([phaseId])
+  @@index([milestoneId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model ProjectTeam {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  role            ProjectRole @default(DEVELOPER)
+  allocationPercent Float  @default(100)
+  hourlyCost      Float    @default(0)
+  startDate       DateTime?
+  endDate         DateTime?
+  isActive        Boolean  @default(true)
+
+  timelogs        ProjectTimelog[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model ProjectTimelog {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId          String
+  task            ProjectTask @relation(fields: [taskId], references: [id])
+  teamId          String?
+  team            ProjectTeam? @relation(fields: [teamId], references: [id])
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  logDate         DateTime
+  hours           Float
+  description     String?
+  billable        Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([logDate])
+}
+
+model ProjectRisk {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  level           RiskLevel @default(MEDIUM)
+  status          RiskStatus @default(IDENTIFIED)
+  impact          String?
+  mitigationPlan  String?
+  ownerId         String?
+  owner           User?    @relation(fields: [ownerId], references: [id])
+  identifiedDate  DateTime @default(now())
+  resolvedDate    DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([level])
+  @@index([status])
+}
+
+model ProjectIssue {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId          String?
+  task            ProjectTask? @relation(fields: [taskId], references: [id])
+  title           String
+  description     String?
+  status          IssueStatus @default(OPEN)
+  priority        Priority @default(MEDIUM)
+  reportedById    String?
+  reportedBy      User?    @relation("IssueReporter", fields: [reportedById], references: [id])
+  assignedToId    String?
+  assignedTo      User?    @relation("IssueAssignee", fields: [assignedToId], references: [id])
+  reportedDate    DateTime @default(now())
+  resolvedDate    DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+}
+
+model ProjectAttachment {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  filename        String
+  originalName    String
+  mimeType        String
+  size            Int
+  path            String
+  category        AttachmentCategory @default(OTHER)
+
+  createdAt       DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model ProjectChangeRequest {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  type            ChangeRequestType @default(SCOPE)
+  status          ChangeRequestStatus @default(SUBMITTED)
+  impactCost      Float    @default(0)
+  impactDays      Int      @default(0)
+  requestedById   String?
+  requestedBy     User?    @relation("CRRequester", fields: [requestedById], references: [id])
+  approvedById    String?
+  approvedBy      User?    @relation("CRApprover", fields: [approvedById], references: [id])
+  justification   Json     @default("{}")
+  decidedAt       DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model ProjectBilling {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId     String?
+  milestone       ProjectMilestone? @relation(fields: [milestoneId], references: [id])
+  invoiceNumber   String?
+  amount          Float
+  tax             Float    @default(0)
+  totalAmount     Float
+  status          BillingStatus @default(PENDING)
+  dueDate         DateTime?
+  paidAt          DateTime?
+  invoiceData     Json     @default("{}")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model ProjectAcceptance {
+  id              String   @id @default(uuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type            AcceptanceType @default(PROVISIONAL)
+  status          AcceptanceStatus @default(PENDING)
+  documentNumber  String?
+  checklist       Json     @default("[]")
+  approvedById    String?
+  approvedBy      User?    @relation("AcceptanceApprover", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([type])
+  @@index([status])
+}
+
+model ProjectB2GConfig {
+  id              String   @id @default(uuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  empenhoNumber   String?
+  empenhoValue    Float    @default(0)
+  ordemServicoNumber String?
+  editalNumber    String?
+  orgaoCNPJ       String?
+  fiscalContrato  String?
+  gestorContrato  String?
+  medicoes        Json     @default("[]")
+  aditivos        Json     @default("[]")
+  conformidade    Json     @default("{}")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ProjectB2BConfig {
+  id              String   @id @default(uuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  slaConfig       Json     @default("{}")
+  slaHistory      Json     @default("[]")
+  billingSchedule Json     @default("[]")
+  timesheetConfig Json     @default("{}")
+  contractMargin  Float    @default(0)
+  realizedMargin  Float    @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

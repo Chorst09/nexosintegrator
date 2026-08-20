@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 // Catch unhandled promise rejections to prevent the process from crashing.
@@ -31,7 +33,33 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middlewares
-app.use(cors());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  message: { error: 'Muitas requisições. Tente novamente mais tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/', limiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Muitas tentativas de login. Aguarde 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/auth/login', authLimiter);
+
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -103,6 +131,7 @@ app.use('/api/simulator/proposals', simulatorProposalsRoutes);
 app.use('/api/proposal-templates', require('./api/proposal-templates'));
 app.use('/api/products', productsRoutes);
 app.use('/api/settings', require('./api/settings'));
+app.use('/api/projetos', require('./api/projetos.cjs'));
 
 // Handler para APIs antigas (ES modules) - conversão dinâmica
 const handleLegacyAPI = (apiPath) => {
@@ -205,6 +234,9 @@ app.use('/api/ai-analysis', authenticateToken, require('./api/ai-analysis.cjs'))
 
 // Gestão de Kickoff
 app.use('/api/kickoff', require('./api/kickoff'));
+
+// Google Calendar Integration
+app.use('/api/google-calendar', require('./api/google-calendar'));
 
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {

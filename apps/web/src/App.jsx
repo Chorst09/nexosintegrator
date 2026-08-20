@@ -9,16 +9,18 @@ import Empresas from './pages/Empresas';
 import Oportunidades from './pages/Oportunidades';
 import Comissoes from './pages/Comissoes';
 import Atividades from './pages/Atividades';
+import Simuladores from './pages/Simuladores';
 import Produtos from './pages/Produtos';
 import Propostas from './pages/Propostas';
 import TemplatesPropostas from './pages/TemplatesPropostas';
 import Contratos from './pages/Contratos';
 import PosVenda from './pages/PosVenda';
+import Projetos from './pages/Projetos';
+import ProjetoDetalhe from './pages/ProjetoDetalhe';
 import Automacoes from './pages/Automacoes';
 import LeadManagement from './pages/LeadManagement';
 import PreVendas from './pages/PreVendas';
 import Calculadoras from './pages/Calculadoras';
-import Precificacao from './pages/PrecificacaoHome';
 import RatearProdutos from './pages/RatearProdutos';
 import RateiosSalvos from './pages/RateiosSalvos';
 import GestaoPocs from './pages/GestaoPocs';
@@ -61,6 +63,19 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/setup" element={<Setup />} />
+        
+        {/* Simuladores - TELA CHEIA (fora do AppShell) */}
+        <Route
+          path="/simuladores"
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.MASTER]}>
+                <Simuladores />
+              </RoleGuard>
+            </ProtectedRoute>
+          }
+        />
+
 
         <Route
           element={
@@ -226,6 +241,23 @@ export default function App() {
           />
 
           <Route
+            path="projetos"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+                <Projetos />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="projetos/:id"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+                <ProjetoDetalhe />
+              </RoleGuard>
+            }
+          />
+
+          <Route
             path="produtos"
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
@@ -309,11 +341,7 @@ export default function App() {
           />
           <Route
             path="precificacao"
-            element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
-                <Precificacao />
-              </RoleGuard>
-            }
+            element={<Navigate to="/ratear-produtos" replace />}
           />
           <Route
             path="ratear-produtos"

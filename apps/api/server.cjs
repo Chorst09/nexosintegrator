@@ -37,6 +37,7 @@ const aiAnalysisRoutes = require('./api/ai-analysis.cjs');
 const savedAnalysesRoutes = require('./api/saved-analyses.cjs');
 const integrationApiRoutes = require('./api/integration.cjs');
 const licensingRoutes = require('./api/licensing.cjs');
+const projetosRoutes = require('./api/projetos.cjs');
 const { ensureProposalTemplates } = require('./lib/ensure-proposal-templates.cjs');
 
 const app = express();
@@ -252,6 +253,7 @@ app.use('/api/b2g', b2gRoutes);
 app.use('/api/ai-analysis', aiAnalysisRoutes);
 app.use('/api/analyses', savedAnalysesRoutes);
 app.use('/api/companies', companiesDocumentsRoutes);
+app.use('/api/projetos', projetosRoutes);
 
 // Handler para APIs antigas (ES modules) - conversão dinâmica
 const handleLegacyAPI = (apiPath) => {
