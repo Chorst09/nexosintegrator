@@ -70,23 +70,24 @@ const MODALIDADES_CONLICITACAO = [
 ];
 
 const CATEGORIAS_PRODUTO_TI = [
-  { id: 'servidores', label: 'Servidores', keywords: ['servidor', 'server'] },
-  { id: 'switches', label: 'Switches', keywords: ['switch'] },
-  { id: 'access_points', label: 'Access Points', keywords: ['access point', 'ponto de acesso', 'accesspoint', 'ap wifi'] },
-  { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router'] },
-  { id: 'notebooks', label: 'Notebooks', keywords: ['notebook', 'laptop'] },
-  { id: 'desktops', label: 'Desktops', keywords: ['desktop', 'computador'] },
+  { id: 'servidores', label: 'Servidores', keywords: ['servidor', 'server', 'rack server', 'bladed'] },
+  { id: 'switches', label: 'Switches', keywords: ['switch', 'switch de rede', 'switch gerenciável'] },
+  { id: 'access_points', label: 'Access Points', keywords: ['access point', 'ponto de acesso', 'accesspoint', 'ap wifi', 'ponto de acesso wireless'] },
+  { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router', 'gateway'] },
+  { id: 'notebooks', label: 'Notebooks', keywords: ['notebook', 'laptop', 'computador portátil'] },
+  { id: 'desktops', label: 'Desktops', keywords: ['desktop', 'computador', 'microcomputador', 'pc', 'máquina'] },
   { id: 'tablets', label: 'Tablets', keywords: ['tablet'] },
-  { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'tela', 'display'] },
-  { id: 'impressoras', label: 'Impressoras', keywords: ['impressora', 'printer', 'scanner', 'multifuncional'] },
-  { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['ups', 'nobreak', 'no-break', 'fonte de alimentação'] },
-  { id: 'cabo_rede', label: 'Cabos/Rede', keywords: ['cabo de rede', 'patch cord', 'cat6', 'cat5', 'fibra óptica', 'fibra optica'] },
-  { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'fire wall'] },
-  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'armazenamento', 'hd', 'ssd', 'disco rígido', 'nas', 'san'] },
-  { id: 'software', label: 'Software', keywords: ['software', 'licença', 'licenca', 'sistema'] },
-  { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['câmera', 'camera', 'cftv', 'cctv', 'videomonitoramento'] },
-  { id: 'telefonia', label: 'Telefonia IP', keywords: ['telefonia', 'telefone ip', 'voip', 'pbx'] },
-  { id: 'infra_rede', label: 'Infraestrutura de Rede', keywords: ['rack', 'patch panel', 'switch de rede', 'cabeamento estruturado', 'switch l2', 'switch l3'] },
+  { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'tela', 'display', 'monitor led'] },
+  { id: 'impressoras', label: 'Impressoras', keywords: ['impressora', 'printer', 'scanner', 'multifuncional', 'plotter'] },
+  { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['ups', 'nobreak', 'no-break', 'fonte de alimentação', 'fonte ininterrupta'] },
+  { id: 'cabo_rede', label: 'Cabos/Rede', keywords: ['cabo de rede', 'patch cord', 'cat6', 'cat5', 'fibra óptica', 'fibra optica', 'conector rj45'] },
+  { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'fire wall', 'segurança de rede', 'antivírus', 'segurança lógica'] },
+  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'armazenamento', 'hd', 'ssd', 'disco rígido', 'nas', 'san', 'disco de estado sólido'] },
+  { id: 'software', label: 'Software/Licenças', keywords: ['software', 'licença', 'licenca', 'sistema', 'aplicativo', 'antivírus', 'office'] },
+  { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['câmera', 'camera', 'cftv', 'cctv', 'videomonitoramento', 'câmera de segurança'] },
+  { id: 'telefonia', label: 'Telefonia IP', keywords: ['telefonia', 'telefone ip', 'voip', 'pbx', 'central telefônica'] },
+  { id: 'infra_rede', label: 'Infraestrutura de Rede', keywords: ['rack', 'patch panel', 'switch de rede', 'cabeamento estruturado', 'switch l2', 'switch l3', 'torre de rede'] },
+  { id: 'equipamento_informatica', label: 'Equipamentos de Informática', keywords: ['equipamento de informática', 'material de informática', 'equipamento de ti', 'material de ti', 'suprimento de informática'] },
 ];
 
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
@@ -747,8 +748,8 @@ export default function PortalBusca() {
       modalidadeId
     ].some(value => String(value || '').trim());
 
-    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat) {
-      setErro('Informe ao menos um termo, número, período ou filtro de localização/status.');
+    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0) {
+      setErro('Informe ao menos um termo, número, período ou filtro de localização/status/produto.');
       return;
     }
 
@@ -758,8 +759,15 @@ export default function PortalBusca() {
     setMostrarFavoritos(false);
 
     try {
+      const palavrasCategorias = categoriasProdutoTI
+        .map(catId => CATEGORIAS_PRODUTO_TI.find(c => c.id === catId))
+        .filter(Boolean)
+        .flatMap(cat => cat.keywords)
+        .join(' OR ');
+      const objetoFinal = [objeto, palavrasCategorias].filter(Boolean).join(' OR ');
+
       const params = {
-        objeto,
+        objeto: objetoFinal,
         uf,
         cidade,
         dataInicio,
@@ -839,7 +847,8 @@ export default function PortalBusca() {
     incluirPropostas,
     fontesAtivas,
     fontesIntegradas,
-    showToast
+    showToast,
+    categoriasProdutoTI
   ]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleBuscar(); };
