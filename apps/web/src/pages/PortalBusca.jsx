@@ -74,25 +74,36 @@ const MODALIDADES_CONLICITACAO = [
 ];
 
 const CATEGORIAS_PRODUTO_TI = [
-  { id: 'servidores', label: 'Servidores', keywords: ['servidor', 'server', 'rack server', 'bladed'] },
-  { id: 'switches', label: 'Switches', keywords: ['switch', 'switch de rede', 'switch gerenciável'] },
-  { id: 'access_points', label: 'Access Points', keywords: ['access point', 'ponto de acesso', 'accesspoint', 'ap wifi', 'ponto de acesso wireless'] },
-  { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router', 'gateway'] },
-  { id: 'notebooks', label: 'Notebooks', keywords: ['notebook', 'laptop', 'computador portátil'] },
-  { id: 'desktops', label: 'Desktops', keywords: ['desktop', 'computador', 'microcomputador', 'pc', 'máquina'] },
+  { id: 'microcomputadores', label: 'Microcomputadores', keywords: ['microcomputador', 'computador', 'desktop', 'cpu', 'gabinete'] },
+  { id: 'workstations', label: 'Workstations', keywords: ['workstation', 'estação de trabalho', 'estacao de trabalho'] },
+  { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'display'] },
+  { id: 'teclados', label: 'Teclados', keywords: ['teclado'] },
+  { id: 'mouses', label: 'Mouses', keywords: ['mouse'] },
+  { id: 'telas_interativas', label: 'Telas Interativas', keywords: ['tela interativa', 'lousa digital', 'painel interativo', 'quadro interativo', 'display interativo'] },
+  { id: 'webcams', label: 'Webcams', keywords: ['webcam', 'web cam'] },
+  { id: 'notebooks', label: 'Notebooks', keywords: ['notebook', 'laptop', 'portátil', 'portatil'] },
   { id: 'tablets', label: 'Tablets', keywords: ['tablet'] },
-  { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'tela', 'display', 'monitor led'] },
+  { id: 'servidores', label: 'Servidores', keywords: ['servidor', 'server'] },
+  { id: 'switches', label: 'Switches', keywords: ['switch'] },
+  { id: 'access_points', label: 'Access Points', keywords: ['access point', 'ponto de acesso', 'accesspoint', 'ap wifi'] },
+  { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router'] },
   { id: 'impressoras', label: 'Impressoras', keywords: ['impressora', 'printer', 'scanner', 'multifuncional', 'plotter'] },
-  { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['ups', 'nobreak', 'no-break', 'fonte de alimentação', 'fonte ininterrupta'] },
-  { id: 'cabo_rede', label: 'Cabos/Rede', keywords: ['cabo de rede', 'patch cord', 'cat6', 'cat5', 'fibra óptica', 'fibra optica', 'conector rj45'] },
-  { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'fire wall', 'segurança de rede', 'antivírus', 'segurança lógica'] },
-  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'armazenamento', 'hd', 'ssd', 'disco rígido', 'nas', 'san', 'disco de estado sólido'] },
-  { id: 'software', label: 'Software/Licenças', keywords: ['software', 'licença', 'licenca', 'sistema', 'aplicativo', 'antivírus', 'office'] },
-  { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['câmera', 'camera', 'cftv', 'cctv', 'videomonitoramento', 'câmera de segurança'] },
-  { id: 'telefonia', label: 'Telefonia IP', keywords: ['telefonia', 'telefone ip', 'voip', 'pbx', 'central telefônica'] },
-  { id: 'infra_rede', label: 'Infraestrutura de Rede', keywords: ['rack', 'patch panel', 'switch de rede', 'cabeamento estruturado', 'switch l2', 'switch l3', 'torre de rede'] },
-  { id: 'equipamento_informatica', label: 'Equipamentos de Informática', keywords: ['equipamento de informática', 'material de informática', 'equipamento de ti', 'material de ti', 'suprimento de informática'] },
+  { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['nobreak', 'no-break', 'fonte ininterrupta'] },
+  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'ssd', 'nas', 'disco rígido', 'disco rigido', 'disco sólido'] },
+  { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'firewall utm', 'utm'] },
+  { id: 'software', label: 'Software/Licenças', keywords: ['software', 'licença de uso', 'licenca de uso'] },
+  { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['cftv', 'videomonitoramento', 'câmera de segurança', 'camera de seguranca'] },
+  { id: 'infra_rede', label: 'Infra de Rede', keywords: ['rack', 'patch panel', 'cabeamento estruturado', 'fibra óptica', 'fibra optica'] },
+  { id: 'equipamento_informatica', label: 'Equip. de Informática', keywords: ['informática', 'informatica', 'suprimento de informática', 'equipamento de ti'] },
 ];
+
+// Match por palavra inteira para termos simples (evita "monitor" casar com "monitoramento")
+const kwMatch = (texto, kw) => {
+  if (/^[a-z0-9áéíóúâêôãõçü]+$/i.test(kw)) {
+    try { return new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(texto); } catch { return texto.includes(kw); }
+  }
+  return texto.includes(kw);
+};
 
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
 
@@ -869,6 +880,7 @@ export default function PortalBusca() {
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
   const [categoriasProdutoTI, setCategoriasProdutoTI] = useState([]);
+  const [produtoCustom, setProdutoCustom] = useState('');
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [fontesIntegradas, setFontesIntegradas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]'); } catch { return []; }
@@ -928,13 +940,15 @@ export default function PortalBusca() {
       const mun = String(item.municipio || '').toLowerCase();
       if (!mun.includes(cidade.toLowerCase())) return false;
     }
-    if (categoriasProdutoTI.length > 0) {
-      const texto = String(item.objetoCompra || item.objeto || item.descricao || item.nome || '').toLowerCase();
-      const matchaCategoria = categoriasProdutoTI.some(catId => {
+    if (categoriasProdutoTI.length > 0 || produtoCustom.trim()) {
+      const texto = String(item.titulo || item.objetoCompra || item.objeto || item.descricao || '').toLowerCase();
+      const matchCategoria = categoriasProdutoTI.some(catId => {
         const cat = CATEGORIAS_PRODUTO_TI.find(c => c.id === catId);
-        return cat && cat.keywords.some(kw => texto.includes(kw));
+        return cat && cat.keywords.some(kw => kwMatch(texto, kw));
       });
-      if (!matchaCategoria) return false;
+      const termosCustom = produtoCustom.toLowerCase().split(/[,\n]+/).map(t => t.trim()).filter(Boolean);
+      const matchCustom = termosCustom.length > 0 && termosCustom.some(t => texto.includes(t));
+      if (!matchCategoria && !matchCustom) return false;
     }
     return true;
   });
@@ -953,7 +967,7 @@ export default function PortalBusca() {
       modalidadeId
     ].some(value => String(value || '').trim());
 
-    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0) {
+    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0 && !produtoCustom.trim()) {
       setErro('Informe ao menos um termo, número, período ou filtro de localização/status/produto.');
       return;
     }
@@ -964,12 +978,12 @@ export default function PortalBusca() {
     setMostrarFavoritos(false);
 
     try {
-      const palavrasCategorias = categoriasProdutoTI
+      const termosCategorias = categoriasProdutoTI
         .map(catId => CATEGORIAS_PRODUTO_TI.find(c => c.id === catId))
         .filter(Boolean)
-        .flatMap(cat => cat.keywords)
-        .join(' OR ');
-      const objetoFinal = [objeto, palavrasCategorias].filter(Boolean).join(' OR ');
+        .flatMap(cat => cat.keywords);
+      const termosCustom = produtoCustom.split(/[,\n]+/).map(t => t.trim()).filter(Boolean);
+      const objetoFinal = [objeto.trim(), ...termosCategorias, ...termosCustom].filter(Boolean).join(' ');
 
       const params = {
         objeto: objetoFinal,
@@ -1068,7 +1082,8 @@ export default function PortalBusca() {
     fontesAtivas,
     fontesIntegradas,
     showToast,
-    categoriasProdutoTI
+    categoriasProdutoTI,
+    produtoCustom
   ]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleBuscar(); };
@@ -1079,6 +1094,7 @@ export default function PortalBusca() {
     setNumeroEdital(''); setNumeroConlicitacao(''); setModalidadeId('');
     setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
     setCategoriasProdutoTI([]);
+    setProdutoCustom('');
     setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
   };
@@ -1555,6 +1571,14 @@ export default function PortalBusca() {
                       <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{cat.label}</span>
                     </label>
                   ))}
+                  <input
+                    type="text"
+                    value={produtoCustom}
+                    onChange={e => setProdutoCustom(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
+                    placeholder="Outro produto (ex: estabilizador)"
+                    className="w-52 text-xs border border-blue-300 dark:border-blue-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  />
                 </div>
 
                 {/* Limpar */}
