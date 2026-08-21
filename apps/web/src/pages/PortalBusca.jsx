@@ -73,6 +73,26 @@ const MODALIDADES_CONLICITACAO = [
   { id: 12, nome: 'RDC' }
 ];
 
+const CATEGORIAS_PRODUTO_TI = [
+  { id: 'servidores', label: 'Servidores', keywords: ['servidor', 'server'] },
+  { id: 'switches', label: 'Switches', keywords: ['switch'] },
+  { id: 'access_points', label: 'Access Points', keywords: ['access point', 'ponto de acesso', 'accesspoint', 'ap wifi'] },
+  { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router'] },
+  { id: 'notebooks', label: 'Notebooks', keywords: ['notebook', 'laptop'] },
+  { id: 'desktops', label: 'Desktops', keywords: ['desktop', 'computador'] },
+  { id: 'tablets', label: 'Tablets', keywords: ['tablet'] },
+  { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'tela', 'display'] },
+  { id: 'impressoras', label: 'Impressoras', keywords: ['impressora', 'printer', 'scanner', 'multifuncional'] },
+  { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['ups', 'nobreak', 'no-break', 'fonte de alimentação'] },
+  { id: 'cabo_rede', label: 'Cabos/Rede', keywords: ['cabo de rede', 'patch cord', 'cat6', 'cat5', 'fibra óptica', 'fibra optica'] },
+  { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'fire wall'] },
+  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'armazenamento', 'hd', 'ssd', 'disco rígido', 'nas', 'san'] },
+  { id: 'software', label: 'Software', keywords: ['software', 'licença', 'licenca', 'sistema'] },
+  { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['câmera', 'camera', 'cftv', 'cctv', 'videomonitoramento'] },
+  { id: 'telefonia', label: 'Telefonia IP', keywords: ['telefonia', 'telefone ip', 'voip', 'pbx'] },
+  { id: 'infra_rede', label: 'Infraestrutura de Rede', keywords: ['rack', 'patch panel', 'switch de rede', 'cabeamento estruturado', 'switch l2', 'switch l3'] },
+];
+
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
@@ -847,6 +867,7 @@ export default function PortalBusca() {
     }
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
+  const [categoriasProdutoTI, setCategoriasProdutoTI] = useState([]);
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [fontesIntegradas, setFontesIntegradas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]'); } catch { return []; }
@@ -905,6 +926,14 @@ export default function PortalBusca() {
     if (cidade.trim()) {
       const mun = String(item.municipio || '').toLowerCase();
       if (!mun.includes(cidade.toLowerCase())) return false;
+    }
+    if (categoriasProdutoTI.length > 0) {
+      const texto = String(item.objetoCompra || item.objeto || item.descricao || item.nome || '').toLowerCase();
+      const matchaCategoria = categoriasProdutoTI.some(catId => {
+        const cat = CATEGORIAS_PRODUTO_TI.find(c => c.id === catId);
+        return cat && cat.keywords.some(kw => texto.includes(kw));
+      });
+      if (!matchaCategoria) return false;
     }
     return true;
   });
@@ -1040,8 +1069,15 @@ export default function PortalBusca() {
     setApenasVigentes(false); setBuscaExata(false); setComEdital(false); setComMonitoramentoChat(false);
     setNumeroEdital(''); setNumeroConlicitacao(''); setModalidadeId('');
     setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
+    setCategoriasProdutoTI([]);
     setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
+  };
+
+  const toggleCategoriaProduto = (id) => {
+    setCategoriasProdutoTI(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
   };
 
   const toggleFonte = (id) => {
@@ -1497,6 +1533,17 @@ export default function PortalBusca() {
                     <label key={f.id} className="flex items-center gap-1.5 cursor-pointer group">
                       <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
                       <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {/* Produtos TI */}
+                <div className="w-full flex items-center gap-2 flex-wrap border-t border-slate-100 dark:border-slate-700 pt-3 mt-1">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Produtos TI:</span>
+                  {CATEGORIAS_PRODUTO_TI.map(cat => (
+                    <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer group">
+                      <input type="checkbox" checked={categoriasProdutoTI.includes(cat.id)} onChange={() => toggleCategoriaProduto(cat.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{cat.label}</span>
                     </label>
                   ))}
                 </div>
