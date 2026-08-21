@@ -39,6 +39,10 @@ import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import PresentationControls from '../components/PresentationControls';
 import SalesFunnel from '../components/SalesFunnel';
 import TemperatureGauge from '../components/TemperatureGauge';
+import DashboardKPICard from '../components/DashboardKPICard';
+import DashboardAdvancedChart from '../components/DashboardAdvancedChart';
+import { DASHBOARD_COLORS } from '../constants/dashboardTheme';
+import '../styles/dashboardEffects.css';
 
 ChartJS.register(
   CategoryScale,
