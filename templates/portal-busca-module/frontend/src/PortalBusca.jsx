@@ -69,6 +69,38 @@ const MODALIDADES_CONLICITACAO = [
   { id: 12, nome: 'RDC' }
 ];
 
+const CATEGORIAS_PRODUTO_TI = [
+  { id: 'microcomputadores', label: 'Microcomputadores', keywords: ['microcomputador', 'computador', 'desktop', 'cpu', 'gabinete'] },
+  { id: 'workstations', label: 'Workstations', keywords: ['workstation', 'estação de trabalho', 'estacao de trabalho'] },
+  { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'display'] },
+  { id: 'teclados', label: 'Teclados', keywords: ['teclado'] },
+  { id: 'mouses', label: 'Mouses', keywords: ['mouse'] },
+  { id: 'telas_interativas', label: 'Telas Interativas', keywords: ['tela interativa', 'lousa digital', 'painel interativo', 'quadro interativo', 'display interativo'] },
+  { id: 'webcams', label: 'Webcams', keywords: ['webcam', 'web cam'] },
+  { id: 'notebooks', label: 'Notebooks', keywords: ['notebook', 'laptop', 'portátil', 'portatil'] },
+  { id: 'tablets', label: 'Tablets', keywords: ['tablet'] },
+  { id: 'servidores', label: 'Servidores', keywords: ['servidor', 'server'] },
+  { id: 'switches', label: 'Switches', keywords: ['switch'] },
+  { id: 'access_points', label: 'Access Points', keywords: ['access point', 'ponto de acesso', 'accesspoint', 'ap wifi'] },
+  { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router'] },
+  { id: 'impressoras', label: 'Impressoras', keywords: ['impressora', 'printer', 'scanner', 'multifuncional', 'plotter'] },
+  { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['nobreak', 'no-break', 'fonte ininterrupta'] },
+  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'ssd', 'nas', 'disco rígido', 'disco rigido', 'disco sólido'] },
+  { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'firewall utm', 'utm'] },
+  { id: 'software', label: 'Software/Licenças', keywords: ['software', 'licença de uso', 'licenca de uso'] },
+  { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['cftv', 'videomonitoramento', 'câmera de segurança', 'camera de seguranca'] },
+  { id: 'infra_rede', label: 'Infra de Rede', keywords: ['rack', 'patch panel', 'cabeamento estruturado', 'fibra óptica', 'fibra optica'] },
+  { id: 'equipamento_informatica', label: 'Equip. de Informática', keywords: ['informática', 'informatica', 'suprimento de informática', 'equipamento de ti'] },
+];
+
+// Match por palavra inteira para termos simples (evita "monitor" casar com "monitoramento")
+const kwMatch = (texto, kw) => {
+  if (/^[a-z0-9áéíóúâêôãõçü]+$/i.test(kw)) {
+    try { return new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(texto); } catch { return texto.includes(kw); }
+  }
+  return texto.includes(kw);
+};
+
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
@@ -642,6 +674,8 @@ export default function PortalBusca() {
     }
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
+  const [categoriasProdutoTI, setCategoriasProdutoTI] = useState([]);
+  const [produtoCustom, setProdutoCustom] = useState('');
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [fontesIntegradas, setFontesIntegradas] = useState(() => {
     try { return JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]'); } catch { return []; }
@@ -701,6 +735,16 @@ export default function PortalBusca() {
       const mun = String(item.municipio || '').toLowerCase();
       if (!mun.includes(cidade.toLowerCase())) return false;
     }
+    if (categoriasProdutoTI.length > 0 || produtoCustom.trim()) {
+      const texto = String(item.titulo || item.objetoCompra || item.objeto || item.descricao || '').toLowerCase();
+      const matchCategoria = categoriasProdutoTI.some(catId => {
+        const cat = CATEGORIAS_PRODUTO_TI.find(c => c.id === catId);
+        return cat && cat.keywords.some(kw => kwMatch(texto, kw));
+      });
+      const termosCustom = produtoCustom.toLowerCase().split(/[,\n]+/).map(t => t.trim()).filter(Boolean);
+      const matchCustom = termosCustom.length > 0 && termosCustom.some(t => texto.includes(t));
+      if (!matchCategoria && !matchCustom) return false;
+    }
     return true;
   });
 
@@ -718,8 +762,8 @@ export default function PortalBusca() {
       modalidadeId
     ].some(value => String(value || '').trim());
 
-    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat) {
-      setErro('Informe ao menos um termo, número, período ou filtro de localização/status.');
+    if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0 && !produtoCustom.trim()) {
+      setErro('Informe ao menos um termo, número, período ou filtro de localização/status/produto.');
       return;
     }
 
@@ -729,8 +773,15 @@ export default function PortalBusca() {
     setMostrarFavoritos(false);
 
     try {
+      const termosCategorias = categoriasProdutoTI
+        .map(catId => CATEGORIAS_PRODUTO_TI.find(c => c.id === catId))
+        .filter(Boolean)
+        .flatMap(cat => cat.keywords);
+      const termosCustom = produtoCustom.split(/[,\n]+/).map(t => t.trim()).filter(Boolean);
+      const objetoFinal = [objeto.trim(), ...termosCategorias, ...termosCustom].filter(Boolean).join(' ');
+
       const params = {
-        objeto,
+        objeto: objetoFinal,
         uf,
         cidade,
         dataInicio,
@@ -810,7 +861,9 @@ export default function PortalBusca() {
     incluirPropostas,
     fontesAtivas,
     fontesIntegradas,
-    showToast
+    showToast,
+    categoriasProdutoTI,
+    produtoCustom
   ]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter') handleBuscar(); };
@@ -820,8 +873,16 @@ export default function PortalBusca() {
     setApenasVigentes(false); setBuscaExata(false); setComEdital(false); setComMonitoramentoChat(false);
     setNumeroEdital(''); setNumeroConlicitacao(''); setModalidadeId('');
     setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
+    setCategoriasProdutoTI([]);
+    setProdutoCustom('');
     setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
+  };
+
+  const toggleCategoriaProduto = (id) => {
+    setCategoriasProdutoTI(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
   };
 
   const toggleFonte = (id) => {
@@ -1106,7 +1167,7 @@ export default function PortalBusca() {
       />
 
       {/* Tabs de navegação */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-[5.65rem] z-10 shadow-sm">
         <div className="flex items-center gap-1 px-4 py-2">
           {[
             { id: 'busca', label: 'Início', icon: <Search size={14} /> },
@@ -1174,117 +1235,136 @@ export default function PortalBusca() {
           </div>
 
           {/* Corpo: filtros + resultados */}
-          <div className="flex flex-col md:flex-row gap-6 p-4 max-w-7xl mx-auto w-full flex-1">
+          <div className="flex flex-col gap-4 p-4 max-w-7xl mx-auto w-full flex-1">
 
-            {/* Sidebar de filtros */}
-            <div className="w-full md:w-64 shrink-0">
-              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-20">
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <Filter size={16} className="text-blue-600" /> Filtros
-                  </h3>
-                  <button onClick={limparFiltros} className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline">
-                    Limpar
-                  </button>
-                </div>
-
-                {/* Status */}
-                <div className="mb-5">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Status do Edital</h4>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
-                    <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Apenas Vigentes (Abertos)</span>
+            {/* Barra de filtros horizontal */}
+            <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+              <div className="flex flex-wrap items-end gap-4">
+                {/* Status do Edital */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Status:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Vigentes</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Incluir em Proposta</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Em Proposta</span>
                   </label>
                 </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
 
                 {/* ConLicitações */}
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Filtros ConLicitações</h4>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
-                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata por objeto</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitações:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
-                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-3">
-                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com monitoramento de chat</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Chat</span>
                   </label>
-                  <div className="mb-3">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Nº Edital</label>
-                    <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Ex: 12/2026" className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Nº ConLicitação</label>
-                    <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código interno" className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Modalidade</label>
-                    <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                      {MODALIDADES_CONLICITACAO.map(modalidade => (
-                        <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
+
+                {/* Nº Edital */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Edital:</label>
+                  <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                </div>
+
+                {/* Nº ConLicitação */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitação:</label>
+                  <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                </div>
+
+                {/* Modalidade */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Modalidade:</label>
+                  <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
+                    {MODALIDADES_CONLICITACAO.map(modalidade => (
+                      <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
 
                 {/* Localização */}
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Localização</h4>
-                  <div className="mb-3">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Estado</label>
-                    <select value={uf} onChange={e => setUf(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                      <option value="">Todo o Brasil</option>
-                      {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla} - {e.nome}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Cidade</label>
-                    <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Digite a cidade..." className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                  </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">UF:</label>
+                  <select value={uf} onChange={e => setUf(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
+                    <option value="">Todo Brasil</option>
+                    {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Cidade:</label>
+                  <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade..." className="w-32 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
                 </div>
 
-                {/* Período */}
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Período</h4>
-                  <div className="mb-2">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De</label>
-                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
-                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
+
+                {/* Período publicação */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Publicação:</label>
+                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
+                  <span className="text-xs text-slate-400">até</span>
+                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                 </div>
 
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Data Prazo</h4>
-                  <div className="mb-2">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De</label>
-                    <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
-                    <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
+                {/* Data Prazo */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Prazo:</label>
+                  <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
+                  <span className="text-xs text-slate-400">até</span>
+                  <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                 </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
 
                 {/* Fontes */}
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Fontes</h4>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Fontes:</span>
                   {fontesDisponiveis.map(f => (
-                    <label key={f.id} className="flex items-center gap-3 cursor-pointer group mb-2">
-                      <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
+                    <label key={f.id} className="flex items-center gap-1.5 cursor-pointer group">
+                      <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
                     </label>
                   ))}
                 </div>
+
+                {/* Produtos TI */}
+                <div className="w-full flex items-center gap-2 flex-wrap border-t border-slate-100 dark:border-slate-700 pt-3 mt-1">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Produtos TI:</span>
+                  {CATEGORIAS_PRODUTO_TI.map(cat => (
+                    <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer group">
+                      <input type="checkbox" checked={categoriasProdutoTI.includes(cat.id)} onChange={() => toggleCategoriaProduto(cat.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{cat.label}</span>
+                    </label>
+                  ))}
+                  <input
+                    type="text"
+                    value={produtoCustom}
+                    onChange={e => setProdutoCustom(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
+                    placeholder="Outro produto (ex: estabilizador)"
+                    className="w-52 text-xs border border-blue-300 dark:border-blue-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  />
+                </div>
+
+                {/* Limpar */}
+                <button onClick={limparFiltros} className="ml-auto text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline whitespace-nowrap">
+                  Limpar filtros
+                </button>
               </div>
             </div>
 
