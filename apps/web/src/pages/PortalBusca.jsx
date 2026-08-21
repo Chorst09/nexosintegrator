@@ -1326,7 +1326,7 @@ export default function PortalBusca() {
       />
 
       {/* Tabs de navegação */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-[5.65rem] z-10 shadow-sm">
         <div className="flex items-center gap-1 px-4 py-2">
           {[
             { id: 'busca', label: 'Início', icon: <Search size={14} /> },
@@ -1394,117 +1394,117 @@ export default function PortalBusca() {
           </div>
 
           {/* Corpo: filtros + resultados */}
-          <div className="flex flex-col md:flex-row gap-6 p-4 max-w-7xl mx-auto w-full flex-1">
+          <div className="flex flex-col gap-4 p-4 max-w-7xl mx-auto w-full flex-1">
 
-            {/* Sidebar de filtros */}
-            <div className="w-full md:w-64 shrink-0">
-              <div className="bg-white dark:bg-slate-800/60 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 sticky top-20">
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <Filter size={16} className="text-blue-600" /> Filtros
-                  </h3>
-                  <button onClick={limparFiltros} className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline">
-                    Limpar
-                  </button>
-                </div>
-
-                {/* Status */}
-                <div className="mb-5">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Status do Edital</h4>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
-                    <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Apenas Vigentes (Abertos)</span>
+            {/* Barra de filtros horizontal */}
+            <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+              <div className="flex flex-wrap items-end gap-4">
+                {/* Status do Edital */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Status:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Vigentes</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Incluir em Proposta</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Em Proposta</span>
                   </label>
                 </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
 
                 {/* ConLicitações */}
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Filtros ConLicitações</h4>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
-                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata por objeto</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitações:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-2">
-                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group mb-3">
-                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com monitoramento de chat</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Chat</span>
                   </label>
-                  <div className="mb-3">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Nº Edital</label>
-                    <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Ex: 12/2026" className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Nº ConLicitação</label>
-                    <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código interno" className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Modalidade</label>
-                    <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                      {MODALIDADES_CONLICITACAO.map(modalidade => (
-                        <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
+
+                {/* Nº Edital */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Edital:</label>
+                  <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                </div>
+
+                {/* Nº ConLicitação */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitação:</label>
+                  <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+                </div>
+
+                {/* Modalidade */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Modalidade:</label>
+                  <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
+                    {MODALIDADES_CONLICITACAO.map(modalidade => (
+                      <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
 
                 {/* Localização */}
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Localização</h4>
-                  <div className="mb-3">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Estado</label>
-                    <select value={uf} onChange={e => setUf(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                      <option value="">Todo o Brasil</option>
-                      {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla} - {e.nome}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Cidade</label>
-                    <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Digite a cidade..." className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                  </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">UF:</label>
+                  <select value={uf} onChange={e => setUf(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
+                    <option value="">Todo Brasil</option>
+                    {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Cidade:</label>
+                  <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade..." className="w-32 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
                 </div>
 
-                {/* Período */}
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Período</h4>
-                  <div className="mb-2">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De</label>
-                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
-                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
+
+                {/* Período publicação */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Publicação:</label>
+                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
+                  <span className="text-xs text-slate-400">até</span>
+                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                 </div>
 
-                <div className="mb-5 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Data Prazo</h4>
-                  <div className="mb-2">
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">De</label>
-                    <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Até</label>
-                    <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  </div>
+                {/* Data Prazo */}
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Prazo:</label>
+                  <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
+                  <span className="text-xs text-slate-400">até</span>
+                  <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
                 </div>
+
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
 
                 {/* Fontes */}
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3 uppercase tracking-wider">Fontes</h4>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Fontes:</span>
                   {fontesDisponiveis.map(f => (
-                    <label key={f.id} className="flex items-center gap-3 cursor-pointer group mb-2">
-                      <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-sm text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
+                    <label key={f.id} className="flex items-center gap-1.5 cursor-pointer group">
+                      <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
+                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
                     </label>
                   ))}
                 </div>
+
+                {/* Limpar */}
+                <button onClick={limparFiltros} className="ml-auto text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline whitespace-nowrap">
+                  Limpar filtros
+                </button>
               </div>
             </div>
 
