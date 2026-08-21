@@ -5,6 +5,7 @@ import AppShell from './layout/AppShell';
 import DashboardGeral from './pages/DashboardGeral';
 import DashboardHome from './pages/DashboardHome';
 import Dashboard from './pages/Dashboard';
+import DashboardModernized from './pages/DashboardModernized';
 import Empresas from './pages/Empresas';
 import Oportunidades from './pages/Oportunidades';
 import Comissoes from './pages/Comissoes';
@@ -85,6 +86,8 @@ export default function App() {
           }
         >
           <Route path="dashboard" element={<Dashboard />} />
+
+          <Route path="dashboard-modernized" element={<DashboardModernized />} />
 
           <Route path="dashboard-geral" element={<DashboardGeral />} />
 
