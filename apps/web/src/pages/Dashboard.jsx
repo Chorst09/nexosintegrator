@@ -746,7 +746,7 @@ export default function Dashboard() {
           subtitle={`${kpis.wonOpportunities} vendas concluidas`}
           icon={<DollarSign className="h-3.5 w-3.5" />}
           colorTheme="cyan"
-          trend={kpiTrends.won}
+          trend={kpiTrends.won?.value || 0}
           status="success"
         />
 
@@ -756,7 +756,7 @@ export default function Dashboard() {
           subtitle={`${kpis.totalCompanies} contas ativas`}
           icon={<Target className="h-3.5 w-3.5" />}
           colorTheme="blue"
-          trend={kpiTrends.avgTicket}
+          trend={kpiTrends.avgTicket?.value || 0}
           status="active"
         />
 
@@ -766,7 +766,7 @@ export default function Dashboard() {
           subtitle="Respostas em ate 4h"
           icon={<Clock3 className="h-3.5 w-3.5" />}
           colorTheme="green"
-          trend={kpiTrends.sla}
+          trend={kpiTrends.sla?.value || 0}
           status="active"
         />
 
@@ -852,7 +852,7 @@ export default function Dashboard() {
               fill: true,
               tension: 0.35
             }]
-          } : null}
+          } : { labels: [], datasets: [] }}
           isEmpty={charts.monthlyRevenue.length === 0}
         />
 
@@ -876,7 +876,7 @@ export default function Dashboard() {
               borderColor: '#0e2648',
               borderWidth: 2
             }]
-          } : null}
+          } : { labels: [], datasets: [] }}
           isEmpty={charts.opportunitiesBySource.length === 0}
         />
         </section>
@@ -897,7 +897,7 @@ export default function Dashboard() {
               borderRadius: 8,
               borderSkipped: false
             }]
-          } : null}
+          } : { labels: [], datasets: [] }}
           isEmpty={charts.velocityByStage.length === 0}
         />
 
@@ -923,7 +923,7 @@ export default function Dashboard() {
                 borderRadius: 6
               }
             ]
-          } : null}
+          } : { labels: [], datasets: [] }}
           isEmpty={charts.activityPulse.length === 0}
         />
 
