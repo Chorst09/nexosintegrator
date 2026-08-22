@@ -1,8 +1,8 @@
 import React from 'react';
 import { Issue } from '../types';
-import { 
-  X, CheckSquare, Maximize2, MoreHorizontal, MessageSquare, 
-  Search, Bell, Filter, User as UserIcon, Calendar, 
+import {
+  X, CheckSquare, Maximize2, MoreHorizontal, MessageSquare,
+  Search, Bell, Filter, User as UserIcon, Calendar,
   Flag, Paperclip, ChevronRight, Sparkles, Smile, Image as ImageIcon,
   Plus, Edit, CheckSquare as CheckSquareIcon
 } from 'lucide-react';
@@ -18,14 +18,14 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-[#0b1120] w-full max-w-[1200px] h-[90vh] rounded-xl border border-[#334155] shadow-2xl flex flex-col overflow-hidden text-slate-300 flex-row">
-        
+      <div className="bg-[#070f1f] w-full max-w-[1200px] h-[90vh] rounded-md border border-[#294a70] shadow-2xl flex flex-col overflow-hidden text-slate-300 flex-row">
+
         {/* Left Side: Task Details (65%) */}
-        <div className="w-[65%] border-r border-[#334155] flex flex-col h-full bg-[#1e293b]">
+        <div className="w-[65%] border-r border-[#294a70] flex flex-col h-full bg-[#13233b]">
           {/* Header */}
           <div className="h-12 flex items-center justify-between px-6 shrink-0 text-xs">
             <div className="flex items-center gap-2 text-slate-400 mt-2">
-              <span className="flex items-center gap-1 hover:bg-[#1e293b] px-2 py-1 rounded cursor-pointer transition-colors border border-[#334155]">
+              <span className="flex items-center gap-1 hover:bg-[#13233b] px-2 py-1 rounded cursor-pointer transition-colors border border-[#294a70]">
                 <CheckSquare className="w-3.5 h-3.5" /> Tarefa <ChevronRight className="w-3 h-3" />
               </span>
               <Maximize2 className="w-4 h-4 cursor-pointer hover:text-slate-200" />
@@ -39,8 +39,8 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
             </h1>
 
             {/* AI Prompt */}
-            <div className="bg-[#0b1120] border border-[#334155] rounded-lg p-3 mb-8 flex items-center gap-2 text-slate-400 text-sm">
-              <Sparkles className="w-4 h-4 text-purple-400" />
+            <div className="bg-[#070f1f] border border-[#294a70] rounded-lg p-3 mb-8 flex items-center gap-2 text-slate-400 text-sm">
+              <Sparkles className="w-4 h-4 text-teal-400" />
               <span>Peça ao Brain² um <span className="text-slate-200">apresentação</span>, documento ou <span className="text-slate-200">protótipo</span></span>
             </div>
 
@@ -50,8 +50,8 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
                 <div className="w-32 flex items-center gap-2 text-slate-500 shrink-0">
                   <CheckSquareIcon className="w-4 h-4" /> Status
                 </div>
-                <div className="flex items-center gap-2 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors flex-1">
-                  <span className="bg-[#2a2b2e] px-2 py-1 rounded text-xs font-bold text-slate-200 uppercase">
+                <div className="flex items-center gap-2 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors flex-1">
+                  <span className="bg-[#1a2e4b] px-2 py-1 rounded text-xs font-bold text-slate-200 uppercase">
                     {task.status === 'PENDENTE' ? 'PENDENTE' : task.status}
                   </span>
                   <Edit className="w-3.5 h-3.5 text-slate-500" />
@@ -64,14 +64,14 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
                 </div>
                 <div className="flex-1">
                   {task.assignee ? (
-                    <div className="flex items-center gap-2 text-slate-200 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors w-fit">
+                    <div className="flex items-center gap-2 text-slate-200 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors w-fit">
                       <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white", task.assignee.color)}>
                         {task.assignee.initials}
                       </div>
                       {task.assignee.name}
                     </div>
                   ) : (
-                    <span className="text-slate-500 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors">Vazio</span>
+                    <span className="text-slate-500 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors">Vazio</span>
                   )}
                 </div>
               </div>
@@ -80,7 +80,7 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
                 <div className="w-32 flex items-center gap-2 text-slate-500 shrink-0">
                   <Calendar className="w-4 h-4" /> Datas
                 </div>
-                <div className="flex items-center gap-1 text-slate-300 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors flex-wrap flex-1">
+                <div className="flex items-center gap-1 text-slate-300 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors flex-wrap flex-1">
                   <span className="text-slate-500">Início</span> → <Calendar className="w-3.5 h-3.5" /> {task.dueDate || '2023-09-04'}
                 </div>
               </div>
@@ -89,7 +89,7 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
                 <div className="w-32 flex items-center gap-2 text-slate-500 shrink-0">
                   <Flag className="w-4 h-4" /> Prioridade
                 </div>
-                <div className="flex items-center gap-2 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors flex-1">
+                <div className="flex items-center gap-2 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors flex-1">
                   {task.priority === 'Alta' ? (
                     <span className="text-yellow-500 flex items-center gap-1"><Flag className="w-4 h-4 fill-current" /> Alta</span>
                   ) : (
@@ -103,24 +103,24 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
                   <span className="w-4 h-4 border border-dashed border-slate-500 flex items-center justify-center rounded"></span>
                   Estimativa
                 </div>
-                <div className="text-slate-500 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors flex-1">Vazio</div>
+                <div className="text-slate-500 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors flex-1">Vazio</div>
               </div>
 
               <div className="flex items-center gap-4">
                 <div className="w-32 flex items-center gap-2 text-slate-500 shrink-0">
                   <Sparkles className="w-4 h-4" /> Pontos
                 </div>
-                <div className="text-slate-500 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors flex-1">Vazio</div>
+                <div className="text-slate-500 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors flex-1">Vazio</div>
               </div>
               {task.customFields && task.customFields.length > 0 && (
                 <>
-                  <div className="h-px bg-[#2a2b2e] my-4 w-full" />
+                  <div className="h-px bg-[#1a2e4b] my-4 w-full" />
                   {task.customFields.map((cf) => (
                     <div key={cf.id} className="flex items-center gap-4">
                       <div className="w-32 flex items-center gap-2 text-slate-500 shrink-0 truncate">
                         <CheckSquareIcon className="w-4 h-4" /> {cf.name}
                       </div>
-                      <div className="text-slate-300 cursor-pointer hover:bg-[#1e293b] px-2 py-1 -ml-2 rounded transition-colors flex-1 break-words">
+                      <div className="text-slate-300 cursor-pointer hover:bg-[#13233b] px-2 py-1 -ml-2 rounded transition-colors flex-1 break-words">
                         {cf.value || 'Vazio'}
                       </div>
                     </div>
@@ -153,16 +153,16 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
         </div>
 
         {/* Right Side: Activity & Comments (35%) */}
-        <div className="w-[35%] flex flex-col h-full bg-[#0b1120]">
-          
+        <div className="w-[35%] flex flex-col h-full bg-[#070f1f]">
+
           {/* Header */}
-          <div className="h-12 border-b border-[#334155] flex items-center justify-between px-4 shrink-0 text-slate-400">
+          <div className="h-12 border-b border-[#294a70] flex items-center justify-between px-4 shrink-0 text-slate-400">
             <span className="font-semibold text-slate-200">Activity</span>
             <div className="flex items-center gap-4">
               <Search className="w-4 h-4 cursor-pointer hover:text-slate-200" />
               <div className="relative">
                 <Bell className="w-4 h-4 cursor-pointer hover:text-slate-200" />
-                <div className="absolute -top-1 -right-1 bg-[#ea580c] text-white text-[9px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold">2</div>
+                <div className="absolute -top-1 -right-1 bg-[#38bdf8] text-white text-[9px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold">2</div>
               </div>
               <Filter className="w-4 h-4 cursor-pointer hover:text-slate-200" />
               <div className="w-px h-4 bg-slate-700 mx-1"></div>
@@ -188,7 +188,7 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
             </div>
 
             <div className="mt-8 flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#ea580c] flex items-center justify-center text-white font-bold shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[#38bdf8] flex items-center justify-center text-white font-bold shrink-0">
                 CH
               </div>
               <div className="flex-1">
@@ -208,25 +208,25 @@ export default function TaskModal({ task, onClose }: { task: Issue, onClose: () 
           </div>
 
           {/* Comment Input */}
-          <div className="p-4 bg-[#0b1120] border-t border-[#334155]">
-            <div className="bg-[#1e293b] border border-[#475569] rounded-xl p-3 focus-within:border-[#5a5c63] transition-colors">
-              <input 
-                type="text" 
-                placeholder="Escreva um comentário..." 
+          <div className="p-4 bg-[#070f1f] border-t border-[#294a70]">
+            <div className="bg-[#13233b] border border-[#315d87] rounded-md p-3 focus-within:border-[#5a5c63] transition-colors">
+              <input
+                type="text"
+                placeholder="Escreva um comentário..."
                 className="w-full bg-transparent border-none focus:outline-none text-sm text-slate-200 mb-3"
               />
               <div className="flex items-center justify-between text-slate-400 mt-2">
                 <div className="flex items-center gap-2">
-                  <button className="w-6 h-6 rounded hover:bg-[#3e4046] flex items-center justify-center"><Plus className="w-4 h-4" /></button>
-                  <button className="bg-[#2a2b2e] px-2 py-1 rounded text-xs flex items-center gap-1 hover:text-slate-200 transition-colors">
+                  <button className="w-6 h-6 rounded hover:bg-[#244568] flex items-center justify-center"><Plus className="w-4 h-4" /></button>
+                  <button className="bg-[#1a2e4b] px-2 py-1 rounded text-xs flex items-center gap-1 hover:text-slate-200 transition-colors">
                     Comentário <ChevronRight className="w-3 h-3 rotate-90" />
                   </button>
-                  <Sparkles className="w-4 h-4 text-purple-400 cursor-pointer ml-1 hover:text-purple-300" />
+                  <Sparkles className="w-4 h-4 text-teal-400 cursor-pointer ml-1 hover:text-teal-300" />
                 </div>
                 <div className="flex items-center gap-3">
                   <ImageIcon className="w-4 h-4 cursor-pointer hover:text-slate-200" />
                   <Paperclip className="w-4 h-4 cursor-pointer hover:text-slate-200" />
-                  <div className="bg-[#3e4046] p-1.5 rounded-md cursor-pointer hover:bg-[#4e5056] transition-colors flex items-center justify-center">
+                  <div className="bg-[#244568] p-1.5 rounded-md cursor-pointer hover:bg-[#315d87] transition-colors flex items-center justify-center">
                     <ChevronRight className="w-4 h-4 text-slate-200" />
                   </div>
                 </div>

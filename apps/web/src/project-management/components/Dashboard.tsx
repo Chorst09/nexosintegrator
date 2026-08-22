@@ -19,16 +19,16 @@ const velocityData = [
 ];
 
 const distributionData = [
-  { name: 'Bug', value: 12, color: '#ea580c' },
-  { name: 'Feature', value: 35, color: '#3b82f6' },
-  { name: 'Melhoria', value: 20, color: '#0ea5e9' },
-  { name: 'Tech Debt', value: 10, color: '#22c55e' },
+  { name: 'Bug', value: 12, color: '#f87171' },
+  { name: 'Feature', value: 35, color: '#60a5fa' },
+  { name: 'Melhoria', value: 20, color: '#38bdf8' },
+  { name: 'Tech Debt', value: 10, color: '#2dd4bf' },
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#0b1120]/90 backdrop-blur-md border border-[#475569] p-3 rounded-lg shadow-xl">
+      <div className="bg-[#070f1f]/90 backdrop-blur-md border border-[#315d87] p-3 rounded-lg shadow-xl">
         <p className="text-slate-200 font-semibold mb-2">{label}</p>
         {payload.map((entry: any, index: number) => (
           <div key={index} className="flex items-center gap-2 text-sm">
@@ -45,25 +45,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Dashboard() {
   return (
-    <div className="h-full bg-[#0f172a] overflow-y-auto p-8 custom-scrollbar relative">
-      {/* Abstract Background Glows */}
-      <div className="absolute top-[-10%] left-[-5%] w-96 h-96 bg-[#0ea5e9]/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-[#0ea5e9]/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className="h-full bg-[#0e1b32] overflow-y-auto p-6 custom-scrollbar">
+      <div className="max-w-7xl mx-auto space-y-6">
 
-      <div className="max-w-7xl mx-auto space-y-8 relative z-10">
-        
         {/* Header */}
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-bold text-slate-100">Visão Geral do Projeto</h1>
-          <p className="text-slate-400">Acompanhe métricas e progresso da equipe em tempo real.</p>
+          <h1 className="text-xl font-semibold text-slate-100">Visão Geral do Projeto</h1>
+          <p className="text-sm text-slate-400">Acompanhe métricas e progresso da equipe em tempo real.</p>
         </div>
-        
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-br from-[#1a1b1e] to-[#1e1f23] p-5 rounded-2xl border border-[#334155] shadow-lg relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-[100px] transition-colors group-hover:bg-blue-500/10" />
+          <div className="bg-gradient-to-br from-[#102139] to-[#132943] p-5 rounded-lg border border-[#294a70] shadow-lg relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5  transition-colors group-hover:bg-blue-500/10" />
             <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
                 <Clock className="w-5 h-5 text-blue-400" />
               </div>
               <span className="flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full">
@@ -74,11 +70,11 @@ export default function Dashboard() {
             <p className="text-sm text-slate-400">Tempo de Ciclo Médio</p>
           </div>
 
-          <div className="bg-gradient-to-br from-[#1a1b1e] to-[#1e1f23] p-5 rounded-2xl border border-[#334155] shadow-lg relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-bl-[100px] transition-colors group-hover:bg-orange-500/10" />
+          <div className="bg-gradient-to-br from-[#102139] to-[#132943] p-5 rounded-lg border border-[#294a70] shadow-lg relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5  transition-colors group-hover:bg-cyan-500/10" />
             <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-orange-400" />
+              <div className="w-10 h-10 rounded-md bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-cyan-400" />
               </div>
               <span className="flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full">
                 <ArrowUpRight className="w-3 h-3" /> 8%
@@ -88,10 +84,10 @@ export default function Dashboard() {
             <p className="text-sm text-slate-400">Velocity Atual</p>
           </div>
 
-          <div className="bg-gradient-to-br from-[#1a1b1e] to-[#1e1f23] p-5 rounded-2xl border border-[#334155] shadow-lg relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-[100px] transition-colors group-hover:bg-emerald-500/10" />
+          <div className="bg-gradient-to-br from-[#102139] to-[#132943] p-5 rounded-lg border border-[#294a70] shadow-lg relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5  transition-colors group-hover:bg-emerald-500/10" />
             <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                 <Activity className="w-5 h-5 text-emerald-400" />
               </div>
               <span className="flex items-center gap-1 text-xs font-medium text-slate-400 bg-slate-400/10 px-2 py-1 rounded-full">
@@ -101,12 +97,12 @@ export default function Dashboard() {
             <h3 className="text-3xl font-bold text-white mb-1">85%</h3>
             <p className="text-sm text-slate-400">Carga de WIP</p>
           </div>
-          
-          <div className="bg-gradient-to-br from-[#1a1b1e] to-[#1e1f23] p-5 rounded-2xl border border-[#334155] shadow-lg relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-bl-[100px] transition-colors group-hover:bg-purple-500/10" />
+
+          <div className="bg-gradient-to-br from-[#102139] to-[#132943] p-5 rounded-lg border border-[#294a70] shadow-lg relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 transition-colors group-hover:bg-teal-500/10" />
             <div className="flex justify-between items-start mb-4">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                <Layers className="w-5 h-5 text-purple-400" />
+              <div className="w-10 h-10 rounded-md bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
+                <Layers className="w-5 h-5 text-teal-400" />
               </div>
               <span className="flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-full">
                 <ArrowUpRight className="w-3 h-3" /> +14
@@ -119,10 +115,10 @@ export default function Dashboard() {
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-[#1e293b]/80 backdrop-blur-sm p-6 rounded-2xl border border-[#334155] shadow-xl">
+          <div className="lg:col-span-2 bg-[#13233b]/80 backdrop-blur-sm p-6 rounded-lg border border-[#294a70] shadow-xl">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-lg font-bold text-slate-100">Diagrama de Fluxo Cumulativo (CFD)</h3>
-              <select className="bg-[#1e293b] border border-[#475569] text-slate-300 text-xs rounded-md px-2 py-1 outline-none">
+              <select className="bg-[#13233b] border border-[#315d87] text-slate-300 text-xs rounded-md px-2 py-1 outline-none">
                 <option>Últimos 7 dias</option>
                 <option>Últimos 30 dias</option>
               </select>
@@ -132,32 +128,32 @@ export default function Dashboard() {
                 <AreaChart data={cfdData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorPendente" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0}/>
                     </linearGradient>
                     <linearGradient id="colorProgresso" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                     </linearGradient>
                     <linearGradient id="colorUpdate" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ea580c" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#38bdf8" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2a2b2e" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1a2e4b" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 20 }} />
-                  <Area type="monotone" dataKey="CONCLUÍDO" stackId="1" stroke="#ea580c" strokeWidth={2} fill="url(#colorUpdate)" />
+                  <Area type="monotone" dataKey="CONCLUÍDO" stackId="1" stroke="#2dd4bf" strokeWidth={2} fill="url(#colorUpdate)" />
                   <Area type="monotone" dataKey="EM PROGRESSO" stackId="1" stroke="#3b82f6" strokeWidth={2} fill="url(#colorProgresso)" />
-                  <Area type="monotone" dataKey="PENDENTE" stackId="1" stroke="#0ea5e9" strokeWidth={2} fill="url(#colorPendente)" />
+                  <Area type="monotone" dataKey="PENDENTE" stackId="1" stroke="#38bdf8" strokeWidth={2} fill="url(#colorPendente)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="bg-[#1e293b]/80 backdrop-blur-sm p-6 rounded-2xl border border-[#334155] shadow-xl flex flex-col">
+          <div className="bg-[#13233b]/80 backdrop-blur-sm p-6 rounded-lg border border-[#294a70] shadow-xl flex flex-col">
             <h3 className="text-lg font-bold text-slate-100 mb-2">Distribuição de Tipos</h3>
             <p className="text-xs text-slate-400 mb-6">Composição das tarefas na sprint ativa</p>
             <div className="flex-1 min-h-[250px] relative">
@@ -185,7 +181,7 @@ export default function Dashboard() {
                 <span className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Tarefas</span>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3 mt-4">
               {distributionData.map((item, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -199,14 +195,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="lg:col-span-3 bg-[#1e293b]/80 backdrop-blur-sm p-6 rounded-2xl border border-[#334155] shadow-xl">
+          <div className="lg:col-span-3 bg-[#13233b]/80 backdrop-blur-sm p-6 rounded-lg border border-[#294a70] shadow-xl">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-lg font-bold text-slate-100">Gráfico de Velocity</h3>
                 <p className="text-xs text-slate-400 mt-1">Comparativo de pontos comprometidos vs entregues</p>
               </div>
-              <div className="flex items-center gap-4 bg-[#1e293b] p-1 rounded-lg border border-[#475569]">
-                <button className="px-3 py-1 text-xs font-medium bg-[#3e4046] text-white rounded shadow-sm">Sprints</button>
+              <div className="flex items-center gap-4 bg-[#13233b] p-1 rounded-lg border border-[#315d87]">
+                <button className="px-3 py-1 text-xs font-medium bg-[#244568] text-white rounded shadow-sm">Sprints</button>
                 <button className="px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors">Meses</button>
               </div>
             </div>
@@ -215,18 +211,18 @@ export default function Dashboard() {
                 <BarChart data={velocityData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }} barGap={8}>
                   <defs>
                     <linearGradient id="colorComprometido" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#334155" stopOpacity={1}/>
-                      <stop offset="100%" stopColor="#1e293b" stopOpacity={0.8}/>
+                      <stop offset="0%" stopColor="#294a70" stopOpacity={1}/>
+                      <stop offset="100%" stopColor="#13233b" stopOpacity={0.8}/>
                     </linearGradient>
                     <linearGradient id="colorEntregue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={1}/>
-                      <stop offset="100%" stopColor="#6d28d9" stopOpacity={0.8}/>
+                      <stop offset="0%" stopColor="#38bdf8" stopOpacity={1}/>
+                      <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0.8}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2a2b2e" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1a2e4b" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#2a2b2e', opacity: 0.4 }} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1a2e4b', opacity: 0.4 }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 20 }} />
                   <Bar dataKey="comprometido" name="Comprometido" fill="url(#colorComprometido)" radius={[6, 6, 0, 0]} maxBarSize={32} />
                   <Bar dataKey="entregue" name="Entregue" fill="url(#colorEntregue)" radius={[6, 6, 0, 0]} maxBarSize={32} />
@@ -240,4 +236,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

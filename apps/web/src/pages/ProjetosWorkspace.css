@@ -1,8 +1,16 @@
 .project-management-embed {
+  --pm-bg: #070f1f;
+  --pm-bg-elevated: #0e1b32;
+  --pm-surface: #13233b;
+  --pm-surface-strong: #1a2e4b;
+  --pm-border: #294a70;
+  --pm-accent: #38bdf8;
+  --pm-success: #2dd4bf;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #0b1120;
+  color-scheme: dark;
+  background: var(--pm-bg);
 }
 
 .project-management-embed > div {

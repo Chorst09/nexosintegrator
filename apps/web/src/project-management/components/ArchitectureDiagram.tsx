@@ -67,19 +67,19 @@ const ArchNode = ({ id, data, selected }: any) => {
   };
 
   return (
-    <div className={`bg-[#1e293b] border ${selected ? 'border-[#0ea5e9] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#334155]'} rounded-xl p-4 shadow-lg min-w-[180px] flex items-center gap-3 text-slate-200 transition-colors`}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#1e293b] bg-[#0ea5e9]" />
-      <div 
-        className="w-12 h-12 rounded-lg bg-[#0f172a] border border-[#334155] text-[#0ea5e9] flex items-center justify-center shrink-0 overflow-hidden p-1.5 cursor-pointer relative group"
+    <div className={`bg-[#13233b] border ${selected ? 'border-[#38bdf8] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#294a70]'} rounded-md p-4 shadow-lg min-w-[180px] flex items-center gap-3 text-slate-200 transition-colors`}>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#13233b] bg-[#38bdf8]" />
+      <div
+        className="w-12 h-12 rounded-lg bg-[#0e1b32] border border-[#294a70] text-[#38bdf8] flex items-center justify-center shrink-0 overflow-hidden p-1.5 cursor-pointer relative group"
         onClick={() => fileInputRef.current?.click()}
         title="Clique para alterar a imagem"
       >
         {customImage && !imgError ? (
-          <img 
-            src={customImage} 
-            alt={data.label} 
-            onError={() => setImgError(true)} 
-            className="w-full h-full object-contain" 
+          <img
+            src={customImage}
+            alt={data.label}
+            onError={() => setImgError(true)}
+            className="w-full h-full object-contain"
           />
         ) : (
           <Icon className="w-6 h-6" />
@@ -87,19 +87,19 @@ const ArchNode = ({ id, data, selected }: any) => {
         <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center rounded-lg">
           <Upload className="w-4 h-4 text-white" />
         </div>
-        <input 
-          type="file" 
-          accept="image/*" 
-          className="hidden" 
-          ref={fileInputRef} 
-          onChange={handleImageUpload} 
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleImageUpload}
         />
       </div>
       <div className="flex-1">
         <div className="font-bold text-sm leading-tight">{data.label}</div>
         {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 border-2 border-[#1e293b] bg-[#ea580c]" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 border-2 border-[#13233b] bg-[#38bdf8]" />
     </div>
   );
 };
@@ -107,11 +107,11 @@ const ArchNode = ({ id, data, selected }: any) => {
 const nodeTypes = { arch: ArchNode };
 
 const defaultEdgeOptions = {
-  style: { stroke: '#475569', strokeWidth: 2 },
+  style: { stroke: '#315d87', strokeWidth: 2 },
   type: 'smoothstep',
   markerEnd: {
     type: MarkerType.ArrowClosed,
-    color: '#475569',
+    color: '#315d87',
   },
 };
 
@@ -158,7 +158,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   const [customNodeName, setCustomNodeName] = useState('');
   const [hasSaved, setHasSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const { getNodes } = useReactFlow();
 
   useEffect(() => {
@@ -199,7 +199,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    
+
     nodes.forEach((n) => {
       const width = n.measured?.width || 200;
       const height = n.measured?.height || 150;
@@ -212,7 +212,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     const padding = 60;
     const boundsWidth = maxX - minX;
     const boundsHeight = maxY - minY;
-    
+
     const imageWidth = boundsWidth + padding * 2;
     const imageHeight = boundsHeight + padding * 2;
 
@@ -225,7 +225,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     const translateY = -minY + padding;
 
     toPng(viewportElement, {
-      backgroundColor: '#0f172a',
+      backgroundColor: '#0e1b32',
       width: imageWidth,
       height: imageHeight,
       style: {
@@ -285,61 +285,61 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
       setNodes((nds) => [...nds, newNode]);
     };
     reader.readAsDataURL(file);
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0f172a] overflow-hidden w-full absolute inset-0 z-50">
-      <div className="h-14 border-b border-[#334155] bg-[#1e293b] flex items-center justify-between px-4 flex-shrink-0">
+    <div className="h-full flex flex-col bg-[#0e1b32] overflow-hidden w-full absolute inset-0 z-50">
+      <div className="h-14 border-b border-[#294a70] bg-[#13233b] flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onBack}
             className="flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" /> Voltar
           </button>
-          <div className="w-px h-6 bg-[#334155]"></div>
+          <div className="w-px h-6 bg-[#294a70]"></div>
           <h2 className="text-slate-200 font-semibold flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#0ea5e9]" /> Diagrama de Arquitetura
+            <Layers className="w-4 h-4 text-[#38bdf8]" /> Diagrama de Arquitetura
           </h2>
         </div>
-        
+
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-[#0f172a] p-1 rounded-lg border border-[#334155]">
+          <div className="flex items-center gap-2 bg-[#0e1b32] p-1 rounded-lg border border-[#294a70]">
             {hasSaved && (
-              <button 
+              <button
                 onClick={() => loadTemplate('saved')}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'saved' ? 'bg-[#ea580c] text-white' : 'text-[#ea580c] hover:bg-[#ea580c]/10'}`}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'saved' ? 'bg-[#38bdf8] text-white' : 'text-[#38bdf8] hover:bg-[#38bdf8]/10'}`}
               >Meu Diagrama</button>
             )}
-            <div className="w-px h-4 bg-[#334155] mx-1"></div>
-            <button 
+            <div className="w-px h-4 bg-[#294a70] mx-1"></div>
+            <button
               onClick={() => loadTemplate('blank')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'blank' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'blank' ? 'bg-[#294a70] text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >Em Branco</button>
-            <button 
+            <button
               onClick={() => loadTemplate('3-tier')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === '3-tier' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === '3-tier' ? 'bg-[#294a70] text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >Web 3-Tier</button>
-            <button 
+            <button
               onClick={() => loadTemplate('microservices')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'microservices' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'microservices' ? 'bg-[#294a70] text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >Microserviços</button>
           </div>
-          
-          <div className="flex items-center gap-2 border-l border-[#334155] pl-3">
-            <button 
+
+          <div className="flex items-center gap-2 border-l border-[#294a70] pl-3">
+            <button
               onClick={saveDiagram}
-              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-[#1e293b] hover:bg-[#334155] border border-[#334155] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
+              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-[#13233b] hover:bg-[#294a70] border border-[#294a70] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
             >
               <Save className="w-4 h-4" /> Salvar
             </button>
-            <button 
+            <button
               onClick={downloadPDF}
-              className="flex items-center gap-2 text-sm text-white bg-[#0ea5e9] hover:bg-[#0284c7] px-4 py-1.5 rounded-md transition-colors font-medium shadow-lg"
+              className="flex items-center gap-2 text-sm text-white bg-[#38bdf8] hover:bg-[#0ea5e9] px-4 py-1.5 rounded-md transition-colors font-medium shadow-lg"
             >
               <Download className="w-4 h-4" /> Exportar PDF
             </button>
@@ -358,66 +358,66 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           defaultEdgeOptions={defaultEdgeOptions}
           colorMode="dark"
           fitView
-          className="bg-[#0f172a]"
+          className="bg-[#0e1b32]"
         >
-          <Background color="#334155" gap={24} size={2} />
-          <Controls className="bg-[#1e293b] border-[#334155] fill-slate-300" />
-          <MiniMap 
-            nodeColor={(n) => '#0ea5e9'}
+          <Background color="#294a70" gap={24} size={2} />
+          <Controls className="bg-[#13233b] border-[#294a70] fill-slate-300" />
+          <MiniMap
+            nodeColor={(n) => '#38bdf8'}
             maskColor="rgba(15, 23, 42, 0.7)"
-            className="bg-[#1e293b] border border-[#334155] rounded-xl"
+            className="bg-[#13233b] border border-[#294a70] rounded-md"
           />
-          
-          <Panel position="top-left" className="bg-[#1e293b]/90 backdrop-blur-md border border-[#334155] p-3 rounded-xl shadow-xl flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto">
+
+          <Panel position="top-left" className="bg-[#13233b]/90 backdrop-blur-md border border-[#294a70] p-3 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Componentes</h3>
-            <button onClick={() => addNode('globe', 'Web Client')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#334155] p-2 rounded-lg transition-colors text-left">
-              <Globe className="w-4 h-4 text-[#0ea5e9]" /> Web App
+            <button onClick={() => addNode('globe', 'Web Client')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
+              <Globe className="w-4 h-4 text-[#38bdf8]" /> Web App
             </button>
-            <button onClick={() => addNode('smartphone', 'Mobile App')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#334155] p-2 rounded-lg transition-colors text-left">
-              <Smartphone className="w-4 h-4 text-[#0ea5e9]" /> Mobile App
+            <button onClick={() => addNode('smartphone', 'Mobile App')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
+              <Smartphone className="w-4 h-4 text-[#38bdf8]" /> Mobile App
             </button>
-            <button onClick={() => addNode('server', 'Servidor API')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#334155] p-2 rounded-lg transition-colors text-left">
-              <Server className="w-4 h-4 text-[#0ea5e9]" /> Servidor
+            <button onClick={() => addNode('server', 'Servidor API')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
+              <Server className="w-4 h-4 text-[#38bdf8]" /> Servidor
             </button>
-            <button onClick={() => addNode('database', 'Banco de Dados')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#334155] p-2 rounded-lg transition-colors text-left">
-              <Database className="w-4 h-4 text-[#0ea5e9]" /> Banco de Dados
+            <button onClick={() => addNode('database', 'Banco de Dados')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
+              <Database className="w-4 h-4 text-[#38bdf8]" /> Banco de Dados
             </button>
-            <button onClick={() => addNode('cloud', 'Cloud Service')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#334155] p-2 rounded-lg transition-colors text-left">
-              <Cloud className="w-4 h-4 text-[#0ea5e9]" /> Cloud Service
+            <button onClick={() => addNode('cloud', 'Cloud Service')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
+              <Cloud className="w-4 h-4 text-[#38bdf8]" /> Cloud Service
             </button>
 
-            <div className="mt-2 pt-3 border-t border-[#334155] flex flex-col gap-2">
+            <div className="mt-2 pt-3 border-t border-[#294a70] flex flex-col gap-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tecnologia Específica</h3>
-              <input 
-                type="text" 
-                placeholder="Ex: React, Docker, AWS" 
-                className="bg-[#0f172a] border border-[#334155] rounded-md px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-[#0ea5e9]"
+              <input
+                type="text"
+                placeholder="Ex: React, Docker, AWS"
+                className="bg-[#0e1b32] border border-[#294a70] rounded-md px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-[#38bdf8]"
                 value={customNodeName}
                 onChange={(e) => setCustomNodeName(e.target.value)}
                 onKeyDown={(e) => {
                    if (e.key === 'Enter') addCustomNode();
                 }}
               />
-              <button 
+              <button
                 onClick={addCustomNode}
-                className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
+                className="bg-[#38bdf8] hover:bg-[#0ea5e9] text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
               >
                 Adicionar ao Diagrama
               </button>
             </div>
 
-            <div className="mt-2 pt-3 border-t border-[#334155] flex flex-col gap-2">
+            <div className="mt-2 pt-3 border-t border-[#294a70] flex flex-col gap-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Upload de Imagem</h3>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept="image/*"
                 className="hidden"
                 ref={fileInputRef}
                 onChange={handleFileUpload}
               />
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 bg-[#1e293b] hover:bg-[#334155] border border-[#334155] text-slate-300 hover:text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
+                className="flex items-center justify-center gap-2 bg-[#13233b] hover:bg-[#294a70] border border-[#294a70] text-slate-300 hover:text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
               >
                 <Upload className="w-4 h-4" /> Enviar Arquivo
               </button>

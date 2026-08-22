@@ -15,17 +15,17 @@ export default function WorkloadView({ issues }: { issues: Issue[] }) {
   });
 
   return (
-    <div className="h-full bg-[#0f172a] overflow-y-auto p-6 text-slate-300">
+    <div className="h-full bg-[#0e1b32] overflow-y-auto p-6 text-slate-300">
       <div className="max-w-4xl mx-auto">
         <h2 className="text-xl font-semibold text-slate-100 mb-6">Carga de Trabalho da Equipe (WIP)</h2>
-        
+
         <div className="grid gap-4">
           {userWorkload.map(user => {
             const usagePercent = Math.min(100, (user.taskCount / user.capacity) * 100);
             const isOverloaded = user.taskCount > user.capacity;
-            
+
             return (
-              <div key={user.id} className="bg-[#1e293b] border border-[#334155] rounded-lg p-5 flex items-center gap-6">
+              <div key={user.id} className="bg-[#13233b] border border-[#294a70] rounded-lg p-5 flex items-center gap-6">
                 <div className="flex items-center gap-3 w-48 shrink-0">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white ${user.color}`}>
                     {user.initials}
@@ -43,9 +43,9 @@ export default function WorkloadView({ issues }: { issues: Issue[] }) {
                       {user.taskCount} / {user.capacity}
                     </span>
                   </div>
-                  <div className="h-3 w-full bg-[#2a2b2e] rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${isOverloaded ? 'bg-red-500' : 'bg-[#ea580c]'}`}
+                  <div className="h-3 w-full bg-[#1a2e4b] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${isOverloaded ? 'bg-red-500' : 'bg-[#38bdf8]'}`}
                       style={{ width: `${usagePercent}%` }}
                     ></div>
                   </div>
@@ -53,8 +53,8 @@ export default function WorkloadView({ issues }: { issues: Issue[] }) {
               </div>
             );
           })}
-          
-          <div className="bg-[#1e293b] border border-[#334155] rounded-lg p-5 flex items-center gap-6 opacity-60">
+
+          <div className="bg-[#13233b] border border-[#294a70] rounded-lg p-5 flex items-center gap-6 opacity-60">
             <div className="flex items-center gap-3 w-48 shrink-0">
               <div className="w-10 h-10 rounded-full border border-dashed border-slate-500 flex items-center justify-center text-slate-500 text-xs">
                 ?

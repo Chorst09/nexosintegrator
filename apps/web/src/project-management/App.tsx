@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Home, Compass, CheckSquare, Sparkles, Users, FileText, 
+import {
+  Home, Compass, CheckSquare, Sparkles, Users, FileText,
   BarChart2, LayoutTemplate, MoreHorizontal,
   Search, Bell, Settings, Plus, ChevronDown, CheckCircle2,
-  List as ListIcon, Calendar, Activity, 
+  List as ListIcon, Calendar, Activity,
   Users2, GanttChartSquare, ArrowLeft
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
@@ -32,7 +32,7 @@ type ViewMode = 'board' | 'list' | 'dashboard' | 'team' | 'calendar' | 'gantt' |
 export default function App({ onBack }: { onBack?: () => void }) {
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [globalView, setGlobalView] = useState('spaces');
-  
+
   // Try to load issues from localStorage, fallback to mockIssues
   const [issues, setIssues] = useState<Issue[]>(() => {
     const saved = localStorage.getItem('pm_issues_v4');
@@ -52,12 +52,12 @@ export default function App({ onBack }: { onBack?: () => void }) {
   ]);
   const [activeSpaceId, setActiveSpaceId] = useState<string>('s1');
   const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({ 's1': true });
-  
+
   // New States
   const [selectedTask, setSelectedTask] = useState<Issue | null>(null);
   const [isCreatingSpace, setIsCreatingSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
-  
+
   const submitNewSpace = () => {
     if (newSpaceName.trim() !== "" && isCreatingSpace) {
       const colors = ['bg-indigo-600', 'bg-emerald-600', 'bg-rose-600', 'bg-blue-600', 'bg-amber-600'];
@@ -106,14 +106,14 @@ export default function App({ onBack }: { onBack?: () => void }) {
   };
 
   return (
-    <div className="flex h-screen bg-[#0b1120] font-sans overflow-hidden text-slate-300 text-sm">
-      
+    <div className="flex h-screen bg-[#070f1f] font-sans overflow-hidden text-slate-300 text-sm">
+
       {/* Far Left Thin Navigation */}
-      <nav className="w-16 bg-[#0b1120] flex-shrink-0 flex flex-col items-center py-4 border-r border-[#334155] z-30">
+      <nav className="w-16 bg-[#070f1f] flex-shrink-0 flex flex-col items-center py-4 border-r border-[#294a70] z-30">
         <div className="w-8 h-8 bg-emerald-500 rounded text-white flex items-center justify-center font-bold mb-6 cursor-pointer">
           C
         </div>
-        
+
         <div className="flex flex-col gap-4 w-full px-2">
           <NavItem icon={Home} label="Início" active={globalView === 'home'} onClick={() => setGlobalView('home')} />
           <NavItem icon={Compass} label="Espaços" active={globalView === 'spaces'} onClick={() => setGlobalView('spaces')} />
@@ -127,16 +127,16 @@ export default function App({ onBack }: { onBack?: () => void }) {
 
       {/* Second Sidebar (Spaces) */}
       {globalView === 'spaces' && (
-        <aside className="w-[260px] bg-[#1e293b] flex-shrink-0 flex flex-col h-full border-r border-[#334155] z-20">
-          <div className="p-4 flex items-center justify-between border-b border-[#334155]">
+        <aside className="w-[260px] bg-[#13233b] flex-shrink-0 flex flex-col h-full border-r border-[#294a70] z-20">
+          <div className="p-4 flex items-center justify-between border-b border-[#294a70]">
           <h2 className="font-semibold text-slate-200">Espaços</h2>
-          <button onClick={() => setIsCreatingSpace(true)} className="bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-semibold px-2 py-1 rounded flex items-center gap-1 transition-colors">
+          <button onClick={() => setIsCreatingSpace(true)} className="bg-[#38bdf8] hover:bg-[#0ea5e9] text-white text-xs font-semibold px-2 py-1 rounded flex items-center gap-1 transition-colors">
             <Plus className="w-3 h-3" /> Criar
           </button>
         </div>
 
         <div className="p-3 flex-1 overflow-y-auto">
-          <div className="flex items-center gap-2 text-slate-400 hover:bg-[#334155] p-1.5 rounded cursor-pointer mb-4">
+          <div className="flex items-center gap-2 text-slate-400 hover:bg-[#294a70] p-1.5 rounded cursor-pointer mb-4">
             <LayoutTemplate className="w-4 h-4" />
             <span className="text-sm">Todas as tarefas</span>
           </div>
@@ -144,11 +144,11 @@ export default function App({ onBack }: { onBack?: () => void }) {
           <div className="flex flex-col gap-2">
             {isCreatingSpace && (
               <div className="mb-2">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   autoFocus
                   placeholder="Nome do espaço..."
-                  className="w-full bg-[#1e293b] border border-[#0ea5e9] text-slate-200 text-sm rounded px-2 py-1 outline-none"
+                  className="w-full bg-[#13233b] border border-[#38bdf8] text-slate-200 text-sm rounded px-2 py-1 outline-none"
                   value={newSpaceName}
                   onChange={(e) => setNewSpaceName(e.target.value)}
                   onKeyDown={(e) => {
@@ -159,27 +159,27 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 />
               </div>
             )}
-            
+
             {spaces.map(space => (
               <div key={space.id}>
-                <div 
-                  className={cn("flex items-center justify-between p-1.5 rounded cursor-pointer group", activeSpaceId === space.id ? "bg-[#334155] text-slate-200" : "text-slate-300 hover:bg-[#334155]")}
+                <div
+                  className={cn("flex items-center justify-between p-1.5 rounded cursor-pointer group", activeSpaceId === space.id ? "bg-[#294a70] text-slate-200" : "text-slate-300 hover:bg-[#294a70]")}
                   onClick={() => setActiveSpaceId(space.id)}
                 >
                   <div className="flex items-center gap-2">
                     <div className={cn("w-4 h-4 rounded-sm text-[8px] flex items-center justify-center font-bold text-white", space.color)}>{space.initial}</div>
                     <span className="font-medium text-sm">{space.name}</span>
                   </div>
-                  <ChevronDown 
-                    className={cn("w-4 h-4 transition-transform", expandedSpaces[space.id] ? "rotate-180 text-slate-300" : "opacity-0 group-hover:opacity-100")} 
+                  <ChevronDown
+                    className={cn("w-4 h-4 transition-transform", expandedSpaces[space.id] ? "rotate-180 text-slate-300" : "opacity-0 group-hover:opacity-100")}
                     onClick={(e) => { e.stopPropagation(); toggleSpace(space.id); }}
                   />
                 </div>
-                
+
                 {expandedSpaces[space.id] && (
                   <div className="ml-5 mt-1 border-l border-slate-700 pl-2 flex flex-col gap-1">
-                    <div 
-                      className={cn("flex items-center justify-between p-1.5 rounded cursor-pointer", activeView === 'list' && activeSpaceId === space.id ? 'bg-[#334155] text-slate-200' : 'text-slate-400 hover:bg-[#334155]')}
+                    <div
+                      className={cn("flex items-center justify-between p-1.5 rounded cursor-pointer", activeView === 'list' && activeSpaceId === space.id ? 'bg-[#294a70] text-slate-200' : 'text-slate-400 hover:bg-[#294a70]')}
                       onClick={() => { setActiveView('list'); setActiveSpaceId(space.id); }}
                     >
                       <div className="flex items-center gap-2">
@@ -192,7 +192,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 )}
               </div>
             ))}
-            
+
             <div onClick={() => setIsCreatingSpace(true)} className="flex items-center gap-2 text-slate-500 hover:text-slate-300 p-1.5 ml-5 rounded cursor-pointer mt-1">
               <Plus className="w-3.5 h-3.5" />
               <span className="text-sm">Novo Espaço</span>
@@ -203,29 +203,29 @@ export default function App({ onBack }: { onBack?: () => void }) {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[#0f172a]">
-        
+      <main className="flex-1 flex flex-col min-w-0 bg-[#0e1b32]">
+
         {/* Top Global Bar */}
-        <header className="h-12 border-b border-[#334155] px-4 flex items-center justify-between bg-[#1e293b] flex-shrink-0">
+        <header className="h-12 border-b border-[#294a70] px-4 flex items-center justify-between bg-[#13233b] flex-shrink-0">
           <div className="flex items-center gap-2">
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="flex h-8 items-center gap-1.5 rounded-md border border-[#475569] px-2.5 text-xs font-semibold text-slate-300 transition-colors hover:border-[#64748b] hover:bg-[#334155] hover:text-white"
+                className="flex h-8 items-center gap-1.5 rounded-md border border-[#315d87] px-2.5 text-xs font-semibold text-slate-300 transition-colors hover:border-[#64748b] hover:bg-[#294a70] hover:text-white"
                 title="Voltar ao CRM"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Voltar
               </button>
             )}
-            <div className="flex items-center gap-2 cursor-pointer hover:bg-[#334155] px-2 py-1 rounded transition-colors">
+            <div className="flex items-center gap-2 cursor-pointer hover:bg-[#294a70] px-2 py-1 rounded transition-colors">
               <div className="w-5 h-5 bg-emerald-500 rounded text-white flex items-center justify-center font-bold text-xs">C</div>
               <span className="font-semibold text-slate-200">Carlos Horst's Workspace</span>
               <ChevronDown className="w-4 h-4 text-slate-500" />
             </div>
           </div>
-          
+
           <div className="flex-1 max-w-lg mx-4 flex items-center gap-2">
             <div className="flex-1 relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -233,20 +233,20 @@ export default function App({ onBack }: { onBack?: () => void }) {
               </div>
               <input
                 type="text"
-                className="block w-full pl-8 pr-3 py-1 bg-[#1e293b] border border-[#475569] rounded-md text-slate-300 placeholder-slate-500 focus:outline-none focus:border-[#0ea5e9] text-xs transition-colors"
+                className="block w-full pl-8 pr-3 py-1 bg-[#13233b] border border-[#315d87] rounded-md text-slate-300 placeholder-slate-500 focus:outline-none focus:border-[#38bdf8] text-xs transition-colors"
                 placeholder="Pesquisar ⌘ K"
                 onClick={() => alert('Pesquisa global ativada. Use ⌘ K para buscar tarefas, documentos ou pessoas.')}
               />
             </div>
-            <button onClick={() => alert('Abrindo painel de Chat com IA...')} className="bg-[#1e293b] hover:bg-[#334155] border border-[#475569] text-slate-300 px-3 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition-colors">
-              Chats com IA <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <button onClick={() => alert('Abrindo painel de Chat com IA...')} className="bg-[#13233b] hover:bg-[#294a70] border border-[#315d87] text-slate-300 px-3 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition-colors">
+              Chats com IA <Sparkles className="w-3.5 h-3.5 text-teal-400" />
             </button>
           </div>
-          
+
           <div className="flex items-center gap-3 text-slate-400">
             <CheckCircle2 onClick={() => setGlobalView('planned')} className="w-5 h-5 hover:text-slate-200 cursor-pointer" />
             <Bell onClick={() => alert('Painel de Notificações')} className="w-5 h-5 hover:text-slate-200 cursor-pointer" />
-            <div onClick={() => alert('Menu do Perfil')} className="w-6 h-6 rounded-full bg-[#ea580c] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#1a1b1e] cursor-pointer">
+            <div onClick={() => alert('Menu do Perfil')} className="w-6 h-6 rounded-full bg-[#38bdf8] flex items-center justify-center text-white text-xs font-bold ring-2 ring-[#102139] cursor-pointer">
               CH
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
         {globalView === 'spaces' ? (
           <>
             {/* Project Header & Tabs */}
-            <div className="bg-[#1e293b] border-b border-[#334155] flex-shrink-0">
+            <div className="bg-[#13233b] border-b border-[#294a70] flex-shrink-0">
           <div className="px-6 pt-4 pb-0 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xl font-bold text-slate-200">
@@ -266,10 +266,10 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 <ListIcon className="w-5 h-5 text-slate-400 ml-1" /> List
                 <ChevronDown className="w-5 h-5 text-slate-500 cursor-pointer" />
               </div>
-              
+
               <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
                 <button onClick={() => alert('Funcionalidade de Agentes será lançada em breve')} className="hover:text-slate-200 flex items-center gap-1"><Users2 className="w-4 h-4" /> Agentes</button>
-                <button onClick={() => alert('ClickUp Brain em processamento...')} className="hover:text-slate-200 flex items-center gap-1"><Sparkles className="w-4 h-4 text-purple-400" /> Brain</button>
+                <button onClick={() => alert('ClickUp Brain em processamento...')} className="hover:text-slate-200 flex items-center gap-1"><Sparkles className="w-4 h-4 text-teal-400" /> Brain</button>
                 <button onClick={() => alert('Compartilhar este espaço com outras pessoas')} className="hover:text-slate-200 flex items-center gap-1"><Users className="w-4 h-4" /> Compartilhar</button>
               </div>
             </div>
@@ -291,25 +291,25 @@ export default function App({ onBack }: { onBack?: () => void }) {
         </div>
 
         {/* Toolbar */}
-        <div className="h-14 px-6 flex items-center justify-between flex-shrink-0 bg-[#0f172a]">
+        <div className="h-14 px-6 flex items-center justify-between flex-shrink-0 bg-[#0e1b32]">
           <div className="flex items-center gap-3">
-            <button onClick={() => alert('Controles de Visão (Filtros, Agrupamento)')} className="bg-[#1e293b] hover:bg-[#2b2d32] text-slate-200 px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-2 border border-[#475569]">
-              <LayersIcon className="w-4 h-4 text-[#0ea5e9]" /> View Controls
+            <button onClick={() => alert('Controles de Visão (Filtros, Agrupamento)')} className="bg-[#13233b] hover:bg-[#2b2d32] text-slate-200 px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-2 border border-[#315d87]">
+              <LayersIcon className="w-4 h-4 text-[#38bdf8]" /> View Controls
             </button>
           </div>
-          
+
           <div className="flex items-center gap-3 text-slate-400">
-            <button onClick={() => alert('Busca específica na lista atual')} className="hover:bg-[#1e293b] p-1.5 rounded"><Search className="w-4 h-4" /></button>
-            <button onClick={() => alert('Configurações da visualização atual')} className="hover:bg-[#1e293b] p-1.5 rounded"><Settings className="w-4 h-4" /></button>
+            <button onClick={() => alert('Busca específica na lista atual')} className="hover:bg-[#13233b] p-1.5 rounded"><Search className="w-4 h-4" /></button>
+            <button onClick={() => alert('Configurações da visualização atual')} className="hover:bg-[#13233b] p-1.5 rounded"><Settings className="w-4 h-4" /></button>
             <div className="h-4 w-px bg-slate-700 mx-1"></div>
-            <button onClick={handleCreateTask} className="bg-[#ea580c] hover:bg-[#c2410c] text-white px-4 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors">
+            <button onClick={handleCreateTask} className="bg-[#38bdf8] hover:bg-[#0ea5e9] text-white px-4 py-1.5 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors">
               <Plus className="w-3.5 h-3.5" /> Tarefa <ChevronDown className="w-3 h-3 ml-1" />
             </button>
           </div>
         </div>
 
         {/* View Renderer */}
-        <div className="flex-1 overflow-hidden relative bg-[#0f172a]">
+        <div className="flex-1 overflow-hidden relative bg-[#0e1b32]">
           {activeView === 'board' && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'list' && <ListView issues={issues} onTaskClick={setSelectedTask} />}
           {activeView === 'dashboard' && <Dashboard />}
@@ -319,10 +319,10 @@ export default function App({ onBack }: { onBack?: () => void }) {
           {activeView === 'activity' && <ActivityView />}
           {activeView === 'workload' && <WorkloadView issues={issues} />}
         </div>
-        
+
           </>
         ) : (
-          <div className="flex-1 overflow-hidden relative bg-[#0f172a]">
+          <div className="flex-1 overflow-hidden relative bg-[#0e1b32]">
             {globalView === 'home' && <HomeView />}
             {globalView === 'planned' && <PlannedView />}
             {globalView === 'teams' && <TeamView />}
@@ -336,11 +336,11 @@ export default function App({ onBack }: { onBack?: () => void }) {
       {selectedTask && (
         <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />
       )}
-      
+
       {isCreatingTaskGlobal && (
-        <CreateTaskModal 
-          onClose={() => setIsCreatingTaskGlobal(false)} 
-          onCreate={handleGlobalCreateTaskSubmit} 
+        <CreateTaskModal
+          onClose={() => setIsCreatingTaskGlobal(false)}
+          onCreate={handleGlobalCreateTaskSubmit}
         />
       )}
     </div>
@@ -350,11 +350,11 @@ export default function App({ onBack }: { onBack?: () => void }) {
 // Helpers
 function NavItem({ icon: Icon, label, active, onClick }: { icon: any, label: string, active?: boolean, onClick?: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center gap-1 w-full py-2 px-1 rounded-xl transition-colors group",
-      active ? "text-[#0ea5e9] bg-[#0ea5e9]/10" : "text-slate-500 hover:text-slate-300 hover:bg-[#334155]"
+        "flex flex-col items-center justify-center gap-1 w-full py-2 px-1 rounded-md transition-colors group",
+      active ? "text-[#38bdf8] bg-[#38bdf8]/10" : "text-slate-500 hover:text-slate-300 hover:bg-[#294a70]"
     )}>
       <Icon className="w-5 h-5" />
       <span className="text-[10px] font-medium leading-none">{label}</span>
@@ -364,14 +364,14 @@ function NavItem({ icon: Icon, label, active, onClick }: { icon: any, label: str
 
 function Tab({ icon: Icon, label, active, onClick }: { icon: any, label: string, active?: boolean, onClick?: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
         "flex items-center gap-1.5 pb-2 border-b-2 transition-colors whitespace-nowrap",
-        active ? "border-[#0ea5e9] text-slate-200" : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600"
+        active ? "border-[#38bdf8] text-slate-200" : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600"
       )}
     >
-      <Icon className={cn("w-4 h-4", active ? "text-[#0ea5e9]" : "")} />
+      <Icon className={cn("w-4 h-4", active ? "text-[#38bdf8]" : "")} />
       {label}
     </button>
   );
