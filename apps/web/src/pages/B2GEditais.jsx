@@ -4385,12 +4385,12 @@ export default function B2GEditais() {
               value={
                 <div className="relative mx-auto mt-4 h-24 w-44 overflow-hidden">
                   <TemperatureGauge
-                    value={dashboardForecastScore}
+                    value={Number(dashboardForecastScore) || 0}
                     size="small"
                     colorTheme="magenta"
                   />
                   <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-black text-[#ecf5ff]">
-                    {dashboardForecastScore.toFixed(1)}%
+                    {(Number(dashboardForecastScore) || 0).toFixed(1)}%
                   </div>
                 </div>
               }
@@ -4403,7 +4403,7 @@ export default function B2GEditais() {
             <DashboardKPICard
               title="Total em Pipeline"
               icon={TrendingUp}
-              value={formatCurrencyNoCents(dashboardTotals.pipelineValue)}
+              value={formatCurrencyNoCents(Number(dashboardTotals?.pipelineValue) || 0)}
               subtitle="Volume total em análise comercial"
               colorTheme="cyan"
               status="active"
@@ -4415,7 +4415,7 @@ export default function B2GEditais() {
             <DashboardKPICard
               title="Taxa de Vitória"
               icon={Gauge}
-              value={`${dashboardTotals.winRate.toFixed(1)}%`}
+              value={`${(Number(dashboardTotals?.winRate) || 0).toFixed(1)}%`}
               subtitle="Conversão média do trimestre"
               colorTheme="green"
               status="active"
@@ -4427,7 +4427,7 @@ export default function B2GEditais() {
             <DashboardKPICard
               title="Licitações 'GO'"
               icon={CheckCircle2}
-              value={dashboardTotals.goCount}
+              value={Number(dashboardTotals?.goCount) || 0}
               subtitle="Ativas na fase de proposta"
               colorTheme="blue"
               status="active"
@@ -4439,7 +4439,7 @@ export default function B2GEditais() {
             <DashboardKPICard
               title="Prazos Próximos"
               icon={Clock3}
-              value={String(dashboardCriticalDeadlines.length).padStart(2, '0')}
+              value={String((dashboardCriticalDeadlines?.length || 0)).padStart(2, '0')}
               subtitle="Abertura nos próximos 7 dias"
               colorTheme="pink"
               status="active"
