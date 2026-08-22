@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ScrollToTop from './components/ScrollToTop';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -16,7 +17,6 @@ import Propostas from './pages/Propostas';
 import TemplatesPropostas from './pages/TemplatesPropostas';
 import Contratos from './pages/Contratos';
 import PosVenda from './pages/PosVenda';
-import Projetos from './pages/Projetos';
 import ProjetoDetalhe from './pages/ProjetoDetalhe';
 import Automacoes from './pages/Automacoes';
 import LeadManagement from './pages/LeadManagement';
@@ -44,6 +44,8 @@ import Setup from './pages/Setup';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleGuard from './components/RoleGuard';
 import { ROLES, getUserAccess, normalizeRole } from './utils/permissions';
+
+const Projetos = lazy(() => import('./pages/Projetos'));
 
 function B2GRouteScreen() {
   const location = useLocation();
@@ -247,7 +249,9 @@ export default function App() {
             path="projetos"
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
-                <Projetos />
+                <Suspense fallback={<div className="py-16 text-center text-[var(--crm-muted)]">Carregando projetos...</div>}>
+                  <Projetos />
+                </Suspense>
               </RoleGuard>
             }
           />

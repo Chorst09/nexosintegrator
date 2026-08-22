@@ -1,0 +1,39 @@
+.project-management-embed {
+  margin: -1.5rem -1rem -3rem;
+  overflow: hidden;
+  border: 1px solid #334155;
+  background: #0b1120;
+}
+
+.project-management-embed > div {
+  height: calc(100vh - 7.25rem);
+  min-height: 680px;
+}
+
+.project-management-embed h1,
+.project-management-embed h2,
+.project-management-embed h3,
+.project-management-embed h4 {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+@media (min-width: 640px) {
+  .project-management-embed {
+    margin-right: -1.5rem;
+    margin-left: -1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .project-management-embed {
+    margin-right: -2rem;
+    margin-left: -2rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .project-management-embed > div {
+    min-width: 920px;
+  }
+}
