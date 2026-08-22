@@ -44,7 +44,9 @@ const DashboardAdvancedChart = ({
   colorTheme = 'multi',
   showLegend = true,
   animated = true,
-  customOptions = {}
+  customOptions = {},
+  isEmpty = false,
+  icon = null
 }) => {
   // Cores baseadas no tema
   const colorPalettes = {
@@ -187,69 +189,83 @@ const DashboardAdvancedChart = ({
   return (
     <div className="dashboard-card p-6 space-y-4">
       {/* Header */}
-      <div>
-        {title && (
-          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-            {title}
-          </h3>
-        )}
-        {subtitle && (
-          <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
-        )}
+      <div className="flex items-center justify-between">
+        <div>
+          {title && (
+            <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+              {title}
+            </h3>
+          )}
+          {subtitle && (
+            <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+          )}
+        </div>
+        {icon && <div className="text-slate-400">{icon}</div>}
       </div>
 
-      {/* Chart Container */}
-      <div style={{ height, position: 'relative' }}>
-        {type === 'line' && (
-          <Line data={processedData} options={chartOptions} />
-        )}
-        {type === 'bar' && (
-          <Bar
-            data={processedData}
-            options={{
-              ...chartOptions,
-              scales: {
-                ...chartOptions.scales,
-                y: {
-                  ...chartOptions.scales.y,
-                  stacked: false
-                }
-              }
-            }}
-          />
-        )}
-        {type === 'doughnut' && (
-          <Doughnut
-            data={processedData}
-            options={{
-              ...chartOptions,
-              plugins: {
-                ...chartOptions.plugins,
-                legend: {
-                  ...chartOptions.plugins.legend,
-                  position: 'right'
-                }
-              }
-            }}
-          />
-        )}
-        {type === 'radar' && (
-          <Radar data={processedData} options={chartOptions} />
-        )}
-        {type === 'polar' && (
-          <PolarArea data={processedData} options={chartOptions} />
-        )}
-      </div>
+      {/* Empty State */}
+      {isEmpty ? (
+        <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="text-center">
+            <p className="text-sm text-slate-500">Nenhum dado disponível</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Chart Container */}
+          <div style={{ height, position: 'relative' }}>
+            {type === 'line' && (
+              <Line data={processedData} options={chartOptions} />
+            )}
+            {type === 'bar' && (
+              <Bar
+                data={processedData}
+                options={{
+                  ...chartOptions,
+                  scales: {
+                    ...chartOptions.scales,
+                    y: {
+                      ...chartOptions.scales.y,
+                      stacked: false
+                    }
+                  }
+                }}
+              />
+            )}
+            {type === 'doughnut' && (
+              <Doughnut
+                data={processedData}
+                options={{
+                  ...chartOptions,
+                  plugins: {
+                    ...chartOptions.plugins,
+                    legend: {
+                      ...chartOptions.plugins.legend,
+                      position: 'right'
+                    }
+                  }
+                }}
+              />
+            )}
+            {type === 'radar' && (
+              <Radar data={processedData} options={chartOptions} />
+            )}
+            {type === 'polar' && (
+              <PolarArea data={processedData} options={chartOptions} />
+            )}
+          </div>
 
-      {/* Footer Info */}
-      <div className="flex items-center justify-between pt-4 border-t border-slate-500/20">
-        <span className="text-xs text-slate-500">
-          {new Date().toLocaleDateString('pt-BR')}
-        </span>
-        <span className="text-xs text-slate-600">
-          {processedData.datasets.length} série{processedData.datasets.length !== 1 ? 's' : ''}
-        </span>
-      </div>
+          {/* Footer Info */}
+          <div className="flex items-center justify-between pt-4 border-t border-slate-500/20">
+            <span className="text-xs text-slate-500">
+              {new Date().toLocaleDateString('pt-BR')}
+            </span>
+            <span className="text-xs text-slate-600">
+              {processedData.datasets.length} série{processedData.datasets.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 };
