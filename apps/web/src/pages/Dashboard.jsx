@@ -175,7 +175,7 @@ const TrendBadge = ({ trend }) => {
   const positive = trend.direction === 'up';
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${positive ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
-      {positive ? '▲' : '▼'} {trend.value.toFixed(0)}% vs mês anterior
+      {positive ? '▲' : '▼'} {(Number(trend.value) || 0).toFixed(0)}% vs mês anterior
     </span>
   );
 };
