@@ -3,7 +3,7 @@
  * Arquitetura: Senior - Com efeitos neon, gradientes e animações
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, isValidElement, useState } from 'react';
 import { TrendingUp, TrendingDown, AlertCircle, CheckCircle } from 'lucide-react';
 import { DASHBOARD_COLORS, TRANSITIONS } from '../constants/dashboardTheme';
 import '../styles/dashboardEffects.css';
@@ -21,24 +21,31 @@ const DashboardKPICard = ({
   sparklineData = [],
   isAnimated = true,
   subtitle = '',
-  onClick = null
+  onClick = null,
+  size = 'default'
 }) => {
-  const [displayValue, setDisplayValue] = useState(0);
-  const numericValue = Number(value || 0);
+  const isCompact = size === 'compact';
+  const parsedValue = Number(value);
+  const hasNumericValue = value !== null && value !== undefined && value !== '' && Number.isFinite(parsedValue);
+  const [displayValue, setDisplayValue] = useState(hasNumericValue ? 0 : (value ?? ''));
 
-  // Animação de contagem para números
   useEffect(() => {
+    if (!hasNumericValue) {
+      setDisplayValue(value ?? '');
+      return;
+    }
+
     if (!isAnimated) {
-      setDisplayValue(numericValue);
+      setDisplayValue(parsedValue);
       return;
     }
 
     let current = 0;
-    const increment = numericValue / 50;
+    const increment = parsedValue / 50;
     const interval = setInterval(() => {
       current += increment;
-      if (current >= numericValue) {
-        setDisplayValue(numericValue);
+      if (current >= parsedValue) {
+        setDisplayValue(parsedValue);
         clearInterval(interval);
       } else {
         setDisplayValue(current);
@@ -46,7 +53,7 @@ const DashboardKPICard = ({
     }, 16);
 
     return () => clearInterval(interval);
-  }, [numericValue, isAnimated]);
+  }, [parsedValue, hasNumericValue, value, isAnimated]);
 
   // Determinar cores baseado no tema
   const colorMap = {
@@ -83,7 +90,7 @@ const DashboardKPICard = ({
     <div
       onClick={onClick}
       className={`
-        dashboard-card group relative overflow-hidden p-6
+        dashboard-card group relative overflow-hidden ${isCompact ? 'p-3.5' : 'p-6'}
         ${onClick ? 'cursor-pointer' : ''}
         ${isAnimated ? 'animate-fade-in-up' : ''}
       `}
@@ -112,44 +119,48 @@ const DashboardKPICard = ({
       {/* Conteúdo */}
       <div className="relative z-10">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
+        <div className={`flex items-start justify-between ${isCompact ? 'mb-2.5' : 'mb-4'}`}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <p className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-semibold uppercase tracking-wider text-slate-400 mb-1`}>
               {title}
             </p>
             {subtitle && (
-              <p className="text-xs text-slate-500">{subtitle}</p>
+              <p className={`${isCompact ? 'text-[11px]' : 'text-xs'} leading-snug text-slate-500`}>{subtitle}</p>
             )}
           </div>
 
           {Icon && (
             <div
-              className="p-2 rounded-lg transition-all duration-300"
+              className={`${isCompact ? 'p-1.5' : 'p-2'} rounded-lg transition-all duration-300`}
               style={{
                 backgroundColor: `${color}15`,
                 border: `1px solid ${color}30`
               }}
             >
-              <Icon
-                size={20}
-                style={{ color }}
-                className="group-hover:animate-float"
-              />
+              {isValidElement(Icon) ? (
+                Icon
+              ) : (
+                <Icon
+                  size={isCompact ? 16 : 20}
+                  style={{ color }}
+                  className="group-hover:animate-float"
+                />
+              )}
             </div>
           )}
         </div>
 
         {/* Valor Principal */}
-        <div className="mb-4">
+        <div className={isCompact ? 'mb-2.5' : 'mb-4'}>
           <div className="flex items-baseline gap-2">
             <span
-              className="text-4xl font-bold tracking-tight"
+              className={`${isCompact ? 'text-2xl sm:text-3xl' : 'text-4xl'} font-bold tracking-tight`}
               style={{
                 color,
                 textShadow: `0 0 20px ${color}40`
               }}
             >
-              {formatValue(displayValue)}
+              {hasNumericValue ? formatValue(displayValue) : (displayValue || '-')}
             </span>
             {unit && (
               <span className="text-sm font-medium text-slate-400">

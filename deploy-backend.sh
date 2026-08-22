@@ -53,11 +53,13 @@ ENDSSH
 echo ""
 echo "🐳 Passo 3: Rebuild e reinício do container..."
 sshpass -e ssh -o StrictHostKeyChecking=accept-new -p $SERVER_PORT $SERVER_USER@$SERVER_IP << 'ENDSSH'
+    set -e
     cd /opt/nexoscrm
 
     # Rebuild da imagem do backend e reiniciar
     docker compose -f docker-compose.production.yml build backend
-    docker compose -f docker-compose.production.yml up -d backend
+    docker rm -f nexoscrm-backend 2>/dev/null || true
+    docker compose -f docker-compose.production.yml up -d --no-deps backend
 
     echo "✅ Container rebuildado e reiniciado"
 ENDSSH

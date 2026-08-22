@@ -41,6 +41,7 @@ import SalesFunnel from '../components/SalesFunnel';
 import TemperatureGauge from '../components/TemperatureGauge';
 import DashboardKPICard from '../components/DashboardKPICard';
 import DashboardAdvancedChart from '../components/DashboardAdvancedChart';
+import PipelineDashboardModel from '../components/PipelineDashboardModel';
 import { DASHBOARD_COLORS } from '../constants/dashboardTheme';
 import '../styles/dashboardEffects.css';
 
@@ -222,9 +223,18 @@ export default function Dashboard() {
     setTimeRange('30d');
   };
 
-  const fetchDashboardData = async (ownerId, temperature, period) => {
+  const dashboardRequestRef = useRef(0);
+  const dashboardLoadingRequestRef = useRef(0);
+
+  const fetchDashboardData = async (ownerId, temperature, period, { silent = false } = {}) => {
+    const requestId = dashboardRequestRef.current + 1;
+    dashboardRequestRef.current = requestId;
+
     try {
-      setLoading(true);
+      if (!silent) {
+        dashboardLoadingRequestRef.current = requestId;
+        setLoading(true);
+      }
       const token = localStorage.getItem('token');
       const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
@@ -234,13 +244,13 @@ export default function Dashboard() {
       if (ownerId) params.set('ownerId', ownerId);
       if (temperature) params.set('temperature', temperature);
 
-      const res = await fetch(`/api/dashboard?${params.toString()}`, { headers });
+      const res = await fetch(`/api/dashboard?${params.toString()}`, { headers, cache: 'no-store' });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
       const data = await res.json();
 
-      if (data) {
+      if (data && requestId === dashboardRequestRef.current) {
         setDashboardData(data);
         setFilteredOpportunities(data.opportunities || []);
         setRealData({ kpis: data.kpis || {} });
@@ -248,7 +258,7 @@ export default function Dashboard() {
     } catch (e) {
       console.error('Erro ao carregar dashboard B2B:', e);
     } finally {
-      setLoading(false);
+      if (!silent && requestId === dashboardLoadingRequestRef.current) setLoading(false);
     }
   };
 
@@ -272,6 +282,25 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData(selectedOwnerId, selectedTemperature, timeRange);
+  }, [selectedOwnerId, selectedTemperature, timeRange]);
+
+  useEffect(() => {
+    const syncDashboard = () => {
+      fetchDashboardData(selectedOwnerId, selectedTemperature, timeRange, { silent: true });
+    };
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') syncDashboard();
+    };
+
+    const intervalId = window.setInterval(syncDashboard, 30000);
+    window.addEventListener('focus', syncDashboard);
+    document.addEventListener('visibilitychange', syncWhenVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncDashboard);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+    };
   }, [selectedOwnerId, selectedTemperature, timeRange]);
 
   const rawFunnel = dashboardData?.charts?.funnel || [];
@@ -578,6 +607,138 @@ export default function Dashboard() {
 
   const openPipelineValue = Math.max(kpis.pipelineValue - kpis.wonValue, 0);
   const projectedValue = charts.forecast[charts.forecast.length - 1]?.forecast || 0;
+
+  const referencePalette = ['#ef3b36', '#efe58a', '#45c96f', '#21bfe0', '#2784d6', '#8a43cf'];
+  const referenceStageLevels = [
+    { value: 0, label: 'Frio', color: referencePalette[0] },
+    { value: 25, label: 'Amarelo Claro', color: referencePalette[1] },
+    { value: 50, label: 'Verde / Qualificado', color: referencePalette[2] },
+    { value: 75, label: 'Ciano / Quente', color: referencePalette[3] },
+    { value: 100, label: 'Roxo / Fechado', color: referencePalette[5] }
+  ];
+  const opportunityBase = Math.max(kpis.activeLeads, kpis.totalOpportunities, kpis.wonOpportunities, 1);
+  const temperatureTotal = Object.values(temperatureCounts).reduce((sum, count) => sum + Number(count || 0), 0);
+  const pipelineTemperature = temperatureTotal > 0
+    ? Object.entries(temperatureCounts).reduce((sum, [level, count]) => sum + Number(level) * Number(count || 0), 0) / temperatureTotal
+    : kpis.conversionRate;
+  const openOpportunities = filteredOpportunities
+    .filter((item) => !['WON', 'LOST'].includes(String(item?.stage || '').toUpperCase()))
+    .sort((a, b) => Number(a?.probability || 0) - Number(b?.probability || 0));
+  const monthlyLabels = charts.monthlyRevenue.map((month) => (
+    new Date(month.month).toLocaleDateString('pt-BR', { month: 'short' })
+  ));
+  const revenueByMonth = charts.monthlyRevenue.map((month) => Number(month.revenue || 0));
+  const forecastByMonth = monthlyLabels.map((_, index) => Number(charts.forecast[index]?.forecast || 0));
+  const sellerRows = charts.performanceByUser.slice(0, 6);
+  const sellerRevenueTotal = sellerRows.reduce((sum, row) => sum + Number(row.value || 0), 0);
+
+  if (true) {
+    return (
+      <div
+        ref={presentationRef}
+        className={presentationMode ? 'h-screen overflow-y-auto overflow-x-hidden bg-[#0b1322] p-2 pb-24' : ''}
+      >
+        <PipelineDashboardModel
+          title="Dashboard Comercial B2B"
+          subtitle="Visão consolidada do pipeline, conversão e desempenho da equipe"
+          controls={(
+            <>
+              <select value={timeRange} onChange={(event) => setTimeRange(event.target.value)} aria-label="Período">
+                {PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <select value={selectedOwnerId} onChange={(event) => setSelectedOwnerId(event.target.value)} aria-label="Gerente">
+                <option value="">Todos os gerentes</option>
+                {users.map((user) => <option key={user.id} value={user.id}>{user.name || user.email}</option>)}
+              </select>
+              <select value={selectedTemperature} onChange={(event) => setSelectedTemperature(event.target.value)} aria-label="Temperatura">
+                {temperatureOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <button type="button" onClick={resetFilters} title="Limpar filtros" aria-label="Limpar filtros"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={handlePresentation} title="Apresentação" aria-label="Abrir apresentação"><Maximize2 className="h-4 w-4" /></button>
+            </>
+          )}
+          metrics={[
+            { label: 'Leads Gerados', value: kpis.activeLeads, percent: (kpis.activeLeads / opportunityBase) * 100, color: '#ff6b18' },
+            { label: 'Oportunidades Criadas', value: kpis.totalOpportunities, percent: (kpis.totalOpportunities / opportunityBase) * 100, color: '#08c7e8' },
+            { label: 'Vendas Fechadas', value: kpis.wonOpportunities, percent: (kpis.wonOpportunities / opportunityBase) * 100, color: '#24d17e' },
+            { label: 'Taxa de Conversão', value: formatPercent(kpis.conversionRate), percent: kpis.conversionRate, color: '#1689ff', secondaryColor: '#b43fe1' }
+          ]}
+          funnel={<SalesFunnel data={charts.funnel} />}
+          funnelTitle="Funil Comercial B2B"
+          funnelSubtitle="Volume de oportunidades por etapa"
+          temperature={pipelineTemperature}
+          temperatureLevels={referenceStageLevels}
+          performanceChart={{
+            title: 'Performance por Origem',
+            subtitle: 'Oportunidades geradas por canal',
+            labels: charts.opportunitiesBySource.map((row) => row.source || 'Não informado'),
+            values: charts.opportunitiesBySource.map((row) => Number(row.count || 0)),
+            colors: ['#1689ff', '#08c7e8', '#1671d9', '#24d17e', '#ff6b18', '#ffbd16'],
+            targetPercent: 85
+          }}
+          trendChart={{
+            title: 'Tendência Mensal',
+            subtitle: 'Receita realizada e previsão',
+            labels: monthlyLabels,
+            datasets: [
+              { label: 'Receita', data: revenueByMonth, color: '#ff7a24', fill: true, fillColor: 'rgba(255, 107, 24, 0.16)' },
+              { label: 'Forecast', data: forecastByMonth, color: '#08c7e8', fill: false }
+            ]
+          }}
+          table={{
+            title: 'Performance Comercial',
+            subtitle: 'Resultados por gerente',
+            columns: [
+              { label: 'Gerente' },
+              { label: 'Negócios', align: 'right' },
+              { label: 'Receita', align: 'right' },
+              { label: 'Participação', align: 'right' }
+            ],
+            rows: sellerRows.map((row, index) => ({
+              id: `${row.user || 'gerente'}-${index}`,
+              cells: [
+                row.user || 'Não informado',
+                Number(row.won || 0),
+                formatCurrencyNoCents(row.value),
+                `${sellerRevenueTotal > 0 ? ((Number(row.value || 0) / sellerRevenueTotal) * 100).toFixed(1) : '0.0'}%`
+              ]
+            }))
+          }}
+          alerts={{
+            title: 'Alertas do Pipeline',
+            subtitle: 'Oportunidades que pedem atenção',
+            items: openOpportunities.slice(0, 4).map((item, index) => {
+              const probability = Number(item?.probability || 0);
+              return {
+                id: item.id || `alert-${index}`,
+                title: item.title || item.name || item.company?.name || 'Oportunidade sem título',
+                detail: `${STAGE_LABELS[item.stage] || item.stage || 'Etapa não informada'} • ${probability}% de probabilidade`,
+                tone: probability <= 25 ? 'red' : probability <= 50 ? 'yellow' : 'blue'
+              };
+            })
+          }}
+          teamChart={{
+            title: 'Performance da Equipe',
+            subtitle: 'Negócios fechados por gerente',
+            labels: sellerRows.map((row) => String(row.user || 'N/I').split(' ')[0]),
+            datasets: [{ label: 'Negócios', data: sellerRows.map((row) => Number(row.won || 0)), colors: ['#ff6b18', '#08c7e8', '#1689ff', '#24d17e', '#ffbd16', '#b43fe1'] }]
+          }}
+          presentationControls={(
+            <PresentationControls
+              active={presentationMode}
+              current={presentationProgress.current}
+              total={presentationProgress.total}
+              canPrevious={presentationProgress.current > 1}
+              canNext={presentationProgress.current < presentationProgress.total}
+              onPrevious={() => scrollPresentationStep(-1)}
+              onNext={() => scrollPresentationStep(1)}
+              onExit={handlePresentation}
+            />
+          )}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

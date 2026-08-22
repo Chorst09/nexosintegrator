@@ -21,9 +21,9 @@ echo ""
 echo "📁 Passo 1: Enviando arquivos do frontend..."
 
 # Criar arquivo tar do frontend excluindo node_modules e arquivos desnecessários
-COPYFILE_DISABLE=1 tar --exclude='./node_modules' \
-    --exclude='./.git' \
-    --exclude='./dist' \
+COPYFILE_DISABLE=1 tar --exclude='apps/web/node_modules' \
+    --exclude='apps/web/.git' \
+    --exclude='apps/web/dist' \
     --exclude='./*.md' \
     --exclude='./*.sh' \
     --exclude='./deploy-to-server.sh' \
@@ -38,15 +38,11 @@ sshpass -e scp -o StrictHostKeyChecking=accept-new -P $SERVER_PORT /tmp/frontend
 echo ""
 echo "🔧 Passo 2: Extraindo e configurando no servidor..."
 sshpass -e ssh -o StrictHostKeyChecking=accept-new -p $SERVER_PORT $SERVER_USER@$SERVER_IP << 'ENDSSH'
+    set -e
     cd /opt/nexoscrm
-    
-    # Parar containers existentes
-    if [ -f docker-compose.production.yml ]; then
-        docker compose -f docker-compose.production.yml down 2>/dev/null || true
-    fi
 
     # Limpar arquivos antigos do frontend
-    find apps/web -mindepth 1 \
+    find apps/web -mindepth 1 -maxdepth 1 \
         ! -name '.env' \
         ! -name '.env.example' \
         ! -name 'package.json' \
@@ -68,6 +64,7 @@ ENDSSH
 echo ""
 echo "🐳 Passo 3: Fazendo build do frontend..."
 sshpass -e ssh -o StrictHostKeyChecking=accept-new -p $SERVER_PORT $SERVER_USER@$SERVER_IP << 'ENDSSH'
+    set -e
     cd /opt/nexoscrm/apps/web
     
     # Instalar dependências
@@ -82,11 +79,12 @@ ENDSSH
 echo ""
 echo "🔄 Passo 4: Rebuild e reinício dos containers..."
 sshpass -e ssh -o StrictHostKeyChecking=accept-new -p $SERVER_PORT $SERVER_USER@$SERVER_IP << 'ENDSSH'
+    set -e
     cd /opt/nexoscrm
     
     # Rebuild da imagem do frontend e reiniciar
     docker compose -f docker-compose.production.yml build frontend
-    docker compose -f docker-compose.production.yml up -d
+    docker compose -f docker-compose.production.yml up -d --no-deps frontend
     
     echo "✅ Containers rebuildados e reiniciados"
 ENDSSH

@@ -31,5 +31,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD wget -qO- http://localhost:3001/health || exit 1
 
-# Iniciar aplicação
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node prisma/ensure-schema.cjs && node server.js"]
+# Aplicar apenas ajustes aditivos conhecidos; migrations destrutivas ficam fora do boot.
+CMD ["sh", "-c", "node prisma/ensure-schema.cjs && node server.js"]

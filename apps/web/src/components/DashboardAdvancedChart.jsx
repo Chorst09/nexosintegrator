@@ -15,8 +15,7 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler,
-  plugins
+  Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
 import { DASHBOARD_COLORS, CHART_CONFIG } from '../constants/dashboardTheme';
@@ -82,6 +81,25 @@ const DashboardAdvancedChart = ({
     if (!data) {
       return { labels: [], datasets: [] };
     }
+
+    // Suporte ao formato simplificado { labels, values, colors }
+    if (Array.isArray(data.values)) {
+      return {
+        labels: data.labels || [],
+        datasets: [{
+          label: subtitle,
+          data: data.values,
+          backgroundColor: Array.isArray(data.colors)
+            ? data.colors
+            : (data.colors || colors[0]),
+          borderColor: DASHBOARD_COLORS.background.primary,
+          borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false
+        }]
+      };
+    }
+
     const datasets = data.datasets || [];
     return {
       labels: data.labels || [],
@@ -105,7 +123,7 @@ const DashboardAdvancedChart = ({
         borderCapStyle: 'round'
       }))
     };
-  }, [data, type, colors]);
+  }, [data, type, colors, subtitle]);
 
   // Opções do chart
   const chartOptions = useMemo(() => {

@@ -11,7 +11,6 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
-  DollarSign,
   FileText,
   Gavel,
   Layers,
@@ -20,7 +19,6 @@ import {
   Phone,
   RefreshCcw,
   Target,
-  TrendingUp,
   UserCircle2,
   Users,
   Zap
@@ -41,7 +39,6 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { getUserAccess, normalizeRole } from '../utils/permissions';
 import PresentationControls from '../components/PresentationControls';
-import DashboardKPICard from '../components/DashboardKPICard';
 import DashboardAdvancedChart from '../components/DashboardAdvancedChart';
 import { DASHBOARD_COLORS } from '../constants/dashboardTheme';
 import '../styles/dashboardEffects.css';
@@ -1381,18 +1378,6 @@ export default function DashboardGeral() {
           totals={consolidatedRevenue}
           accent="emerald"
         />
-      </div>
-
-      <div data-section="kpis" className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8">
-        <DashboardKPICard icon={DollarSign} label="Pipeline Consolidado" value={formatCurrency(totalPipeline)} sub="Contrato + pontual" colorTheme="cyan" />
-        <DashboardKPICard icon={TrendingUp} label="Receita Ganha" value={formatCurrency(totalWonValue)} sub={`B2B ${formatCurrency(b2bWonRevenue.total)} | B2G ${formatCurrency(b2gWonRevenue.total)}`} colorTheme="green" />
-        <DashboardKPICard icon={Target} label="Oportunidades" value={formatNumber(opportunitiesB2BRange.length + opportunitiesB2GRange.length)} sub="B2B + B2G" colorTheme="cyan" onClick={() => navigate('/oportunidades')} />
-        <DashboardKPICard icon={Building2} label="Empresas" value={formatNumber(companiesB2B.length + companiesB2G.length)} sub="Carteira total" colorTheme="magenta" onClick={() => navigate('/empresas')} />
-        <DashboardKPICard icon={Package} label="Produtos Ativos" value={formatNumber(activeProducts.length)} sub={`${formatNumber(regions.length)} regiões`} colorTheme="yellow" onClick={() => navigate('/produtos')} />
-        <DashboardKPICard icon={Activity} label="Atividades Pendentes" value={formatNumber(pendingActivities.length)} sub={`${formatNumber(overdueActivities.length)} atrasadas`} colorTheme={overdueActivities.length > 0 ? 'pink' : 'cyan'} onClick={() => navigate('/atividades')} />
-        <DashboardKPICard icon={Beaker} label="POCs Pré-Vendas" value={formatNumber(preSalesPocsRange.length)} sub={`${formatNumber(activePreSalesPocs.length)} em andamento`} colorTheme={blockedPreSalesPocs.length > 0 || overduePreSalesPocs.length > 0 ? 'pink' : 'magenta'} onClick={() => navigate('/gestao-pocs')} />
-        <DashboardKPICard icon={Brain} label="Leads Quentes" value={formatNumber(hotLeads)} sub={`${formatNumber(warmLeads)} warm`} colorTheme="green" onClick={() => navigate('/leads')} />
-        <DashboardKPICard icon={Users} label="Equipe Comercial" value={formatNumber(teamPerformance.length)} sub={`${formatNumber(integrations.length)} integrações`} colorTheme="blue" onClick={() => navigate('/vendedores')} />
       </div>
 
       <div data-section="extras" className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">

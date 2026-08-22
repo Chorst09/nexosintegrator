@@ -1,149 +1,82 @@
 import React from 'react';
 
 const STAGE_PALETTES = {
-  ANALISE: ['#ff5d7d', '#d73958', '#8f1f39'],
-  PROPOSTA_ENVIADA: ['#ffd15f', '#e79d12', '#99640b'],
-  HABILITACAO: ['#8be3a4', '#5fb97e', '#27653e'],
-  RECURSO: ['#82d7f5', '#52acd2', '#236680'],
-  SUSPENSO: ['#c8d2e2', '#9daac0', '#596579'],
-  HOMOLOGADO: ['#7da2ff', '#5478e7', '#253b8e'],
-  CONCLUIDO: ['#9474ff', '#6a4de4', '#3d238c'],
-  GANHO: ['#82dd8c', '#64bd70', '#276335'],
-  NO_GO: ['#f4c34f', '#d99a1e', '#84540d'],
-  PERDIDO: ['#ef6a5d', '#bf3f36', '#73241f']
+  ANALISE: ['#ff4b42', '#db1f25', '#7f1018'],
+  PROPOSTA_ENVIADA: ['#ff9950', '#e35d22', '#853013'],
+  HABILITACAO: ['#fff4a6', '#e4d66e', '#837934'],
+  RECURSO: ['#c0e867', '#83bd38', '#41691d'],
+  SUSPENSO: ['#72dc7e', '#40b85c', '#206739'],
+  HOMOLOGADO: ['#36d9e5', '#16aaba', '#0d5d69'],
+  CONCLUIDO: ['#258bd0', '#125b9c', '#092f5a'],
+  GANHO: ['#4f76df', '#324fab', '#192c6b'],
+  NO_GO: ['#8e51d5', '#632cac', '#381467'],
+  PERDIDO: ['#ba3bd4', '#81189e', '#480a5b']
 };
 
 const B2GFunnelStrategic = ({ funnelRows = [] }) => {
-  const funnelData = funnelRows.map((row) => ({
+  const svgWidth = 620;
+  const svgHeight = 420;
+  const centerX = svgWidth / 2;
+  const maxStageWidth = 520;
+  const stageHeight = 37;
+  const funnelData = funnelRows.map((row, index) => ({
     ...row,
+    y: 17 + index * 39,
+    renderedWidth: Math.max(148, (Number(row.width || (100 - index * 7.5)) / 100) * maxStageWidth),
     palette: STAGE_PALETTES[row.id] || ['#78a9ff', '#4e79da', '#243c7a']
   }));
 
-  const svgWidth = 560;
-  const svgHeight = 410;
-  const centerX = svgWidth / 2;
-  const maxStageWidth = 480;
-  const stageHeight = 32;
-  const stageGap = 7;
-  const startY = 20;
-  const depthX = 15;
-  const depthY = 8;
-
   return (
-    <div className="b2g-funnel-shell relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-[#7ec8ff26] px-3 py-2">
-      <style>
-        {`
-          .b2g-funnel-shell {
-            background:
-              radial-gradient(circle at 24% 18%, rgba(102, 215, 234, 0.22), transparent 30%),
-              linear-gradient(125deg, rgba(8, 29, 58, 0.72), rgba(18, 58, 103, 0.74), rgba(9, 25, 54, 0.78));
-            background-size: 180% 180%;
-            animation: b2gFunnelGradient 9s ease-in-out infinite;
-          }
-
-          .b2g-funnel-shell::after {
-            position: absolute;
-            inset: 12px;
-            content: '';
-            border-radius: 14px;
-            background:
-              linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent),
-              repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 16px);
-            opacity: 0.65;
-            pointer-events: none;
-          }
-
-          @keyframes b2gFunnelGradient {
-            0%, 100% { background-position: 0% 45%; }
-            50% { background-position: 100% 55%; }
-          }
-
-          @media (prefers-reduced-motion: reduce) {
-            .b2g-funnel-shell { animation: none; }
-          }
-        `}
-      </style>
-
-      <svg
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="relative z-10 h-full max-h-[390px] w-full max-w-[700px]"
-        preserveAspectRatio="xMidYMid meet"
-      >
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden px-2 py-1">
+      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="h-full w-full max-w-[760px]" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Funil de licitações B2G em dez etapas">
         <defs>
           {funnelData.map((stage) => (
-            <linearGradient key={`grad-${stage.id}`} id={`b2g-stage-${stage.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={stage.palette[0]} />
-              <stop offset="54%" stopColor={stage.palette[1]} />
-              <stop offset="100%" stopColor={stage.palette[2]} />
-            </linearGradient>
+            <React.Fragment key={stage.id}>
+              <linearGradient id={`b2g-front-${stage.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor={stage.palette[2]} />
+                <stop offset="17%" stopColor={stage.palette[1]} />
+                <stop offset="50%" stopColor={stage.palette[0]} />
+                <stop offset="83%" stopColor={stage.palette[1]} />
+                <stop offset="100%" stopColor={stage.palette[2]} />
+              </linearGradient>
+              <linearGradient id={`b2g-rim-${stage.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor={stage.palette[0]} />
+                <stop offset="48%" stopColor={stage.palette[1]} />
+                <stop offset="100%" stopColor={stage.palette[2]} />
+              </linearGradient>
+              <linearGradient id={`b2g-depth-${stage.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+                <stop offset="100%" stopColor="#020713" stopOpacity="0.55" />
+              </linearGradient>
+            </React.Fragment>
           ))}
-
-          <linearGradient id="b2g-shine" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0)" />
-            <stop offset="45%" stopColor="rgba(255,255,255,0.38)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </linearGradient>
-
-          <filter id="b2g-soft-shadow" x="-20%" y="-40%" width="140%" height="190%">
-            <feDropShadow dx="0" dy="12" stdDeviation="9" floodColor="#020817" floodOpacity="0.42" />
+          <filter id="b2g-stage-shadow" x="-20%" y="-25%" width="140%" height="175%">
+            <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="#01040c" floodOpacity="0.6" />
           </filter>
         </defs>
 
-        {funnelData.map((stage, idx) => {
-          const stageWidth = Math.max(132, (Number(stage.width) / 100) * maxStageWidth);
-          const x = centerX - stageWidth / 2;
-          const y = startY + idx * (stageHeight + stageGap);
-          const labelFill = stage.id === 'HABILITACAO' || stage.id === 'NO_GO' ? '#1a2433' : '#ffffff';
+        {funnelData.map((stage, index) => {
+          const nextWidth = funnelData[index + 1]?.renderedWidth || stage.renderedWidth * 0.72;
+          const bottomWidth = Math.min(stage.renderedWidth - 10, nextWidth + 12);
+          const topLeft = centerX - stage.renderedWidth / 2;
+          const topRight = centerX + stage.renderedWidth / 2;
+          const bottomLeft = centerX - bottomWidth / 2;
+          const bottomRight = centerX + bottomWidth / 2;
+          const topY = stage.y;
+          const bottomY = topY + stageHeight;
+          const percent = Math.round((index / Math.max(funnelData.length - 1, 1)) * 100);
+          const textColor = stage.id === 'HABILITACAO' ? '#27303b' : '#ffffff';
 
           return (
-            <g key={stage.id} filter="url(#b2g-soft-shadow)">
-              <path
-                d={`M ${x + stageWidth - 10} ${y + depthY} L ${x + stageWidth + depthX} ${y + depthY + 4} L ${x + stageWidth + depthX} ${y + stageHeight + depthY - 8} L ${x + stageWidth - 10} ${y + stageHeight} Z`}
-                fill={stage.palette[2]}
-                opacity="0.72"
-              />
-              <path
-                d={`M ${x + 12} ${y + stageHeight - 3} L ${x + stageWidth - 12} ${y + stageHeight - 3} L ${x + stageWidth + depthX - 2} ${y + stageHeight + depthY} L ${x + depthX + 2} ${y + stageHeight + depthY} Z`}
-                fill={stage.palette[2]}
-                opacity="0.55"
-              />
-              <rect
-                x={x}
-                y={y}
-                width={stageWidth}
-                height={stageHeight}
-                rx="13"
-                fill={`url(#b2g-stage-${stage.id})`}
-                stroke="rgba(255,255,255,0.32)"
-                strokeWidth="1"
-              />
-              <rect
-                x={x + 12}
-                y={y + 4}
-                width={Math.max(26, stageWidth - 24)}
-                height="6"
-                rx="3"
-                fill="url(#b2g-shine)"
-                opacity="0.62"
-              />
-              <text
-                x={x + 24}
-                y={y + 21}
-                fill={labelFill}
-                fontSize="14"
-                fontWeight="800"
-              >
-                {stage.label}
-              </text>
-              <text
-                x={x + stageWidth - 22}
-                y={y + 21}
-                textAnchor="end"
-                fill={labelFill}
-                fontSize="16"
-                fontWeight="900"
-              >
-                {stage.count}
+            <g key={stage.id} filter="url(#b2g-stage-shadow)">
+              <title>{`${stage.label}: ${Number(stage.count || 0)} oportunidade${Number(stage.count || 0) === 1 ? '' : 's'}`}</title>
+              <path d={`M ${topLeft + 5} ${topY + 2} C ${topLeft + 10} ${topY + 13}, ${bottomLeft - 3} ${bottomY - 12}, ${bottomLeft} ${bottomY - 5} Q ${centerX} ${bottomY + 6} ${bottomRight} ${bottomY - 5} C ${bottomRight + 3} ${bottomY - 12}, ${topRight - 10} ${topY + 13}, ${topRight - 5} ${topY + 2} Z`} fill={`url(#b2g-front-${stage.id})`} stroke={stage.palette[2]} strokeWidth="1.1" />
+              <path d={`M ${bottomLeft} ${bottomY - 8} Q ${centerX} ${bottomY + 7} ${bottomRight} ${bottomY - 8} Q ${centerX} ${bottomY + 13} ${bottomLeft} ${bottomY - 8} Z`} fill={`url(#b2g-depth-${stage.id})`} opacity="0.8" />
+              <ellipse cx={centerX} cy={topY + 2} rx={stage.renderedWidth / 2} ry="9" fill={`url(#b2g-rim-${stage.id})`} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+              <ellipse cx={centerX} cy={topY + 3} rx={Math.max(stage.renderedWidth / 2 - 9, 24)} ry="5" fill={stage.palette[2]} opacity="0.7" />
+              <path d={`M ${topLeft + 14} ${topY} Q ${centerX} ${topY - 6} ${topRight - 14} ${topY}`} fill="none" stroke="#ffffff" strokeLinecap="round" strokeWidth="1.7" opacity="0.34" />
+              <text x={centerX} y={topY + 27} textAnchor="middle" fill={textColor} fontFamily="Arial, Segoe UI, sans-serif" fontSize={stage.renderedWidth < 190 ? '12' : stage.renderedWidth < 250 ? '13' : '14'} fontWeight="800" paintOrder="stroke" stroke={textColor === '#ffffff' ? 'rgba(3,8,18,0.34)' : 'transparent'} strokeWidth="1.2">
+                {`${stage.label} (${percent}%)`}
               </text>
             </g>
           );

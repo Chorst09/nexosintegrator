@@ -1,178 +1,87 @@
 import React from 'react';
 
 const B2B_STAGES = [
-  {
-    key: 'LEAD_GENERATION',
-    label: 'Geração de Leads',
-    width: 100,
-    palette: ['#65b4ff', '#367bdc', '#1b3f86']
-  },
-  {
-    key: 'LEAD_QUALIFICATION',
-    label: 'Qualificar Leads',
-    width: 88,
-    palette: ['#69e2a8', '#31b77a', '#166445']
-  },
-  {
-    key: 'PROBLEM_ASSESSMENT',
-    label: 'Avaliar Desafios / Problemas',
-    width: 76,
-    palette: ['#ffd76b', '#eaa522', '#8d5d0e']
-  },
-  {
-    key: 'SOLUTION',
-    label: 'Solucionar Problemas',
-    width: 64,
-    palette: ['#ffad65', '#e87025', '#8c3716']
-  },
-  {
-    key: 'CONVERSION',
-    label: 'Converter',
-    width: 52,
-    palette: ['#ff7c82', '#d94650', '#84232d']
-  },
-  {
-    key: 'CLOSING',
-    label: 'Fechar',
-    width: 42,
-    palette: ['#b184ff', '#7f52e8', '#43268a']
-  }
+  { key: 'LEAD_GENERATION', label: 'Geração de Leads', lines: ['Geração de Leads (0%)'], width: 100, height: 46, palette: ['#ff4b42', '#db1f25', '#7f1018'] },
+  { key: 'LEAD_QUALIFICATION', label: 'Qualificar Leads', lines: ['Qualificar Leads (25%)'], width: 86, height: 46, palette: ['#fff4a6', '#e4d66e', '#837934'] },
+  { key: 'PROBLEM_ASSESSMENT', label: 'Avaliar Desafios / Problemas', lines: ['Avaliar Desafios / Problemas', '(50%)'], width: 72, height: 53, palette: ['#9ddd50', '#67b934', '#315f1d'] },
+  { key: 'SOLUTION', label: 'Solucionar Problemas', lines: ['Solucionar', 'Problemas (75%)'], width: 58, height: 53, palette: ['#36d9e5', '#16aaba', '#0d5d69'] },
+  { key: 'CONVERSION', label: 'Converter', lines: ['Converter'], width: 44, height: 46, palette: ['#258bd0', '#125b9c', '#092f5a'] },
+  { key: 'CLOSING', label: 'Fechar', lines: ['Fechar', '(100%)'], width: 32, height: 52, palette: ['#a63ce0', '#701bab', '#3d0c65'] }
 ];
 
 const getStageCount = (data, stage, index) => {
   const row = data.find((item) => item?.stage === stage.key || item?.key === stage.key);
-  const fallback = data[index];
-  const source = row || fallback || {};
+  const source = row || data[index] || {};
   return Number(source?._count?.stage ?? source?.count ?? source?.value ?? 0) || 0;
 };
 
 const SalesFunnel = ({ data = [] }) => {
-  const svgWidth = 560;
-  const svgHeight = 300;
+  const svgWidth = 620;
+  const svgHeight = 340;
   const centerX = svgWidth / 2;
-  const maxStageWidth = 470;
-  const stageHeight = 34;
-  const stageGap = 9;
-  const startY = 20;
-  const depthX = 15;
-  const depthY = 8;
+  const maxStageWidth = 510;
+  let currentY = 18;
+  const layouts = B2B_STAGES.map((stage, index) => {
+    const renderedWidth = (stage.width / 100) * maxStageWidth;
+    const bottomWidth = index < B2B_STAGES.length - 1
+      ? (B2B_STAGES[index + 1].width / 100) * maxStageWidth + 14
+      : renderedWidth * 0.7;
+    const layout = { ...stage, y: currentY, renderedWidth, bottomWidth };
+    currentY += stage.height + 2;
+    return layout;
+  });
 
   return (
-    <div className="b2b-funnel-shell relative flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-[#7ec8ff26] px-3 py-2">
-      <style>
-        {`
-          .b2b-funnel-shell {
-            background:
-              radial-gradient(circle at 24% 18%, rgba(94, 176, 255, 0.22), transparent 30%),
-              linear-gradient(125deg, rgba(8, 29, 58, 0.72), rgba(19, 61, 105, 0.74), rgba(9, 25, 54, 0.78));
-            background-size: 180% 180%;
-            animation: b2bFunnelGradient 9s ease-in-out infinite;
-          }
-
-          .b2b-funnel-shell::after {
-            position: absolute;
-            inset: 12px;
-            content: '';
-            border-radius: 14px;
-            background:
-              linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent),
-              repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 16px);
-            opacity: 0.65;
-            pointer-events: none;
-          }
-
-          @keyframes b2bFunnelGradient {
-            0%, 100% { background-position: 0% 45%; }
-            50% { background-position: 100% 55%; }
-          }
-
-          @media (prefers-reduced-motion: reduce) {
-            .b2b-funnel-shell { animation: none; }
-          }
-        `}
-      </style>
-
-      <svg
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="relative z-10 h-full max-h-[330px] w-full max-w-[690px]"
-        preserveAspectRatio="xMidYMid meet"
-      >
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden px-2 py-1">
+      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="h-full w-full max-w-[760px]" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Funil comercial B2B em seis etapas">
         <defs>
-          {B2B_STAGES.map((stage) => (
-            <linearGradient key={`grad-${stage.key}`} id={`b2b-stage-${stage.key}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={stage.palette[0]} />
-              <stop offset="54%" stopColor={stage.palette[1]} />
-              <stop offset="100%" stopColor={stage.palette[2]} />
-            </linearGradient>
+          {layouts.map((stage) => (
+            <React.Fragment key={stage.key}>
+              <linearGradient id={`b2b-front-${stage.key}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor={stage.palette[2]} />
+                <stop offset="17%" stopColor={stage.palette[1]} />
+                <stop offset="50%" stopColor={stage.palette[0]} />
+                <stop offset="83%" stopColor={stage.palette[1]} />
+                <stop offset="100%" stopColor={stage.palette[2]} />
+              </linearGradient>
+              <linearGradient id={`b2b-rim-${stage.key}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor={stage.palette[0]} />
+                <stop offset="48%" stopColor={stage.palette[1]} />
+                <stop offset="100%" stopColor={stage.palette[2]} />
+              </linearGradient>
+              <linearGradient id={`b2b-depth-${stage.key}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+                <stop offset="100%" stopColor="#020713" stopOpacity="0.55" />
+              </linearGradient>
+            </React.Fragment>
           ))}
-
-          <linearGradient id="b2b-shine" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0)" />
-            <stop offset="45%" stopColor="rgba(255,255,255,0.38)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </linearGradient>
-
-          <filter id="b2b-soft-shadow" x="-20%" y="-40%" width="140%" height="190%">
-            <feDropShadow dx="0" dy="12" stdDeviation="9" floodColor="#020817" floodOpacity="0.42" />
+          <filter id="b2b-stage-shadow" x="-20%" y="-25%" width="140%" height="175%">
+            <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#01040c" floodOpacity="0.62" />
           </filter>
         </defs>
 
-        {B2B_STAGES.map((stage, index) => {
-          const stageWidth = Math.max(142, (stage.width / 100) * maxStageWidth);
-          const x = centerX - stageWidth / 2;
-          const y = startY + index * (stageHeight + stageGap);
-          const labelFill = stage.key === 'PROBLEM_ASSESSMENT' ? '#1a2433' : '#ffffff';
-          const label = stage.key === 'PROBLEM_ASSESSMENT' ? 'Avaliar Desafios / Problemas' : stage.label;
+        {layouts.map((stage, index) => {
+          const topLeft = centerX - stage.renderedWidth / 2;
+          const topRight = centerX + stage.renderedWidth / 2;
+          const bottomLeft = centerX - stage.bottomWidth / 2;
+          const bottomRight = centerX + stage.bottomWidth / 2;
+          const topY = stage.y;
+          const bottomY = topY + stage.height;
+          const count = getStageCount(data, stage, index);
+          const textColor = stage.key === 'LEAD_QUALIFICATION' ? '#27303b' : '#ffffff';
+          const lineHeight = stage.lines.length > 1 ? 17 : 18;
+          const textStartY = topY + (stage.height / 2) - ((stage.lines.length - 1) * lineHeight / 2) + 7;
 
           return (
-            <g key={stage.key} filter="url(#b2b-soft-shadow)">
-              <path
-                d={`M ${x + stageWidth - 10} ${y + depthY} L ${x + stageWidth + depthX} ${y + depthY + 4} L ${x + stageWidth + depthX} ${y + stageHeight + depthY - 8} L ${x + stageWidth - 10} ${y + stageHeight} Z`}
-                fill={stage.palette[2]}
-                opacity="0.72"
-              />
-              <path
-                d={`M ${x + 12} ${y + stageHeight - 3} L ${x + stageWidth - 12} ${y + stageHeight - 3} L ${x + stageWidth + depthX - 2} ${y + stageHeight + depthY} L ${x + depthX + 2} ${y + stageHeight + depthY} Z`}
-                fill={stage.palette[2]}
-                opacity="0.55"
-              />
-              <rect
-                x={x}
-                y={y}
-                width={stageWidth}
-                height={stageHeight}
-                rx="13"
-                fill={`url(#b2b-stage-${stage.key})`}
-                stroke="rgba(255,255,255,0.32)"
-                strokeWidth="1"
-              />
-              <rect
-                x={x + 12}
-                y={y + 4}
-                width={Math.max(26, stageWidth - 24)}
-                height="6"
-                rx="3"
-                fill="url(#b2b-shine)"
-                opacity="0.62"
-              />
-              <text
-                x={x + 24}
-                y={y + 22}
-                fill={labelFill}
-                fontSize={stage.key === 'PROBLEM_ASSESSMENT' ? '13' : '14'}
-                fontWeight="800"
-              >
-                {label}
-              </text>
-              <text
-                x={x + stageWidth - 22}
-                y={y + 22}
-                textAnchor="end"
-                fill={labelFill}
-                fontSize="16"
-                fontWeight="900"
-              >
-                {getStageCount(data, stage, index)}
+            <g key={stage.key} filter="url(#b2b-stage-shadow)">
+              <title>{`${stage.label}: ${count} oportunidade${count === 1 ? '' : 's'}`}</title>
+              <path d={`M ${topLeft + 5} ${topY + 2} C ${topLeft + 10} ${topY + 14}, ${bottomLeft - 3} ${bottomY - 13}, ${bottomLeft} ${bottomY - 5} Q ${centerX} ${bottomY + 7} ${bottomRight} ${bottomY - 5} C ${bottomRight + 3} ${bottomY - 13}, ${topRight - 10} ${topY + 14}, ${topRight - 5} ${topY + 2} Z`} fill={`url(#b2b-front-${stage.key})`} stroke={stage.palette[2]} strokeWidth="1.2" />
+              <path d={`M ${bottomLeft} ${bottomY - 8} Q ${centerX} ${bottomY + 8} ${bottomRight} ${bottomY - 8} Q ${centerX} ${bottomY + 15} ${bottomLeft} ${bottomY - 8} Z`} fill={`url(#b2b-depth-${stage.key})`} opacity="0.8" />
+              <ellipse cx={centerX} cy={topY + 2} rx={stage.renderedWidth / 2} ry="11" fill={`url(#b2b-rim-${stage.key})`} stroke="rgba(255,255,255,0.42)" strokeWidth="1.2" />
+              <ellipse cx={centerX} cy={topY + 3} rx={Math.max(stage.renderedWidth / 2 - 10, 24)} ry="6" fill={stage.palette[2]} opacity="0.72" />
+              <path d={`M ${topLeft + 16} ${topY - 1} Q ${centerX} ${topY - 8} ${topRight - 16} ${topY - 1}`} fill="none" stroke="#ffffff" strokeLinecap="round" strokeWidth="2" opacity="0.38" />
+              <text x={centerX} y={textStartY} textAnchor="middle" fill={textColor} fontFamily="Arial, Segoe UI, sans-serif" fontSize={stage.key === 'PROBLEM_ASSESSMENT' ? '15' : '17'} fontWeight="800" paintOrder="stroke" stroke={textColor === '#ffffff' ? 'rgba(3,8,18,0.34)' : 'transparent'} strokeWidth="1.4">
+                {stage.lines.map((line, lineIndex) => <tspan key={line} x={centerX} dy={lineIndex === 0 ? 0 : lineHeight}>{line}</tspan>)}
               </text>
             </g>
           );

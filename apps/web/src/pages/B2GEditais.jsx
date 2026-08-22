@@ -88,6 +88,7 @@ import OpportunityForm from '../components/OpportunityForm';
 import { B2GOpportunityDetailModal, B2GOpportunityEditModal } from '../components/B2GOpportunityModal';
 import B2GOpportunityAlerts from '../components/B2GOpportunityAlerts';
 import PresentationControls from '../components/PresentationControls';
+import PipelineDashboardModel from '../components/PipelineDashboardModel';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { isCompanyInClientType, isOpportunityInClientType } from '../utils/businessModel';
 import { hydrateActivityFlow } from '../utils/activityFlow';
@@ -1300,6 +1301,7 @@ export default function B2GEditais() {
   const repositoryFileInputRef = useRef(null);
   const dashboardPresentationRef = useRef(null);
   const draggedOpportunityRef = useRef(null);
+  const b2gOpportunityRequestRef = useRef(0);
   const [advancedFilters, setAdvancedFilters] = useState({
     organization: '',
     stateCode: '',
@@ -1951,8 +1953,18 @@ export default function B2GEditais() {
     return Math.max(base + extra, 0);
   }, [analyzedNotices.length, nonConformTRCount]);
 
+  const dashboardSourceOpportunities = useMemo(() => {
+    const periodDays = Math.max(Number(dashboardPeriod) || 30, 1);
+    const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000;
+
+    return opportunities.filter((item) => {
+      const timestamp = toTimestamp(item?.createdAt || item?.updatedAt);
+      return timestamp <= 0 || timestamp >= cutoff;
+    });
+  }, [dashboardPeriod, opportunities]);
+
   const dashboardOpportunities = useMemo(() => {
-    return sortedFilteredOpportunities.map((item) => {
+    return dashboardSourceOpportunities.map((item) => {
       const columnId = resolveKanbanColumnId(item?.b2gStage || item?.stage);
       const probability = clampScore(item?.probability);
       const value = Number(item?.value || item?.estimatedValue || 0);
@@ -1974,7 +1986,7 @@ export default function B2GEditais() {
         __title: title
       };
     });
-  }, [sortedFilteredOpportunities]);
+  }, [dashboardSourceOpportunities]);
 
   const dashboardTotals = useMemo(() => {
     let pipelineValue = 0;
@@ -2334,12 +2346,35 @@ export default function B2GEditais() {
     }
   };
 
+  const refreshB2GOpportunities = async () => {
+    const requestId = b2gOpportunityRequestRef.current + 1;
+    b2gOpportunityRequestRef.current = requestId;
+
+    try {
+      const response = await fetch(buildApiUrl('/opportunities?clientType=B2G'), {
+        headers: getAuthHeaders(),
+        cache: 'no-store'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json().catch(() => []);
+      const rows = Array.isArray(data) ? data : [];
+      if (requestId === b2gOpportunityRequestRef.current) {
+        setOpportunities(
+          rows.filter((item) => isOpportunityInClientType(item, 'B2G', item?.company || null))
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao sincronizar oportunidades B2G:', error);
+    }
+  };
+
   const loadSupportData = async () => {
     try {
       setSupportLoading(true);
-      const [companiesRes, opportunitiesRes, activitiesRes] = await Promise.all([
+      const [companiesRes, , activitiesRes] = await Promise.all([
         fetch(buildApiUrl('/companies?clientType=B2G'), { headers: getAuthHeaders() }),
-        fetch(buildApiUrl('/opportunities?clientType=B2G'), { headers: getAuthHeaders() }),
+        refreshB2GOpportunities(),
         fetch(buildApiUrl('/activities-simple?clientType=B2G'), { headers: getAuthHeaders() })
       ]);
 
@@ -2351,16 +2386,6 @@ export default function B2GEditais() {
         setLeads([]);
       }
 
-      if (opportunitiesRes.ok) {
-        const opportunitiesData = await opportunitiesRes.json().catch(() => []);
-        const opportunitiesRows = Array.isArray(opportunitiesData) ? opportunitiesData : [];
-        setOpportunities(
-          opportunitiesRows.filter((item) => isOpportunityInClientType(item, 'B2G', item?.company || null))
-        );
-      } else {
-        setOpportunities([]);
-      }
-
       if (activitiesRes.ok) {
         const activitiesData = await activitiesRes.json().catch(() => []);
         setActivities(Array.isArray(activitiesData) ? activitiesData.map(hydrateActivityFlow) : []);
@@ -2370,7 +2395,6 @@ export default function B2GEditais() {
     } catch (error) {
       console.error('Erro ao carregar dados complementares B2G:', error);
       setLeads([]);
-      setOpportunities([]);
       setActivities([]);
     } finally {
       setSupportLoading(false);
@@ -2677,6 +2701,26 @@ export default function B2GEditais() {
     ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return undefined;
+
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshB2GOpportunities();
+    };
+
+    refreshB2GOpportunities();
+    const intervalId = window.setInterval(refreshB2GOpportunities, 30000);
+    window.addEventListener('focus', refreshB2GOpportunities);
+    document.addEventListener('visibilitychange', syncWhenVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshB2GOpportunities);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   useEffect(() => {
     if (selectedNoticeId) {
@@ -3630,6 +3674,7 @@ export default function B2GEditais() {
 
       setShowOpportunityEditModal(false);
       setEditingOpportunity(null);
+      await refreshB2GOpportunities();
     } catch (err) {
       setOpportunityEditError(err.message || 'Erro ao salvar oportunidade.');
     } finally {
@@ -4375,76 +4420,66 @@ export default function B2GEditais() {
           </div>
         </section>
 
-        <section className="dashboard-card grid gap-2.5 lg:grid-cols-5">
-          {/* Card 1: Previsão de Sucesso (Forecast) com TemperatureGauge */}
-          <div className="metric-chip">
-            <DashboardKPICard
-              title="Previsão de Sucesso (Forecast)"
-              icon={TrendingUp}
-              colorTheme="magenta"
-              value={
-                <div className="relative mx-auto mt-4 h-24 w-44 overflow-hidden">
-                  <TemperatureGauge
-                    value={Number(dashboardForecastScore) || 0}
-                    size="small"
-                    colorTheme="magenta"
-                  />
-                  <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-black text-[#ecf5ff]">
-                    {(Number(dashboardForecastScore) || 0).toFixed(1)}%
-                  </div>
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <DashboardKPICard
+            title="Previsão de Sucesso"
+            icon={TrendingUp}
+            colorTheme="magenta"
+            size="compact"
+            value={
+              <div className="relative mx-auto mt-1 h-20 w-36 overflow-hidden">
+                <TemperatureGauge
+                  value={Number(dashboardForecastScore) || 0}
+                  size="small"
+                  colorTheme="magenta"
+                />
+                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-lg font-black text-[#ecf5ff]">
+                  {(Number(dashboardForecastScore) || 0).toFixed(1)}%
                 </div>
-              }
-              status="active"
-            />
-          </div>
+              </div>
+            }
+            status="active"
+          />
 
-          {/* Card 2: Total em Pipeline */}
-          <div className="metric-chip">
-            <DashboardKPICard
-              title="Total em Pipeline"
-              icon={TrendingUp}
-              value={formatCurrencyNoCents(Number(dashboardTotals?.pipelineValue) || 0)}
-              subtitle="Volume total em análise comercial"
-              colorTheme="cyan"
-              status="active"
-            />
-          </div>
+          <DashboardKPICard
+            title="Total em Pipeline"
+            icon={TrendingUp}
+            value={formatCurrencyNoCents(Number(dashboardTotals?.pipelineValue) || 0)}
+            subtitle="Volume em análise comercial"
+            colorTheme="cyan"
+            status="active"
+            size="compact"
+          />
 
-          {/* Card 3: Taxa de Vitória */}
-          <div className="metric-chip">
-            <DashboardKPICard
-              title="Taxa de Vitória"
-              icon={Gauge}
-              value={`${(Number(dashboardTotals?.winRate) || 0).toFixed(1)}%`}
-              subtitle="Conversão média do trimestre"
-              colorTheme="green"
-              status="active"
-            />
-          </div>
+          <DashboardKPICard
+            title="Taxa de Vitória"
+            icon={Gauge}
+            value={`${(Number(dashboardTotals?.winRate) || 0).toFixed(1)}%`}
+            subtitle="Conversão média"
+            colorTheme="green"
+            status="active"
+            size="compact"
+          />
 
-          {/* Card 4: Licitações 'GO' */}
-          <div className="metric-chip">
-            <DashboardKPICard
-              title="Licitações 'GO'"
-              icon={CheckCircle2}
-              value={Number(dashboardTotals?.goCount) || 0}
-              subtitle="Ativas na fase de proposta"
-              colorTheme="blue"
-              status="active"
-            />
-          </div>
+          <DashboardKPICard
+            title="Licitações GO"
+            icon={CheckCircle2}
+            value={Number(dashboardTotals?.goCount) || 0}
+            subtitle="Ativas em proposta"
+            colorTheme="blue"
+            status="active"
+            size="compact"
+          />
 
-          {/* Card 5: Prazos Próximos */}
-          <div className="metric-chip">
-            <DashboardKPICard
-              title="Prazos Próximos"
-              icon={Clock3}
-              value={String((dashboardCriticalDeadlines?.length || 0)).padStart(2, '0')}
-              subtitle="Abertura nos próximos 7 dias"
-              colorTheme="pink"
-              status="active"
-            />
-          </div>
+          <DashboardKPICard
+            title="Prazos Próximos"
+            icon={Clock3}
+            value={String((dashboardCriticalDeadlines?.length || 0)).padStart(2, '0')}
+            subtitle="Abertura em 7 dias"
+            colorTheme="pink"
+            status="active"
+            size="compact"
+          />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.9fr_1fr]">
@@ -4559,31 +4594,31 @@ export default function B2GEditais() {
             `}
           </style>
 
-          <h3 className="text-xl md:text-2xl font-black leading-tight text-[#dcecff]">Probabilidade de Ganho (%)</h3>
-          <p className="mt-1 text-sm md:text-base font-medium text-[#aac6e4]">
+          <h3 className="text-lg font-black leading-tight text-[#dcecff]">Probabilidade de Ganho (%)</h3>
+          <p className="mt-1 text-sm font-medium text-[#aac6e4]">
             Distribuição por faixas com participação e volume financeiro do pipeline.
           </p>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-2xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Total de opps</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardProbabilitySummary.totalOpps}</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-3 py-2.5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Total de opps</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{dashboardProbabilitySummary.totalOpps}</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Média</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardProbabilitySummary.avg.toFixed(1)}%</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-3 py-2.5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Média</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{dashboardProbabilitySummary.avg.toFixed(1)}%</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Mediana</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardProbabilitySummary.median.toFixed(1)}%</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[linear-gradient(145deg,rgba(13,43,80,0.98),rgba(7,25,53,0.96))] px-3 py-2.5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Mediana</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{dashboardProbabilitySummary.median.toFixed(1)}%</div>
             </div>
-            <div className="rounded-2xl border border-[#8adba77a] bg-[linear-gradient(145deg,rgba(81,140,128,0.72),rgba(25,71,66,0.58))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
-              <div className="text-base font-semibold uppercase text-[#42c592]">Alta confiança (75-100)</div>
-              <div className="mt-1 text-2xl font-black text-[#13b981] sm:text-3xl">{dashboardProbabilitySummary.highConfidence}</div>
+            <div className="rounded-xl border border-[#8adba77a] bg-[linear-gradient(145deg,rgba(81,140,128,0.72),rgba(25,71,66,0.58))] px-3 py-2.5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-[11px] font-semibold uppercase text-[#42c592]">Alta confiança</div>
+              <div className="mt-1 text-xl font-black text-[#13b981]">{dashboardProbabilitySummary.highConfidence}</div>
             </div>
-            <div className="rounded-2xl border border-[#f2db6b95] bg-[linear-gradient(145deg,rgba(142,122,93,0.74),rgba(82,63,49,0.58))] px-4 py-3 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
-              <div className="text-base font-semibold uppercase text-[#f18a36]">Baixa confiança (0-25)</div>
-              <div className="mt-1 text-2xl font-black text-[#f07819] sm:text-3xl">{dashboardProbabilitySummary.lowConfidence}</div>
+            <div className="rounded-xl border border-[#f2db6b95] bg-[linear-gradient(145deg,rgba(142,122,93,0.74),rgba(82,63,49,0.58))] px-3 py-2.5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.85)]">
+              <div className="text-[11px] font-semibold uppercase text-[#f18a36]">Baixa confiança</div>
+              <div className="mt-1 text-xl font-black text-[#f07819]">{dashboardProbabilitySummary.lowConfidence}</div>
           </div>
         </div>
 
@@ -4640,11 +4675,11 @@ export default function B2GEditais() {
         >
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h3 className="flex items-center gap-2 text-xl md:text-2xl font-black leading-tight text-[#dcecff]">
-                <Thermometer className="h-7 w-7 text-[#74c5ff]" />
+              <h3 className="flex items-center gap-2 text-lg font-black leading-tight text-[#dcecff]">
+                <Thermometer className="h-5 w-5 text-[#74c5ff]" />
                 Temperatura do Negócio por Edital
               </h3>
-              <p className="mt-1 text-sm md:text-base font-medium text-[#aac6e4]">
+              <p className="mt-1 text-sm font-medium text-[#aac6e4]">
                 Filtre por temperatura e fase para visualizar os editais com seus respectivos valores.
               </p>
             </div>
@@ -4686,21 +4721,21 @@ export default function B2GEditais() {
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Editais filtrados</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardTemperatureStats.total}</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[#0b2243] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Editais filtrados</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{dashboardTemperatureStats.total}</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Valor total</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{formatCurrencyNoCents(dashboardTemperatureStats.totalValue)}</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[#0b2243] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Valor total</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{formatCurrencyNoCents(dashboardTemperatureStats.totalValue)}</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Ticket médio</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{formatCurrencyNoCents(dashboardTemperatureStats.avgTicket)}</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[#0b2243] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Ticket médio</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{formatCurrencyNoCents(dashboardTemperatureStats.avgTicket)}</div>
             </div>
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Maior edital</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{formatCurrencyNoCents(dashboardTemperatureStats.biggestValue)}</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[#0b2243] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Maior edital</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{formatCurrencyNoCents(dashboardTemperatureStats.biggestValue)}</div>
             </div>
           </div>
 
@@ -4859,24 +4894,24 @@ export default function B2GEditais() {
           className="rounded-[22px] border border-[#78c5ff50] p-4 text-[#d9edff] lg:p-6"
           style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
         >
-          <h3 className="text-xl md:text-2xl font-black leading-tight text-[#dcecff]">Editais e valores</h3>
+          <h3 className="text-lg font-black leading-tight text-[#dcecff]">Editais e valores</h3>
           <div className="mt-4 max-h-[420px] space-y-2 overflow-y-auto pr-2">
             {listRows.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-col justify-between gap-3 rounded-2xl border border-[#74b9f353] bg-[#0b2243]/80 px-4 py-3 lg:flex-row lg:items-start"
+                className="flex flex-col justify-between gap-3 rounded-xl border border-[#74b9f353] bg-[#0b2243]/80 px-3 py-2.5 lg:flex-row lg:items-start"
               >
                 <div className="min-w-0">
-                  <div className="line-clamp-1 text-base md:text-lg font-bold text-[#e6f2ff]">{item.__title}</div>
-                  <div className="line-clamp-1 text-sm md:text-base text-[#adc8e4]">{item.referenceCode || item.__title}</div>
-                  <div className="line-clamp-1 text-sm md:text-base text-[#9eb9d6]">{item.__organization}</div>
+                  <div className="line-clamp-1 text-sm font-bold text-[#e6f2ff]">{item.__title}</div>
+                  <div className="line-clamp-1 text-xs text-[#adc8e4]">{item.referenceCode || item.__title}</div>
+                  <div className="line-clamp-1 text-xs text-[#9eb9d6]">{item.__organization}</div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-lg md:text-xl font-black text-[#e6f2ff]">{formatCurrencyNoCents(item.__value)}</div>
+                  <div className="text-base font-black text-[#e6f2ff]">{formatCurrencyNoCents(item.__value)}</div>
                   <span
                     className={[
-                      'inline-flex items-center rounded-full border px-3 py-1 text-xs md:text-sm font-bold',
+                      'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold',
                       dashboardOutcomeBadgeClass(item.__columnId)
                     ].join(' ')}
                   >
@@ -4887,7 +4922,7 @@ export default function B2GEditais() {
             ))}
 
             {listRows.length === 0 && (
-              <div className="rounded-xl border border-dashed border-[#74b9f353] p-8 text-center text-base md:text-lg italic text-[#a9c6e3]">
+              <div className="rounded-xl border border-dashed border-[#74b9f353] p-8 text-center text-sm italic text-[#a9c6e3]">
                 Nenhum edital encontrado para os filtros atuais.
               </div>
             )}
@@ -4899,22 +4934,22 @@ export default function B2GEditais() {
             className="rounded-[22px] border border-[#78c5ff50] p-5 text-[#d9edff]"
             style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
           >
-            <h3 className="flex items-center gap-2 text-xl md:text-2xl font-black leading-tight text-[#dcecff]">
-              <AlertTriangle className="h-6 w-6 text-[#4cc8ff]" />
+            <h3 className="flex items-center gap-2 text-lg font-black leading-tight text-[#dcecff]">
+              <AlertTriangle className="h-5 w-5 text-[#4cc8ff]" />
               Prazos Críticos
             </h3>
-            <p className="mt-1 text-sm md:text-base text-[#aac6e4]">Licitações com abertura nos próximos 7 dias.</p>
+            <p className="mt-1 text-sm text-[#aac6e4]">Licitações com abertura nos próximos 7 dias.</p>
 
             {dashboardCriticalDeadlines.length === 0 ? (
-              <div className="my-12 text-center text-lg md:text-2xl italic text-[#a7c4e2]">
+              <div className="my-10 text-center text-sm italic text-[#a7c4e2]">
                 Nenhum prazo crítico para os próximos 7 dias.
               </div>
             ) : (
               <div className="mt-4 space-y-2">
                 {dashboardCriticalDeadlines.map((item) => (
                   <div key={item.id} className="rounded-xl border border-[#74b9f353] bg-[#0b2243]/75 px-3 py-2">
-                    <div className="line-clamp-1 text-base md:text-lg font-semibold text-[#e6f2ff]">{item.title}</div>
-                    <div className="text-sm md:text-base text-[#a7c4e2]">
+                    <div className="line-clamp-1 text-sm font-semibold text-[#e6f2ff]">{item.title}</div>
+                    <div className="text-xs text-[#a7c4e2]">
                       {item.organization} • abertura {formatDateFlexible(item.proposalDueDate)}
                     </div>
                   </div>
@@ -4937,31 +4972,31 @@ export default function B2GEditais() {
           >
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-xl md:text-2xl font-black leading-tight text-[#dcecff]">Resultados Recentes</h3>
-                <p className="mt-1 text-sm md:text-base text-[#aac6e4]">Últimas decisões e homologações.</p>
+                <h3 className="text-lg font-black leading-tight text-[#dcecff]">Resultados Recentes</h3>
+                <p className="mt-1 text-sm text-[#aac6e4]">Últimas decisões e homologações.</p>
               </div>
-              <History className="h-8 w-8 text-[#9cb9d8]" />
+              <History className="h-6 w-6 text-[#9cb9d8]" />
             </div>
 
             {primaryResult ? (
-              <div className="mt-5 rounded-2xl border border-[#74b9f353] bg-[#0b2243]/82 p-4">
+              <div className="mt-5 rounded-xl border border-[#74b9f353] bg-[#0b2243]/82 p-3">
                 <div className="flex items-start gap-4">
-                  <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#a62a613f]">
-                    <Gavel className="h-7 w-7 text-[#ff7da3]" />
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#a62a613f]">
+                    <Gavel className="h-5 w-5 text-[#ff7da3]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="line-clamp-1 text-base md:text-lg font-bold text-[#e6f2ff]">
+                    <div className="line-clamp-1 text-sm font-bold text-[#e6f2ff]">
                       {primaryResult.__organization}
                     </div>
-                    <div className="line-clamp-1 text-sm md:text-base text-[#afcae4]">
+                    <div className="line-clamp-1 text-xs text-[#afcae4]">
                       {primaryResult.__title}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-base md:text-lg font-black text-[#e6f2ff]">{formatCurrencyNoCents(primaryResult.__value)}</div>
+                    <div className="text-base font-black text-[#e6f2ff]">{formatCurrencyNoCents(primaryResult.__value)}</div>
                     <span
                       className={[
-                        'inline-flex rounded-full border px-3 py-0.5 text-sm md:text-base font-bold',
+                        'inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold',
                         dashboardOutcomeBadgeClass(primaryResult.__columnId)
                       ].join(' ')}
                     >
@@ -4971,7 +5006,7 @@ export default function B2GEditais() {
                 </div>
               </div>
             ) : (
-              <div className="mt-12 text-center text-lg md:text-xl xl:text-2xl italic text-[#a7c4e2]">
+              <div className="mt-10 text-center text-sm italic text-[#a7c4e2]">
                 Sem resultados recentes para o período filtrado.
               </div>
             )}
@@ -4982,40 +5017,40 @@ export default function B2GEditais() {
           className="rounded-[22px] border border-[#78c5ff50] p-5 text-[#d9edff]"
           style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
         >
-          <h3 className="flex items-center gap-2 text-xl md:text-2xl font-black leading-tight text-[#dcecff]">
-            <Workflow className="h-6 w-6 text-[#4cc8ff]" />
+          <h3 className="flex items-center gap-2 text-lg font-black leading-tight text-[#dcecff]">
+            <Workflow className="h-5 w-5 text-[#4cc8ff]" />
             SLA do Fluxo Pré-vendas
           </h3>
-          <p className="mt-1 text-sm md:text-base text-[#aac6e4]">
+          <p className="mt-1 text-sm text-[#aac6e4]">
             Monitoramento das atividades Comercial x Pré-vendas para evitar estouro de prazo.
           </p>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-2xl border border-[#74b9f353] bg-[#0b2243] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#9fb9d7]">Abertas</div>
-              <div className="mt-1 text-2xl font-black text-[#e3f0ff] sm:text-3xl">{dashboardSlaStats.open}</div>
+            <div className="rounded-xl border border-[#74b9f353] bg-[#0b2243] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#9fb9d7]">Abertas</div>
+              <div className="mt-1 text-xl font-black text-[#e3f0ff]">{dashboardSlaStats.open}</div>
             </div>
-            <div className="rounded-2xl border border-[#f0a2ad8e] bg-[#b7bec85e] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#e54465]">Atrasadas</div>
-              <div className="mt-1 text-2xl font-black text-[#dc1f45] sm:text-3xl">{dashboardSlaStats.overdue}</div>
+            <div className="rounded-xl border border-[#f0a2ad8e] bg-[#b7bec85e] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#e54465]">Atrasadas</div>
+              <div className="mt-1 text-xl font-black text-[#dc1f45]">{dashboardSlaStats.overdue}</div>
             </div>
-            <div className="rounded-2xl border border-[#f0df858e] bg-[#bec6cb65] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#cc6700]">Vence 24h</div>
-              <div className="mt-1 text-2xl font-black text-[#bf5f00] sm:text-3xl">{dashboardSlaStats.due24h}</div>
+            <div className="rounded-xl border border-[#f0df858e] bg-[#bec6cb65] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#cc6700]">Vence 24h</div>
+              <div className="mt-1 text-xl font-black text-[#bf5f00]">{dashboardSlaStats.due24h}</div>
             </div>
-            <div className="rounded-2xl border border-[#8ed0ef8e] bg-[#b7c4d267] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#2089ca]">Vence 48h</div>
-              <div className="mt-1 text-2xl font-black text-[#1178b8] sm:text-3xl">{dashboardSlaStats.due48h}</div>
+            <div className="rounded-xl border border-[#8ed0ef8e] bg-[#b7c4d267] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#2089ca]">Vence 48h</div>
+              <div className="mt-1 text-xl font-black text-[#1178b8]">{dashboardSlaStats.due48h}</div>
             </div>
-            <div className="rounded-2xl border border-[#b8a2ef8e] bg-[#b8bfd868] px-4 py-3">
-              <div className="text-base font-semibold uppercase text-[#7138f2]">Em revisão</div>
-              <div className="mt-1 text-2xl font-black text-[#6428ef] sm:text-3xl">{dashboardSlaStats.inReview}</div>
+            <div className="rounded-xl border border-[#b8a2ef8e] bg-[#b8bfd868] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase text-[#7138f2]">Em revisão</div>
+              <div className="mt-1 text-xl font-black text-[#6428ef]">{dashboardSlaStats.inReview}</div>
             </div>
           </div>
 
           <div className="mt-5 rounded-xl border border-[#74b9f353] bg-[#0b2243]/72 p-4">
-            <div className="text-base md:text-lg font-semibold text-[#dcecff]">Demandas críticas e próximas do vencimento</div>
-            <p className="mt-2 text-sm md:text-base text-[#a9c6e3]">
+            <div className="text-sm font-semibold text-[#dcecff]">Demandas críticas e próximas do vencimento</div>
+            <p className="mt-2 text-sm text-[#a9c6e3]">
               {dashboardCriticalActivity
                 ? `${dashboardCriticalActivity.subject || 'Atividade sem título'} • vence em ${formatDateFlexible(dashboardCriticalActivity.dueDate)}`
                 : 'Nenhuma atividade com SLA crítico no momento.'}
@@ -5048,6 +5083,131 @@ export default function B2GEditais() {
     );
   };
 
+  const renderB2GStrategicDashboardV2 = () => {
+    const palette = ['#ef3b36', '#f08a3a', '#efe58a', '#9ccc4b', '#45c96f', '#21bfe0', '#2784d6', '#3867d6', '#7048d1', '#8a43cf'];
+    const metricBase = Math.max(dashboardTotals.totalCount, dashboardTotals.openCount, dashboardTotals.wonCount, 1);
+    const stageLevels = [
+      { value: 0, label: 'Frio', color: palette[0] },
+      { value: 25, label: 'Amarelo Claro', color: palette[2] },
+      { value: 50, label: 'Verde / Qualificado', color: palette[4] },
+      { value: 75, label: 'Ciano / Quente', color: palette[5] },
+      { value: 100, label: 'Roxo / Fechado', color: palette[9] }
+    ];
+    const monthTotals = monthlyProjectData.months.map((_, monthIndex) => (
+      monthlyProjectData.datasets.reduce((sum, dataset) => sum + Number(dataset.data?.[monthIndex] || 0), 0)
+    ));
+    const monthLabels = monthlyProjectData.months.map((month) => {
+      const [year, monthNumber] = month.split('-').map(Number);
+      return new Date(year, monthNumber - 1, 1).toLocaleDateString('pt-BR', { month: 'short' });
+    });
+    const deadlineAlerts = dashboardCriticalDeadlines.slice(0, 3).map((item, index) => ({
+      id: item.id || `deadline-${index}`,
+      title: item.title || item.name || 'Edital com prazo crítico',
+      detail: `${item.organization || item.agency || 'Orgão não informado'} • prazo ${formatDateFlexible(item.proposalDueDate)}`,
+      tone: index === 0 ? 'red' : 'yellow'
+    }));
+    const activityAlert = dashboardCriticalActivity ? [{
+      id: dashboardCriticalActivity.id || 'critical-activity',
+      title: dashboardCriticalActivity.subject || 'Atividade com SLA crítico',
+      detail: `Vencimento ${formatDateFlexible(dashboardCriticalActivity.dueDate)}`,
+      tone: 'blue'
+    }] : [];
+    const stageChartRows = dashboardStageValueRows.filter((row) => Number(row.value) > 0).slice(0, 8);
+
+    return (
+      <div
+        ref={dashboardPresentationRef}
+        className={dashboardPresentationMode ? 'h-screen overflow-y-auto overflow-x-hidden bg-[#0b1322] p-2 pb-24' : ''}
+      >
+        <PipelineDashboardModel
+          title="Dashboard Estratégico B2G"
+          subtitle="Performance comercial e pipeline de governo"
+          controls={(
+            <>
+              <button type="button" onClick={() => navigate('/b2g-analise')}><Plus className="h-4 w-4" /> Nova Licitação</button>
+              <select value={dashboardPeriod} onChange={(event) => setDashboardPeriod(event.target.value)} aria-label="Período">
+                {PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <select value={dashboardPhaseFilter} onChange={(event) => setDashboardPhaseFilter(event.target.value)} aria-label="Fase">
+                {dashboardPhaseOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+              <select value={dashboardTemperatureFilter} onChange={(event) => setDashboardTemperatureFilter(event.target.value)} aria-label="Temperatura">
+                {DASHBOARD_TEMPERATURE_FILTERS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+              <button type="button" onClick={() => { loadNotices({ preserveSelection: true }); loadSupportData(); }} title="Atualizar dados" aria-label="Atualizar dados"><RefreshCcw className="h-4 w-4" /></button>
+              <button type="button" onClick={handleDashboardFullscreen} title="Apresentação" aria-label="Abrir apresentação"><Maximize2 className="h-4 w-4" /></button>
+            </>
+          )}
+          metrics={[
+            { label: 'Editais Mapeados', value: dashboardTotals.totalCount, percent: (dashboardTotals.totalCount / metricBase) * 100, color: '#ff6b18' },
+            { label: 'Oportunidades em Análise', value: dashboardTotals.openCount, percent: (dashboardTotals.openCount / metricBase) * 100, color: '#08c7e8' },
+            { label: 'Licitações Ganhas', value: dashboardTotals.wonCount, percent: (dashboardTotals.wonCount / metricBase) * 100, color: '#24d17e' },
+            { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#1689ff', secondaryColor: '#b43fe1' }
+          ]}
+          funnel={<B2GFunnelStrategic funnelRows={dashboardFunnelRows} />}
+          funnelTitle="Funil de Licitações B2G"
+          funnelSubtitle="Editais e oportunidades por fase"
+          temperature={dashboardForecastScore}
+          temperatureLevels={stageLevels}
+          performanceChart={{
+            title: 'Performance do Pipeline',
+            subtitle: 'Valores por situação comercial',
+            labels: dashboardProjectionBars.map((row) => row.label),
+            values: dashboardProjectionBars.map((row) => Number(row.value || 0)),
+            colors: ['#1689ff', '#08c7e8', '#24d17e', '#ff6b18'],
+            targetPercent: 85
+          }}
+          trendChart={{
+            title: 'Tendência Mensal',
+            subtitle: 'Valor mensal e projeção ponderada',
+            labels: monthLabels,
+            datasets: [
+              { label: 'Pipeline', data: monthTotals, color: '#ff7a24', fill: true, fillColor: 'rgba(255, 107, 24, 0.16)' },
+              { label: 'Projeção', data: monthTotals.map((value) => value * (dashboardForecastScore / 100)), color: '#08c7e8', fill: false }
+            ]
+          }}
+          table={{
+            title: 'Performance de Editais',
+            subtitle: 'Maiores oportunidades filtradas',
+            columns: [
+              { label: 'Órgão' },
+              { label: 'Edital' },
+              { label: 'Valor', align: 'right' },
+              { label: 'Prob.', align: 'right' }
+            ],
+            rows: dashboardTopEditais.slice(0, 5).map((item, index) => ({
+              id: item.id || `edital-${index}`,
+              cells: [item.__organization, item.__title, formatCurrencyNoCents(item.__value), `${item.__probability}%`]
+            }))
+          }}
+          alerts={{
+            title: 'Alertas do Pipeline',
+            subtitle: 'Prazos e atividades prioritárias',
+            items: [...deadlineAlerts, ...activityAlert].slice(0, 4)
+          }}
+          teamChart={{
+            title: 'Performance por Etapa',
+            subtitle: 'Valor acumulado no funil B2G',
+            labels: stageChartRows.map((row) => row.label),
+            datasets: [{ label: 'Valor', data: stageChartRows.map((row) => Number(row.value || 0)), colors: ['#ff6b18', '#08c7e8', '#1689ff', '#24d17e', '#ffbd16', '#b43fe1'] }]
+          }}
+          presentationControls={(
+            <PresentationControls
+              active={dashboardPresentationMode}
+              current={dashboardPresentationProgress.current}
+              total={dashboardPresentationProgress.total}
+              canPrevious={dashboardPresentationProgress.current > 1}
+              canNext={dashboardPresentationProgress.current < dashboardPresentationProgress.total}
+              onPrevious={() => scrollDashboardPresentation(-1)}
+              onNext={() => scrollDashboardPresentation(1)}
+              onExit={handleDashboardFullscreen}
+            />
+          )}
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {feedback.message && (
@@ -5069,7 +5229,7 @@ export default function B2GEditais() {
           Carregando módulo B2G...
         </div>
       ) : activeTab === 'dashboard' ? (
-        renderB2GStrategicDashboard()
+        renderB2GStrategicDashboardV2()
       ) : activeTab === 'leads' ? (
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

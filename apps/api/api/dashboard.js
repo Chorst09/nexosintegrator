@@ -412,13 +412,7 @@ export default async function handler(req) {
         const monthsBack = periodMonths || 6;
         const revenueStartDate = new Date(Date.now() - monthsBack * 30 * 24 * 60 * 60 * 1000);
 
-        const b2bOpportunityFilter = {
-          OR: [
-            { projectClientType: null },
-            { projectClientType: { not: 'B2G' } }
-          ],
-          b2gStage: null
-        };
+        const b2bOpportunityFilter = { b2gStage: null };
 
         const baseWhere = { ...b2bOpportunityFilter, company: { clientType: 'B2B' }, ...dateFilter };
         if (ownerId) baseWhere.ownerId = ownerId;
@@ -463,7 +457,7 @@ export default async function handler(req) {
           monthlyRevenue
         ] = await Promise.all([
           prisma.company.count({ where: { clientType: 'B2B' } }),
-          prisma.opportunity.count({ where: { ...whereClause, stage: { notIn: ['WON', 'LOST'] } } }),
+          prisma.opportunity.count({ where: { ...whereClause } }),
           prisma.opportunity.count({ where: { ...whereClause, stage: 'WON' } }),
           prisma.opportunity.count({ where: { ...whereClause, stage: 'LOST' } }),
           prisma.opportunity.aggregate({
