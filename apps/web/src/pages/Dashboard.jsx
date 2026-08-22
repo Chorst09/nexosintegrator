@@ -740,53 +740,35 @@ export default function Dashboard() {
         </section>
 
         <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-[#cde3fb]">Receita Fechada</div>
-            <DollarSign className="h-3.5 w-3.5 text-[#8fd0ff]" />
-          </div>
-          {hasPositiveValue(kpis.wonValue) ? (
-            <>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatCurrencyNoCents(kpis.wonValue)}</span>
-                <TrendBadge trend={kpiTrends.won} />
-              </div>
-              <div className="mt-1.5 text-[10px] text-[#a9c5df]">{kpis.wonOpportunities} vendas concluidas</div>
-            </>
-          ) : (
-            <div className="mt-3"><EmptyState compact /></div>
-          )}
-        </div>
+        <DashboardKPICard
+          title="Receita Fechada"
+          value={formatCurrencyNoCents(kpis.wonValue)}
+          subtitle={`${kpis.wonOpportunities} vendas concluidas`}
+          icon={<DollarSign className="h-3.5 w-3.5" />}
+          colorTheme="cyan"
+          trend={kpiTrends.won}
+          status="success"
+        />
 
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-[#cde3fb]">Ticket Medio</div>
-            <Target className="h-3.5 w-3.5 text-[#8fd0ff]" />
-          </div>
-          {hasPositiveValue(kpis.avgTicket) ? (
-            <>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatCurrencyNoCents(kpis.avgTicket)}</span>
-                <TrendBadge trend={kpiTrends.avgTicket} />
-              </div>
-              <div className="mt-1.5 text-[10px] text-[#a9c5df]">{kpis.totalCompanies} contas ativas</div>
-            </>
-          ) : (
-            <div className="mt-3"><EmptyState compact /></div>
-          )}
-        </div>
+        <DashboardKPICard
+          title="Ticket Medio"
+          value={formatCurrencyNoCents(kpis.avgTicket)}
+          subtitle={`${kpis.totalCompanies} contas ativas`}
+          icon={<Target className="h-3.5 w-3.5" />}
+          colorTheme="blue"
+          trend={kpiTrends.avgTicket}
+          status="active"
+        />
 
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-[#cde3fb]">SLA Comercial</div>
-            <Clock3 className="h-3.5 w-3.5 text-[#8fd0ff]" />
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-xl font-black text-[#5eb0ff] sm:text-2xl">{formatPercent(kpis.slaCompliance)}</span>
-            <TrendBadge trend={kpiTrends.sla} />
-          </div>
-          <div className="mt-1.5 text-[10px] text-[#a9c5df]">Respostas em ate 4h</div>
-        </div>
+        <DashboardKPICard
+          title="SLA Comercial"
+          value={formatPercent(kpis.slaCompliance)}
+          subtitle="Respostas em ate 4h"
+          icon={<Clock3 className="h-3.5 w-3.5" />}
+          colorTheme="green"
+          trend={kpiTrends.sla}
+          status="active"
+        />
 
         <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3 text-[#d9edff]">
           <div className="flex items-center justify-between">
@@ -851,134 +833,99 @@ export default function Dashboard() {
         </section>
 
         <section className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-black text-[#dcecff]">Receita Mensal</h3>
-              <p className="text-xs text-[#aac6e4]">Evolucao dos ultimos 6 meses</p>
-            </div>
-            <TrendingUp className="h-4 w-4 text-[#8fd1ff]" />
-          </div>
-          <div className="h-[220px]">
-            {charts.monthlyRevenue.length > 0 ? (
-              <Line
-                data={revenueData}
-                options={{
-                  ...baseCartesianOptions,
-                  scales: {
-                    ...baseCartesianOptions.scales,
-                    y: {
-                      ...baseCartesianOptions.scales.y,
-                      ticks: {
-                        ...baseCartesianOptions.scales.y.ticks,
-                        callback: (value) => formatCurrencyNoCents(value)
-                      }
-                    }
-                  }
-                }}
-              />
-            ) : (
-              <EmptyState compact message="Dados de receita mensal indisponíveis" />
-            )}
-          </div>
-        </div>
+        <DashboardAdvancedChart
+          title="Receita Mensal"
+          subtitle="Evolucao dos ultimos 6 meses"
+          icon={<TrendingUp className="h-4 w-4" />}
+          type="line"
+          colorTheme="blue"
+          data={charts.monthlyRevenue.length > 0 ? {
+            labels: charts.monthlyRevenue.map((month) =>
+              new Date(month.month).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+            ),
+            datasets: [{
+              label: 'Receita',
+              data: charts.monthlyRevenue.map((month) => month.revenue),
+              borderColor: DASHBOARD_COLORS.neon.cyan,
+              backgroundColor: 'rgba(0, 217, 255, 0.16)',
+              borderWidth: 3,
+              fill: true,
+              tension: 0.35
+            }]
+          } : null}
+          isEmpty={charts.monthlyRevenue.length === 0}
+        />
 
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-black text-[#dcecff]">Origem das Oportunidades</h3>
-              <p className="text-xs text-[#aac6e4]">Participacao por canal</p>
-            </div>
-            <PieChart className="h-4 w-4 text-[#8fd1ff]" />
-          </div>
-          <div className="h-[220px]">
-            {charts.opportunitiesBySource.length > 0 ? (
-              <Doughnut
-                data={sourceData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom',
-                      labels: {
-                        color: axisColor,
-                        usePointStyle: true,
-                        boxWidth: 8,
-                        padding: 12,
-                        font: { size: 11, weight: '600' }
-                      }
-                    }
-                  }
-                }}
-              />
-            ) : (
-              <EmptyState compact message="Sem dados de origem" />
-            )}
-          </div>
-        </div>
+        <DashboardAdvancedChart
+          title="Origem das Oportunidades"
+          subtitle="Participacao por canal"
+          icon={<PieChart className="h-4 w-4" />}
+          type="doughnut"
+          colorTheme="multi"
+          data={charts.opportunitiesBySource.length > 0 ? {
+            labels: charts.opportunitiesBySource.map((source) => source.source),
+            datasets: [{
+              data: charts.opportunitiesBySource.map((source) => source.count),
+              backgroundColor: [
+                DASHBOARD_COLORS.neon.cyan,
+                DASHBOARD_COLORS.neon.green,
+                DASHBOARD_COLORS.neon.yellow,
+                DASHBOARD_COLORS.neon.purple,
+                DASHBOARD_COLORS.neon.pink
+              ],
+              borderColor: '#0e2648',
+              borderWidth: 2
+            }]
+          } : null}
+          isEmpty={charts.opportunitiesBySource.length === 0}
+        />
         </section>
 
         <section className="grid gap-3 xl:grid-cols-[1fr_1fr_1fr]">
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-base font-black text-[#dcecff]">Velocidade do Pipeline</h3>
-            <Clock3 className="h-4 w-4 text-[#8fd1ff]" />
-          </div>
-          <div className="mb-3 grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/75 p-2.5">
-              <div className="text-[10px] uppercase tracking-[0.08em] text-[#9fb9d7]">Ciclo medio</div>
-              <div className="mt-1 text-base font-black text-[#e8f4ff]">{kpis.avgCycleDays}d</div>
-            </div>
-            <div className="rounded-lg border border-[#74b9f353] bg-[#0b2243]/75 p-2.5">
-              <div className="text-[10px] uppercase tracking-[0.08em] text-[#9fb9d7]">Velocidade</div>
-              <div className="mt-1 text-base font-black text-[#e8f4ff]">{kpis.pipelineVelocity}</div>
-            </div>
-          </div>
-          <div className="h-[160px]">
-            {charts.velocityByStage.length > 0 ? (
-              <Bar
-                data={velocityData}
-                options={{
-                  ...baseCartesianOptions,
-                  plugins: {
-                    ...baseCartesianOptions.plugins,
-                    legend: { display: false }
-                  },
-                  scales: {
-                    ...baseCartesianOptions.scales,
-                    y: {
-                      ...baseCartesianOptions.scales.y,
-                      ticks: {
-                        ...baseCartesianOptions.scales.y.ticks,
-                        callback: (value) => `${value}d`
-                      }
-                    }
-                  }
-                }}
-              />
-            ) : (
-              <EmptyState compact message="Dados de velocidade indisponíveis" />
-            )}
-          </div>
-        </div>
+        <DashboardAdvancedChart
+          title="Velocidade do Pipeline"
+          subtitle={`Ciclo medio: ${kpis.avgCycleDays}d`}
+          icon={<Clock3 className="h-4 w-4" />}
+          type="bar"
+          colorTheme="blue"
+          data={charts.velocityByStage.length > 0 ? {
+            labels: charts.velocityByStage.map((stage) => stage.stage),
+            datasets: [{
+              label: 'Dias medios',
+              data: charts.velocityByStage.map((stage) => stage.days),
+              backgroundColor: DASHBOARD_COLORS.neon.blue,
+              borderRadius: 8,
+              borderSkipped: false
+            }]
+          } : null}
+          isEmpty={charts.velocityByStage.length === 0}
+        />
 
-        <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-base font-black text-[#dcecff]">Pulso de Atividades</h3>
-            <Zap className="h-4 w-4 text-[#8fd1ff]" />
-          </div>
-          <div className="h-[190px]">
-            {charts.activityPulse.length > 0 ? (
-              <Bar data={activityData} options={baseCartesianOptions} />
-            ) : (
-              <EmptyState compact message="Dados de atividades não disponíveis" />
-            )}
-          </div>
-          <div className="mt-3 text-[10px] text-[#b8d3ee]">
-            Leads ativos: <span className="font-semibold text-white">{kpis.activeLeads}</span>
-          </div>
-        </div>
+        <DashboardAdvancedChart
+          title="Pulso de Atividades"
+          subtitle={`Leads ativos: ${kpis.activeLeads}`}
+          icon={<Zap className="h-4 w-4" />}
+          type="bar"
+          colorTheme="warm"
+          data={charts.activityPulse.length > 0 ? {
+            labels: charts.activityPulse.map((item) => item.week),
+            datasets: [
+              {
+                label: 'Atividades',
+                data: charts.activityPulse.map((item) => item.activities),
+                backgroundColor: DASHBOARD_COLORS.neon.purple,
+                borderRadius: 6
+              },
+              {
+                label: 'Reunioes',
+                data: charts.activityPulse.map((item) => item.meetings),
+                backgroundColor: DASHBOARD_COLORS.neon.yellow,
+                borderRadius: 6
+              }
+            ]
+          } : null}
+          isEmpty={charts.activityPulse.length === 0}
+        />
 
         <div className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
           <div className="mb-3 flex items-center justify-between">

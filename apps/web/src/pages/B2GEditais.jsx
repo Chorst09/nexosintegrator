@@ -80,6 +80,9 @@ ChartJS.register(
 
 import AnimatedStats from '../components/AnimatedStats';
 import B2GFunnelStrategic from '../components/B2GFunnelStrategic';
+import DashboardKPICard from '../components/DashboardKPICard';
+import DashboardAdvancedChart from '../components/DashboardAdvancedChart';
+import TemperatureGauge from '../components/TemperatureGauge';
 import Modal from '../components/Modal';
 import OpportunityForm from '../components/OpportunityForm';
 import { B2GOpportunityDetailModal, B2GOpportunityEditModal } from '../components/B2GOpportunityModal';
@@ -88,6 +91,8 @@ import PresentationControls from '../components/PresentationControls';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { isCompanyInClientType, isOpportunityInClientType } from '../utils/businessModel';
 import { hydrateActivityFlow } from '../utils/activityFlow';
+import { DASHBOARD_COLORS } from '../constants/dashboardTheme';
+import '../styles/dashboardEffects.css';
 
 const TYPE_OPTIONS = [
   { value: 'EDITAL', label: 'Edital' },
@@ -4370,93 +4375,75 @@ export default function B2GEditais() {
           </div>
         </section>
 
-        <section className="grid gap-2.5 lg:grid-cols-5">
-          <div
-            className="overflow-hidden rounded-[18px] border border-[#78c5ff50] p-3 text-[#d9edff]"
-            style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
-          >
-            <div className="text-xs font-bold uppercase tracking-[0.3em] text-[#b6cee8]">
-              Previsão de Sucesso
-              <br />
-              (Forecast)
-            </div>
-            <div className="relative mx-auto mt-4 h-24 w-44 overflow-hidden">
-              <div
-                className="absolute -bottom-20 left-0 h-44 w-44 rounded-full"
-                style={{
-                  background:
-                    'conic-gradient(from 180deg, #ef7a73 0deg, #ef7a73 35deg, #f6b335 35deg 70deg, #5d8dff 70deg 110deg, #64ca7f 110deg 150deg, #3ac8f0 150deg 180deg, transparent 180deg 360deg)'
-                }}
-              />
-              <div className="absolute -bottom-[64px] left-7 h-36 w-36 rounded-full bg-[#0d2d56]" />
-              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-black text-[#ecf5ff]">
-                {dashboardForecastScore.toFixed(1)}%
-              </div>
-            </div>
+        <section className="dashboard-card grid gap-2.5 lg:grid-cols-5">
+          {/* Card 1: Previsão de Sucesso (Forecast) com TemperatureGauge */}
+          <div className="metric-chip">
+            <DashboardKPICard
+              title="Previsão de Sucesso (Forecast)"
+              icon={TrendingUp}
+              colorTheme="magenta"
+              value={
+                <div className="relative mx-auto mt-4 h-24 w-44 overflow-hidden">
+                  <TemperatureGauge
+                    value={dashboardForecastScore}
+                    size="small"
+                    colorTheme="magenta"
+                  />
+                  <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xl sm:text-2xl font-black text-[#ecf5ff]">
+                    {dashboardForecastScore.toFixed(1)}%
+                  </div>
+                </div>
+              }
+              status="active"
+            />
           </div>
 
-          <div
-            className="rounded-xl border border-[#78c5ff50] p-3 text-[#d9edff]"
-            style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold leading-tight text-[#cde3fb]">Total em Pipeline</div>
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8ac7ff6b] bg-[#2f5d8f5e]">
-                <TrendingUp className="h-3.5 w-3.5 text-[#8fd0ff]" />
-              </span>
-            </div>
-            <div className="mt-2 break-words text-xl font-black leading-none text-[#5eb0ff] sm:text-2xl">
-              {formatCurrencyNoCents(dashboardTotals.pipelineValue)}
-            </div>
-            <div className="mt-1.5 text-[10px] text-[#a9c5df]">Volume total em análise comercial</div>
+          {/* Card 2: Total em Pipeline */}
+          <div className="metric-chip">
+            <DashboardKPICard
+              title="Total em Pipeline"
+              icon={TrendingUp}
+              value={formatCurrencyNoCents(dashboardTotals.pipelineValue)}
+              subtitle="Volume total em análise comercial"
+              colorTheme="cyan"
+              status="active"
+            />
           </div>
 
-          <div
-            className="rounded-xl border border-[#78c5ff50] p-3 text-[#d9edff]"
-            style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold leading-tight text-[#cde3fb]">Taxa de Vitória</div>
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8ac7ff6b] bg-[#2f5d8f5e]">
-                <Gauge className="h-3.5 w-3.5 text-[#8fd0ff]" />
-              </span>
-            </div>
-            <div className="mt-2 text-xl font-black leading-none text-[#5eb0ff] sm:text-2xl">
-              {dashboardTotals.winRate.toFixed(1)}%
-            </div>
-            <div className="mt-1.5 text-[10px] text-[#a9c5df]">Conversão média do trimestre</div>
+          {/* Card 3: Taxa de Vitória */}
+          <div className="metric-chip">
+            <DashboardKPICard
+              title="Taxa de Vitória"
+              icon={Gauge}
+              value={`${dashboardTotals.winRate.toFixed(1)}%`}
+              subtitle="Conversão média do trimestre"
+              colorTheme="green"
+              status="active"
+            />
           </div>
 
-          <div
-            className="rounded-xl border border-[#78c5ff50] p-3 text-[#d9edff]"
-            style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold leading-tight text-[#cde3fb]">Licitações 'GO'</div>
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8ac7ff6b] bg-[#2f5d8f5e]">
-                <CheckCircle2 className="h-3.5 w-3.5 text-[#8fd0ff]" />
-              </span>
-            </div>
-            <div className="mt-2 text-xl font-black leading-none text-[#5eb0ff] sm:text-2xl">
-              {dashboardTotals.goCount}
-            </div>
-            <div className="mt-1.5 text-[10px] text-[#a9c5df]">Ativas na fase de proposta</div>
+          {/* Card 4: Licitações 'GO' */}
+          <div className="metric-chip">
+            <DashboardKPICard
+              title="Licitações 'GO'"
+              icon={CheckCircle2}
+              value={dashboardTotals.goCount}
+              subtitle="Ativas na fase de proposta"
+              colorTheme="blue"
+              status="active"
+            />
           </div>
 
-          <div
-            className="rounded-xl border border-[#78c5ff50] p-3 text-[#d9edff]"
-            style={{ background: 'linear-gradient(140deg, rgba(14,47,87,0.93), rgba(8,29,58,0.96))' }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold leading-tight text-[#cde3fb]">Prazos Próximos</div>
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8ac7ff6b] bg-[#2f5d8f5e]">
-                <Clock3 className="h-3.5 w-3.5 text-[#8fd0ff]" />
-              </span>
-            </div>
-            <div className="mt-2 text-xl font-black leading-none text-[#5eb0ff] sm:text-2xl">
-              {String(dashboardCriticalDeadlines.length).padStart(2, '0')}
-            </div>
-            <div className="mt-1.5 text-[10px] text-[#a9c5df]">Abertura nos próximos 7 dias</div>
+          {/* Card 5: Prazos Próximos */}
+          <div className="metric-chip">
+            <DashboardKPICard
+              title="Prazos Próximos"
+              icon={Clock3}
+              value={String(dashboardCriticalDeadlines.length).padStart(2, '0')}
+              subtitle="Abertura nos próximos 7 dias"
+              colorTheme="pink"
+              status="active"
+            />
           </div>
         </section>
 
@@ -4504,28 +4491,18 @@ export default function B2GEditais() {
             </div>
 
             <div className="relative mt-6 h-[250px]">
-              <div className="absolute inset-0 flex flex-col justify-between text-xs md:text-sm text-[#9bbad8]">
-                {projectionTicks.map((tick, idx) => (
-                  <div key={`proj-tick-${idx}`} className="relative border-t border-dashed border-[#79afd24a] pt-1">
-                    {idx === projectionTicks.length - 1 ? 'R$ 0k' : formatCurrencyAxisK(tick)}
-                  </div>
-                ))}
-              </div>
-
-              <div className="relative z-10 ml-12 flex h-full items-end justify-between gap-4 pb-8">
-                {dashboardProjectionBars.map((bar) => {
-                  const ratio = Math.max(0.02, bar.value / dashboardProjectionMax);
-                  return (
-                    <div key={bar.key} className="flex flex-1 flex-col items-center justify-end">
-                      <div
-                        className={`w-10 rounded-t-xl shadow-[0_20px_36px_-22px_rgba(0,0,0,0.9)] ${bar.color}`}
-                        style={{ height: `${Math.max(12, Math.round(ratio * 170))}px` }}
-                      />
-                      <div className="mt-4 text-sm md:text-base font-semibold text-[#a8c7e4]">{bar.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
+              <DashboardAdvancedChart
+                title="Previsões de Venda"
+                subtitle="Composição do pipeline por origem e impacto de perdas."
+                type="bar"
+                colorTheme="warm"
+                data={{
+                  labels: dashboardProjectionBars.map((bar) => bar.label),
+                  values: dashboardProjectionBars.map((bar) => bar.value),
+                  colors: dashboardProjectionBars.map((bar) => bar.color)
+                }}
+                isEmpty={dashboardProjectionBars.length === 0}
+              />
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">

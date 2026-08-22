@@ -41,6 +41,10 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { getUserAccess, normalizeRole } from '../utils/permissions';
 import PresentationControls from '../components/PresentationControls';
+import DashboardKPICard from '../components/DashboardKPICard';
+import DashboardAdvancedChart from '../components/DashboardAdvancedChart';
+import { DASHBOARD_COLORS } from '../constants/dashboardTheme';
+import '../styles/dashboardEffects.css';
 
 ChartJS.register(
   CategoryScale,
@@ -172,30 +176,30 @@ const mergeRevenueBreakdowns = (...items) =>
   }), { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
 
 function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
-  const accents = {
+  const neonColors = {
     cyan: {
-      border: 'border-cyan-300/35',
-      glow: 'shadow-[0_24px_80px_-54px_rgba(34,211,238,0.95)]',
-      bg: 'from-cyan-500/22 via-sky-500/10 to-blue-950/60',
-      icon: 'bg-cyan-400/16 text-cyan-200 ring-cyan-300/30'
+      border: 'border-[#00d9ff]/30',
+      glow: 'shadow-[0_24px_80px_-54px_rgba(0,217,255,0.95)]',
+      bg: 'from-[rgba(0,217,255,0.08)] via-[rgba(0,217,255,0.04)] to-[rgba(14,47,87,0.93)]',
+      icon: 'bg-[#00d9ff]/10 text-[#00d9ff] ring-[#00d9ff]/30'
     },
-    violet: {
-      border: 'border-violet-300/35',
-      glow: 'shadow-[0_24px_80px_-54px_rgba(139,92,246,0.95)]',
-      bg: 'from-violet-500/24 via-indigo-500/12 to-blue-950/62',
-      icon: 'bg-violet-400/16 text-violet-200 ring-violet-300/30'
+    magenta: {
+      border: 'border-[#ff00ff]/30',
+      glow: 'shadow-[0_24px_80px_-54px_rgba(255,0,255,0.95)]',
+      bg: 'from-[rgba(255,0,255,0.08)] via-[rgba(255,0,255,0.04)] to-[rgba(14,47,87,0.93)]',
+      icon: 'bg-[#ff00ff]/10 text-[#ff00ff] ring-[#ff00ff]/30'
     },
-    emerald: {
-      border: 'border-emerald-300/35',
-      glow: 'shadow-[0_24px_80px_-54px_rgba(16,185,129,0.95)]',
-      bg: 'from-emerald-500/22 via-teal-500/10 to-blue-950/60',
-      icon: 'bg-emerald-400/16 text-emerald-200 ring-emerald-300/30'
+    green: {
+      border: 'border-[#00ff88]/30',
+      glow: 'shadow-[0_24px_80px_-54px_rgba(0,255,136,0.95)]',
+      bg: 'from-[rgba(0,255,136,0.08)] via-[rgba(0,255,136,0.04)] to-[rgba(14,47,87,0.93)]',
+      icon: 'bg-[#00ff88]/10 text-[#00ff88] ring-[#00ff88]/30'
     }
   };
-  const tone = accents[accent] || accents.cyan;
+  const tone = neonColors[accent] || neonColors.cyan;
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border ${tone.border} bg-gradient-to-br ${tone.bg} p-5 ${tone.glow}`}>
+    <div className={`dashboard-card relative overflow-hidden rounded-2xl border ${tone.border} bg-gradient-to-br ${tone.bg} p-5 ${tone.glow}`}>
       <div className="pointer-events-none absolute -right-16 -top-16 h-36 w-36 rounded-full bg-white/10 blur-3xl" />
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -207,26 +211,26 @@ function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
         </div>
       </div>
       <div className="relative mt-5 grid grid-cols-3 gap-2">
-        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="metric-chip min-w-0 rounded-xl border border-[#78c5ff50] bg-white/[0.045] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Mensal</p>
           <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.monthly)}>
             {formatCompactCurrency(totals.monthly)}
           </p>
         </div>
-        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="metric-chip min-w-0 rounded-xl border border-[#78c5ff50] bg-white/[0.045] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Contrato</p>
           <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.contract)}>
             {formatCompactCurrency(totals.contract)}
           </p>
         </div>
-        <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="metric-chip min-w-0 rounded-xl border border-[#78c5ff50] bg-white/[0.045] p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Pontual</p>
           <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.single)}>
             {formatCompactCurrency(totals.single)}
           </p>
         </div>
       </div>
-      <div className="relative mt-4 flex min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/10 px-3 py-2">
+      <div className="relative mt-4 flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#78c5ff50] bg-black/10 px-3 py-2">
         <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-[#9fb9d7]">Total comercial</span>
         <span className="min-w-0 truncate text-[clamp(1rem,1.45vw,1.25rem)] font-black leading-tight text-white" title={formatCurrency(totals.total)}>
           {formatCompactCurrency(totals.total)}
@@ -236,38 +240,7 @@ function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
   );
 }
 
-function KpiCard({ icon: Icon, label, value, sub, tone = 'blue', onClick }) {
-  const tones = {
-    blue: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400',
-    green: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400',
-    amber: 'from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400',
-    purple: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-400',
-    cyan: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-400',
-    rose: 'from-rose-500/20 to-rose-600/10 border-rose-500/30 text-rose-400'
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      className={[
-        'relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 transition-all',
-        tones[tone],
-        onClick ? 'cursor-pointer hover:scale-[1.02]' : ''
-      ].join(' ')}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--crm-muted)]">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-[var(--crm-ink)]">{value}</p>
-          {sub && <p className="mt-1 text-xs text-[var(--crm-muted)]">{sub}</p>}
-        </div>
-        <div className={`rounded-xl bg-gradient-to-br p-2.5 ${tones[tone]}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
-  );
-}
+// KpiCard has been migrated to DashboardKPICard component - see below for mapping
 
 function ModuleCard({ title, subtitle, icon: Icon, color, kpis, route, navigate, badge }) {
   const gradients = {
@@ -1411,15 +1384,15 @@ export default function DashboardGeral() {
       </div>
 
       <div data-section="kpis" className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8">
-        <KpiCard icon={DollarSign} label="Pipeline Consolidado" value={formatCurrency(totalPipeline)} sub="Contrato + pontual" tone="blue" />
-        <KpiCard icon={TrendingUp} label="Receita Ganha" value={formatCurrency(totalWonValue)} sub={`B2B ${formatCurrency(b2bWonRevenue.total)} | B2G ${formatCurrency(b2gWonRevenue.total)}`} tone="green" />
-        <KpiCard icon={Target} label="Oportunidades" value={formatNumber(opportunitiesB2BRange.length + opportunitiesB2GRange.length)} sub="B2B + B2G" tone="cyan" onClick={() => navigate('/oportunidades')} />
-        <KpiCard icon={Building2} label="Empresas" value={formatNumber(companiesB2B.length + companiesB2G.length)} sub="Carteira total" tone="purple" onClick={() => navigate('/empresas')} />
-        <KpiCard icon={Package} label="Produtos Ativos" value={formatNumber(activeProducts.length)} sub={`${formatNumber(regions.length)} regiões`} tone="amber" onClick={() => navigate('/produtos')} />
-        <KpiCard icon={Activity} label="Atividades Pendentes" value={formatNumber(pendingActivities.length)} sub={`${formatNumber(overdueActivities.length)} atrasadas`} tone={overdueActivities.length > 0 ? 'rose' : 'cyan'} onClick={() => navigate('/atividades')} />
-        <KpiCard icon={Beaker} label="POCs Pré-Vendas" value={formatNumber(preSalesPocsRange.length)} sub={`${formatNumber(activePreSalesPocs.length)} em andamento`} tone={blockedPreSalesPocs.length > 0 || overduePreSalesPocs.length > 0 ? 'rose' : 'purple'} onClick={() => navigate('/gestao-pocs')} />
-        <KpiCard icon={Brain} label="Leads Quentes" value={formatNumber(hotLeads)} sub={`${formatNumber(warmLeads)} warm`} tone="green" onClick={() => navigate('/leads')} />
-        <KpiCard icon={Users} label="Equipe Comercial" value={formatNumber(teamPerformance.length)} sub={`${formatNumber(integrations.length)} integrações`} tone="blue" onClick={() => navigate('/vendedores')} />
+        <DashboardKPICard icon={DollarSign} label="Pipeline Consolidado" value={formatCurrency(totalPipeline)} sub="Contrato + pontual" colorTheme="cyan" />
+        <DashboardKPICard icon={TrendingUp} label="Receita Ganha" value={formatCurrency(totalWonValue)} sub={`B2B ${formatCurrency(b2bWonRevenue.total)} | B2G ${formatCurrency(b2gWonRevenue.total)}`} colorTheme="green" />
+        <DashboardKPICard icon={Target} label="Oportunidades" value={formatNumber(opportunitiesB2BRange.length + opportunitiesB2GRange.length)} sub="B2B + B2G" colorTheme="cyan" onClick={() => navigate('/oportunidades')} />
+        <DashboardKPICard icon={Building2} label="Empresas" value={formatNumber(companiesB2B.length + companiesB2G.length)} sub="Carteira total" colorTheme="magenta" onClick={() => navigate('/empresas')} />
+        <DashboardKPICard icon={Package} label="Produtos Ativos" value={formatNumber(activeProducts.length)} sub={`${formatNumber(regions.length)} regiões`} colorTheme="yellow" onClick={() => navigate('/produtos')} />
+        <DashboardKPICard icon={Activity} label="Atividades Pendentes" value={formatNumber(pendingActivities.length)} sub={`${formatNumber(overdueActivities.length)} atrasadas`} colorTheme={overdueActivities.length > 0 ? 'pink' : 'cyan'} onClick={() => navigate('/atividades')} />
+        <DashboardKPICard icon={Beaker} label="POCs Pré-Vendas" value={formatNumber(preSalesPocsRange.length)} sub={`${formatNumber(activePreSalesPocs.length)} em andamento`} colorTheme={blockedPreSalesPocs.length > 0 || overduePreSalesPocs.length > 0 ? 'pink' : 'magenta'} onClick={() => navigate('/gestao-pocs')} />
+        <DashboardKPICard icon={Brain} label="Leads Quentes" value={formatNumber(hotLeads)} sub={`${formatNumber(warmLeads)} warm`} colorTheme="green" onClick={() => navigate('/leads')} />
+        <DashboardKPICard icon={Users} label="Equipe Comercial" value={formatNumber(teamPerformance.length)} sub={`${formatNumber(integrations.length)} integrações`} colorTheme="blue" onClick={() => navigate('/vendedores')} />
       </div>
 
       <div data-section="extras" className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
@@ -1474,185 +1447,155 @@ export default function DashboardGeral() {
       </div>
 
       <div data-section="receita-graficos" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <ChartCard
-          title="Mix de Receita B2B x B2G"
-          subtitle="Mensal, total do período do contrato e receita pontual"
-          action={<span className="rounded-full bg-cyan-400/15 px-2 py-1 text-xs font-semibold text-cyan-200">{formatCurrency(consolidatedRevenue.total)}</span>}
-        >
-          <Bar
-            data={chartData.revenueMix}
-            options={{
-              ...chartOptionsBase,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
-              },
-              scales: {
-                ...chartOptionsBase.scales,
-                x: { ...chartOptionsBase.scales.x, stacked: false },
-                y: { ...chartOptionsBase.scales.y, ticks: { ...chartOptionsBase.scales.y.ticks, callback: (value) => formatCurrency(value) } }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Mix de Receita B2B x B2G</h3>
+              <p className="text-xs text-[#9fb9d7]">Mensal, total do período do contrato e receita pontual</p>
+            </div>
+            <span className="metric-chip rounded-full bg-cyan-400/15 px-2 py-1 text-xs font-semibold text-cyan-200">{formatCurrency(consolidatedRevenue.total)}</span>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="bar" colorTheme="warm" data={chartData.revenueMix} />
+          </div>
+        </div>
 
-        <ChartCard
-          title="Receita Mensal por Modelo"
-          subtitle="Separação temporal entre mensal, contrato e pontual"
-          action={<span className="rounded-full bg-emerald-400/15 px-2 py-1 text-xs font-semibold text-emerald-200">{formatCurrency(consolidatedRevenue.monthly)}/mês</span>}
-        >
-          <Line
-            data={chartData.monthlyRevenueSplit}
-            options={{
-              ...chartOptionsBase,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
-              },
-              scales: {
-                ...chartOptionsBase.scales,
-                y: { ...chartOptionsBase.scales.y, ticks: { ...chartOptionsBase.scales.y.ticks, callback: (value) => formatCurrency(value) } }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Receita Mensal por Modelo</h3>
+              <p className="text-xs text-[#9fb9d7]">Separação temporal entre mensal, contrato e pontual</p>
+            </div>
+            <span className="metric-chip rounded-full bg-emerald-400/15 px-2 py-1 text-xs font-semibold text-emerald-200">{formatCurrency(consolidatedRevenue.monthly)}/mês</span>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="line" colorTheme="blue" data={chartData.monthlyRevenueSplit} />
+          </div>
+        </div>
       </div>
 
       <div data-section="charts-row-1" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <ChartCard
-          title="Tendência Mensal de Receita"
-          subtitle="Potencial x realizado nos últimos 6 meses"
-          action={<span className="rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">{formatCurrency(totalWonValue)}</span>}
-        >
-          <Line
-            data={chartData.monthlyTrend}
-            options={{
-              ...chartOptionsBase,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Tendência Mensal de Receita</h3>
+              <p className="text-xs text-[#9fb9d7]">Potencial x realizado nos últimos 6 meses</p>
+            </div>
+            <span className="metric-chip rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">{formatCurrency(totalWonValue)}</span>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="line" colorTheme="blue" data={chartData.monthlyTrend} />
+          </div>
+        </div>
 
-        <ChartCard title="Distribuição por Estágio" subtitle="Volume de oportunidades por etapa do funil">
-          <Bar
-            data={chartData.stageDistribution}
-            options={{
-              ...chartOptionsBase,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Distribuição por Estágio</h3>
+              <p className="text-xs text-[#9fb9d7]">Volume de oportunidades por etapa do funil</p>
+            </div>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="bar" colorTheme="blue" data={chartData.stageDistribution} />
+          </div>
+        </div>
       </div>
 
       <div data-section="charts-row-2" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <ChartCard title="Temperatura dos Leads" subtitle="Classificação por score (B2B e B2G)">
-          <Bar
-            data={chartData.leadTemperature}
-            options={{
-              ...chartOptionsBase,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Temperatura dos Leads</h3>
+              <p className="text-xs text-[#9fb9d7]">Classificação por score (B2B e B2G)</p>
+            </div>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="bar" colorTheme="warm" data={chartData.leadTemperature} />
+          </div>
+        </div>
 
-        <ChartCard title="Carga Operacional" subtitle="Fila de demandas em execução">
-          <Doughnut
-            data={chartData.operationalLoad}
-            options={{
-              ...chartOptionsBase,
-              scales: undefined,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'bottom' }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Carga Operacional</h3>
+              <p className="text-xs text-[#9fb9d7]">Fila de demandas em execução</p>
+            </div>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="doughnut" colorTheme="multi" data={chartData.operationalLoad} />
+          </div>
+        </div>
 
-        <ChartCard title="Composição do Pipeline" subtitle="Participação entre B2B e B2G">
-          <Doughnut
-            data={chartData.pipelineComposition}
-            options={{
-              ...chartOptionsBase,
-              scales: undefined,
-              plugins: {
-                ...chartOptionsBase.plugins,
-                legend: { ...chartOptionsBase.plugins.legend, position: 'bottom' }
-              }
-            }}
-          />
-        </ChartCard>
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Composição do Pipeline</h3>
+              <p className="text-xs text-[#9fb9d7]">Participação entre B2B e B2G</p>
+            </div>
+          </div>
+          <div className="h-[280px]">
+            <DashboardAdvancedChart type="doughnut" colorTheme="success" data={chartData.pipelineComposition} />
+          </div>
+        </div>
       </div>
 
       <div data-section="charts-row-3" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <ChartCard title="Performance da Equipe" subtitle="Top responsáveis por volume de oportunidades">
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Performance da Equipe</h3>
+              <p className="text-xs text-[#9fb9d7]">Top responsáveis por volume de oportunidades</p>
+            </div>
+          </div>
           {chartData.hasTeamData ? (
-            <Bar
-              data={chartData.teamLoad}
-              options={{
-                ...chartOptionsBase,
-                indexAxis: 'y',
-                plugins: {
-                  ...chartOptionsBase.plugins,
-                  legend: { ...chartOptionsBase.plugins.legend, position: 'top' }
-                }
-              }}
-            />
+            <div className="h-[280px]">
+              <DashboardAdvancedChart type="bar" colorTheme="cool" data={chartData.teamLoad} />
+            </div>
           ) : (
-            <div className="grid h-full place-items-center rounded-xl border border-dashed border-[var(--crm-border)]">
-              <p className="text-sm text-[var(--crm-muted)]">Sem dados de equipe no período selecionado.</p>
+            <div className="grid h-[280px] place-items-center rounded-xl border border-dashed border-[#78c5ff50]">
+              <p className="text-sm text-[#9fb9d7]">Sem dados de equipe no período selecionado.</p>
             </div>
           )}
-        </ChartCard>
+        </div>
 
-        <ChartCard title="Volume por Módulo" subtitle="Top módulos por quantidade de registros carregados">
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-[#dcecff]">Volume por Módulo</h3>
+              <p className="text-xs text-[#9fb9d7]">Top módulos por quantidade de registros carregados</p>
+            </div>
+          </div>
           {chartData.hasModuleVolumeData ? (
-            <Bar
-              data={chartData.moduleVolume}
-              options={{
-                ...chartOptionsBase,
-                plugins: {
-                  ...chartOptionsBase.plugins,
-                  legend: { ...chartOptionsBase.plugins.legend, display: false }
-                }
-              }}
-            />
+            <div className="h-[280px]">
+              <DashboardAdvancedChart type="bar" colorTheme="blue" data={chartData.moduleVolume} />
+            </div>
           ) : (
-            <div className="grid h-full place-items-center rounded-xl border border-dashed border-[var(--crm-border)]">
-              <p className="text-sm text-[var(--crm-muted)]">Sem volume suficiente para comparação.</p>
+            <div className="grid h-[280px] place-items-center rounded-xl border border-dashed border-[#78c5ff50]">
+              <p className="text-sm text-[#9fb9d7]">Sem volume suficiente para comparação.</p>
             </div>
           )}
-        </ChartCard>
+        </div>
 
-        <div className="rounded-2xl border border-[var(--crm-border)] bg-[var(--crm-surface)] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold text-[var(--crm-ink)]">Cobertura de Módulos</h3>
-            <span className="rounded-full bg-[rgb(var(--crm-accent-rgb)_/_0.2)] px-2.5 py-1 text-xs font-semibold text-[var(--crm-ink)]">
+            <h3 className="font-semibold text-[#dcecff]">Cobertura de Módulos</h3>
+            <span className="metric-chip rounded-full bg-[#00d9ff]/20 px-2.5 py-1 text-xs font-semibold text-[#00d9ff]">
               {modulesLoaded}/{modulesEnabled} carregados
             </span>
           </div>
 
           <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-2">
+            <div className="rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.05)] p-2">
               <p className="text-lg font-bold text-emerald-300">{modulesLoaded}</p>
-              <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">OK</p>
+              <p className="text-[10px] uppercase tracking-wide text-[#9fb9d7]">OK</p>
             </div>
-            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-2">
+            <div className="rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.05)] p-2">
               <p className="text-lg font-bold text-rose-300">{modulesWithError}</p>
-              <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Falhas</p>
+              <p className="text-[10px] uppercase tracking-wide text-[#9fb9d7]">Falhas</p>
             </div>
-            <div className="rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] p-2">
+            <div className="rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.05)] p-2">
               <p className="text-lg font-bold text-blue-300">{moduleHealth.filter((item) => item.status === 'skipped').length}</p>
-              <p className="text-[10px] uppercase tracking-wide text-[var(--crm-muted)]">Ignorados</p>
+              <p className="text-[10px] uppercase tracking-wide text-[#9fb9d7]">Ignorados</p>
             </div>
           </div>
 
@@ -1660,14 +1603,14 @@ export default function DashboardGeral() {
             {moduleHealth.map((item) => (
               <div
                 key={item.key}
-                className="flex items-start justify-between gap-3 rounded-xl border border-[var(--crm-border)] bg-[var(--crm-bg)] px-3 py-2"
+                className="flex items-start justify-between gap-3 rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.03)] px-3 py-2"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-[var(--crm-ink)]">{item.label}</p>
+                  <p className="truncate text-sm font-medium text-[#dcecff]">{item.label}</p>
                   {item.status === 'error' ? (
                     <p className="truncate text-xs text-rose-300">{item.error}</p>
                   ) : (
-                    <p className="text-xs text-[var(--crm-muted)]">{formatNumber(item.count)} registros</p>
+                    <p className="text-xs text-[#9fb9d7]">{formatNumber(item.count)} registros</p>
                   )}
                 </div>
                 <span
