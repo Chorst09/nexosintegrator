@@ -79,6 +79,18 @@ export default function App() {
           }
         />
 
+        <Route
+          path="/projetos"
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+                <Suspense fallback={<div className="min-h-screen grid place-items-center bg-[#0b1120] text-slate-400">Carregando gestão de projetos...</div>}>
+                  <Projetos />
+                </Suspense>
+              </RoleGuard>
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           element={
@@ -245,16 +257,6 @@ export default function App() {
             }
           />
 
-          <Route
-            path="projetos"
-            element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
-                <Suspense fallback={<div className="py-16 text-center text-[var(--crm-muted)]">Carregando projetos...</div>}>
-                  <Projetos />
-                </Suspense>
-              </RoleGuard>
-            }
-          />
           <Route
             path="projetos/:id"
             element={

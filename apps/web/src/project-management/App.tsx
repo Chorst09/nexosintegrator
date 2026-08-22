@@ -4,7 +4,7 @@ import {
   BarChart2, LayoutTemplate, MoreHorizontal,
   Search, Bell, Settings, Plus, ChevronDown, CheckCircle2,
   List as ListIcon, Calendar, Activity, 
-  Users2, GanttChartSquare
+  Users2, GanttChartSquare, ArrowLeft
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,7 +29,7 @@ function cn(...inputs: ClassValue[]) {
 
 type ViewMode = 'board' | 'list' | 'dashboard' | 'team' | 'calendar' | 'gantt' | 'activity' | 'workload';
 
-export default function App() {
+export default function App({ onBack }: { onBack?: () => void }) {
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [globalView, setGlobalView] = useState('spaces');
   
@@ -207,10 +207,23 @@ export default function App() {
         
         {/* Top Global Bar */}
         <header className="h-12 border-b border-[#334155] px-4 flex items-center justify-between bg-[#1e293b] flex-shrink-0">
-          <div className="flex items-center gap-2 cursor-pointer hover:bg-[#334155] px-2 py-1 rounded transition-colors">
-            <div className="w-5 h-5 bg-emerald-500 rounded text-white flex items-center justify-center font-bold text-xs">C</div>
-            <span className="font-semibold text-slate-200">Carlos Horst's Workspace</span>
-            <ChevronDown className="w-4 h-4 text-slate-500" />
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="flex h-8 items-center gap-1.5 rounded-md border border-[#475569] px-2.5 text-xs font-semibold text-slate-300 transition-colors hover:border-[#64748b] hover:bg-[#334155] hover:text-white"
+                title="Voltar ao CRM"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Voltar
+              </button>
+            )}
+            <div className="flex items-center gap-2 cursor-pointer hover:bg-[#334155] px-2 py-1 rounded transition-colors">
+              <div className="w-5 h-5 bg-emerald-500 rounded text-white flex items-center justify-center font-bold text-xs">C</div>
+              <span className="font-semibold text-slate-200">Carlos Horst's Workspace</span>
+              <ChevronDown className="w-4 h-4 text-slate-500" />
+            </div>
           </div>
           
           <div className="flex-1 max-w-lg mx-4 flex items-center gap-2">

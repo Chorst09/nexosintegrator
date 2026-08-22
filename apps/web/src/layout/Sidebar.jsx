@@ -198,7 +198,7 @@ export default function Sidebar({
         { path: '/comissoes', label: 'Comissoes', icon: Coins, accent: 'from-yellow-200/95 via-amber-400/90 to-orange-400/85 text-slate-950 shadow-amber-500/30', description: 'Pagamentos e regras' },
         { path: '/metas-performance', label: 'Metas & Performance', icon: Trophy, accent: 'from-orange-300/95 via-amber-400/90 to-yellow-300/85 text-slate-950 shadow-orange-500/30', description: 'Metas e indicadores' },
         { path: '/kickoff', label: 'Gestão de Kickoff', icon: Rocket, accent: 'from-rose-300/95 via-orange-400/90 to-amber-300/90 text-slate-950 shadow-orange-500/30', description: 'Reuniões estratégicas do projeto' },
-        { path: '/projetos', label: 'Projetos', icon: FolderKanban, accent: 'from-teal-300/95 via-emerald-400/85 to-green-400/85 text-slate-950 shadow-emerald-500/30', description: 'Gestão de projetos e entregas' },
+        { path: '/projetos', label: 'Gestão de Projetos', icon: FolderKanban, accent: 'from-teal-300/95 via-emerald-400/85 to-green-400/85 text-slate-950 shadow-emerald-500/30', description: 'Gestão de projetos e entregas' },
         { path: '/pos-venda', label: 'Pos-Venda', icon: Handshake, accent: 'from-emerald-300/95 via-teal-400/85 to-cyan-400/85 text-slate-950 shadow-emerald-500/30', description: 'Relacionamento e suporte' },
         { path: '/relatorios', label: 'Relatorios', icon: ChartNoAxesCombined, accent: 'from-cyan-300/95 via-blue-400/85 to-indigo-400/85 text-white shadow-blue-500/30', description: 'Analises e metricas' }
       ]
