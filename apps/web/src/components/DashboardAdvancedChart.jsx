@@ -77,6 +77,9 @@ const DashboardAdvancedChart = ({
 
   // Processar dados
   const processedData = useMemo(() => {
+    if (!data) {
+      return { labels: [], datasets: [] };
+    }
     const datasets = data.datasets || [];
     return {
       labels: data.labels || [],

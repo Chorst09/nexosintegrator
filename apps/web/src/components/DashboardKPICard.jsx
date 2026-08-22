@@ -161,7 +161,7 @@ const DashboardKPICard = ({
 
         {/* Trend e Status */}
         <div className="flex items-center justify-between">
-          {trend !== null && (
+          {trend !== null && trend !== undefined && (
             <div className="flex items-center gap-2">
               {StatusIcon && (
                 <StatusIcon size={16} style={{ color: statusColor }} />
@@ -170,7 +170,7 @@ const DashboardKPICard = ({
                 className="text-xs font-semibold"
                 style={{ color: statusColor }}
               >
-                {trend > 0 ? '+' : ''}{trend.toFixed(1)}%
+                {trend > 0 ? '+' : ''}{(Number(trend) || 0).toFixed(1)}%
               </span>
               {trendLabel && (
                 <span className="text-xs text-slate-500">{trendLabel}</span>
