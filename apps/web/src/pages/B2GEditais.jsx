@@ -5139,10 +5139,10 @@ export default function B2GEditais() {
             </>
           )}
           metrics={[
-            { label: 'Editais Mapeados', value: dashboardTotals.totalCount, percent: (dashboardTotals.totalCount / metricBase) * 100, color: '#ff6b18' },
-            { label: 'Oportunidades em Análise', value: dashboardTotals.openCount, percent: (dashboardTotals.openCount / metricBase) * 100, color: '#08c7e8' },
-            { label: 'Licitações Ganhas', value: dashboardTotals.wonCount, percent: (dashboardTotals.wonCount / metricBase) * 100, color: '#24d17e' },
-            { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#1689ff', secondaryColor: '#b43fe1' }
+            { label: 'Editais Mapeados', value: dashboardTotals.totalCount, percent: (dashboardTotals.totalCount / metricBase) * 100, color: '#38bdf8' },
+            { label: 'Oportunidades em Análise', value: dashboardTotals.openCount, percent: (dashboardTotals.openCount / metricBase) * 100, color: '#60a5fa' },
+            { label: 'Licitações Ganhas', value: dashboardTotals.wonCount, percent: (dashboardTotals.wonCount / metricBase) * 100, color: '#2dd4bf' },
+            { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#38bdf8', secondaryColor: '#a78bfa' }
           ]}
           funnel={<B2GFunnelStrategic funnelRows={dashboardFunnelRows} />}
           funnelTitle="Funil de Licitações B2G"
@@ -5154,7 +5154,7 @@ export default function B2GEditais() {
             subtitle: 'Valores por situação comercial',
             labels: dashboardProjectionBars.map((row) => row.label),
             values: dashboardProjectionBars.map((row) => Number(row.value || 0)),
-            colors: ['#1689ff', '#08c7e8', '#24d17e', '#ff6b18'],
+            colors: ['#38bdf8', '#60a5fa', '#2dd4bf', '#f59e0b'],
             targetPercent: 85
           }}
           trendChart={{
@@ -5162,8 +5162,8 @@ export default function B2GEditais() {
             subtitle: 'Valor mensal e projeção ponderada',
             labels: monthLabels,
             datasets: [
-              { label: 'Pipeline', data: monthTotals, color: '#ff7a24', fill: true, fillColor: 'rgba(255, 107, 24, 0.16)' },
-              { label: 'Projeção', data: monthTotals.map((value) => value * (dashboardForecastScore / 100)), color: '#08c7e8', fill: false }
+              { label: 'Pipeline', data: monthTotals, color: '#38bdf8', fill: true, fillColor: 'rgba(56, 189, 248, 0.16)' },
+              { label: 'Projeção', data: monthTotals.map((value) => value * (dashboardForecastScore / 100)), color: '#2dd4bf', fill: false }
             ]
           }}
           table={{
@@ -5189,7 +5189,7 @@ export default function B2GEditais() {
             title: 'Performance por Etapa',
             subtitle: 'Valor acumulado no funil B2G',
             labels: stageChartRows.map((row) => row.label),
-            datasets: [{ label: 'Valor', data: stageChartRows.map((row) => Number(row.value || 0)), colors: ['#ff6b18', '#08c7e8', '#1689ff', '#24d17e', '#ffbd16', '#b43fe1'] }]
+            datasets: [{ label: 'Valor', data: stageChartRows.map((row) => Number(row.value || 0)), colors: ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171'] }]
           }}
           presentationControls={(
             <PresentationControls

@@ -28,9 +28,9 @@ ChartJS.register(
   Tooltip
 );
 
-const DEFAULT_COLORS = ['#ff6b18', '#08c7e8', '#1689ff', '#24d17e', '#ffbd16', '#b43fe1'];
-const GRID_COLOR = 'rgba(92, 116, 151, 0.2)';
-const TEXT_COLOR = '#8191a8';
+const DEFAULT_COLORS = ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171'];
+const GRID_COLOR = 'rgba(120, 197, 255, 0.14)';
+const TEXT_COLOR = '#9fb9d7';
 
 const clampPercent = (value) => Math.min(Math.max(Number(value) || 0, 0), 100);
 
@@ -49,12 +49,15 @@ const panelOptions = {
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#0b1220',
-      borderColor: '#2b3a52',
+      backgroundColor: 'rgba(7, 27, 53, 0.96)',
+      borderColor: 'rgba(120, 197, 255, 0.31)',
       borderWidth: 1,
-      titleColor: '#f7f9fc',
-      bodyColor: '#d5ddea',
-      padding: 10
+      titleColor: '#dcecff',
+      bodyColor: '#9fb9d7',
+      padding: 11,
+      cornerRadius: 8,
+      usePointStyle: true,
+      boxPadding: 6
     }
   }
 };
@@ -205,12 +208,12 @@ function TrendChart({ chart }) {
       borderColor: dataset.color || DEFAULT_COLORS[index + 2],
       backgroundColor: dataset.fillColor || 'rgba(69, 201, 111, 0.09)',
       pointBackgroundColor: dataset.color || DEFAULT_COLORS[index + 2],
-      pointBorderColor: '#f5f8fc',
+      pointBorderColor: '#0b2243',
       pointBorderWidth: 1.5,
       pointRadius: index === 0 ? 3.5 : 3,
-      pointHoverRadius: 5,
-      borderWidth: 2.4,
-      tension: 0.32,
+      pointHoverRadius: 6,
+      borderWidth: 2.6,
+      tension: 0.36,
       fill: Boolean(dataset.fill)
     }))
   }), [chart]);
@@ -227,17 +230,19 @@ function TrendChart({ chart }) {
           legend: {
             display: true,
             align: 'end',
-            labels: { color: '#c8d1df', usePointStyle: true, pointStyle: 'circle', boxWidth: 7, font: { size: 9 } }
+            labels: { color: '#bcd4ee', usePointStyle: true, pointStyle: 'circle', boxWidth: 7, padding: 12, font: { size: 10, weight: '600' } }
           }
         },
         scales: {
           x: {
             grid: { color: GRID_COLOR },
+            border: { display: false },
             ticks: { color: TEXT_COLOR, font: { size: 9, weight: '600' }, maxRotation: 0 }
           },
           y: {
             beginAtZero: true,
             grid: { color: GRID_COLOR },
+            border: { display: false },
             ticks: { color: TEXT_COLOR, font: { size: 9 }, callback: compactNumber }
           }
         }
@@ -256,7 +261,7 @@ function TeamPerformance({ chart }) {
       backgroundColor: dataset.colors || dataset.color || DEFAULT_COLORS[index + 2],
       borderColor: dataset.borderColors || dataset.colors || dataset.color || DEFAULT_COLORS[index + 2],
       borderWidth: 1,
-      borderRadius: 3,
+      borderRadius: 7,
       borderSkipped: false,
       barPercentage: 0.74,
       categoryPercentage: 0.68,
@@ -274,11 +279,11 @@ function TeamPerformance({ chart }) {
         plugins: {
           ...panelOptions.plugins,
           legend: chart.datasets.length > 1
-            ? { display: true, labels: { color: '#c8d1df', boxWidth: 8, font: { size: 9 } } }
+            ? { display: true, labels: { color: '#bcd4ee', usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 12, font: { size: 10, weight: '600' } } }
             : { display: false }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { color: '#aab6c8', font: { size: 9, weight: '600' }, maxRotation: 0 } },
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: '#9fb9d7', font: { size: 9, weight: '600' }, maxRotation: 0 } },
           y: { beginAtZero: true, grid: { color: GRID_COLOR }, border: { display: false }, ticks: { color: TEXT_COLOR, font: { size: 9 }, precision: 0, callback: compactNumber } }
         }
       }}

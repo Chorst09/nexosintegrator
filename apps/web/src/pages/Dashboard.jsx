@@ -658,10 +658,10 @@ export default function Dashboard() {
             </>
           )}
           metrics={[
-            { label: 'Leads Gerados', value: kpis.activeLeads, percent: (kpis.activeLeads / opportunityBase) * 100, color: '#ff6b18' },
-            { label: 'Oportunidades Criadas', value: kpis.totalOpportunities, percent: (kpis.totalOpportunities / opportunityBase) * 100, color: '#08c7e8' },
-            { label: 'Vendas Fechadas', value: kpis.wonOpportunities, percent: (kpis.wonOpportunities / opportunityBase) * 100, color: '#24d17e' },
-            { label: 'Taxa de Conversão', value: formatPercent(kpis.conversionRate), percent: kpis.conversionRate, color: '#1689ff', secondaryColor: '#b43fe1' }
+            { label: 'Leads Gerados', value: kpis.activeLeads, percent: (kpis.activeLeads / opportunityBase) * 100, color: '#38bdf8' },
+            { label: 'Oportunidades Criadas', value: kpis.totalOpportunities, percent: (kpis.totalOpportunities / opportunityBase) * 100, color: '#60a5fa' },
+            { label: 'Vendas Fechadas', value: kpis.wonOpportunities, percent: (kpis.wonOpportunities / opportunityBase) * 100, color: '#2dd4bf' },
+            { label: 'Taxa de Conversão', value: formatPercent(kpis.conversionRate), percent: kpis.conversionRate, color: '#38bdf8', secondaryColor: '#a78bfa' }
           ]}
           funnel={<SalesFunnel data={charts.funnel} />}
           funnelTitle="Funil Comercial B2B"
@@ -673,7 +673,7 @@ export default function Dashboard() {
             subtitle: 'Oportunidades geradas por canal',
             labels: charts.opportunitiesBySource.map((row) => row.source || 'Não informado'),
             values: charts.opportunitiesBySource.map((row) => Number(row.count || 0)),
-            colors: ['#1689ff', '#08c7e8', '#1671d9', '#24d17e', '#ff6b18', '#ffbd16'],
+            colors: ['#38bdf8', '#2dd4bf', '#60a5fa', '#0ea5e9', '#f59e0b', '#a78bfa'],
             targetPercent: 85
           }}
           trendChart={{
@@ -681,8 +681,8 @@ export default function Dashboard() {
             subtitle: 'Receita realizada e previsão',
             labels: monthlyLabels,
             datasets: [
-              { label: 'Receita', data: revenueByMonth, color: '#ff7a24', fill: true, fillColor: 'rgba(255, 107, 24, 0.16)' },
-              { label: 'Forecast', data: forecastByMonth, color: '#08c7e8', fill: false }
+              { label: 'Receita', data: revenueByMonth, color: '#38bdf8', fill: true, fillColor: 'rgba(56, 189, 248, 0.16)' },
+              { label: 'Forecast', data: forecastByMonth, color: '#2dd4bf', fill: false }
             ]
           }}
           table={{
@@ -721,7 +721,7 @@ export default function Dashboard() {
             title: 'Performance da Equipe',
             subtitle: 'Negócios fechados por gerente',
             labels: sellerRows.map((row) => String(row.user || 'N/I').split(' ')[0]),
-            datasets: [{ label: 'Negócios', data: sellerRows.map((row) => Number(row.won || 0)), colors: ['#ff6b18', '#08c7e8', '#1689ff', '#24d17e', '#ffbd16', '#b43fe1'] }]
+            datasets: [{ label: 'Negócios', data: sellerRows.map((row) => Number(row.won || 0)), colors: ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171'] }]
           }}
           presentationControls={(
             <PresentationControls
