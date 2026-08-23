@@ -76,3 +76,6 @@ uploads/
 
 # Build artifacts
 *.tsbuildinfo
+
+# Local source archives
+SimuladoresDoublev2.zip
