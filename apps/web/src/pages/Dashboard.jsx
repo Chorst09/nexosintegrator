@@ -573,7 +573,7 @@ export default function Dashboard() {
       {
         data: charts.opportunitiesBySource.map((source) => source.count),
         backgroundColor: ['#3dbef3', '#57d88b', '#f8b525', '#9164ff', '#f56b88'],
-        borderColor: '#0e2648',
+        borderColor: '#050914',
         borderWidth: 2
       }
     ]
@@ -675,7 +675,7 @@ export default function Dashboard() {
       { label: '0%', min: 0, max: 0, color: '#f97316' },
       { label: '25%', min: 1, max: 25, color: '#f43f5e' },
       { label: '50%', min: 26, max: 50, color: '#f59e0b' },
-      { label: '75%', min: 51, max: 75, color: '#38bdf8' },
+      { label: '75%', min: 51, max: 75, color: '#ff7a00' },
       { label: '100%', min: 76, max: 100, color: '#22c55e' }
     ].map((band) => {
       const bandRows = rows.filter((item) => item.__probability >= band.min && item.__probability <= band.max);
@@ -735,10 +735,10 @@ export default function Dashboard() {
             </>
           )}
           metrics={[
-            { label: 'Leads Gerados', value: kpis.activeLeads, percent: (kpis.activeLeads / opportunityBase) * 100, color: '#38bdf8' },
-            { label: 'Oportunidades Criadas', value: kpis.totalOpportunities, percent: (kpis.totalOpportunities / opportunityBase) * 100, color: '#60a5fa' },
-            { label: 'Vendas Fechadas', value: kpis.wonOpportunities, percent: (kpis.wonOpportunities / opportunityBase) * 100, color: '#2dd4bf' },
-            { label: 'Taxa de Conversão', value: formatPercent(kpis.conversionRate), percent: kpis.conversionRate, color: '#38bdf8', secondaryColor: '#a78bfa' }
+            { label: 'Leads Gerados', value: kpis.activeLeads, percent: (kpis.activeLeads / opportunityBase) * 100, color: '#ff7a00' },
+            { label: 'Oportunidades Criadas', value: kpis.totalOpportunities, percent: (kpis.totalOpportunities / opportunityBase) * 100, color: '#18c8df' },
+            { label: 'Vendas Fechadas', value: kpis.wonOpportunities, percent: (kpis.wonOpportunities / opportunityBase) * 100, color: '#22c55e' },
+            { label: 'Taxa de Conversão', value: formatPercent(kpis.conversionRate), percent: kpis.conversionRate, color: '#ff7a00', secondaryColor: '#f6b40b' }
           ]}
           funnel={<SalesFunnel data={charts.funnel} />}
           funnelTitle="Funil Comercial B2B"
@@ -750,7 +750,7 @@ export default function Dashboard() {
             subtitle: 'Oportunidades geradas por canal',
             labels: charts.opportunitiesBySource.map((row) => row.source || 'Não informado'),
             values: charts.opportunitiesBySource.map((row) => Number(row.count || 0)),
-            colors: ['#38bdf8', '#2dd4bf', '#60a5fa', '#0ea5e9', '#f59e0b', '#a78bfa'],
+            colors: ['#ff7a00', '#f6b40b', '#22c55e', '#18c8df', '#1f7fe5', '#ef4444'],
             targetPercent: 85
           }}
           trendChart={{
@@ -758,8 +758,8 @@ export default function Dashboard() {
             subtitle: 'Receita realizada e previsão',
             labels: monthlyLabels,
             datasets: [
-              { label: 'Receita', data: revenueByMonth, color: '#38bdf8', fill: true, fillColor: 'rgba(56, 189, 248, 0.16)' },
-              { label: 'Forecast', data: forecastByMonth, color: '#2dd4bf', fill: false }
+              { label: 'Receita', data: revenueByMonth, color: '#ff7a00', fill: true, fillColor: 'rgba(255, 122, 0, 0.20)' },
+              { label: 'Forecast', data: forecastByMonth, color: '#22c55e', fill: false }
             ]
           }}
           table={{
@@ -798,7 +798,7 @@ export default function Dashboard() {
             title: 'Performance da Equipe',
             subtitle: 'Negócios fechados por gerente',
             labels: sellerRows.map((row) => String(row.user || 'N/I').split(' ')[0]),
-            datasets: [{ label: 'Negócios', data: sellerRows.map((row) => Number(row.won || 0)), colors: ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171'] }]
+            datasets: [{ label: 'Negócios', data: sellerRows.map((row) => Number(row.won || 0)), colors: ['#ff7a00', '#f6b40b', '#22c55e', '#18c8df', '#1f7fe5', '#ef4444'] }]
           }}
           presentationControls={(
             <PresentationControls
@@ -827,13 +827,13 @@ export default function Dashboard() {
                 {
                   label: 'Pipeline',
                   data: opportunityInsights.stageRows.map((row) => row.value),
-                  backgroundColor: 'rgba(56, 189, 248, 0.74)',
+                  backgroundColor: 'rgba(255, 122, 0, 0.78)',
                   borderRadius: 8
                 },
                 {
                   label: 'Forecast ponderado',
                   data: opportunityInsights.stageRows.map((row) => row.weightedValue),
-                  backgroundColor: 'rgba(45, 212, 191, 0.74)',
+                  backgroundColor: 'rgba(34, 197, 94, 0.74)',
                   borderRadius: 8
                 }
               ]
@@ -895,7 +895,7 @@ export default function Dashboard() {
                 {
                   data: opportunityInsights.temperatureRows.map((row) => row.value),
                   backgroundColor: opportunityInsights.temperatureRows.map((row) => row.color),
-                  borderColor: '#0e2648',
+                  borderColor: '#050914',
                   borderWidth: 2
                 }
               ]
@@ -1229,7 +1229,7 @@ export default function Dashboard() {
                 DASHBOARD_COLORS.neon.purple,
                 DASHBOARD_COLORS.neon.pink
               ],
-              borderColor: '#0e2648',
+              borderColor: '#050914',
               borderWidth: 2
             }]
           } : { labels: [], datasets: [] }}

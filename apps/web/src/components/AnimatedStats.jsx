@@ -40,26 +40,26 @@ const AnimatedStats = ({
 
   const colorClasses = {
     blue: {
-      wash: 'from-sky-500/25 via-sky-500/10 to-transparent',
-      light: 'from-sky-500/20 to-sky-500/5 dark:from-sky-400/20 dark:to-sky-400/5',
-      text: 'text-sky-700 dark:text-sky-200',
-      icon: 'text-sky-700 dark:text-sky-200'
+      wash: 'from-cyan-400/24 via-blue-500/10 to-transparent',
+      light: 'from-cyan-400/22 to-blue-500/8 dark:from-cyan-400/18 dark:to-blue-500/8',
+      text: 'text-cyan-700 dark:text-cyan-200',
+      icon: 'text-cyan-700 dark:text-cyan-200'
     },
     green: {
-      wash: 'from-emerald-500/25 via-emerald-500/10 to-transparent',
-      light: 'from-emerald-500/20 to-emerald-500/5 dark:from-emerald-400/20 dark:to-emerald-400/5',
-      text: 'text-emerald-700 dark:text-emerald-200',
-      icon: 'text-emerald-700 dark:text-emerald-200'
+      wash: 'from-emerald-500/22 via-emerald-500/10 to-transparent',
+      light: 'from-emerald-500/18 to-teal-500/8 dark:from-emerald-400/18 dark:to-teal-400/8',
+      text: 'text-emerald-700 dark:text-emerald-300',
+      icon: 'text-emerald-700 dark:text-emerald-300'
     },
     purple: {
-      wash: 'from-indigo-500/25 via-indigo-500/10 to-transparent',
-      light: 'from-indigo-500/20 to-indigo-500/5 dark:from-indigo-400/20 dark:to-indigo-400/5',
-      text: 'text-indigo-700 dark:text-indigo-200',
-      icon: 'text-indigo-700 dark:text-indigo-200'
+      wash: 'from-blue-500/22 via-cyan-500/10 to-transparent',
+      light: 'from-blue-500/18 to-cyan-500/8 dark:from-blue-400/18 dark:to-cyan-400/8',
+      text: 'text-blue-700 dark:text-blue-200',
+      icon: 'text-blue-700 dark:text-blue-200'
     },
     orange: {
-      wash: 'from-orange-500/25 via-orange-500/10 to-transparent',
-      light: 'from-orange-500/20 to-orange-500/5 dark:from-orange-400/20 dark:to-orange-400/5',
+      wash: 'from-orange-500/28 via-orange-500/12 to-transparent',
+      light: 'from-orange-500/24 to-amber-500/8 dark:from-orange-400/22 dark:to-amber-400/8',
       text: 'text-orange-700 dark:text-orange-200',
       icon: 'text-orange-700 dark:text-orange-200'
     },
@@ -97,11 +97,11 @@ const AnimatedStats = ({
     
     switch (trend.direction) {
       case 'up':
-        return 'text-emerald-700 bg-emerald-500/10 dark:text-emerald-200 dark:bg-emerald-500/10';
+        return 'text-emerald-700 bg-emerald-500/10 dark:text-emerald-300 dark:bg-emerald-500/10';
       case 'down':
         return 'text-red-700 bg-red-500/10 dark:text-red-200 dark:bg-red-500/10';
       default:
-        return 'text-slate-700 bg-slate-500/10 dark:text-slate-200 dark:bg-slate-500/10';
+        return 'text-orange-700 bg-orange-500/10 dark:text-orange-200 dark:bg-orange-500/10';
     }
   };
 

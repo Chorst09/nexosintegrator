@@ -8,23 +8,23 @@
 export const DASHBOARD_COLORS = {
   // Cores de fundo
   background: {
-    primary: '#0f0f1e',      // Preto profundo
-    secondary: '#1a1a2e',    // Preto com toque azul
-    tertiary: '#16213e',     // Azul escuro
-    card: 'rgba(26, 26, 46, 0.95)',
-    overlay: 'rgba(15, 15, 30, 0.85)'
+    primary: '#050914',
+    secondary: '#070b16',
+    tertiary: '#0d1423',
+    card: 'rgba(17, 24, 39, 0.96)',
+    overlay: 'rgba(5, 9, 20, 0.92)'
   },
 
-  // Cores Neon vibrantes (dos prints)
+  // Paleta market intelligence baseada no print de referência
   neon: {
-    cyan: '#00d9ff',         // Ciano brilhante
-    magenta: '#ff00ff',      // Magenta puro
-    pink: '#ff006e',         // Rosa quente
-    purple: '#b200ff',       // Roxo elétrico
-    blue: '#0080ff',         // Azul elétrico
-    green: '#00ff88',        // Verde neon
-    yellow: '#ffed00',       // Amarelo vibrante
-    orange: '#ff6600'        // Laranja quente
+    cyan: '#18c8df',
+    magenta: '#c026d3',
+    pink: '#ef4444',
+    purple: '#7c3aed',
+    blue: '#1f7fe5',
+    green: '#22c55e',
+    yellow: '#f6b40b',
+    orange: '#ff7a00'
   },
 
   // Gradientes principais
@@ -34,60 +34,60 @@ export const DASHBOARD_COLORS = {
     
     // Gradientes para charts
     chartGradients: {
-      blue: 'linear-gradient(135deg, #0080ff 0%, #00d9ff 100%)',
-      pink: 'linear-gradient(135deg, #ff006e 0%, #ff00ff 100%)',
-      purple: 'linear-gradient(135deg, #b200ff 0%, #ff006e 100%)',
-      cyan: 'linear-gradient(135deg, #00d9ff 0%, #00ff88 100%)',
-      multi: 'linear-gradient(90deg, #0080ff 0%, #b200ff 25%, #ff006e 50%, #ffed00 75%, #00ff88 100%)'
+      blue: 'linear-gradient(135deg, #1f7fe5 0%, #18c8df 100%)',
+      pink: 'linear-gradient(135deg, #ef4444 0%, #c026d3 100%)',
+      purple: 'linear-gradient(135deg, #7c3aed 0%, #1f7fe5 100%)',
+      cyan: 'linear-gradient(135deg, #18c8df 0%, #22c55e 100%)',
+      multi: 'linear-gradient(90deg, #ff7a00 0%, #1f7fe5 32%, #18c8df 62%, #22c55e 100%)'
     },
 
     // Fundo de temperatura
-    temperatureGradient: 'conic-gradient(from 0deg, #00ff88 0deg, #ffed00 90deg, #ff6600 180deg, #ff006e 270deg, #00ff88 360deg)'
+    temperatureGradient: 'conic-gradient(from 0deg, #22c55e 0deg, #18c8df 90deg, #f6b40b 180deg, #ff7a00 270deg, #22c55e 360deg)'
   },
 
   // Paleta de dados - 14 cores para múltiplas séries
   data: {
     product: [
-      '#0080ff', '#00d9ff', '#00ff88', '#ffed00',
-      '#ff6600', '#ff006e', '#b200ff', '#ff00ff'
+      '#ff7a00', '#18c8df', '#1f7fe5', '#22c55e',
+      '#f6b40b', '#7c3aed', '#ef4444', '#8f9caf'
     ],
     stage: {
-      LEAD_GENERATION: '#65b4ff',
-      LEAD_QUALIFICATION: '#69e2a8',
-      PROBLEM_ASSESSMENT: '#ffd76b',
-      SOLUTION: '#ffad65',
-      CONVERSION: '#ff7c82',
-      CLOSING: '#b184ff'
+      LEAD_GENERATION: '#18c8df',
+      LEAD_QUALIFICATION: '#1f7fe5',
+      PROBLEM_ASSESSMENT: '#f6b40b',
+      SOLUTION: '#ff7a00',
+      CONVERSION: '#22c55e',
+      CLOSING: '#7c3aed'
     },
     status: {
-      excellent: '#00ff88',
-      good: '#00d9ff',
-      neutral: '#ffed00',
-      warning: '#ff6600',
-      critical: '#ff006e'
+      excellent: '#22c55e',
+      good: '#18c8df',
+      neutral: '#f6b40b',
+      warning: '#ff7a00',
+      critical: '#ef4444'
     },
     temperature: {
-      0: '#00ff88',    // Frio (verde)
-      25: '#00d9ff',   // Morno (ciano)
-      50: '#ffed00',   // Quente (amarelo)
-      75: '#ff6600',   // Muito quente (laranja)
-      100: '#ff006e'   // Crítico (rosa/magenta)
+      0: '#22c55e',
+      25: '#18c8df',
+      50: '#f6b40b',
+      75: '#ff7a00',
+      100: '#ef4444'
     }
   },
 
   // Textos
   text: {
-    primary: '#ffffff',
-    secondary: '#b0b0c0',
-    tertiary: '#80809f',
-    muted: '#60608f'
+    primary: '#f4f7fb',
+    secondary: '#cbd5e1',
+    tertiary: '#8f9caf',
+    muted: '#64748b'
   },
 
   // Bordas e divisores
   border: {
-    light: 'rgba(255, 255, 255, 0.08)',
-    medium: 'rgba(255, 255, 255, 0.12)',
-    bright: 'rgba(0, 217, 255, 0.15)'
+    light: 'rgba(55, 65, 81, 0.55)',
+    medium: 'rgba(75, 85, 99, 0.75)',
+    bright: 'rgba(24, 200, 223, 0.26)'
   }
 };
 
@@ -97,9 +97,9 @@ export const DASHBOARD_EFFECTS = {
     sm: '0 4px 12px rgba(0, 0, 0, 0.15)',
     md: '0 8px 24px rgba(0, 0, 0, 0.25)',
     lg: '0 16px 48px rgba(0, 0, 0, 0.35)',
-    glow: '0 0 20px rgba(0, 217, 255, 0.25)',
-    pink: '0 0 20px rgba(255, 0, 110, 0.25)',
-    purple: '0 0 30px rgba(178, 0, 255, 0.2)'
+    glow: '0 0 20px rgba(24, 200, 223, 0.22)',
+    pink: '0 0 20px rgba(239, 68, 68, 0.22)',
+    purple: '0 0 30px rgba(124, 58, 237, 0.18)'
   },
 
   // Backdrop blur para cards
@@ -188,7 +188,7 @@ export const CHART_CONFIG = {
       borderJoinStyle: 'round',
       pointRadius: 4,
       pointBorderWidth: 2,
-      pointBackgroundColor: '#0f0f1e',
+      pointBackgroundColor: '#050914',
       pointHoverRadius: 6
     },
 
@@ -201,7 +201,7 @@ export const CHART_CONFIG = {
 
     doughnutChart: {
       borderWidth: 2,
-      borderColor: '#0f0f1e',
+      borderColor: '#050914',
       cutout: '75%'
     }
   }

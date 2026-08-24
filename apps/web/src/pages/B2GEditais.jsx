@@ -5121,8 +5121,8 @@ export default function B2GEditais() {
       const deadlineBuckets = [
         { label: 'Vencidos', min: Number.NEGATIVE_INFINITY, max: -1, count: 0, value: 0, color: '#f43f5e' },
         { label: '0-7d', min: 0, max: 7, count: 0, value: 0, color: '#f59e0b' },
-        { label: '8-15d', min: 8, max: 15, count: 0, value: 0, color: '#38bdf8' },
-        { label: '16-30d', min: 16, max: 30, count: 0, value: 0, color: '#2dd4bf' },
+        { label: '8-15d', min: 8, max: 15, count: 0, value: 0, color: '#ff7a00' },
+        { label: '16-30d', min: 16, max: 30, count: 0, value: 0, color: '#22c55e' },
         { label: '+30d', min: 31, max: Number.POSITIVE_INFINITY, count: 0, value: 0, color: '#818cf8' }
       ];
 
@@ -5208,10 +5208,10 @@ export default function B2GEditais() {
             </>
           )}
           metrics={[
-            { label: 'Editais Mapeados', value: dashboardTotals.totalCount, percent: (dashboardTotals.totalCount / metricBase) * 100, color: '#38bdf8' },
-            { label: 'Oportunidades em Análise', value: dashboardTotals.openCount, percent: (dashboardTotals.openCount / metricBase) * 100, color: '#60a5fa' },
-            { label: 'Licitações Ganhas', value: dashboardTotals.wonCount, percent: (dashboardTotals.wonCount / metricBase) * 100, color: '#2dd4bf' },
-            { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#38bdf8', secondaryColor: '#a78bfa' }
+            { label: 'Editais Mapeados', value: dashboardTotals.totalCount, percent: (dashboardTotals.totalCount / metricBase) * 100, color: '#ff7a00' },
+            { label: 'Oportunidades em Análise', value: dashboardTotals.openCount, percent: (dashboardTotals.openCount / metricBase) * 100, color: '#18c8df' },
+            { label: 'Licitações Ganhas', value: dashboardTotals.wonCount, percent: (dashboardTotals.wonCount / metricBase) * 100, color: '#22c55e' },
+            { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#ff7a00', secondaryColor: '#f6b40b' }
           ]}
           funnel={<B2GFunnelStrategic funnelRows={dashboardFunnelRows} />}
           funnelTitle="Funil de Licitações B2G"
@@ -5223,7 +5223,7 @@ export default function B2GEditais() {
             subtitle: 'Valores por situação comercial',
             labels: dashboardProjectionBars.map((row) => row.label),
             values: dashboardProjectionBars.map((row) => Number(row.value || 0)),
-            colors: ['#38bdf8', '#60a5fa', '#2dd4bf', '#f59e0b'],
+            colors: ['#ff7a00', '#f6b40b', '#22c55e', '#18c8df'],
             targetPercent: 85
           }}
           trendChart={{
@@ -5231,8 +5231,8 @@ export default function B2GEditais() {
             subtitle: 'Valor mensal e projeção ponderada',
             labels: monthLabels,
             datasets: [
-              { label: 'Pipeline', data: monthTotals, color: '#38bdf8', fill: true, fillColor: 'rgba(56, 189, 248, 0.16)' },
-              { label: 'Projeção', data: monthTotals.map((value) => value * (dashboardForecastScore / 100)), color: '#2dd4bf', fill: false }
+              { label: 'Pipeline', data: monthTotals, color: '#ff7a00', fill: true, fillColor: 'rgba(255, 122, 0, 0.20)' },
+              { label: 'Projeção', data: monthTotals.map((value) => value * (dashboardForecastScore / 100)), color: '#22c55e', fill: false }
             ]
           }}
           table={{
@@ -5258,7 +5258,7 @@ export default function B2GEditais() {
             title: 'Performance por Etapa',
             subtitle: 'Valor acumulado no funil B2G',
             labels: stageChartRows.map((row) => row.label),
-            datasets: [{ label: 'Valor', data: stageChartRows.map((row) => Number(row.value || 0)), colors: ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171'] }]
+            datasets: [{ label: 'Valor', data: stageChartRows.map((row) => Number(row.value || 0)), colors: ['#ff7a00', '#f6b40b', '#22c55e', '#18c8df', '#1f7fe5', '#ef4444'] }]
           }}
           presentationControls={(
             <PresentationControls
@@ -5287,13 +5287,13 @@ export default function B2GEditais() {
                 {
                   label: 'Valor estimado',
                   data: b2gOpportunityCharts.modalityRows.map((row) => row.value),
-                  backgroundColor: 'rgba(56, 189, 248, 0.76)',
+                  backgroundColor: 'rgba(255, 122, 0, 0.78)',
                   borderRadius: 8
                 },
                 {
                   label: 'Valor ponderado',
                   data: b2gOpportunityCharts.modalityRows.map((row) => row.weightedValue),
-                  backgroundColor: 'rgba(45, 212, 191, 0.76)',
+                  backgroundColor: 'rgba(34, 197, 94, 0.76)',
                   borderRadius: 8
                 }
               ]
@@ -5313,7 +5313,7 @@ export default function B2GEditais() {
                 {
                   label: 'Forecast',
                   data: b2gOpportunityCharts.organizationRows.map((row) => row.weightedValue),
-                  backgroundColor: 'rgba(129, 140, 248, 0.76)',
+                  backgroundColor: 'rgba(246, 180, 11, 0.76)',
                   borderRadius: 8
                 }
               ]
@@ -5334,8 +5334,8 @@ export default function B2GEditais() {
               datasets: [
                 {
                   data: b2gOpportunityCharts.stageRows.map((row) => row.value),
-                  backgroundColor: ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171', '#34d399', '#fb7185'],
-                  borderColor: '#0e2648',
+                  backgroundColor: ['#ff7a00', '#f6b40b', '#22c55e', '#18c8df', '#1f7fe5', '#ef4444', '#34d399', '#fb923c'],
+                  borderColor: '#050914',
                   borderWidth: 2
                 }
               ]

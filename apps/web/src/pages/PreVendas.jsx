@@ -559,11 +559,11 @@ export default function PreVendas() {
           label: 'Oportunidades',
           data: counts,
           backgroundColor: [
-            '#38bdf8',
-            '#facc15',
-            '#f59e0b',
-            '#a78bfa',
-            '#22d3ee',
+            '#ff7a00',
+            '#f6b40b',
+            '#f6b40b',
+            '#1f7fe5',
+            '#18c8df',
             '#34d399',
             '#fb7185'
           ],
@@ -599,8 +599,8 @@ export default function PreVendas() {
       datasets: [
         {
           data: counts,
-          backgroundColor: ['#0ea5e9', '#22c55e', '#f59e0b', '#a855f7', '#64748b'],
-          borderColor: ['#0ea5e9', '#22c55e', '#f59e0b', '#a855f7', '#64748b'],
+          backgroundColor: ['#ff7a00', '#22c55e', '#f6b40b', '#1f7fe5', '#64748b'],
+          borderColor: ['#ff7a00', '#22c55e', '#f6b40b', '#1f7fe5', '#64748b'],
           borderWidth: 1
         }
       ]
@@ -631,8 +631,8 @@ export default function PreVendas() {
         {
           label: 'Valor estimado (R$)',
           data: sums,
-          backgroundColor: '#22d3ee',
-          borderColor: '#22d3ee',
+          backgroundColor: '#18c8df',
+          borderColor: '#18c8df',
           borderRadius: 8,
           borderSkipped: false
         }
@@ -667,8 +667,8 @@ export default function PreVendas() {
         {
           label: 'Qtd. registros',
           data: buckets.map((item) => grouped.get(item.key)?.total || 0),
-          borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56, 189, 248, 0.2)',
+          borderColor: '#ff7a00',
+          backgroundColor: 'rgba(255, 122, 0, 0.22)',
           fill: true,
           tension: 0.35,
           pointRadius: 3

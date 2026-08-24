@@ -29,10 +29,10 @@
 
 @keyframes glow {
   0%, 100% {
-    text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+    text-shadow: 0 0 10px rgba(24, 200, 223, 0.45);
   }
   50% {
-    text-shadow: 0 0 20px rgba(0, 217, 255, 0.8), 0 0 30px rgba(0, 217, 255, 0.4);
+    text-shadow: 0 0 20px rgba(24, 200, 223, 0.75), 0 0 30px rgba(255, 122, 0, 0.24);
   }
 }
 
@@ -47,10 +47,10 @@
 
 @keyframes pulse-neon {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(0, 217, 255, 0.3);
+    box-shadow: 0 0 15px rgba(255, 122, 0, 0.24);
   }
   50% {
-    box-shadow: 0 0 30px rgba(0, 217, 255, 0.6), 0 0 45px rgba(0, 217, 255, 0.3);
+    box-shadow: 0 0 30px rgba(255, 122, 0, 0.46), 0 0 45px rgba(24, 200, 223, 0.22);
   }
 }
 
@@ -133,13 +133,13 @@
 
 .dashboard-card {
   position: relative;
-  border-radius: 16px;
+  border-radius: 8px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%);
+  border: 1px solid rgba(55, 65, 81, 0.92);
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.97) 0%, rgba(13, 20, 35, 0.96) 100%);
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -147,15 +147,15 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 122, 0, 0.08), transparent);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
 
 .dashboard-card:hover {
-  border-color: rgba(0, 217, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 217, 255, 0.15), 0 16px 48px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 122, 0, 0.55);
+  box-shadow: 0 8px 32px rgba(255, 122, 0, 0.12), 0 16px 48px rgba(0, 0, 0, 0.35);
   transform: translateY(-4px);
 }
 
@@ -190,13 +190,13 @@
 
 .glitch::before {
   animation: glitch-anim-1 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
-  color: #00d9ff;
+  color: #18c8df;
   z-index: -1;
 }
 
 .glitch::after {
   animation: glitch-anim-2 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) reverse infinite;
-  color: #ff006e;
+  color: #ff7a00;
   z-index: -2;
 }
 
@@ -262,7 +262,7 @@
   position: relative;
   border-radius: 12px;
   padding: 1px;
-  background: linear-gradient(45deg, transparent, rgba(0, 217, 255, 0.5), transparent);
+  background: linear-gradient(45deg, transparent, rgba(255, 122, 0, 0.52), rgba(24, 200, 223, 0.38), transparent);
 }
 
 .neon-border::before {
@@ -270,7 +270,7 @@
   position: absolute;
   inset: 0;
   border-radius: 12px;
-  background: linear-gradient(45deg, #00d9ff, #ff006e, #b200ff, #00d9ff);
+  background: linear-gradient(45deg, #ff7a00, #18c8df, #1f7fe5, #22c55e);
   background-size: 300% 300%;
   animation: gradient-shift 6s ease infinite;
   opacity: 0.1;
@@ -285,9 +285,9 @@
   gap: 8px;
   padding: 8px 12px;
   border-radius: 20px;
-  background: rgba(0, 217, 255, 0.1);
-  border: 1px solid rgba(0, 217, 255, 0.3);
-  color: #00d9ff;
+  background: rgba(255, 122, 0, 0.12);
+  border: 1px solid rgba(255, 122, 0, 0.34);
+  color: #ffb15c;
   font-size: 12px;
   font-weight: 600;
   backdrop-filter: blur(10px);
@@ -295,9 +295,9 @@
 }
 
 .metric-chip:hover {
-  background: rgba(0, 217, 255, 0.2);
-  border-color: rgba(0, 217, 255, 0.6);
-  box-shadow: 0 0 15px rgba(0, 217, 255, 0.25);
+  background: rgba(255, 122, 0, 0.2);
+  border-color: rgba(255, 122, 0, 0.62);
+  box-shadow: 0 0 15px rgba(255, 122, 0, 0.24);
 }
 
 /* ─── CONTADOR ANIMADO ────────────────────────────────────────────────────── */

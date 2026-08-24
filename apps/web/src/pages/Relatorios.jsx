@@ -452,7 +452,7 @@ export default function Relatorios() {
         label: "Pipeline aberto",
         data: analysis.byMonth.map((item) => item.pipeline),
         borderColor: "rgb(56, 189, 248)",
-        backgroundColor: "rgba(56, 189, 248, 0.1)",
+        backgroundColor: "rgba(24, 200, 223, 0.1)",
         borderWidth: 2,
         fill: true,
         tension: 0.35
@@ -466,7 +466,7 @@ export default function Relatorios() {
       {
         label: "Valor",
         data: analysis.byStage.map((item) => item.value),
-        backgroundColor: ["#64748b", "#38bdf8", "#818cf8", "#f59e0b", "#fb7185", "#10b981", "#94a3b8"],
+        backgroundColor: ["#64748b", "#18c8df", "#818cf8", "#f59e0b", "#fb7185", "#10b981", "#94a3b8"],
         borderRadius: 8,
         borderSkipped: false
       }
@@ -478,7 +478,7 @@ export default function Relatorios() {
     datasets: [
       {
         data: analysis.bySource.slice(0, 8).map((item) => item.count),
-        backgroundColor: ["#38bdf8", "#10b981", "#f59e0b", "#818cf8", "#fb7185", "#14b8a6", "#f97316", "#a3e635"],
+        backgroundColor: ["#18c8df", "#10b981", "#f59e0b", "#818cf8", "#fb7185", "#14b8a6", "#f97316", "#a3e635"],
         borderWidth: 0
       }
     ]

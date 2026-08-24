@@ -28,9 +28,9 @@ ChartJS.register(
   Tooltip
 );
 
-const DEFAULT_COLORS = ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171'];
-const GRID_COLOR = 'rgba(120, 197, 255, 0.14)';
-const TEXT_COLOR = '#9fb9d7';
+const DEFAULT_COLORS = ['#ff7a00', '#18c8df', '#f6b40b', '#22c55e', '#1f7fe5', '#ef4444'];
+const GRID_COLOR = 'rgba(75, 85, 99, 0.42)';
+const TEXT_COLOR = '#8f9caf';
 
 const clampPercent = (value) => Math.min(Math.max(Number(value) || 0, 0), 100);
 
@@ -49,11 +49,11 @@ const panelOptions = {
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: 'rgba(7, 27, 53, 0.96)',
-      borderColor: 'rgba(120, 197, 255, 0.31)',
+      backgroundColor: 'rgba(5, 9, 20, 0.96)',
+      borderColor: 'rgba(255, 122, 0, 0.34)',
       borderWidth: 1,
-      titleColor: '#dcecff',
-      bodyColor: '#9fb9d7',
+      titleColor: '#f4f7fb',
+      bodyColor: '#8f9caf',
       padding: 11,
       cornerRadius: 8,
       usePointStyle: true,
@@ -86,7 +86,7 @@ function KpiRing({ metric, index }) {
     ? {
         datasets: [{
           data: [percent * 0.62, percent * 0.38, 100 - percent],
-          backgroundColor: [primary, secondary, '#202b3f'],
+          backgroundColor: [primary, secondary, '#1f2937'],
           borderWidth: 0,
           hoverOffset: 0
         }]
@@ -94,7 +94,7 @@ function KpiRing({ metric, index }) {
     : {
         datasets: [{
           data: [percent, 100 - percent],
-          backgroundColor: [primary, '#202b3f'],
+          backgroundColor: [primary, '#1f2937'],
           borderWidth: 0,
           hoverOffset: 0
         }]
@@ -122,6 +122,87 @@ function KpiRing({ metric, index }) {
       </div>
       <MoreVertical aria-hidden="true" className="pipeline-model__kpi-menu" />
     </article>
+  );
+}
+
+function MiniSignalCard({ title, label, value, data = [], color = DEFAULT_COLORS[0] }) {
+  const hasData = data.some((item) => Number(item) > 0);
+  const chartData = useMemo(() => ({
+    labels: data.map((_, index) => String(index + 1)),
+    datasets: [{
+      data,
+      borderColor: color,
+      backgroundColor: `${color}26`,
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.42,
+      fill: true
+    }]
+  }), [color, data]);
+
+  return (
+    <article className="pipeline-model__signal-card" style={{ '--signal-color': color }}>
+      <div>
+        <h4>{title}</h4>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <p>período selecionado</p>
+      </div>
+      <div className="pipeline-model__sparkline">
+        {hasData ? (
+          <Line
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 500 },
+              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              scales: {
+                x: { display: false },
+                y: { display: false, beginAtZero: true }
+              }
+            }}
+          />
+        ) : <EmptyChart label="" />}
+      </div>
+    </article>
+  );
+}
+
+function ExecutiveSignals({ metrics = [], trendChart, performanceChart, temperature }) {
+  const trendValues = trendChart?.datasets?.[0]?.data?.map((value) => Number(value) || 0) || [];
+  const forecastValues = trendChart?.datasets?.[1]?.data?.map((value) => Number(value) || 0) || [];
+  const performanceValues = performanceChart?.values?.map((value) => Number(value) || 0) || [];
+  const cards = [
+    {
+      title: metrics[0]?.label || 'Pipeline',
+      label: 'Volume',
+      value: metrics[0]?.value ?? compactNumber(performanceValues.reduce((sum, item) => sum + item, 0)),
+      data: performanceValues,
+      color: '#ff7a00'
+    },
+    {
+      title: metrics[2]?.label || 'Conversões',
+      label: 'Realizado',
+      value: metrics[2]?.value ?? compactNumber(trendValues.at(-1) || 0),
+      data: trendValues,
+      color: '#22c55e'
+    },
+    {
+      title: metrics[3]?.label || 'Eficiência',
+      label: 'Score',
+      value: metrics[3]?.value ?? `${clampPercent(temperature).toFixed(1)}%`,
+      data: forecastValues.length ? forecastValues : trendValues.map((value, index) => value * ((index + 1) / Math.max(trendValues.length, 1))),
+      color: '#f6b40b'
+    }
+  ];
+
+  return (
+    <section className="pipeline-model__signals" aria-label="Indicadores com tendência">
+      {cards.map((card) => (
+        <MiniSignalCard key={card.title} {...card} />
+      ))}
+    </section>
   );
 }
 
@@ -157,6 +238,83 @@ function TemperatureScale({ value = 0, levels = [] }) {
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TemporalAreaChart({ chart }) {
+  const hasData = chart?.labels?.length > 0 && chart?.datasets?.some((dataset) => dataset.data?.some((value) => Number(value) > 0));
+  const data = useMemo(() => ({
+    labels: chart?.labels || [],
+    datasets: (chart?.datasets || []).map((dataset, index) => ({
+      label: dataset.label,
+      data: dataset.data,
+      borderColor: dataset.color || DEFAULT_COLORS[index],
+      backgroundColor: dataset.fillColor || `${dataset.color || DEFAULT_COLORS[index]}26`,
+      pointBackgroundColor: dataset.color || DEFAULT_COLORS[index],
+      pointBorderColor: '#050914',
+      pointBorderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      borderWidth: 2.5,
+      tension: 0.4,
+      fill: true
+    }))
+  }), [chart]);
+
+  if (!hasData) return <EmptyChart />;
+
+  return (
+    <Line
+      data={data}
+      options={{
+        ...panelOptions,
+        plugins: {
+          ...panelOptions.plugins,
+          legend: {
+            display: true,
+            align: 'end',
+            labels: { color: '#cbd5e1', usePointStyle: true, pointStyle: 'circle', boxWidth: 7, padding: 12, font: { size: 10, weight: '700' } }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(75,85,99,0.22)' }, border: { display: false }, ticks: { color: TEXT_COLOR, font: { size: 9, weight: '700' }, maxRotation: 0 } },
+          y: { beginAtZero: true, grid: { color: GRID_COLOR }, border: { display: false }, ticks: { color: TEXT_COLOR, font: { size: 9 }, callback: compactNumber } }
+        }
+      }}
+    />
+  );
+}
+
+function HealthDonut({ value = 0 }) {
+  const score = clampPercent(value);
+  const color = score >= 70 ? '#22c55e' : score >= 45 ? '#f6b40b' : '#ff7a00';
+  const data = useMemo(() => ({
+    datasets: [{
+      data: [score, 100 - score],
+      backgroundColor: [color, '#1f2937'],
+      borderColor: '#050914',
+      borderWidth: 3,
+      hoverOffset: 0
+    }]
+  }), [color, score]);
+
+  return (
+    <div className="pipeline-model__health">
+      <Doughnut
+        data={data}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          animation: { duration: 650 }
+        }}
+      />
+      <div>
+        <strong>{score.toFixed(0)}%</strong>
+        <span>Saúde</span>
       </div>
     </div>
   );
@@ -324,6 +482,8 @@ export default function PipelineDashboardModel({
         ))}
       </section>
 
+      <ExecutiveSignals metrics={metrics} trendChart={trendChart} performanceChart={performanceChart} temperature={temperature} />
+
       <section className="pipeline-model__main-grid">
         <article className="pipeline-model__panel pipeline-model__funnel-panel">
           <PanelHeader title={funnelTitle} subtitle={funnelSubtitle} />
@@ -343,6 +503,18 @@ export default function PipelineDashboardModel({
             <div className="pipeline-model__chart"><TrendChart chart={trendChart} /></div>
           </article>
         </div>
+      </section>
+
+      <section className="pipeline-model__insight-grid">
+        <article className="pipeline-model__panel pipeline-model__temporal-panel">
+          <PanelHeader title="Visão Temporal" subtitle="Evolução comparada do período selecionado" />
+          <div className="pipeline-model__temporal-chart"><TemporalAreaChart chart={trendChart} /></div>
+        </article>
+
+        <article className="pipeline-model__panel pipeline-model__health-panel">
+          <PanelHeader title="Saúde do Pipeline" subtitle="Score ponderado por conversão e temperatura" />
+          <HealthDonut value={temperature} />
+        </article>
       </section>
 
       <section className="pipeline-model__bottom-grid">

@@ -1369,7 +1369,7 @@ const DashboardView = () => {
                 <defs>
                   <linearGradient id="volumeBarGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#7dd3fc" stopOpacity={0.95} />
-                    <stop offset="55%" stopColor="#38bdf8" stopOpacity={0.85} />
+                    <stop offset="55%" stopColor="#18c8df" stopOpacity={0.85} />
                     <stop offset="100%" stopColor="#0b4a6f" stopOpacity={0.95} />
                   </linearGradient>
                   <linearGradient id="volumeLineGrad" x1="0" y1="0" x2="1" y2="0">

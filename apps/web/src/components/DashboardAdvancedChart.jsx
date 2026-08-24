@@ -50,21 +50,21 @@ const DashboardAdvancedChart = ({
   // Cores baseadas no tema
   const colorPalettes = {
     multi: [
-      DASHBOARD_COLORS.neon.blue,
+      DASHBOARD_COLORS.neon.orange,
       DASHBOARD_COLORS.neon.cyan,
-      DASHBOARD_COLORS.neon.pink,
-      DASHBOARD_COLORS.neon.purple
+      DASHBOARD_COLORS.neon.blue,
+      DASHBOARD_COLORS.neon.green
     ],
-    blue: [DASHBOARD_COLORS.neon.blue, DASHBOARD_COLORS.neon.cyan],
+    blue: [DASHBOARD_COLORS.neon.cyan, DASHBOARD_COLORS.neon.blue],
     warm: [
       DASHBOARD_COLORS.neon.orange,
       DASHBOARD_COLORS.neon.yellow,
-      DASHBOARD_COLORS.neon.pink
+      DASHBOARD_COLORS.neon.green
     ],
     cool: [
-      DASHBOARD_COLORS.neon.blue,
       DASHBOARD_COLORS.neon.cyan,
-      DASHBOARD_COLORS.neon.purple
+      DASHBOARD_COLORS.neon.blue,
+      DASHBOARD_COLORS.neon.green
     ],
     success: [DASHBOARD_COLORS.neon.green, DASHBOARD_COLORS.neon.cyan],
     warning: [

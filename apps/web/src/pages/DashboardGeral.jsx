@@ -172,66 +172,129 @@ const mergeRevenueBreakdowns = (...items) =>
     singleCount: acc.singleCount + toNumber(item?.singleCount)
   }), { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
 
-function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
-  const neonColors = {
-    cyan: {
-      border: 'border-[#00d9ff]/30',
-      glow: 'shadow-[0_24px_80px_-54px_rgba(0,217,255,0.95)]',
-      bg: 'from-[rgba(0,217,255,0.08)] via-[rgba(0,217,255,0.04)] to-[rgba(14,47,87,0.93)]',
-      icon: 'bg-[#00d9ff]/10 text-[#00d9ff] ring-[#00d9ff]/30'
+function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue }) {
+  const safeTotal = Math.max(toNumber(consolidatedRevenue.total), 1);
+  const channels = [
+    {
+      id: 'b2b',
+      title: 'B2B Privado',
+      subtitle: 'Modelo comercial corporativo',
+      icon: Building2,
+      totals: b2bRevenue,
+      color: 'from-orange-400 to-cyan-400',
+      tint: 'text-orange-200',
+      share: Math.round((toNumber(b2bRevenue.total) / safeTotal) * 100)
     },
-    magenta: {
-      border: 'border-[#ff00ff]/30',
-      glow: 'shadow-[0_24px_80px_-54px_rgba(255,0,255,0.95)]',
-      bg: 'from-[rgba(255,0,255,0.08)] via-[rgba(255,0,255,0.04)] to-[rgba(14,47,87,0.93)]',
-      icon: 'bg-[#ff00ff]/10 text-[#ff00ff] ring-[#ff00ff]/30'
-    },
-    green: {
-      border: 'border-[#00ff88]/30',
-      glow: 'shadow-[0_24px_80px_-54px_rgba(0,255,136,0.95)]',
-      bg: 'from-[rgba(0,255,136,0.08)] via-[rgba(0,255,136,0.04)] to-[rgba(14,47,87,0.93)]',
-      icon: 'bg-[#00ff88]/10 text-[#00ff88] ring-[#00ff88]/30'
+    {
+      id: 'b2g',
+      title: 'B2G Governo',
+      subtitle: 'Editais e oportunidades públicas',
+      icon: Gavel,
+      totals: b2gRevenue,
+      color: 'from-blue-500 to-cyan-400',
+      tint: 'text-cyan-200',
+      share: Math.round((toNumber(b2gRevenue.total) / safeTotal) * 100)
     }
-  };
-  const tone = neonColors[accent] || neonColors.cyan;
+  ];
+
+  const mix = [
+    { label: 'Mensal', value: consolidatedRevenue.monthly, color: 'bg-teal-300' },
+    { label: 'Contrato', value: consolidatedRevenue.contract, color: 'bg-blue-500' },
+    { label: 'Pontual', value: consolidatedRevenue.single, color: 'bg-orange-500' }
+  ];
+  const mixTotal = Math.max(mix.reduce((sum, item) => sum + toNumber(item.value), 0), 1);
 
   return (
-    <div className={`dashboard-card relative overflow-hidden rounded-2xl border ${tone.border} bg-gradient-to-br ${tone.bg} p-5 ${tone.glow}`}>
-      <div className="pointer-events-none absolute -right-16 -top-16 h-36 w-36 rounded-full bg-white/10 blur-3xl" />
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#9fb9d7]">{title}</p>
-          <p className="mt-1 text-sm font-semibold text-[#c9ddf3]/78">{subtitle}</p>
+    <div className="dashboard-card overflow-hidden rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] shadow-[0_28px_76px_-56px_rgba(24,200,223,0.18)]">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.05fr_1.6fr]">
+        <div className="border-b border-[#263345] p-5 xl:border-b-0 xl:border-r">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8f9caf]">Consolidado</p>
+              <h2 className="mt-2 truncate text-[clamp(1.55rem,2.8vw,2.35rem)] font-black leading-none text-white" title={formatCurrency(consolidatedRevenue.total)}>
+                {formatCompactCurrency(consolidatedRevenue.total)}
+              </h2>
+              <p className="mt-2 text-sm font-semibold text-[#a9c5df]">Receita comercial no período selecionado</p>
+            </div>
+            <div className="rounded-2xl border border-orange-300/30 bg-orange-400/10 p-3 text-orange-200">
+              <CalendarClock className="h-6 w-6" />
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {mix.map((item) => {
+              const width = Math.max(4, Math.round((toNumber(item.value) / mixTotal) * 100));
+              return (
+                <div key={item.label}>
+                  <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                    <span className="font-bold uppercase tracking-wide text-[#8f9caf]">{item.label}</span>
+                    <span className="font-black text-[#f4f7fb]">{formatCompactCurrency(item.value)}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[#0d1423]">
+                    <div className={`h-full rounded-full ${item.color}`} style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className={`rounded-2xl p-3 ring-1 ${tone.icon}`}>
-          <Icon className="h-5 w-5" />
+
+        <div className="grid grid-cols-1 divide-y divide-[#263345] md:grid-cols-2 md:divide-x md:divide-y-0">
+          {channels.map((channel) => {
+            const Icon = channel.icon;
+            return (
+              <div key={channel.id} className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className={`rounded-xl bg-gradient-to-br ${channel.color} p-2 text-white shadow-[0_16px_30px_-22px_rgba(24,200,223,0.65)]`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-[#f4f7fb]">{channel.title}</p>
+                        <p className="truncate text-xs text-[#8f9caf]">{channel.subtitle}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`rounded-full border border-white/10 bg-white/[0.06] px-2 py-1 text-xs font-black ${channel.tint}`}>
+                    {channel.share}%
+                  </span>
+                </div>
+
+                <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#0d1423]">
+                  <div className={`h-full rounded-full bg-gradient-to-r ${channel.color}`} style={{ width: `${Math.max(channel.share, 4)}%` }} />
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Total</p>
+                    <p className="mt-1 truncate text-lg font-black leading-tight text-white" title={formatCurrency(channel.totals.total)}>
+                      {formatCompactCurrency(channel.totals.total)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Mensal</p>
+                    <p className="mt-1 truncate text-lg font-black leading-tight text-white" title={formatCurrency(channel.totals.monthly)}>
+                      {formatCompactCurrency(channel.totals.monthly)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Contrato</p>
+                    <p className="mt-1 truncate text-lg font-black leading-tight text-white" title={formatCurrency(channel.totals.contract)}>
+                      {formatCompactCurrency(channel.totals.contract)}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Pontual</p>
+                    <p className="mt-1 truncate text-lg font-black leading-tight text-white" title={formatCurrency(channel.totals.single)}>
+                      {formatCompactCurrency(channel.totals.single)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
-      <div className="relative mt-5 grid grid-cols-3 gap-2">
-        <div className="metric-chip min-w-0 rounded-xl border border-[#78c5ff50] bg-white/[0.045] p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Mensal</p>
-          <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.monthly)}>
-            {formatCompactCurrency(totals.monthly)}
-          </p>
-        </div>
-        <div className="metric-chip min-w-0 rounded-xl border border-[#78c5ff50] bg-white/[0.045] p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Contrato</p>
-          <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.contract)}>
-            {formatCompactCurrency(totals.contract)}
-          </p>
-        </div>
-        <div className="metric-chip min-w-0 rounded-xl border border-[#78c5ff50] bg-white/[0.045] p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[#9fb9d7]">Pontual</p>
-          <p className="mt-1 truncate text-[clamp(0.95rem,1.2vw,1.125rem)] font-black leading-tight text-white" title={formatCurrency(totals.single)}>
-            {formatCompactCurrency(totals.single)}
-          </p>
-        </div>
-      </div>
-      <div className="relative mt-4 flex min-w-0 items-center justify-between gap-3 rounded-xl border border-[#78c5ff50] bg-black/10 px-3 py-2">
-        <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-[#9fb9d7]">Total comercial</span>
-        <span className="min-w-0 truncate text-[clamp(1rem,1.45vw,1.25rem)] font-black leading-tight text-white" title={formatCurrency(totals.total)}>
-          {formatCompactCurrency(totals.total)}
-        </span>
       </div>
     </div>
   );
@@ -241,9 +304,9 @@ function RevenueCard({ title, subtitle, icon: Icon, totals, accent = 'cyan' }) {
 
 function ModuleCard({ title, subtitle, icon: Icon, color, kpis, route, navigate, badge }) {
   const gradients = {
-    blue: 'from-blue-600 to-cyan-500',
-    indigo: 'from-indigo-600 to-blue-600',
-    sky: 'from-sky-500 to-blue-500'
+    blue: 'from-orange-500 to-cyan-500',
+    indigo: 'from-blue-600 to-cyan-500',
+    sky: 'from-cyan-500 to-blue-600'
   };
 
   return (
@@ -297,6 +360,48 @@ function ChartCard({ title, subtitle, action, children }) {
         {action || null}
       </div>
       <div className="h-[280px]">{children}</div>
+    </div>
+  );
+}
+
+function ExecutiveSparkCard({ title, label, value, data = [], color = '#ff7a00' }) {
+  const chartData = useMemo(() => ({
+    labels: data.map((_, index) => String(index + 1)),
+    datasets: [{
+      data,
+      borderColor: color,
+      backgroundColor: `${color}24`,
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.42,
+      fill: true
+    }]
+  }), [color, data]);
+
+  const hasData = data.some((item) => Number(item) > 0);
+
+  return (
+    <div className="dashboard-card grid min-h-[132px] grid-cols-[minmax(0,0.82fr)_minmax(120px,1fr)] gap-3 overflow-hidden rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.98),rgba(13,20,35,0.98))] p-4">
+      <div className="min-w-0">
+        <p className="text-sm font-black leading-tight text-[#f4f7fb]">{title}</p>
+        <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">{label}</p>
+        <p className="mt-1 truncate text-2xl font-black leading-none text-white" title={String(value)}>{value}</p>
+      </div>
+      <div className="h-[88px] min-w-0 self-end">
+        {hasData ? (
+          <Line
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+              animation: { duration: 500 }
+            }}
+          />
+        ) : null}
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${color}, #f6b40b, #22c55e)` }} />
     </div>
   );
 }
@@ -866,8 +971,8 @@ export default function DashboardGeral() {
         {
           label: 'Potencial de receita',
           data: monthlyPotential,
-          borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56, 189, 248, 0.18)',
+          borderColor: '#18c8df',
+          backgroundColor: 'rgba(24, 200, 223, 0.18)',
           tension: 0.35,
           fill: true,
           borderWidth: 2
@@ -890,7 +995,7 @@ export default function DashboardGeral() {
         {
           label: 'B2B',
           data: b2bStageCounts,
-          backgroundColor: 'rgba(56, 189, 248, 0.75)',
+          backgroundColor: 'rgba(24, 200, 223, 0.75)',
           borderRadius: 8
         },
         {
@@ -943,7 +1048,7 @@ export default function DashboardGeral() {
       datasets: [
         {
           data: hasOperationalData ? operationalLoadValues : [1, 0, 0, 0, 0],
-          backgroundColor: ['#38bdf8', '#f43f5e', '#f59e0b', '#818cf8', '#34d399'],
+          backgroundColor: ['#18c8df', '#f43f5e', '#f59e0b', '#818cf8', '#34d399'],
           borderWidth: 0
         }
       ]
@@ -956,7 +1061,7 @@ export default function DashboardGeral() {
         {
           label: 'Oportunidades',
           data: teamPerformance.map((item) => item.total),
-          backgroundColor: 'rgba(56, 189, 248, 0.7)',
+          backgroundColor: 'rgba(24, 200, 223, 0.7)',
           borderRadius: 8
         },
         {
@@ -979,7 +1084,7 @@ export default function DashboardGeral() {
               .filter((item) => OPEN_STAGES.has(String(item.stage || '').toUpperCase()))
               .reduce((sum, item) => sum + revenueBreakdownFromOpportunities([item]).total, 0)
           ],
-          backgroundColor: ['#22d3ee', '#8b5cf6', '#38bdf8'],
+          backgroundColor: ['#22d3ee', '#8b5cf6', '#18c8df'],
           borderWidth: 0
         }
       ]
@@ -995,7 +1100,7 @@ export default function DashboardGeral() {
         {
           label: 'Registros',
           data: moduleVolumeRows.map((item) => item.count),
-          backgroundColor: 'rgba(56, 189, 248, 0.7)',
+          backgroundColor: 'rgba(24, 200, 223, 0.7)',
           borderRadius: 8
         }
       ]
@@ -1219,12 +1324,12 @@ export default function DashboardGeral() {
       route: '/dashboard',
       badge: `${opportunitiesB2BRange.length} oport.`,
       kpis: [
-        { label: 'Mensal', value: formatCurrency(b2bRevenue.monthly) },
-        { label: 'Contrato', value: formatCurrency(b2bRevenue.contract) },
-        { label: 'Pontual', value: formatCurrency(b2bRevenue.single) },
+        { label: 'Oportunidades', value: formatNumber(opportunitiesB2BRange.length) },
+        { label: 'Empresas', value: formatNumber(companiesB2B.length) },
         { label: 'Pipeline', value: formatCurrency(b2bPipelineValue) },
         { label: 'Ganhos', value: formatCurrency(b2bWonValue) },
-        { label: 'Conversão', value: formatPercent(b2bConversion) }
+        { label: 'Conversão', value: formatPercent(b2bConversion) },
+        { label: 'Leads quentes', value: formatNumber(hotLeads) }
       ]
     },
     access.accessB2G && {
@@ -1236,9 +1341,9 @@ export default function DashboardGeral() {
       route: '/b2g-dashboard',
       badge: `${activeB2GNotices.length} ativos`,
       kpis: [
-        { label: 'Mensal', value: formatCurrency(b2gRevenue.monthly) },
-        { label: 'Contrato', value: formatCurrency(b2gRevenue.contract) },
-        { label: 'Pontual', value: formatCurrency(b2gRevenue.single) },
+        { label: 'Oportunidades', value: formatNumber(opportunitiesB2GRange.length) },
+        { label: 'Órgãos', value: formatNumber(companiesB2G.length) },
+        { label: 'Pipeline', value: formatCurrency(b2gRevenue.total) },
         { label: 'Editais', value: formatNumber(b2gNoticesRange.length) },
         { label: 'Em análise', value: formatNumber(inAnalysisB2G.length) },
         { label: 'Taxa', value: formatPercent(b2gConversion) }
@@ -1283,25 +1388,25 @@ export default function DashboardGeral() {
 
       <div
         data-section="header"
-        className="relative overflow-hidden rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-4 text-[#d9edff] shadow-[0_24px_60px_-44px_rgba(0,0,0,0.95)]"
+        className="relative overflow-hidden rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-4 text-[#f4f7fb] shadow-[0_24px_60px_-44px_rgba(0,0,0,0.95)]"
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_86%_18%,rgba(102,215,234,0.16),transparent_28%)]" />
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-black leading-tight text-[#dcecff] md:text-2xl">Dashboard Geral</h1>
-              <span className="rounded-full border border-[#78c5ff45] bg-[#10375e]/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8fd1ff]">
+              <h1 className="text-xl font-black leading-tight text-[#f4f7fb] md:text-2xl">Dashboard Geral</h1>
+              <span className="rounded-full border border-[#374151] bg-[#1b2433]/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#18c8df]">
                 Visão executiva
               </span>
             </div>
             <p className="mt-1 max-w-3xl text-sm font-medium leading-snug text-[#a9c5df]">
               Consolidação B2B, B2G, Pré-Vendas, Atividades, Produtos, Equipe e Integrações.
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#9fb9d7]">
-              <span className="rounded-full border border-[#74b9f340] bg-[#0b2243]/75 px-2.5 py-1">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#8f9caf]">
+              <span className="rounded-full border border-[#374151] bg-[#0d1423]/75 px-2.5 py-1">
                 Atualizado: {updatedAt ? updatedAt.toLocaleString('pt-BR') : '-'}
               </span>
-              <span className="rounded-full border border-[#74b9f340] bg-[#0b2243]/75 px-2.5 py-1">
+              <span className="rounded-full border border-[#374151] bg-[#0d1423]/75 px-2.5 py-1">
                 {moduleCardItems.length} módulos ativos
               </span>
               <span className={[
@@ -1316,7 +1421,7 @@ export default function DashboardGeral() {
           </div>
 
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
-            <div className="inline-flex rounded-2xl border border-[#74b9f353] bg-[#071b35]/78 p-1 shadow-[inset_0_0_22px_rgba(143,209,255,0.08)]">
+            <div className="inline-flex rounded-2xl border border-[#374151] bg-[#050914]/78 p-1 shadow-[inset_0_0_22px_rgba(143,209,255,0.08)]">
               {[
                 { value: '30', label: '30d' },
                 { value: '90', label: '90d' },
@@ -1328,8 +1433,8 @@ export default function DashboardGeral() {
                   className={[
                     'min-w-[4.8rem] rounded-xl px-3 py-2 text-xs font-black transition-all',
                     timeRange === option.value
-                      ? 'bg-[#1f6d93] text-white shadow-[0_12px_28px_-18px_rgba(61,202,255,0.95)]'
-                      : 'text-[#9fb9d7] hover:bg-[#14365b] hover:text-[#dcecff]'
+                      ? 'bg-[#ff7a00] text-white shadow-[0_12px_28px_-18px_rgba(61,202,255,0.95)]'
+                      : 'text-[#8f9caf] hover:bg-[#111827] hover:text-[#f4f7fb]'
                   ].join(' ')}
                 >
                   {option.label}
@@ -1341,13 +1446,13 @@ export default function DashboardGeral() {
               <button
                 onClick={loadData}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#74b9f353] bg-[#0b2243]/80 px-3.5 py-2 text-xs font-bold text-[#bcd4ee] transition hover:border-[#8fd1ff80] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#374151] bg-[#0d1423]/80 px-3.5 py-2 text-xs font-bold text-[#bcd4ee] transition hover:border-[#18c8df80] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
               </button>
               <button
                 onClick={handlePresentation}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#74b9f353] bg-[#0b2243]/80 px-3.5 py-2 text-xs font-bold text-[#bcd4ee] transition hover:border-[#8fd1ff80] hover:text-white"
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#374151] bg-[#0d1423]/80 px-3.5 py-2 text-xs font-bold text-[#bcd4ee] transition hover:border-[#18c8df80] hover:text-white"
               >
                 <Maximize2 className="h-4 w-4" /> Apresentar
               </button>
@@ -1356,27 +1461,35 @@ export default function DashboardGeral() {
         </div>
       </div>
 
-      <div data-section="receita-arquitetura" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <RevenueCard
-          title="B2B Privado"
-          subtitle="Pipeline aberto separado por modelo comercial"
-          icon={Building2}
-          totals={b2bRevenue}
-          accent="cyan"
+      <div data-section="receita-arquitetura">
+        <RevenueOverview
+          b2bRevenue={b2bRevenue}
+          b2gRevenue={b2gRevenue}
+          consolidatedRevenue={consolidatedRevenue}
         />
-        <RevenueCard
-          title="B2G Governo"
-          subtitle="Oportunidades e editais ativos no período"
-          icon={Gavel}
-          totals={b2gRevenue}
-          accent="violet"
+      </div>
+
+      <div data-section="sinais-executivos" className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <ExecutiveSparkCard
+          title="Receita"
+          label="Potencial"
+          value={formatCompactCurrency(totalPipeline)}
+          data={chartData.monthlyTrend.datasets?.[0]?.data || []}
+          color="#ff7a00"
         />
-        <RevenueCard
-          title="Consolidado"
-          subtitle="Mensal, contrato e pontual em uma visão executiva"
-          icon={CalendarClock}
-          totals={consolidatedRevenue}
-          accent="emerald"
+        <ExecutiveSparkCard
+          title="Conversões"
+          label="Realizado"
+          value={formatCompactCurrency(totalWonValue)}
+          data={chartData.monthlyTrend.datasets?.[1]?.data || []}
+          color="#22c55e"
+        />
+        <ExecutiveSparkCard
+          title="Carga Operacional"
+          label="Alertas e filas"
+          value={formatNumber(alertCount)}
+          data={chartData.operationalLoad.datasets?.[0]?.data || []}
+          color="#f6b40b"
         />
       </div>
 
@@ -1432,11 +1545,11 @@ export default function DashboardGeral() {
       </div>
 
       <div data-section="receita-graficos" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Mix de Receita B2B x B2G</h3>
-              <p className="text-xs text-[#9fb9d7]">Mensal, total do período do contrato e receita pontual</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Mix de Receita B2B x B2G</h3>
+              <p className="text-xs text-[#8f9caf]">Mensal, total do período do contrato e receita pontual</p>
             </div>
             <span className="metric-chip rounded-full bg-cyan-400/15 px-2 py-1 text-xs font-semibold text-cyan-200">{formatCurrency(consolidatedRevenue.total)}</span>
           </div>
@@ -1445,11 +1558,11 @@ export default function DashboardGeral() {
           </div>
         </div>
 
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Receita Mensal por Modelo</h3>
-              <p className="text-xs text-[#9fb9d7]">Separação temporal entre mensal, contrato e pontual</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Receita Mensal por Modelo</h3>
+              <p className="text-xs text-[#8f9caf]">Separação temporal entre mensal, contrato e pontual</p>
             </div>
             <span className="metric-chip rounded-full bg-emerald-400/15 px-2 py-1 text-xs font-semibold text-emerald-200">{formatCurrency(consolidatedRevenue.monthly)}/mês</span>
           </div>
@@ -1460,11 +1573,11 @@ export default function DashboardGeral() {
       </div>
 
       <div data-section="charts-row-1" className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Tendência Mensal de Receita</h3>
-              <p className="text-xs text-[#9fb9d7]">Potencial x realizado nos últimos 6 meses</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Tendência Mensal de Receita</h3>
+              <p className="text-xs text-[#8f9caf]">Potencial x realizado nos últimos 6 meses</p>
             </div>
             <span className="metric-chip rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">{formatCurrency(totalWonValue)}</span>
           </div>
@@ -1473,11 +1586,11 @@ export default function DashboardGeral() {
           </div>
         </div>
 
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Distribuição por Estágio</h3>
-              <p className="text-xs text-[#9fb9d7]">Volume de oportunidades por etapa do funil</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Distribuição por Estágio</h3>
+              <p className="text-xs text-[#8f9caf]">Volume de oportunidades por etapa do funil</p>
             </div>
           </div>
           <div className="h-[280px]">
@@ -1487,11 +1600,11 @@ export default function DashboardGeral() {
       </div>
 
       <div data-section="charts-row-2" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Temperatura dos Leads</h3>
-              <p className="text-xs text-[#9fb9d7]">Classificação por score (B2B e B2G)</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Temperatura dos Leads</h3>
+              <p className="text-xs text-[#8f9caf]">Classificação por score (B2B e B2G)</p>
             </div>
           </div>
           <div className="h-[280px]">
@@ -1499,11 +1612,11 @@ export default function DashboardGeral() {
           </div>
         </div>
 
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Carga Operacional</h3>
-              <p className="text-xs text-[#9fb9d7]">Fila de demandas em execução</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Carga Operacional</h3>
+              <p className="text-xs text-[#8f9caf]">Fila de demandas em execução</p>
             </div>
           </div>
           <div className="h-[280px]">
@@ -1511,11 +1624,11 @@ export default function DashboardGeral() {
           </div>
         </div>
 
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Composição do Pipeline</h3>
-              <p className="text-xs text-[#9fb9d7]">Participação entre B2B e B2G</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Composição do Pipeline</h3>
+              <p className="text-xs text-[#8f9caf]">Participação entre B2B e B2G</p>
             </div>
           </div>
           <div className="h-[280px]">
@@ -1525,11 +1638,11 @@ export default function DashboardGeral() {
       </div>
 
       <div data-section="charts-row-3" className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Performance da Equipe</h3>
-              <p className="text-xs text-[#9fb9d7]">Top responsáveis por volume de oportunidades</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Performance da Equipe</h3>
+              <p className="text-xs text-[#8f9caf]">Top responsáveis por volume de oportunidades</p>
             </div>
           </div>
           {chartData.hasTeamData ? (
@@ -1537,17 +1650,17 @@ export default function DashboardGeral() {
               <DashboardAdvancedChart type="bar" colorTheme="cool" data={chartData.teamLoad} />
             </div>
           ) : (
-            <div className="grid h-[280px] place-items-center rounded-xl border border-dashed border-[#78c5ff50]">
-              <p className="text-sm text-[#9fb9d7]">Sem dados de equipe no período selecionado.</p>
+            <div className="grid h-[280px] place-items-center rounded-xl border border-dashed border-[#263345]">
+              <p className="text-sm text-[#8f9caf]">Sem dados de equipe no período selecionado.</p>
             </div>
           )}
         </div>
 
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-[#dcecff]">Volume por Módulo</h3>
-              <p className="text-xs text-[#9fb9d7]">Top módulos por quantidade de registros carregados</p>
+              <h3 className="font-semibold text-[#f4f7fb]">Volume por Módulo</h3>
+              <p className="text-xs text-[#8f9caf]">Top módulos por quantidade de registros carregados</p>
             </div>
           </div>
           {chartData.hasModuleVolumeData ? (
@@ -1555,32 +1668,32 @@ export default function DashboardGeral() {
               <DashboardAdvancedChart type="bar" colorTheme="blue" data={chartData.moduleVolume} />
             </div>
           ) : (
-            <div className="grid h-[280px] place-items-center rounded-xl border border-dashed border-[#78c5ff50]">
-              <p className="text-sm text-[#9fb9d7]">Sem volume suficiente para comparação.</p>
+            <div className="grid h-[280px] place-items-center rounded-xl border border-dashed border-[#263345]">
+              <p className="text-sm text-[#8f9caf]">Sem volume suficiente para comparação.</p>
             </div>
           )}
         </div>
 
-        <div className="dashboard-card rounded-2xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-5">
+        <div className="dashboard-card rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold text-[#dcecff]">Cobertura de Módulos</h3>
-            <span className="metric-chip rounded-full bg-[#00d9ff]/20 px-2.5 py-1 text-xs font-semibold text-[#00d9ff]">
+            <h3 className="font-semibold text-[#f4f7fb]">Cobertura de Módulos</h3>
+            <span className="metric-chip rounded-full bg-[#18c8df]/20 px-2.5 py-1 text-xs font-semibold text-[#18c8df]">
               {modulesLoaded}/{modulesEnabled} carregados
             </span>
           </div>
 
           <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.05)] p-2">
+            <div className="rounded-xl border border-[#263345] bg-[rgba(24,200,223,0.06)] p-2">
               <p className="text-lg font-bold text-emerald-300">{modulesLoaded}</p>
-              <p className="text-[10px] uppercase tracking-wide text-[#9fb9d7]">OK</p>
+              <p className="text-[10px] uppercase tracking-wide text-[#8f9caf]">OK</p>
             </div>
-            <div className="rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.05)] p-2">
+            <div className="rounded-xl border border-[#263345] bg-[rgba(24,200,223,0.06)] p-2">
               <p className="text-lg font-bold text-rose-300">{modulesWithError}</p>
-              <p className="text-[10px] uppercase tracking-wide text-[#9fb9d7]">Falhas</p>
+              <p className="text-[10px] uppercase tracking-wide text-[#8f9caf]">Falhas</p>
             </div>
-            <div className="rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.05)] p-2">
+            <div className="rounded-xl border border-[#263345] bg-[rgba(24,200,223,0.06)] p-2">
               <p className="text-lg font-bold text-blue-300">{moduleHealth.filter((item) => item.status === 'skipped').length}</p>
-              <p className="text-[10px] uppercase tracking-wide text-[#9fb9d7]">Ignorados</p>
+              <p className="text-[10px] uppercase tracking-wide text-[#8f9caf]">Ignorados</p>
             </div>
           </div>
 
@@ -1588,14 +1701,14 @@ export default function DashboardGeral() {
             {moduleHealth.map((item) => (
               <div
                 key={item.key}
-                className="flex items-start justify-between gap-3 rounded-xl border border-[#78c5ff50] bg-[rgba(0,217,255,0.03)] px-3 py-2"
+                className="flex items-start justify-between gap-3 rounded-xl border border-[#263345] bg-[rgba(24,200,223,0.04)] px-3 py-2"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-[#dcecff]">{item.label}</p>
+                  <p className="truncate text-sm font-medium text-[#f4f7fb]">{item.label}</p>
                   {item.status === 'error' ? (
                     <p className="truncate text-xs text-rose-300">{item.error}</p>
                   ) : (
-                    <p className="text-xs text-[#9fb9d7]">{formatNumber(item.count)} registros</p>
+                    <p className="text-xs text-[#8f9caf]">{formatNumber(item.count)} registros</p>
                   )}
                 </div>
                 <span

@@ -11,7 +11,7 @@ const StatsCard = ({
 }) => {
   const colorClasses = {
     blue: {
-      badge: 'from-cyan-500/25 to-sky-500/20 text-cyan-700 dark:text-cyan-300',
+      badge: 'from-cyan-500/24 to-blue-500/18 text-cyan-700 dark:text-cyan-300',
       value: 'text-cyan-700 dark:text-cyan-300'
     },
     green: {
@@ -27,8 +27,8 @@ const StatsCard = ({
       value: 'text-rose-700 dark:text-rose-300'
     },
     purple: {
-      badge: 'from-indigo-500/25 to-violet-500/20 text-indigo-700 dark:text-indigo-300',
-      value: 'text-indigo-700 dark:text-indigo-300'
+      badge: 'from-blue-500/24 to-cyan-500/18 text-blue-700 dark:text-blue-300',
+      value: 'text-blue-700 dark:text-blue-300'
     },
     orange: {
       badge: 'from-orange-500/25 to-amber-500/20 text-orange-700 dark:text-orange-300',
@@ -41,13 +41,13 @@ const StatsCard = ({
   return (
     <div
       className={[
-        'group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white/95 via-white to-slate-100/80 p-6 shadow-soft-xl dark:border-cyan-300/20 dark:from-[#12263f] dark:via-[#12243b] dark:to-[#173151]',
+        'group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white/95 via-white to-slate-100/80 p-6 shadow-soft-xl dark:border-[#374151] dark:from-[#111827] dark:via-[#111827] dark:to-[#0d1423]',
         'transition-all duration-300',
-        onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-soft-2xl hover:border-cyan-300/45 dark:hover:border-cyan-200/35' : ''
+        onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-soft-2xl hover:border-orange-400/45 dark:hover:border-orange-400/45' : ''
       ].join(' ')}
       onClick={onClick}
     >
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-cyan-300/10 opacity-70 dark:from-cyan-400/10 dark:to-cyan-200/12" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-orange-300/10 opacity-70 dark:from-orange-400/8 dark:to-cyan-300/10" />
 
       <div className="relative z-[1] flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
