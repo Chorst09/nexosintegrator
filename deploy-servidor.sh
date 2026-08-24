@@ -127,9 +127,13 @@ $SSH_CMD $SERVER_USER@$SERVER_IP << 'ENDSSH'
     echo "Aguardando PostgreSQL..."
     sleep 10
     
-    # Sincronizar schema e executar migrations via Prisma
-    docker compose -f docker-compose.production.yml exec -T backend npx prisma db push
-    docker compose -f docker-compose.production.yml exec -T backend npx prisma migrate deploy
+    # Executar apenas migrations versionadas. Nunca usar db push em produção,
+    # pois ele pode tentar alterações destrutivas em dados existentes.
+    if docker compose -f docker-compose.production.yml exec -T backend test -d prisma/migrations; then
+        docker compose -f docker-compose.production.yml exec -T backend npx prisma migrate deploy
+    else
+        echo "ℹ️  Nenhuma migration versionada encontrada; pulando etapa de migrations."
+    fi
     
     echo "✅ Migrations executadas"
 ENDSSH
