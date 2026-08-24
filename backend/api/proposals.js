@@ -5,6 +5,22 @@ const { authenticateToken } = require('../lib/auth');
 const router = express.Router();
 const prisma = new PrismaClient();
 
+router.get('/types', authenticateToken, async (req, res) => {
+  res.json({
+    types: [
+      { id: 'GENERAL', name: 'Geral', description: 'Proposta comercial geral' },
+      { id: 'FIBER', name: 'Internet Fibra', description: 'Servicos de conectividade por fibra' },
+      { id: 'RADIO', name: 'Internet Radio', description: 'Servicos de conectividade via radio' },
+      { id: 'DOUBLE', name: 'Double Fibra + Radio', description: 'Oferta combinada com fibra e radio' },
+      { id: 'VM', name: 'Maquinas Virtuais', description: 'Infraestrutura e maquinas virtuais' },
+      { id: 'REDE_MAN_MPLS_FIBRA', name: 'Rede MAN/MPLS Fibra', description: 'Rede corporativa por fibra' },
+      { id: 'REDE_MAN_MPLS_RADIO', name: 'Rede MAN/MPLS Radio', description: 'Rede corporativa via radio' },
+      { id: 'SD_WAN', name: 'SD-WAN', description: 'Projeto SD-WAN' },
+      { id: 'EVENTOS_TI', name: 'Eventos TI', description: 'Conectividade e infraestrutura para eventos' }
+    ]
+  });
+});
+
 // Listar propostas
 router.get('/', authenticateToken, async (req, res) => {
   try {

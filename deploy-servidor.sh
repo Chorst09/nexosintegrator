@@ -57,7 +57,6 @@ COPYFILE_DISABLE=1 tar --exclude='./node_modules' \
     --exclude='./frontend/node_modules' \
     --exclude='./backend/node_modules' \
     --exclude='./apps/*/node_modules' \
-    --exclude='./netlify/functions/node_modules' \
     --exclude='./frontend/dist' \
     --exclude='./*.md' \
     --exclude='./*.sh' \

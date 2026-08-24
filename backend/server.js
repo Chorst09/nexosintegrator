@@ -84,7 +84,7 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/health', async (req, res) => {
+const healthHandler = async (req, res) => {
   let dbOk = false;
   try {
     const { PrismaClient } = require('@prisma/client');
@@ -107,7 +107,10 @@ app.get('/health', async (req, res) => {
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
   });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Rota raiz
 app.get('/', (req, res) => {

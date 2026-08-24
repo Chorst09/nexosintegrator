@@ -32,10 +32,12 @@ const FONTES_CONFIG = [
   { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄' },
   { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️' },
   { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋' },
-  { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢' }
+  { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢' },
+  { id: 'conlicitacao', portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎', integrada: true }
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
+const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.map(fonte => fonte.id);
 
 const FONTES_PAGAS = [
   { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' },
@@ -110,7 +112,6 @@ const kwMatch = (texto, kw) => {
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 
 const hoje = () => {
-  // PNCP tem dados até ~2025. Usar data atual mas com fallback para dados reais.
   const d = new Date();
   return d.toISOString().slice(0, 10).replaceAll('-', '');
 };
@@ -121,7 +122,7 @@ const diasAtras = (n) => {
 };
 // Data máxima com dados reais no PNCP (ajuste conforme necessário)
 const dataFimPadrao = () => hoje();
-const dataInicioPadrao = () => diasAtras(90);
+const dataInicioPadrao = () => diasAtras(365);
 const toISODate = (s) => {
   if (!s) return null;
   const str = String(s).replaceAll('-', '').slice(0, 8);
@@ -229,6 +230,34 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
   } catch { return []; }
 }
 
+async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20, incluirPropostas = true }) {
+  const url = new URL(buildApiUrl('/b2g-search/search'), window.location.origin);
+  url.searchParams.set('fontes', 'pncp');
+  url.searchParams.set('objeto', objeto || '');
+  url.searchParams.set('uf', uf || '');
+  url.searchParams.set('dataInicio', dataInicio || '');
+  url.searchParams.set('dataFim', dataFim || '');
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
+  url.searchParams.set('incluirPropostas', incluirPropostas ? 'true' : 'false');
+
+  const res = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+    signal: AbortSignal.timeout(22000)
+  });
+  if (!res.ok) {
+    const publicacoes = await buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina });
+    const propostas = incluirPropostas ? await buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagina }) : [];
+    return [...publicacoes, ...propostas];
+  }
+
+  const payload = await res.json().catch(() => null);
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+  if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
+    throw new Error(payload.erros.slice(0, 2).join('; '));
+  }
+  return data;
+}
+
 // ─── ComprasNet API (dadosabertos.compras.gov.br, via proxy) ─────────────────
 
 const UFS_BR_SET = new Set([
@@ -259,11 +288,15 @@ async function buscarComprasGovProxy(tipo, params) {
 
   const res = await fetch(url.toString(), {
     headers: { 'Accept': 'application/json' },
-    signal: AbortSignal.timeout(25000)
+    signal: AbortSignal.timeout(15000)
   });
   if (!res.ok) return [];
   const payload = await res.json().catch(() => null);
-  return Array.isArray(payload?.data) ? payload.data : [];
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+  if (data.length === 0 && payload?.erro) {
+    throw new Error(payload.erro);
+  }
+  return data;
 }
 
 async function buscarComprasNet({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
@@ -513,7 +546,8 @@ const normalizePortalItem = (item, fonte) => ({
 });
 
 async function buscarFonteIntegrada(fonte, params) {
-  if (!fonte.usuario || !fonte.senha) return [];
+  const permiteCredencialServidor = fonte.portal === 'conlicitacao';
+  if (!permiteCredencialServidor && (!fonte.usuario || !fonte.senha)) return [];
 
   const url = new URL(buildApiUrl('/bll-proxy'), window.location.origin);
   url.searchParams.set('portal', fonte.portal);
@@ -537,10 +571,10 @@ async function buscarFonteIntegrada(fonte, params) {
   const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
   const res = await fetch(url.toString(), {
     headers: {
-      [`x-${headerPrefix}-email`]: fonte.usuario,
-      [`x-${headerPrefix}-password`]: fonte.senha
+      [`x-${headerPrefix}-email`]: fonte.usuario || '',
+      [`x-${headerPrefix}-password`]: fonte.senha || ''
     },
-    signal: AbortSignal.timeout(30000)
+    signal: AbortSignal.timeout(18000)
   });
 
   if (!res.ok) {
@@ -873,9 +907,9 @@ export default function PortalBusca() {
   const [fontesAtivas, setFontesAtivas] = useState(() => {
     try {
       const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
-      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133', 'arp', 'pregoes', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
+      return [...FONTES_PADRAO_ATIVAS, ...integradas.filter(f => f.ativa !== false && f.portal !== 'conlicitacao').map(f => f.id)];
     } catch {
-      return ['pncp', 'comprasnet', 'dispensas', 'contratacoes14133', 'arp', 'pregoes'];
+      return FONTES_PADRAO_ATIVAS;
     }
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
@@ -920,7 +954,7 @@ export default function PortalBusca() {
   const [toasts, setToasts] = useState([]);
 
   const fontesDisponiveis = useMemo(
-    () => [...FONTES_CONFIG, ...fontesIntegradas],
+    () => [...FONTES_CONFIG, ...fontesIntegradas.filter(fonte => fonte.portal !== 'conlicitacao')],
     [fontesIntegradas]
   );
 
@@ -954,6 +988,11 @@ export default function PortalBusca() {
   });
 
   const itensExibidos = mostrarFavoritos ? favoritos : resultadosFiltrados;
+
+  const executarFonte = (nomeFonte, promise) =>
+    promise.catch(error => {
+      throw new Error(`${nomeFonte}: ${error.message || 'falha na consulta'}`);
+    });
 
   const handleBuscar = useCallback(async () => {
     const hasAdvancedFilter = [
@@ -1005,27 +1044,30 @@ export default function PortalBusca() {
 
       const promises = [];
       if (fontesAtivas.includes('pncp')) {
-        promises.push(buscarPNCPPublicacao(params));
-        if (incluirPropostas) promises.push(buscarPNCPProposta(params));
+        promises.push(executarFonte('PNCP', buscarPNCPProxy({ ...params, incluirPropostas })));
       }
       if (fontesAtivas.includes('comprasnet')) {
-        promises.push(buscarComprasNet(params));
+        promises.push(executarFonte('ComprasNet', buscarComprasNet(params)));
       }
       if (fontesAtivas.includes('dispensas')) {
-        promises.push(buscarComprasGovDispensas(params));
+        promises.push(executarFonte('Dispensas', buscarComprasGovDispensas(params)));
       }
       if (fontesAtivas.includes('contratacoes14133')) {
-        promises.push(buscarContratacoes14133(params));
+        promises.push(executarFonte('Contratações Lei 14.133', buscarContratacoes14133(params)));
       }
       if (fontesAtivas.includes('arp')) {
-        promises.push(buscarAtasRegistroPreco(params));
+        promises.push(executarFonte('Atas de Registro de Preço', buscarAtasRegistroPreco(params)));
       }
       if (fontesAtivas.includes('pregoes')) {
-        promises.push(buscarPregoes(params));
+        promises.push(executarFonte('Pregões', buscarPregoes(params)));
+      }
+      if (fontesAtivas.includes('conlicitacao')) {
+        const fonteConlicitacao = fontesIntegradas.find(fonte => fonte.portal === 'conlicitacao') || FONTES_CONFIG.find(fonte => fonte.id === 'conlicitacao');
+        promises.push(executarFonte('ConLicitação', buscarFonteIntegrada(fonteConlicitacao, params)));
       }
       fontesIntegradas
-        .filter(fonte => fonte.ativa && fontesAtivas.includes(fonte.id))
-        .forEach(fonte => promises.push(buscarFonteIntegrada(fonte, params)));
+        .filter(fonte => fonte.ativa && fonte.portal !== 'conlicitacao' && fontesAtivas.includes(fonte.id))
+        .forEach(fonte => promises.push(executarFonte(getFonteDisplayName(fonte), buscarFonteIntegrada(fonte, params))));
 
       if (promises.length === 0) {
         setErro('Selecione ao menos uma fonte ativa para buscar.');
@@ -1037,6 +1079,10 @@ export default function PortalBusca() {
       const todos = results
         .filter(r => r.status === 'fulfilled')
         .flatMap(r => r.value);
+      const falhas = results
+        .filter(r => r.status === 'rejected')
+        .map(r => r.reason?.message)
+        .filter(Boolean);
 
       const dedup = deduplicar(todos);
       const ordenados = ordenar(dedup, ordem);
@@ -1052,8 +1098,14 @@ export default function PortalBusca() {
       setPorFonte(porFonteMap);
 
       if (ordenados.length === 0) {
+        if (falhas.length > 0) {
+          setErro(`Nenhuma fonte retornou resultado. Falhas: ${falhas.slice(0, 3).join('; ')}${falhas.length > 3 ? '...' : ''}`);
+        }
         showToast('Sem resultados', 'Tente outros termos ou amplie o período de busca.');
       } else {
+        if (falhas.length > 0) {
+          showToast('Busca parcial', `${ordenados.length} resultado(s). Algumas fontes não responderam.`);
+        }
         showToast('Busca concluída', `${ordenados.length} edital(is) encontrado(s).`);
       }
     } catch (err) {
@@ -1457,134 +1509,155 @@ export default function PortalBusca() {
           {/* Corpo: filtros + resultados */}
           <div className="flex flex-col gap-4 p-4 max-w-7xl mx-auto w-full flex-1">
 
-            {/* Barra de filtros horizontal */}
-            <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
-              <div className="flex flex-wrap items-end gap-4">
-                {/* Status do Edital */}
+            {/* Painel de filtros */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-32px_rgba(15,23,42,0.45)] dark:border-slate-700/80 dark:bg-slate-900/70">
+              <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700/80 dark:bg-slate-900/85 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Status:</span>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Vigentes</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Em Proposta</span>
-                  </label>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                    <Filter size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Filtros de pesquisa</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Combine status, fonte, região, datas e produtos para refinar os editais.</p>
+                  </div>
                 </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* ConLicitações */}
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitações:</span>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Chat</span>
-                  </label>
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Nº Edital */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Edital:</label>
-                  <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                </div>
-
-                {/* Nº ConLicitação */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitação:</label>
-                  <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                </div>
-
-                {/* Modalidade */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Modalidade:</label>
-                  <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                    {MODALIDADES_CONLICITACAO.map(modalidade => (
-                      <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Localização */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">UF:</label>
-                  <select value={uf} onChange={e => setUf(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                    <option value="">Todo Brasil</option>
-                    {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Cidade:</label>
-                  <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade..." className="w-32 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Período publicação */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Publicação:</label>
-                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  <span className="text-xs text-slate-400">até</span>
-                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                </div>
-
-                {/* Data Prazo */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Prazo:</label>
-                  <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  <span className="text-xs text-slate-400">até</span>
-                  <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Fontes */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Fontes:</span>
-                  {fontesDisponiveis.map(f => (
-                    <label key={f.id} className="flex items-center gap-1.5 cursor-pointer group">
-                      <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
-                    </label>
-                  ))}
-                </div>
-
-                {/* Produtos TI */}
-                <div className="w-full flex items-center gap-2 flex-wrap border-t border-slate-100 dark:border-slate-700 pt-3 mt-1">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Produtos TI:</span>
-                  {CATEGORIAS_PRODUTO_TI.map(cat => (
-                    <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer group">
-                      <input type="checkbox" checked={categoriasProdutoTI.includes(cat.id)} onChange={() => toggleCategoriaProduto(cat.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{cat.label}</span>
-                    </label>
-                  ))}
-                  <input
-                    type="text"
-                    value={produtoCustom}
-                    onChange={e => setProdutoCustom(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
-                    placeholder="Outro produto (ex: estabilizador)"
-                    className="w-52 text-xs border border-blue-300 dark:border-blue-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  />
-                </div>
-
-                {/* Limpar */}
-                <button onClick={limparFiltros} className="ml-auto text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline whitespace-nowrap">
+                <button
+                  onClick={limparFiltros}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-500/60 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                >
+                  <X size={14} />
                   Limpar filtros
                 </button>
+              </div>
+
+              <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+                <div className="space-y-4">
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Status</p>
+                      <div className="flex flex-wrap gap-2">
+                        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${apenasVigentes ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                          <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                          Vigentes
+                        </label>
+                        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${incluirPropostas ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                          <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                          Em Proposta
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">ConLicitações</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: 'Busca exata', checked: buscaExata, onChange: setBuscaExata },
+                          { label: 'Com edital', checked: comEdital, onChange: setComEdital },
+                          { label: 'Chat', checked: comMonitoramentoChat, onChange: setComMonitoramentoChat }
+                        ].map(item => (
+                          <label key={item.label} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${item.checked ? 'border-cyan-400 bg-cyan-50 text-cyan-700 dark:border-cyan-500/60 dark:bg-cyan-500/15 dark:text-cyan-200' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                            <input type="checkbox" checked={item.checked} onChange={e => item.onChange(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-cyan-600" />
+                            {item.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.2fr]">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Nº edital</label>
+                      <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">ConLicitação</label>
+                      <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Modalidade</label>
+                      <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                        {MODALIDADES_CONLICITACAO.map(modalidade => (
+                          <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[0.7fr_1.3fr]">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">UF</label>
+                      <select value={uf} onChange={e => setUf(e.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                        <option value="">Todo Brasil</option>
+                        {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Cidade</label>
+                      <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade..." className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Publicação</label>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/45">
+                        <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                        <span className="text-xs font-semibold text-slate-400">até</span>
+                        <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Prazo</label>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/45">
+                        <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                        <span className="text-xs font-semibold text-slate-400">até</span>
+                        <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Fontes</p>
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">{fontesAtivas.length} ativas</span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {fontesDisponiveis.map(f => (
+                        <label key={f.id} className={`flex min-h-[42px] cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${fontesAtivas.includes(f.id) ? 'border-blue-400 bg-blue-50 text-blue-800 dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-100' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                          <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                          <span className="truncate">{f.icon} {f.nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Produtos TI</p>
+                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-bold text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-200">{categoriasProdutoTI.length} selecionados</span>
+                    </div>
+                    <div className="max-h-[148px] overflow-y-auto pr-1">
+                      <div className="flex flex-wrap gap-2">
+                        {CATEGORIAS_PRODUTO_TI.map(cat => (
+                          <label key={cat.id} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${categoriasProdutoTI.includes(cat.id) ? 'border-cyan-400 bg-cyan-50 text-cyan-800 dark:border-cyan-500/60 dark:bg-cyan-500/15 dark:text-cyan-100' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                            <input type="checkbox" checked={categoriasProdutoTI.includes(cat.id)} onChange={() => toggleCategoriaProduto(cat.id)} className="h-3.5 w-3.5 rounded border-slate-300 text-cyan-600" />
+                            {cat.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={produtoCustom}
+                      onChange={e => setProdutoCustom(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
+                      placeholder="Outro produto (ex: estabilizador)"
+                      className="mt-3 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-blue-700/80 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

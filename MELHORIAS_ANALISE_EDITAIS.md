@@ -210,7 +210,7 @@ const extractItemContext = (lines, itemIndex) => {
 ## 🚀 Implementação das Melhorias
 
 ### Arquivo a Modificar:
-`netlify/functions/ai-analysis.js`
+`backend/api/ai-analysis.cjs`
 
 ### Funções a Atualizar:
 

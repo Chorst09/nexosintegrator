@@ -49,7 +49,7 @@ const DashboardModernized = () => {
 
       const queryString = new URLSearchParams(params).toString();
       const response = await fetch(
-        buildApiUrl(`/api/dashboard?${queryString}`),
+        buildApiUrl(`/dashboard?${queryString}`),
         { headers: getAuthHeaders() }
       );
 
@@ -66,7 +66,7 @@ const DashboardModernized = () => {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch(buildApiUrl('/api/users'), {
+      const response = await fetch(buildApiUrl('/users'), {
         headers: getAuthHeaders()
       });
       if (response.ok) {

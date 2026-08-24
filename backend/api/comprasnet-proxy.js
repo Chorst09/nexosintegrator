@@ -43,16 +43,14 @@ router.get('/', async (req, res) => {
   const modalidades = MODALIDADES[tipo] || MODALIDADES.licitacao;
 
   try {
-    const dataInicio = qs.dataInicio || diasAtras(30);
+    const dataInicio = qs.dataInicio || diasAtras(365);
     const dataFim = qs.dataFim || hoje();
     const dataI = toPNCPDate(dataInicio);
     const dataF = toPNCPDate(dataFim);
     const size = clamp(qs.tamanhoPagina, 10, 50);
     const page = clamp(qs.pagina, 1, 500);
 
-    const allResults = [];
-
-    for (const mod of modalidades) {
+    const requests = modalidades.map(async (mod) => {
       try {
         const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
         url.searchParams.set('dataInicial', dataI);
@@ -67,20 +65,35 @@ router.get('/', async (req, res) => {
           signal: AbortSignal.timeout(15000)
         });
 
-        if (!response.ok) continue;
+        if (!response.ok) return { data: [], erro: `Modalidade ${mod}: HTTP ${response.status}` };
 
         const data = await response.json().catch(() => null);
         if (data?.data && Array.isArray(data.data)) {
-          allResults.push(...data.data);
+          return { data: data.data, erro: null };
         }
-      } catch {
-        // ignora erro de modalidade individual
+        return { data: [], erro: `Modalidade ${mod}: resposta vazia` };
+      } catch (error) {
+        return { data: [], erro: `Modalidade ${mod}: ${error.message || 'falha na consulta'}` };
+      }
+    });
+
+    const settled = await Promise.allSettled(requests);
+    const allResults = [];
+    const erros = [];
+
+    for (const item of settled) {
+      if (item.status === 'fulfilled') {
+        allResults.push(...item.value.data);
+        if (item.value.erro) erros.push(item.value.erro);
+      } else {
+        erros.push(item.reason?.message || 'Falha desconhecida');
       }
     }
 
     return res.json({
       data: allResults,
-      total: allResults.length
+      total: allResults.length,
+      erro: allResults.length === 0 && erros.length > 0 ? erros.slice(0, 3).join('; ') : undefined
     });
   } catch (error) {
     return res.json({ data: [], total: 0, erro: error.message || 'Falha ao buscar no PNCP' });

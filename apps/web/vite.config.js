@@ -12,20 +12,6 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Netlify Functions (PNCP, BLL, etc)
-      '/api/pncp-proxy': {
-        target: 'http://localhost:8888/.netlify/functions',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-        secure: false
-      },
-      '/api/bll-proxy': {
-        target: 'http://localhost:8888/.netlify/functions',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-        secure: false
-      },
-      // API Express (outros endpoints)
       '/api': {
         target: 'http://localhost:3002',
         changeOrigin: true,

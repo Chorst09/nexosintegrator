@@ -93,9 +93,8 @@ print_info "Setting up database..."
 echo ""
 echo "Which database would you like to use?"
 echo "1) Neon PostgreSQL (Recommended for production)"
-echo "2) Cloudflare D1 (For edge deployment)"
-echo "3) Local SQLite (For development)"
-read -p "Enter your choice (1-3): " db_choice
+echo "2) Local SQLite (For development)"
+read -p "Enter your choice (1-2): " db_choice
 
 case $db_choice in
     1)
@@ -106,15 +105,6 @@ case $db_choice in
         print_info "NEON_DATABASE_URL=\"postgresql://username:password@ep-xxx.us-east-1.aws.neon.tech/dbname?sslmode=require\""
         ;;
     2)
-        print_info "Setting up Cloudflare D1..."
-        echo "DATABASE_TYPE=d1" >> backend/.env
-        echo ""
-        print_warning "Please update your backend/.env file with your Cloudflare D1 configuration:"
-        print_info "CLOUDFLARE_D1_DATABASE_ID=\"your-d1-database-id\""
-        print_info "CLOUDFLARE_ACCOUNT_ID=\"your-cloudflare-account-id\""
-        print_info "CLOUDFLARE_API_TOKEN=\"your-cloudflare-api-token\""
-        ;;
-    3)
         print_info "Setting up Local SQLite..."
         echo "DATABASE_TYPE=sqlite" >> backend/.env
         echo "DATABASE_URL=\"file:./dev.db\"" >> backend/.env
@@ -140,12 +130,11 @@ if [ "$db_choice" = "1" ]; then
     cp ../database/neon/schema.prisma prisma/schema.prisma
     print_status "Copied Neon PostgreSQL schema"
 elif [ "$db_choice" = "2" ]; then
-    # For D1, we'll use a modified schema
     cp ../database/neon/schema.prisma prisma/schema.prisma
     # Modify for SQLite compatibility
     sed -i.bak 's/provider = "postgresql"/provider = "sqlite"/' prisma/schema.prisma
     sed -i.bak 's/env("NEON_DATABASE_URL")/env("DATABASE_URL")/' prisma/schema.prisma
-    print_status "Copied and modified schema for D1/SQLite"
+    print_status "Copied and modified schema for SQLite"
 else
     cp ../database/neon/schema.prisma prisma/schema.prisma
     sed -i.bak 's/provider = "postgresql"/provider = "sqlite"/' prisma/schema.prisma
@@ -158,7 +147,7 @@ npm run db:generate
 print_status "Generated Prisma client"
 
 # Run migrations (only for local development)
-if [ "$db_choice" = "3" ]; then
+if [ "$db_choice" = "2" ]; then
     print_info "Running database migrations..."
     npm run db:push
     print_status "Database migrations completed"
@@ -180,7 +169,7 @@ print_status "Setup completed successfully! 🎉"
 echo ""
 print_info "Next steps:"
 echo "1. Update your environment files with your actual configuration"
-echo "2. If using Neon or D1, run the database migrations manually"
+echo "2. If using Neon, run the database migrations manually"
 echo "3. Start the development servers:"
 echo ""
 echo "   # Terminal 1 - Backend"

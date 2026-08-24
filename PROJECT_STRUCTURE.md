@@ -41,10 +41,6 @@ crm-comercial/
 │   │   ├── schema.sql
 │   │   ├── seed.sql
 │   │   └── migrations/
-│   ├── 📁 cloudflare-d1/         # Configuração Cloudflare D1
-│   │   ├── schema.sql
-│   │   ├── seed.sql
-│   │   └── migrations/
 │   └── 📁 shared/                # Scripts compartilhados
 │       ├── migrate.js
 │       └── seed-data.js
@@ -76,7 +72,7 @@ crm-comercial/
 
 ### **2. Multi-Database Support**
 - Configuração para Neon PostgreSQL (produção)
-- Configuração para Cloudflare D1 (edge computing)
+- Configuração para SQLite local
 - Scripts de migração compartilhados
 - Seed data unificado
 

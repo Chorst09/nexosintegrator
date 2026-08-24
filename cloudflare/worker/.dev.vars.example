@@ -1,2 +1,0 @@
-JWT_SECRET=troque-por-um-segredo-forte
-CORS_ORIGIN=http://209.50.241.25

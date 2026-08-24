@@ -35,13 +35,6 @@ npm install
 cd ../..
 echo ""
 
-# Instalar dependências das functions
-echo "📦 Instalando dependências das Netlify Functions..."
-cd netlify/functions
-npm install
-cd ../..
-echo ""
-
 # Verificar se .env existe
 if [ ! -f .env ]; then
     echo "⚙️  Criando arquivo .env..."
@@ -68,8 +61,7 @@ fi
 
 # Gerar Prisma Client
 echo "🔧 Gerando Prisma Client..."
-cd netlify/functions
-npx prisma generate
+npm run prisma:generate
 echo ""
 
 # Perguntar se quer rodar migrations
@@ -77,15 +69,7 @@ read -p "🗄️  Deseja rodar as migrations do banco de dados agora? (s/n) " -n
 echo ""
 if [[ $REPLY =~ ^[Ss]$ ]]; then
     echo "🗄️  Rodando migrations..."
-    npx prisma migrate deploy
-    echo ""
-fi
-cd ../..
-
-# Verificar se Netlify CLI está instalado
-if ! command -v netlify &> /dev/null; then
-    echo "📦 Netlify CLI não encontrado. Instalando..."
-    npm install -g netlify-cli
+    npm run prisma:migrate
     echo ""
 fi
 
@@ -100,11 +84,9 @@ echo "   2. Para acessar o Prisma Studio:"
 echo "      npm run prisma:studio"
 echo ""
 echo "   3. Para fazer deploy:"
-echo "      netlify deploy --prod"
+echo "      ./deploy-servidor.sh"
 echo ""
 echo "📚 Documentação:"
-echo "   - Deploy: DEPLOY_NETLIFY_SUPABASE.md"
-echo "   - Migração de APIs: MIGRACAO_APIS.md"
 echo "   - README: README.md"
 echo ""
 echo "🆘 Precisa de ajuda? Abra uma issue no GitHub!"

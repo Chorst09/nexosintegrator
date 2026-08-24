@@ -74,45 +74,23 @@ nexoscrm/
 │       ├── public/             # Arquivos estáticos
 │       └── dist/               # Build de produção
 │
-├── netlify/
-│   └── functions/              # Netlify Functions (API)
-│       ├── lib/                # Bibliotecas compartilhadas
-│       │   ├── prisma.js       # Cliente Prisma
-│       │   ├── auth.js         # Autenticação
-│       │   ├── permissions.js  # Permissões
-│       │   └── response.js     # Helpers de resposta
-│       ├── prisma/             # Schema do banco
-│       │   └── schema.prisma
-│       ├── auth.js             # API de autenticação
-│       ├── clients.js          # API de clientes
-│       ├── health.js           # Health check
-│       └── ...                 # Outras APIs
+├── backend/                    # API Express
+│   ├── api/                    # Rotas HTTP
+│   ├── lib/                    # Bibliotecas compartilhadas
+│   ├── prisma/                 # Schema do banco
+│   └── server.js               # Servidor
 │
-├── netlify.toml                # Configuração Netlify
 ├── package.json                # Dependências raiz
 └── README.md                   # Este arquivo
 ```
 
 ## 🚀 Deploy
 
-### Opção 1: Deploy Rápido (Recomendado)
+### Deploy em Servidor
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start)
-
-1. Clique no botão acima
-2. Conecte seu repositório
-3. Configure as variáveis de ambiente
-4. Deploy automático!
-
-### Opção 2: Deploy Manual
-
-Siga o guia completo: [DEPLOY_NETLIFY_SUPABASE.md](./DEPLOY_NETLIFY_SUPABASE.md)
-
-**Resumo:**
-1. Criar projeto no Supabase
-2. Configurar variáveis de ambiente
-3. Rodar migrations
-4. Deploy no Netlify
+1. Configure as variáveis de ambiente.
+2. Rode migrations e gere o Prisma Client.
+3. Execute `./deploy-servidor.sh`.
 
 ## 💻 Desenvolvimento Local
 
@@ -120,8 +98,7 @@ Siga o guia completo: [DEPLOY_NETLIFY_SUPABASE.md](./DEPLOY_NETLIFY_SUPABASE.md)
 
 - Node.js 18+
 - npm ou yarn
-- Conta Supabase (para banco de dados)
-- Netlify CLI (opcional)
+- PostgreSQL
 
 ### Instalação
 
@@ -133,17 +110,15 @@ cd nexoscrm
 # 2. Instalar dependências
 npm install
 cd apps/web && npm install && cd ../..
-cd netlify/functions && npm install && cd ../..
+cd backend && npm install && cd ..
 
 # 3. Configurar variáveis de ambiente
 cp .env.example .env
 # Edite o .env com suas credenciais
 
 # 4. Rodar migrations
-cd netlify/functions
-npx prisma migrate deploy
-npx prisma generate
-cd ../..
+npm run prisma:generate
+npm run prisma:migrate
 
 # 5. Iniciar desenvolvimento
 npm run dev
@@ -155,7 +130,7 @@ npm run dev
 # Desenvolvimento
 npm run dev              # Inicia frontend + API
 npm run dev:web          # Apenas frontend
-npm run dev:api          # Apenas API (Netlify Dev)
+npm run dev:api          # Apenas API
 
 # Build
 npm run build            # Build do frontend
@@ -213,16 +188,14 @@ O projeto está em processo de migração do Express para Netlify Functions.
 - 🔄 Em andamento: Oportunidades, Produtos, Propostas
 - ⏳ Pendente: Demais módulos
 
-Veja o guia completo: [MIGRACAO_APIS.md](./MIGRACAO_APIS.md)
-
 ## 🧪 Testes
 
 ```bash
 # Testar health check
-curl https://seu-site.netlify.app/api/health
+curl https://seu-dominio.com/health
 
 # Testar autenticação
-curl -X POST https://seu-site.netlify.app/api/auth/login \
+curl -X POST https://seu-dominio.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@exemplo.com","password":"senha123"}'
 ```
@@ -249,9 +222,9 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 ## 🎯 Roadmap
 
 ### Q1 2024
-- [x] Migração para Netlify + Supabase
+- [x] Migração para backend Express + PostgreSQL
 - [x] Módulo de autenticação
-- [ ] Migração completa de APIs
+- [x] APIs consolidadas no backend
 - [ ] Testes automatizados
 
 ### Q2 2024
@@ -273,8 +246,6 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ## 🙏 Agradecimentos
 
-- [Netlify](https://netlify.com) - Hosting e Functions
-- [Supabase](https://supabase.com) - Database
 - [Prisma](https://prisma.io) - ORM
 - [React](https://react.dev) - Framework Frontend
 - [TailwindCSS](https://tailwindcss.com) - CSS Framework

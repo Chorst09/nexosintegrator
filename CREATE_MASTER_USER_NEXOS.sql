@@ -1,4 +1,4 @@
--- Criar novo usuário MASTER no banco D1 do nexos
+-- Criar novo usuário MASTER no banco PostgreSQL do Nexos
 -- Email: master@master.com
 -- Senha: admin123
 -- Hash: $2b$10$lTKAs0VqeitQZRE5/t5ZtuLnZ83pcXURoJAmtBgB/zUlqaa4BnvTw.

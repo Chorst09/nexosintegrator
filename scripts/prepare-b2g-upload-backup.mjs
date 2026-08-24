@@ -306,7 +306,7 @@ const buildTargetBackup = (sourceJson, sourceFileName) => {
     generatedAt: new Date().toISOString(),
     generatedBy: {
       id: null,
-      name: 'Conversor D1->B2G',
+      name: 'Conversor Backup->B2G',
       email: null,
       role: 'SYSTEM'
     },

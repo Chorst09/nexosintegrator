@@ -26,8 +26,13 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Token inválido' });
     }
 
+    const userId = decoded?.userId || decoded?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: userId },
       select: {
         id: true,
         name: true,

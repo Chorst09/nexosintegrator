@@ -119,7 +119,7 @@ Para producao, troque `FileSavedAnalysisRepository` por implementacao em:
 
 - Postgres
 - MySQL
-- D1
+- SQLite local
 - MongoDB
 
 Mantendo a mesma interface de repositorio.

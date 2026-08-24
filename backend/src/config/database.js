@@ -20,15 +20,16 @@ class DatabaseAdapter {
           },
           log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error']
         });
-      } else if (this.type === 'd1' || this.type === 'cloudflare') {
-        // Cloudflare D1 configuration
+      } else if (this.type === 'sqlite') {
         this.client = new PrismaClient({
           datasources: {
             db: {
-              url: this.buildD1Url()
+              url: process.env.DATABASE_URL || 'file:./dev.db'
             }
           }
         });
+      } else {
+        throw new Error(`Unsupported DATABASE_TYPE: ${this.type}`);
       }
 
       // Test connection
@@ -40,17 +41,6 @@ class DatabaseAdapter {
       console.error('❌ Database connection failed:', error);
       throw error;
     }
-  }
-
-  buildD1Url() {
-    const { CLOUDFLARE_D1_DATABASE_ID, CLOUDFLARE_ACCOUNT_ID } = process.env;
-    
-    if (!CLOUDFLARE_D1_DATABASE_ID || !CLOUDFLARE_ACCOUNT_ID) {
-      throw new Error('Cloudflare D1 configuration missing');
-    }
-
-    return `file:./dev.db`; // For development, use local SQLite
-    // In production with Cloudflare Workers, this would be handled differently
   }
 
   async disconnect() {
