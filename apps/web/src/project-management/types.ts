@@ -49,9 +49,19 @@ export interface Issue {
   assignee?: User;
   startDate?: string;
   dueDate?: string;
+  estimate?: string;
+  points?: string;
   customFields?: CustomField[];
+  followUps?: FollowUp[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FollowUp {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface Column {

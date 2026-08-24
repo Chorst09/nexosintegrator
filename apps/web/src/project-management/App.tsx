@@ -164,6 +164,11 @@ export default function App({ onBack }: { onBack?: () => void }) {
     setIsCreatingTaskGlobal(false);
   };
 
+  const handleUpdateIssue = (updatedIssue: Issue) => {
+    setIssues(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
+    setSelectedTask(updatedIssue);
+  };
+
   return (
     <div className="flex h-screen bg-[#050914] font-sans overflow-hidden text-slate-300 text-sm">
 
@@ -400,7 +405,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
       </main>
 
       {selectedTask && (
-        <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />
+        <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdateIssue} />
       )}
 
       {isCreatingTaskGlobal && (
