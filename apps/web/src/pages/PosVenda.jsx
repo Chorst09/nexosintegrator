@@ -43,6 +43,11 @@ const detailLabelClass = 'text-[10px] font-bold text-[var(--crm-muted)] uppercas
 const emptyIconClass = 'w-16 h-16 text-[var(--crm-muted)] opacity-45 mx-auto mb-4';
 const emptyTitleClass = 'text-lg font-semibold text-[var(--crm-ink)] mb-2';
 const emptyTextClass = 'text-[var(--crm-muted)]';
+const formatDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('pt-BR');
+};
 
 const PosVenda = () => {
   const [activeTab, setActiveTab] = useState('onboarding');
@@ -268,25 +273,48 @@ const PosVenda = () => {
     setViewingOnboarding(item);
   };
 
-  const handleAdvanceStep = async (onboardingId, step) => {
+  const handleUpdateOnboarding = async (onboardingId, payload) => {
+    try {
+      const response = await fetch(buildApiUrl(`/post-sales/onboarding/${onboardingId}`), {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (response.ok) {
+        const updated = await response.json();
+        setViewingOnboarding(updated);
+        await fetchData();
+        showFeedback('Onboarding atualizado com sucesso!');
+      } else {
+        const err = await response.json().catch(() => ({}));
+        showFeedback(err.error || 'Erro ao atualizar onboarding', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao atualizar onboarding', 'error');
+    }
+  };
+
+  const handleAdvanceStep = async (onboardingId, step, nextStatus = 'COMPLETED') => {
     try {
       setAdvancingStep(step.id);
       const response = await fetch(buildApiUrl(`/post-sales/onboarding/${onboardingId}/steps/${step.id}`), {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ status: 'COMPLETED' })
+        body: JSON.stringify({ status: nextStatus })
       });
       if (response.ok) {
+        const updatedStep = await response.json();
+        setViewingOnboarding((current) => current?.id === onboardingId ? {
+          ...current,
+          steps: (current.steps || []).map((item) => item.id === step.id ? { ...item, ...updatedStep } : item)
+        } : current);
         await fetchData();
-        showFeedback(`Etapa "${step.title}" concluída!`);
-        // Atualizar o onboarding em visualização
-        const updated = onboardings.find(o => o.id === onboardingId);
-        if (updated) setViewingOnboarding(updated);
+        showFeedback(nextStatus === 'COMPLETED' ? `Etapa "${step.title}" concluída!` : `Etapa "${step.title}" reaberta!`);
       } else {
-        showFeedback('Erro ao avançar etapa', 'error');
+        showFeedback('Erro ao atualizar etapa', 'error');
       }
     } catch (error) {
-      showFeedback('Erro ao avançar etapa', 'error');
+      showFeedback('Erro ao atualizar etapa', 'error');
     } finally {
       setAdvancingStep(null);
     }
@@ -316,8 +344,11 @@ const PosVenda = () => {
         body: JSON.stringify({ message: responseText, isInternal: false })
       });
       if (res.ok) {
+        const createdResponse = await res.json();
+        setTicketResponses((current) => [...current, createdResponse]);
         setResponseText('');
         showFeedback('Resposta enviada com sucesso!');
+        await fetchData();
       } else {
         showFeedback('Erro ao enviar resposta', 'error');
       }
@@ -325,6 +356,48 @@ const PosVenda = () => {
       showFeedback('Erro ao enviar resposta', 'error');
     } finally {
       setSendingResponse(false);
+    }
+  };
+
+  const handleUpdateTicketStatus = async (ticketId, status) => {
+    try {
+      const res = await fetch(buildApiUrl(`/post-sales/support/${ticketId}`), {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setViewingTicket(updated);
+        await fetchData();
+        showFeedback('Status do ticket atualizado!');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showFeedback(err.error || 'Erro ao atualizar ticket', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao atualizar ticket', 'error');
+    }
+  };
+
+  const handleSubmitNPSResponse = async (surveyId, payload) => {
+    try {
+      const res = await fetch(buildApiUrl(`/post-sales/nps/${surveyId}/respond`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setViewingNPS(updated);
+        await fetchData();
+        showFeedback('Resposta NPS registrada!');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showFeedback(err.error || 'Erro ao registrar NPS', 'error');
+      }
+    } catch (error) {
+      showFeedback('Erro ao registrar NPS', 'error');
     }
   };
 
@@ -510,8 +583,15 @@ const PosVenda = () => {
               <option value="PENDING">Pendente</option>
               <option value="IN_PROGRESS">Em Andamento</option>
               <option value="COMPLETED">Concluído</option>
+              <option value="CANCELLED">Cancelado</option>
               <option value="OPEN">Aberto</option>
+              <option value="WAITING_CUSTOMER">Aguardando Cliente</option>
               <option value="RESOLVED">Resolvido</option>
+              <option value="CLOSED">Fechado</option>
+              <option value="SENT">NPS Enviado</option>
+              <option value="RESPONDED">NPS Respondido</option>
+              <option value="EXPIRED">NPS Expirado</option>
+              <option value="ACTIVE">Churn Ativo</option>
             </select>
           </div>
         </div>
@@ -634,7 +714,7 @@ const PosVenda = () => {
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 text-[var(--crm-muted)] mr-2" />
                       <span className="text-sm text-[var(--crm-ink)]">
-                        {item.expectedEndDate ? new Date(item.expectedEndDate).toLocaleDateString('pt-BR') : '-'}
+                        {formatDate(item.expectedEndDate)}
                       </span>
                     </div>
                   )
@@ -724,7 +804,7 @@ const PosVenda = () => {
                       <div className={`flex items-center ${slaExpired ? 'text-red-700 dark:text-red-200' : 'text-[var(--crm-ink)]'}`}>
                         <Clock className={`w-4 h-4 mr-2 ${slaExpired ? 'text-red-500' : 'text-[var(--crm-muted)]'}`} />
                         <span className="text-sm font-medium">
-                          {item.slaDeadline ? new Date(item.slaDeadline).toLocaleDateString('pt-BR') : '-'}
+                          {formatDate(item.slaDeadline)}
                         </span>
                         {slaExpired && <span className="ml-2 px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-200 text-xs rounded-full">Vencido</span>}
                       </div>
@@ -842,7 +922,7 @@ const PosVenda = () => {
                     <div className="flex items-center">
                       <Calendar className="w-4 h-4 text-[var(--crm-muted)] mr-2" />
                       <span className="text-sm text-[var(--crm-ink)]">
-                        {new Date(item.sentAt).toLocaleDateString('pt-BR')}
+                        {formatDate(item.sentAt)}
                       </span>
                     </div>
                   )
@@ -1033,6 +1113,7 @@ const PosVenda = () => {
           <OnboardingDetailModal
             onboarding={viewingOnboarding}
             onAdvanceStep={handleAdvanceStep}
+            onUpdateOnboarding={handleUpdateOnboarding}
             advancingStep={advancingStep}
             onClose={() => setViewingOnboarding(null)}
           />
@@ -1052,6 +1133,7 @@ const PosVenda = () => {
             responseText={responseText}
             onResponseChange={setResponseText}
             onSendResponse={handleRespondTicket}
+            onUpdateStatus={handleUpdateTicketStatus}
             sendingResponse={sendingResponse}
             onClose={() => setViewingTicket(null)}
           />
@@ -1065,7 +1147,7 @@ const PosVenda = () => {
         title="Detalhes da Pesquisa NPS"
       >
         {viewingNPS && (
-          <NPSDetailModal nps={viewingNPS} onClose={() => setViewingNPS(null)} getNPSCategory={getNPSCategory} />
+          <NPSDetailModal nps={viewingNPS} onClose={() => setViewingNPS(null)} getNPSCategory={getNPSCategory} onSubmitResponse={handleSubmitNPSResponse} />
         )}
       </Modal>
     </div>
@@ -1296,7 +1378,7 @@ const NPSSurveyModal = ({ onClose, onSubmit, companies, contracts }) => {
   );
 };
 
-const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClose }) => {
+const OnboardingDetailModal = ({ onboarding, onAdvanceStep, onUpdateOnboarding, advancingStep, onClose }) => {
   const completedSteps = onboarding.steps?.filter(s => s.status === 'COMPLETED').length || 0;
   const totalSteps = onboarding.steps?.length || 0;
   const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
@@ -1305,9 +1387,21 @@ const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClo
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-accent-rgb)_/_0.08)] p-4">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-[var(--crm-ink)]">Progresso</span>
-          <span className="text-sm font-bold text-[rgb(var(--crm-accent-rgb))]">{completedSteps}/{totalSteps} etapas</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+          <div>
+            <span className="text-sm font-semibold text-[var(--crm-ink)]">Progresso</span>
+            <p className="text-xs text-[var(--crm-muted)]">{completedSteps}/{totalSteps} etapas concluídas</p>
+          </div>
+          <select
+            value={onboarding.status}
+            onChange={(e) => onUpdateOnboarding(onboarding.id, { status: e.target.value })}
+            className="crm-input sm:w-48"
+          >
+            <option value="PENDING">Pendente</option>
+            <option value="IN_PROGRESS">Em andamento</option>
+            <option value="COMPLETED">Concluído</option>
+            <option value="CANCELLED">Cancelado</option>
+          </select>
         </div>
         <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-3">
           <div className="bg-blue-600 h-3 rounded-full transition-all" style={{ width: `${progress}%` }} />
@@ -1352,7 +1446,14 @@ const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClo
                 </div>
                 <div className="shrink-0">
                   {isCompleted ? (
-                    <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-500/20 px-2 py-1 rounded-full">Concluída</span>
+                    <button
+                      onClick={() => onAdvanceStep(onboarding.id, step, 'PENDING')}
+                      disabled={!!advancingStep}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-900 dark:text-amber-100 bg-amber-500/20 hover:bg-amber-500/25 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                    >
+                      {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                      Reabrir
+                    </button>
                   ) : (
                     <button
                       onClick={() => onAdvanceStep(onboarding.id, step)}
@@ -1377,7 +1478,7 @@ const OnboardingDetailModal = ({ onboarding, onAdvanceStep, advancingStep, onClo
   );
 };
 
-const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendResponse, sendingResponse, onClose, responses }) => {
+const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendResponse, onUpdateStatus, sendingResponse, onClose, responses }) => {
   const slaExpired = ticket.slaDeadline && new Date(ticket.slaDeadline) < new Date();
 
   return (
@@ -1389,12 +1490,17 @@ const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendRespo
         </div>
         <div className={detailCardClass}>
           <p className={detailLabelClass}>Status</p>
-          <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
-            ticket.status === 'OPEN' ? 'bg-red-500/20 text-red-800 dark:text-red-200' :
-            ticket.status === 'IN_PROGRESS' ? 'bg-sky-500/20 text-sky-800 dark:text-sky-200' :
-            ticket.status === 'RESOLVED' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200' :
-            'bg-slate-500/10 text-slate-800 dark:text-slate-200'
-          }`}>{ticket.status}</span>
+          <select
+            value={ticket.status}
+            onChange={(e) => onUpdateStatus(ticket.id, e.target.value)}
+            className="crm-input mt-1"
+          >
+            <option value="OPEN">Aberto</option>
+            <option value="IN_PROGRESS">Em andamento</option>
+            <option value="WAITING_CUSTOMER">Aguardando cliente</option>
+            <option value="RESOLVED">Resolvido</option>
+            <option value="CLOSED">Fechado</option>
+          </select>
         </div>
         <div className={detailCardClass}>
           <p className={detailLabelClass}>Prioridade</p>
@@ -1410,7 +1516,7 @@ const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendRespo
           <div className="flex items-center gap-1.5">
             <Clock className={`w-3.5 h-3.5 ${slaExpired ? 'text-red-500' : 'text-[var(--crm-muted)]'}`} />
             <span className={`text-xs font-bold ${slaExpired ? 'text-red-700 dark:text-red-200' : 'text-[var(--crm-ink)]'}`}>
-              {ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleDateString('pt-BR') : '-'}
+              {formatDate(ticket.slaDeadline)}
               {slaExpired && ' (Vencido)'}
             </span>
           </div>
@@ -1467,9 +1573,18 @@ const TicketDetailModal = ({ ticket, responseText, onResponseChange, onSendRespo
   );
 };
 
-const NPSDetailModal = ({ nps, onClose, getNPSCategory }) => {
+const NPSDetailModal = ({ nps, onClose, getNPSCategory, onSubmitResponse }) => {
   const category = nps.score !== null ? getNPSCategory(nps.score) : null;
   const CatIcon = category?.icon || Star;
+  const [score, setScore] = useState(nps.score ?? 10);
+  const [feedback, setFeedback] = useState(nps.feedback || '');
+  const responsePath = buildApiUrl(`/post-sales/nps/${nps.id}/respond`);
+  const responseUrl = /^https?:\/\//i.test(responsePath) ? responsePath : `${window.location.origin}${responsePath}`;
+
+  const handleManualResponse = (e) => {
+    e.preventDefault();
+    onSubmitResponse(nps.id, { score, feedback });
+  };
 
   return (
     <div className="space-y-5">
@@ -1509,12 +1624,12 @@ const NPSDetailModal = ({ nps, onClose, getNPSCategory }) => {
         </div>
         <div className={detailCardClass}>
           <p className={detailLabelClass}>Enviada em</p>
-          <p className="text-sm font-bold text-[var(--crm-ink)]">{new Date(nps.sentAt).toLocaleDateString('pt-BR')}</p>
+          <p className="text-sm font-bold text-[var(--crm-ink)]">{formatDate(nps.sentAt)}</p>
         </div>
         <div className={detailCardClass}>
           <p className={detailLabelClass}>Respondida em</p>
           <p className="text-sm font-bold text-[var(--crm-ink)]">
-            {nps.respondedAt ? new Date(nps.respondedAt).toLocaleDateString('pt-BR') : '-'}
+            {formatDate(nps.respondedAt)}
           </p>
         </div>
       </div>
@@ -1525,6 +1640,56 @@ const NPSDetailModal = ({ nps, onClose, getNPSCategory }) => {
           <p className="text-sm text-[var(--crm-ink)] italic">"{nps.feedback}"</p>
         </div>
       )}
+
+      {nps.status !== 'RESPONDED' && (
+        <form onSubmit={handleManualResponse} className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.68)] p-4 space-y-3">
+          <div>
+            <p className={`${detailLabelClass} mb-1`}>Registrar resposta</p>
+            <p className="text-xs text-[var(--crm-muted)]">Use quando a resposta chegar por e-mail, telefone ou reunião.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3">
+            <label className="space-y-1">
+              <span className="text-xs font-bold text-[var(--crm-muted)]">Nota</span>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                value={score}
+                onChange={(e) => setScore(Number(e.target.value))}
+                className="crm-input"
+                required
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-bold text-[var(--crm-muted)]">Feedback</span>
+              <input
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                className="crm-input"
+                placeholder="Comentário do cliente"
+              />
+            </label>
+          </div>
+          <button type="submit" className="crm-btn crm-btn-primary">
+            <CheckCircle2 className="w-4 h-4" />
+            Registrar NPS
+          </button>
+        </form>
+      )}
+
+      <div className={detailCardClass}>
+        <p className={detailLabelClass}>Link público técnico</p>
+        <div className="mt-2 flex flex-col sm:flex-row gap-2">
+          <input readOnly value={responseUrl} className="crm-input text-xs" />
+          <button
+            type="button"
+            onClick={() => navigator.clipboard?.writeText(responseUrl)}
+            className="crm-btn crm-btn-secondary shrink-0"
+          >
+            Copiar
+          </button>
+        </div>
+      </div>
 
       {nps.contract && (
         <div className={detailCardClass}>

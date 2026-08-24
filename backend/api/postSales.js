@@ -27,7 +27,7 @@ router.get('/onboarding', authenticateToken, async (req, res) => {
         where,
         include: {
           company: {
-            select: { id: true, name: true, document: true }
+            select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
           },
           contract: {
             select: { id: true, number: true, title: true }
@@ -67,18 +67,20 @@ router.get('/onboarding', authenticateToken, async (req, res) => {
 // Criar onboarding
 router.post('/onboarding', authenticateToken, async (req, res) => {
   try {
-    const { companyId, contractId, expectedEndDate, steps } = req.body;
+    const { companyId, contractId, assignedToId, expectedEndDate, description, steps } = req.body;
 
-    if (!companyId) {
-      return res.status(400).json({ error: 'Empresa é obrigatória' });
+    if (!companyId || !assignedToId) {
+      return res.status(400).json({ error: 'Empresa e responsável são obrigatórios' });
     }
 
     const onboarding = await prisma.customerOnboarding.create({
       data: {
         companyId,
-        contractId,
+        contractId: contractId || null,
+        assignedToId,
         expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
-        assignedToId: req.user.userId,
+        description: description || null,
+        status: 'IN_PROGRESS',
         steps: {
           create: steps?.map((step, index) => ({
             title: step.title,
@@ -90,7 +92,7 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
       },
       include: {
         company: {
-          select: { id: true, name: true, document: true }
+          select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
         },
         contract: {
           select: { id: true, number: true, title: true }
@@ -107,6 +109,50 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
     res.status(201).json(onboarding);
   } catch (error) {
     console.error('Erro ao criar onboarding:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Atualizar onboarding
+router.put('/onboarding/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, assignedToId, expectedEndDate, description } = req.body;
+
+    const current = await prisma.customerOnboarding.findUnique({ where: { id } });
+    if (!current) {
+      return res.status(404).json({ error: 'Onboarding não encontrado' });
+    }
+
+    if (req.user.role === 'SELLER' && current.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const data = {};
+    if (status) {
+      data.status = status;
+      if (status === 'COMPLETED') data.actualEndDate = new Date();
+      if (status !== 'COMPLETED') data.actualEndDate = null;
+    }
+    if (assignedToId !== undefined) data.assignedToId = assignedToId || current.assignedToId;
+    if (expectedEndDate !== undefined) data.expectedEndDate = expectedEndDate ? new Date(expectedEndDate) : null;
+    if (description !== undefined) data.description = description || null;
+
+    const onboarding = await prisma.customerOnboarding.update({
+      where: { id },
+      data,
+      include: {
+        company: { select: { id: true, name: true, document: true, clientType: true, churnRisk: true } },
+        contract: { select: { id: true, number: true, title: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
+        steps: { orderBy: { order: 'asc' } },
+        _count: { select: { steps: true } }
+      }
+    });
+
+    res.json(onboarding);
+  } catch (error) {
+    console.error('Erro ao atualizar onboarding:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -153,6 +199,14 @@ router.put('/onboarding/:id/steps/:stepId', authenticateToken, async (req, res) 
           actualEndDate: new Date()
         }
       });
+    } else {
+      await prisma.customerOnboarding.update({
+        where: { id },
+        data: {
+          status: completedSteps.length > 0 ? 'IN_PROGRESS' : 'PENDING',
+          actualEndDate: null
+        }
+      });
     }
 
     res.json(step);
@@ -185,7 +239,7 @@ router.get('/support', authenticateToken, async (req, res) => {
         where,
         include: {
           company: {
-            select: { id: true, name: true, document: true }
+            select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
           },
           assignedTo: {
             select: { id: true, name: true, email: true }
@@ -219,7 +273,7 @@ router.get('/support', authenticateToken, async (req, res) => {
 // Criar ticket
 router.post('/support', authenticateToken, async (req, res) => {
   try {
-    const { title, description, priority, category, companyId } = req.body;
+    const { title, description, priority, category, companyId, assignedToId } = req.body;
 
     if (!title || !description || !companyId) {
       return res.status(400).json({ 
@@ -258,12 +312,12 @@ router.post('/support', authenticateToken, async (req, res) => {
         priority: priority || 'MEDIUM',
         category,
         companyId,
-        assignedToId: req.user.userId,
+        assignedToId: assignedToId || req.user.userId,
         slaDeadline
       },
       include: {
         company: {
-          select: { id: true, name: true, document: true }
+          select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
         },
         assignedTo: {
           select: { id: true, name: true, email: true }
@@ -274,6 +328,50 @@ router.post('/support', authenticateToken, async (req, res) => {
     res.status(201).json(ticket);
   } catch (error) {
     console.error('Erro ao criar ticket:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Atualizar ticket
+router.put('/support/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, priority, category, status, assignedToId } = req.body;
+
+    const current = await prisma.supportTicket.findUnique({ where: { id } });
+    if (!current) {
+      return res.status(404).json({ error: 'Ticket não encontrado' });
+    }
+
+    if (req.user.role === 'SELLER' && current.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const data = {};
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (priority !== undefined) data.priority = priority;
+    if (category !== undefined) data.category = category;
+    if (assignedToId !== undefined) data.assignedToId = assignedToId || null;
+    if (status !== undefined) {
+      data.status = status;
+      if (['RESOLVED', 'CLOSED'].includes(status)) data.resolvedAt = new Date();
+      if (!['RESOLVED', 'CLOSED'].includes(status)) data.resolvedAt = null;
+    }
+
+    const ticket = await prisma.supportTicket.update({
+      where: { id },
+      data,
+      include: {
+        company: { select: { id: true, name: true, document: true, clientType: true, churnRisk: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
+        _count: { select: { responses: true } }
+      }
+    });
+
+    res.json(ticket);
+  } catch (error) {
+    console.error('Erro ao atualizar ticket:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -302,6 +400,11 @@ router.post('/support/:id/responses', authenticateToken, async (req, res) => {
       }
     });
 
+    await prisma.supportTicket.update({
+      where: { id },
+      data: { status: isInternal ? undefined : 'IN_PROGRESS' }
+    });
+
     res.status(201).json(response);
   } catch (error) {
     console.error('Erro ao adicionar resposta:', error);
@@ -326,7 +429,7 @@ router.get('/nps', authenticateToken, async (req, res) => {
         where,
         include: {
           company: {
-            select: { id: true, name: true, document: true }
+            select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
           },
           contract: {
             select: { id: true, number: true, title: true }
@@ -366,11 +469,13 @@ router.post('/nps', authenticateToken, async (req, res) => {
     const survey = await prisma.nPSSurvey.create({
       data: {
         companyId,
-        contractId
+        contractId: contractId || null,
+        status: 'SENT',
+        sentAt: new Date()
       },
       include: {
         company: {
-          select: { id: true, name: true, document: true }
+          select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
         },
         contract: {
           select: { id: true, number: true, title: true }
@@ -402,6 +507,10 @@ router.put('/nps/:id/respond', async (req, res) => {
         feedback,
         status: 'RESPONDED',
         respondedAt: new Date()
+      },
+      include: {
+        company: { select: { id: true, name: true, document: true, clientType: true, churnRisk: true } },
+        contract: { select: { id: true, number: true, title: true } }
       }
     });
 
@@ -462,7 +571,7 @@ router.put('/churn-alerts/:id/resolve', authenticateToken, async (req, res) => {
       },
       include: {
         company: {
-          select: { id: true, name: true, document: true, churnRisk: true }
+          select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
         },
         assignedTo: {
           select: { id: true, name: true, email: true }
@@ -503,7 +612,7 @@ router.get('/churn-alerts', authenticateToken, async (req, res) => {
         where,
         include: {
           company: {
-            select: { id: true, name: true, document: true, churnRisk: true }
+            select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
           },
           assignedTo: {
             select: { id: true, name: true, email: true }
@@ -534,7 +643,7 @@ router.get('/churn-alerts', authenticateToken, async (req, res) => {
 // Processar detecção de churn
 router.post('/churn-alerts/detect', authenticateToken, async (req, res) => {
   try {
-    if (!['ADMIN', 'MANAGER'].includes(req.user.role)) {
+    if (!['MASTER', 'ADMIN', 'MANAGER'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -645,12 +754,14 @@ router.post('/churn-alerts/detect', authenticateToken, async (req, res) => {
               companyId: company.id,
               riskLevel,
               reasons,
-              score: churnScore
+              score: churnScore,
+              assignedToId: req.user.userId
             },
             include: {
               company: {
-                select: { id: true, name: true, document: true }
-              }
+                select: { id: true, name: true, document: true, clientType: true, churnRisk: true }
+              },
+              assignedTo: { select: { id: true, name: true, email: true } }
             }
           });
 
