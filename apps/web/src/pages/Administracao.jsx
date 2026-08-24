@@ -194,6 +194,16 @@ const ROLE_POLICY_ITEMS = [
     key: 'strategicReports',
     label: 'Relatórios Estratégicos',
     description: 'Análises, desempenho e inteligência comercial.'
+  },
+  {
+    key: 'management',
+    label: 'Gestão',
+    description: 'Projetos, kickoff, fases, acompanhamentos e painéis operacionais.'
+  },
+  {
+    key: 'automation',
+    label: 'Automações',
+    description: 'Workflows, integrações e execução automatizada de processos.'
   }
 ];
 
@@ -206,7 +216,9 @@ const ROLE_POLICY_MATRIX = {
     ownOpportunitiesOnly: true,
     manufacturerRegistry: true,
     documentation: true,
-    strategicReports: true
+    strategicReports: true,
+    management: false,
+    automation: false
   },
   PRE_SALES: {
     dashboard: true,
@@ -216,7 +228,9 @@ const ROLE_POLICY_MATRIX = {
     ownOpportunitiesOnly: true,
     manufacturerRegistry: false,
     documentation: false,
-    strategicReports: false
+    strategicReports: false,
+    management: false,
+    automation: false
   },
   SELLER: {
     dashboard: true,
@@ -226,7 +240,9 @@ const ROLE_POLICY_MATRIX = {
     ownOpportunitiesOnly: true,
     manufacturerRegistry: true,
     documentation: true,
-    strategicReports: true
+    strategicReports: true,
+    management: false,
+    automation: false
   },
   MANAGER: {
     dashboard: true,
@@ -236,7 +252,9 @@ const ROLE_POLICY_MATRIX = {
     ownOpportunitiesOnly: false,
     manufacturerRegistry: true,
     documentation: true,
-    strategicReports: true
+    strategicReports: true,
+    management: true,
+    automation: true
   },
   ADMIN: {
     dashboard: true,
@@ -246,7 +264,9 @@ const ROLE_POLICY_MATRIX = {
     ownOpportunitiesOnly: false,
     manufacturerRegistry: true,
     documentation: true,
-    strategicReports: true
+    strategicReports: true,
+    management: true,
+    automation: true
   },
   MASTER: {
     dashboard: true,
@@ -256,7 +276,9 @@ const ROLE_POLICY_MATRIX = {
     ownOpportunitiesOnly: false,
     manufacturerRegistry: true,
     documentation: true,
-    strategicReports: true
+    strategicReports: true,
+    management: true,
+    automation: true
   }
 };
 

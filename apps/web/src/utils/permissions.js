@@ -48,6 +48,16 @@ export const ROLE_POLICY_MODULES = [
     key: 'strategicReports',
     label: 'Relatórios Estratégicos',
     description: 'Análises, desempenho e inteligência comercial.'
+  },
+  {
+    key: 'management',
+    label: 'Gestão',
+    description: 'Projetos, kickoff, fases, acompanhamentos e painéis operacionais.'
+  },
+  {
+    key: 'automation',
+    label: 'Automações',
+    description: 'Workflows, integrações e execução automatizada de processos.'
   }
 ];
 
