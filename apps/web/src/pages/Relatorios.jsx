@@ -1042,19 +1042,19 @@ export default function Relatorios() {
         </>
       )}
 
-      <GradientCard gradient="indigo" className="p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-          <div className="max-w-xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.35)] bg-[rgb(var(--crm-accent-rgb)_/_0.12)] px-3 py-1 text-xs font-bold uppercase text-[rgb(var(--crm-accent-rgb))]">
+      <GradientCard gradient="indigo" className="p-5 md:p-6">
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,0.95fr)_minmax(640px,1.35fr)] gap-5 2xl:items-center">
+          <div className="min-w-0">
+            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.35)] bg-[rgb(var(--crm-accent-rgb)_/_0.12)] px-3 py-1 text-xs font-bold uppercase text-[rgb(var(--crm-accent-rgb))]">
               <selectedReport.icon className="w-3.5 h-3.5" />
-              Relatório {selectedReport.label}
+              <span className="truncate">Relatório {selectedReport.label}</span>
             </div>
-            <h3 className="mt-3 text-2xl font-black text-[var(--crm-ink)]">{selectedReport.description}</h3>
+            <h3 className="mt-3 text-xl md:text-2xl font-black text-[var(--crm-ink)] leading-tight">{selectedReport.description}</h3>
             <p className="mt-2 text-sm text-[var(--crm-muted)]">
               Os indicadores abaixo mudam conforme o tipo selecionado e usam os filtros aplicados no painel.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 flex-1">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3 min-w-0">
             {(reportHighlights[filters.reportType] || reportHighlights.executive).map((item) => (
               <Insight key={item.title} {...item} />
             ))}
@@ -1506,10 +1506,12 @@ const Insight = ({ title, value, detail, tone = "slate" }) => {
   }[tone] || "text-[var(--crm-ink)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.62)] border-[color:var(--crm-border)]";
 
   return (
-    <div className={`rounded-2xl border p-4 ${toneClass}`}>
-      <div className="text-xs font-bold uppercase tracking-wide opacity-80">{title}</div>
-      <div className="mt-1 text-2xl font-black">{value}</div>
-      <div className="mt-1 text-xs opacity-80">{detail}</div>
+    <div className={`min-w-0 rounded-2xl border p-4 ${toneClass}`}>
+      <div className="text-xs font-bold uppercase tracking-wide opacity-80 break-words">{title}</div>
+      <div className="mt-2 min-w-0 text-[clamp(1.25rem,1.55vw,1.85rem)] font-black leading-tight break-words tabular-nums">
+        {value}
+      </div>
+      <div className="mt-2 text-xs leading-snug opacity-80 break-words">{detail}</div>
     </div>
   );
 };
