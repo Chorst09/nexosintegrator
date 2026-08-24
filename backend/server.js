@@ -32,6 +32,8 @@ const productsRoutes = require('./api/products');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+app.set('trust proxy', 1);
+
 // Middlewares
 app.use(helmet({
   contentSecurityPolicy: false,
