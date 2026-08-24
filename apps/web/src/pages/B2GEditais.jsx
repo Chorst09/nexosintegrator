@@ -2074,10 +2074,10 @@ export default function B2GEditais() {
 
   const dashboardProjectionBars = useMemo(
     () => [
-      { key: 'open', label: 'Em aberto', value: dashboardTotals.openValue, color: 'bg-[#37c6df]' },
-      { key: 'won', label: 'Ganhas', value: dashboardTotals.wonValue, color: 'bg-[#36d483]' },
-      { key: 'lost', label: 'Perdidas', value: dashboardTotals.lostValue, color: 'bg-[#f3ab1c]' },
-      { key: 'proj', label: 'Projeção', value: dashboardTotals.projectedValue, color: 'bg-[#9d5eff]' }
+      { key: 'open', label: 'Em aberto', value: dashboardTotals.openValue, color: '#37c6df' },
+      { key: 'won', label: 'Ganhas', value: dashboardTotals.wonValue, color: '#36d483' },
+      { key: 'lost', label: 'Perdidas', value: dashboardTotals.lostValue, color: '#f3ab1c' },
+      { key: 'proj', label: 'Projeção', value: dashboardTotals.projectedValue, color: '#9d5eff' }
     ],
     [dashboardTotals]
   );
@@ -5113,6 +5113,75 @@ export default function B2GEditais() {
       tone: 'blue'
     }] : [];
     const stageChartRows = dashboardStageValueRows.filter((row) => Number(row.value) > 0).slice(0, 8);
+    const b2gOpportunityCharts = (() => {
+      const rows = dashboardTemperatureRows;
+      const byModality = new Map();
+      const byOrganization = new Map();
+      const byStage = new Map();
+      const deadlineBuckets = [
+        { label: 'Vencidos', min: Number.NEGATIVE_INFINITY, max: -1, count: 0, value: 0, color: '#f43f5e' },
+        { label: '0-7d', min: 0, max: 7, count: 0, value: 0, color: '#f59e0b' },
+        { label: '8-15d', min: 8, max: 15, count: 0, value: 0, color: '#38bdf8' },
+        { label: '16-30d', min: 16, max: 30, count: 0, value: 0, color: '#2dd4bf' },
+        { label: '+30d', min: 31, max: Number.POSITIVE_INFINITY, count: 0, value: 0, color: '#818cf8' }
+      ];
+
+      rows.forEach((item) => {
+        const modality = item.modality || item.type || item.noticeType || 'Não informado';
+        const organization = item.__organization || 'Órgão não informado';
+        const stage = item.__stageLabel || 'Análise';
+        const weightedValue = item.__value * (item.__probability / 100);
+
+        const modalityRow = byModality.get(modality) || { label: modality, count: 0, value: 0, weightedValue: 0 };
+        modalityRow.count += 1;
+        modalityRow.value += item.__value;
+        modalityRow.weightedValue += weightedValue;
+        byModality.set(modality, modalityRow);
+
+        const organizationRow = byOrganization.get(organization) || { label: organization, count: 0, value: 0, weightedValue: 0 };
+        organizationRow.count += 1;
+        organizationRow.value += item.__value;
+        organizationRow.weightedValue += weightedValue;
+        byOrganization.set(organization, organizationRow);
+
+        const stageRow = byStage.get(stage) || { label: stage, count: 0, value: 0, weightedValue: 0 };
+        stageRow.count += 1;
+        stageRow.value += item.__value;
+        stageRow.weightedValue += weightedValue;
+        byStage.set(stage, stageRow);
+
+        const dueTimestamp = toTimestamp(item.proposalDueDate || item.openingDate || item.dueDate);
+        if (dueTimestamp > 0) {
+          const daysToDue = Math.ceil((dueTimestamp - Date.now()) / (24 * 60 * 60 * 1000));
+          const bucket = deadlineBuckets.find((entry) => daysToDue >= entry.min && daysToDue <= entry.max);
+          if (bucket) {
+            bucket.count += 1;
+            bucket.value += item.__value;
+          }
+        }
+      });
+
+      const modalityRows = Array.from(byModality.values())
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6);
+      const organizationRows = Array.from(byOrganization.values())
+        .sort((a, b) => b.weightedValue - a.weightedValue)
+        .slice(0, 6);
+      const stageRows = Array.from(byStage.values())
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8);
+      const criticalRows = rows
+        .filter((item) => !['GANHO', 'PERDIDO', 'NO_GO'].includes(item.__columnId))
+        .slice()
+        .sort((a, b) => {
+          const aDue = toTimestamp(a.proposalDueDate || a.openingDate || a.dueDate) || Number.MAX_SAFE_INTEGER;
+          const bDue = toTimestamp(b.proposalDueDate || b.openingDate || b.dueDate) || Number.MAX_SAFE_INTEGER;
+          return aDue - bDue || b.__value - a.__value;
+        })
+        .slice(0, 5);
+
+      return { modalityRows, organizationRows, stageRows, deadlineBuckets, criticalRows };
+    })();
 
     return (
       <div
@@ -5204,6 +5273,126 @@ export default function B2GEditais() {
             />
           )}
         />
+
+        <section className="mt-5 grid gap-4 px-2 pb-6 xl:grid-cols-2">
+          <DashboardAdvancedChart
+            title="Valor por Modalidade"
+            subtitle="Ranking das modalidades com maior pipeline filtrado"
+            icon={<Gavel className="h-4 w-4" />}
+            type="bar"
+            colorTheme="cool"
+            data={{
+              labels: b2gOpportunityCharts.modalityRows.map((row) => row.label),
+              datasets: [
+                {
+                  label: 'Valor estimado',
+                  data: b2gOpportunityCharts.modalityRows.map((row) => row.value),
+                  backgroundColor: 'rgba(56, 189, 248, 0.76)',
+                  borderRadius: 8
+                },
+                {
+                  label: 'Valor ponderado',
+                  data: b2gOpportunityCharts.modalityRows.map((row) => row.weightedValue),
+                  backgroundColor: 'rgba(45, 212, 191, 0.76)',
+                  borderRadius: 8
+                }
+              ]
+            }}
+            isEmpty={b2gOpportunityCharts.modalityRows.length === 0}
+          />
+
+          <DashboardAdvancedChart
+            title="Órgãos com Maior Forecast"
+            subtitle="Valor ponderado por probabilidade de vitória"
+            icon={<Landmark className="h-4 w-4" />}
+            type="bar"
+            colorTheme="blue"
+            data={{
+              labels: b2gOpportunityCharts.organizationRows.map((row) => row.label),
+              datasets: [
+                {
+                  label: 'Forecast',
+                  data: b2gOpportunityCharts.organizationRows.map((row) => row.weightedValue),
+                  backgroundColor: 'rgba(129, 140, 248, 0.76)',
+                  borderRadius: 8
+                }
+              ]
+            }}
+            isEmpty={b2gOpportunityCharts.organizationRows.length === 0}
+          />
+        </section>
+
+        <section className="grid gap-4 px-2 pb-8 xl:grid-cols-[1fr_1fr_1.1fr]">
+          <DashboardAdvancedChart
+            title="Valor por Fase"
+            subtitle="Pipeline nominal agrupado pela fase B2G"
+            icon={<BarChart3 className="h-4 w-4" />}
+            type="doughnut"
+            colorTheme="multi"
+            data={{
+              labels: b2gOpportunityCharts.stageRows.map((row) => row.label),
+              datasets: [
+                {
+                  data: b2gOpportunityCharts.stageRows.map((row) => row.value),
+                  backgroundColor: ['#38bdf8', '#2dd4bf', '#60a5fa', '#f59e0b', '#a78bfa', '#f87171', '#34d399', '#fb7185'],
+                  borderColor: '#0e2648',
+                  borderWidth: 2
+                }
+              ]
+            }}
+            isEmpty={b2gOpportunityCharts.stageRows.length === 0}
+          />
+
+          <DashboardAdvancedChart
+            title="Risco de Prazo"
+            subtitle="Editais por janela até abertura ou entrega"
+            icon={<Clock3 className="h-4 w-4" />}
+            type="bar"
+            colorTheme="warning"
+            data={{
+              labels: b2gOpportunityCharts.deadlineBuckets.map((row) => row.label),
+              datasets: [
+                {
+                  label: 'Editais',
+                  data: b2gOpportunityCharts.deadlineBuckets.map((row) => row.count),
+                  backgroundColor: b2gOpportunityCharts.deadlineBuckets.map((row) => row.color),
+                  borderRadius: 8
+                }
+              ]
+            }}
+            isEmpty={!b2gOpportunityCharts.deadlineBuckets.some((row) => row.count > 0)}
+          />
+
+          <div className="dashboard-card p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200">Prioridade B2G</h3>
+                <p className="mt-1 text-xs text-slate-500">Prazos mais próximos com maior impacto comercial</p>
+              </div>
+              <AlertTriangle className="h-4 w-4 text-slate-400" />
+            </div>
+            <div className="space-y-2">
+              {b2gOpportunityCharts.criticalRows.length > 0 ? b2gOpportunityCharts.criticalRows.map((item, index) => (
+                <div key={item.id || `critical-b2g-${index}`} className="rounded-lg border border-slate-500/20 bg-slate-500/10 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-100">{item.__title}</p>
+                      <p className="mt-1 text-xs text-slate-400">{item.__organization} • prazo {formatDateFlexible(item.proposalDueDate || item.openingDate || item.dueDate)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-cyan-200">{formatCurrencyNoCents(item.__value)}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">{item.__probability}%</p>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="grid min-h-[120px] place-items-center rounded-lg border border-dashed border-slate-500/25 text-sm text-slate-500">
+                  Nenhuma prioridade crítica no filtro atual.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     );
   };

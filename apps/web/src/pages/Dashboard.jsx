@@ -98,6 +98,11 @@ const PERIOD_OPTIONS = [
 const toCount = (item) => Number(item?._count?.stage ?? item?.count ?? item?.deals ?? 0);
 const toValue = (item) => Number(item?._sum?.value ?? item?.value ?? item?.revenue ?? item?.forecast ?? 0);
 const hasPositiveValue = (value) => Number(value || 0) > 0;
+const toValidDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
 const avg = (items) => {
   const values = items.map((item) => Number(item.days || 0)).filter((value) => value > 0);
   if (values.length === 0) return 0;
@@ -631,6 +636,78 @@ export default function Dashboard() {
   const forecastByMonth = monthlyLabels.map((_, index) => Number(charts.forecast[index]?.forecast || 0));
   const sellerRows = charts.performanceByUser.slice(0, 6);
   const sellerRevenueTotal = sellerRows.reduce((sum, row) => sum + Number(row.value || 0), 0);
+  const opportunityInsights = useMemo(() => {
+    const rows = filteredOpportunities.map((item) => {
+      const stage = String(item?.stage || 'LEAD').toUpperCase();
+      const probability = Math.min(Math.max(Number(item?.probability || 0), 0), 100);
+      const value = Number(item?.value || 0);
+      const createdAt = toValidDate(item?.createdAt || item?.updatedAt);
+      const ageDays = createdAt
+        ? Math.max(Math.floor((Date.now() - createdAt.getTime()) / (24 * 60 * 60 * 1000)), 0)
+        : 0;
+      return {
+        ...item,
+        __stage: stage,
+        __stageLabel: STAGE_LABELS[stage] || stage,
+        __probability: probability,
+        __value: Number.isFinite(value) ? value : 0,
+        __weightedValue: Number.isFinite(value) ? value * (probability / 100) : 0,
+        __ageDays: ageDays
+      };
+    });
+
+    const openRows = rows.filter((item) => !['WON', 'LOST'].includes(item.__stage));
+    const stageOrder = ['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'];
+    const stageRows = stageOrder
+      .map((stage) => {
+        const stageItems = rows.filter((item) => item.__stage === stage);
+        return {
+          stage,
+          label: STAGE_LABELS[stage] || stage,
+          count: stageItems.length,
+          value: stageItems.reduce((sum, item) => sum + item.__value, 0),
+          weightedValue: stageItems.reduce((sum, item) => sum + item.__weightedValue, 0)
+        };
+      })
+      .filter((item) => item.count > 0 || item.value > 0);
+
+    const temperatureRows = [
+      { label: '0%', min: 0, max: 0, color: '#f97316' },
+      { label: '25%', min: 1, max: 25, color: '#f43f5e' },
+      { label: '50%', min: 26, max: 50, color: '#f59e0b' },
+      { label: '75%', min: 51, max: 75, color: '#38bdf8' },
+      { label: '100%', min: 76, max: 100, color: '#22c55e' }
+    ].map((band) => {
+      const bandRows = rows.filter((item) => item.__probability >= band.min && item.__probability <= band.max);
+      return {
+        ...band,
+        count: bandRows.length,
+        value: bandRows.reduce((sum, item) => sum + item.__value, 0)
+      };
+    });
+
+    const agingRows = [
+      { label: '0-15d', min: 0, max: 15 },
+      { label: '16-30d', min: 16, max: 30 },
+      { label: '31-60d', min: 31, max: 60 },
+      { label: '61-90d', min: 61, max: 90 },
+      { label: '+90d', min: 91, max: Number.POSITIVE_INFINITY }
+    ].map((bucket) => {
+      const bucketRows = openRows.filter((item) => item.__ageDays >= bucket.min && item.__ageDays <= bucket.max);
+      return {
+        ...bucket,
+        count: bucketRows.length,
+        value: bucketRows.reduce((sum, item) => sum + item.__value, 0)
+      };
+    });
+
+    const riskRows = openRows
+      .slice()
+      .sort((a, b) => (b.__ageDays - a.__ageDays) || (a.__probability - b.__probability) || (b.__value - a.__value))
+      .slice(0, 5);
+
+    return { stageRows, temperatureRows, agingRows, riskRows };
+  }, [filteredOpportunities]);
 
   if (true) {
     return (
@@ -736,6 +813,124 @@ export default function Dashboard() {
             />
           )}
         />
+
+        <section className="mt-5 grid gap-4 px-2 pb-6 xl:grid-cols-2">
+          <DashboardAdvancedChart
+            title="Valor por Etapa"
+            subtitle="Pipeline nominal e forecast ponderado por probabilidade"
+            icon={<BarChart3 className="h-4 w-4" />}
+            type="bar"
+            colorTheme="cool"
+            data={{
+              labels: opportunityInsights.stageRows.map((row) => row.label),
+              datasets: [
+                {
+                  label: 'Pipeline',
+                  data: opportunityInsights.stageRows.map((row) => row.value),
+                  backgroundColor: 'rgba(56, 189, 248, 0.74)',
+                  borderRadius: 8
+                },
+                {
+                  label: 'Forecast ponderado',
+                  data: opportunityInsights.stageRows.map((row) => row.weightedValue),
+                  backgroundColor: 'rgba(45, 212, 191, 0.74)',
+                  borderRadius: 8
+                }
+              ]
+            }}
+            isEmpty={opportunityInsights.stageRows.length === 0}
+          />
+
+          <DashboardAdvancedChart
+            title="Temperatura das Oportunidades"
+            subtitle="Volume e valor por probabilidade de fechamento"
+            icon={<Target className="h-4 w-4" />}
+            type="bar"
+            colorTheme="warm"
+            data={{
+              labels: opportunityInsights.temperatureRows.map((row) => row.label),
+              datasets: [
+                {
+                  label: 'Oportunidades',
+                  data: opportunityInsights.temperatureRows.map((row) => row.count),
+                  backgroundColor: opportunityInsights.temperatureRows.map((row) => row.color),
+                  borderRadius: 8
+                }
+              ]
+            }}
+            isEmpty={!opportunityInsights.temperatureRows.some((row) => row.count > 0)}
+          />
+        </section>
+
+        <section className="grid gap-4 px-2 pb-8 xl:grid-cols-[1fr_1fr_1.1fr]">
+          <DashboardAdvancedChart
+            title="Envelhecimento do Pipeline"
+            subtitle="Oportunidades abertas por faixa de idade"
+            icon={<Clock3 className="h-4 w-4" />}
+            type="bar"
+            colorTheme="blue"
+            data={{
+              labels: opportunityInsights.agingRows.map((row) => row.label),
+              datasets: [
+                {
+                  label: 'Em aberto',
+                  data: opportunityInsights.agingRows.map((row) => row.count),
+                  backgroundColor: 'rgba(96, 165, 250, 0.78)',
+                  borderRadius: 8
+                }
+              ]
+            }}
+            isEmpty={!opportunityInsights.agingRows.some((row) => row.count > 0)}
+          />
+
+          <DashboardAdvancedChart
+            title="Mix de Valor por Temperatura"
+            subtitle="Valor nominal agrupado por probabilidade"
+            icon={<PieChart className="h-4 w-4" />}
+            type="doughnut"
+            colorTheme="multi"
+            data={{
+              labels: opportunityInsights.temperatureRows.map((row) => row.label),
+              datasets: [
+                {
+                  data: opportunityInsights.temperatureRows.map((row) => row.value),
+                  backgroundColor: opportunityInsights.temperatureRows.map((row) => row.color),
+                  borderColor: '#0e2648',
+                  borderWidth: 2
+                }
+              ]
+            }}
+            isEmpty={!opportunityInsights.temperatureRows.some((row) => row.value > 0)}
+          />
+
+          <div className="dashboard-card p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200">Oportunidades Críticas</h3>
+                <p className="mt-1 text-xs text-slate-500">Mais antigas em aberto e com baixa temperatura</p>
+              </div>
+              <AlertTriangle className="h-4 w-4 text-slate-400" />
+            </div>
+            <div className="space-y-2">
+              {opportunityInsights.riskRows.length > 0 ? opportunityInsights.riskRows.map((item) => (
+                <div key={item.id || `${item.__title}-${item.__ageDays}`} className="rounded-lg border border-slate-500/20 bg-slate-500/10 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-100">{item.title || item.name || item.company?.name || 'Oportunidade sem título'}</p>
+                      <p className="mt-1 text-xs text-slate-400">{item.__stageLabel} • {item.__ageDays} dias aberta</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-cyan-200">{formatCurrencyNoCents(item.__value)}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">{item.__probability}%</p>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <EmptyState compact message="Nenhuma oportunidade crítica" />
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
