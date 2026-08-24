@@ -24,10 +24,12 @@ import {
   Download,
   FileText,
   Filter,
+  FolderKanban,
   Gauge,
   Layers3,
   PieChart,
   RefreshCcw,
+  Rocket,
   Search,
   SlidersHorizontal,
   Target,
@@ -62,6 +64,8 @@ const REPORT_TYPES = [
   { id: "clients", label: "Clientes", icon: Building2, description: "Segmentos, tipos, lead score e base ativa" },
   { id: "activities", label: "Atividades", icon: Activity, description: "Pendências, atrasos e produtividade" },
   { id: "contracts", label: "Contratos", icon: FileText, description: "Receita contratada, vencimentos e status" },
+  { id: "projects", label: "Projetos", icon: FolderKanban, description: "Status, saúde, fases, orçamento e entregas" },
+  { id: "kickoff", label: "Kickoff", icon: Rocket, description: "Reuniões internas, externas, agenda e ações" },
   { id: "losses", label: "Perdas", icon: TrendingDown, description: "Motivos, gargalos e oportunidades perdidas" }
 ];
 
@@ -75,6 +79,46 @@ const STAGE_LABELS = {
   NEGOTIATION: "Negociação",
   WON: "Ganha",
   LOST: "Perdida"
+};
+
+const PROJECT_PHASE_ORDER = ["SETUP", "KICKOFF_INTERNO", "KICKOFF_EXTERNO", "EXECUCAO", "MONITORAMENTO", "ENCERRAMENTO"];
+const PROJECT_PHASE_LABELS = {
+  SETUP: "Setup",
+  KICKOFF_INTERNO: "Kickoff interno",
+  KICKOFF_EXTERNO: "Kickoff externo",
+  EXECUCAO: "Execução",
+  MONITORAMENTO: "Monitoramento",
+  ENCERRAMENTO: "Encerramento"
+};
+
+const PROJECT_STATUS_LABELS = {
+  PLANEJADO: "Planejado",
+  EM_ANDAMENTO: "Em andamento",
+  PAUSADO: "Pausado",
+  CONCLUIDO: "Concluído",
+  CANCELADO: "Cancelado"
+};
+
+const KICKOFF_PHASE_ORDER = [
+  "ENTENDIMENTO_OPORTUNIDADE",
+  "APRESENTACAO_PROPOSTA",
+  "FECHAMENTO_PROJETO",
+  "ALINHAMENTO_INTERNO",
+  "ALINHAMENTO_EXTERNO"
+];
+const KICKOFF_PHASE_LABELS = {
+  ENTENDIMENTO_OPORTUNIDADE: "Entendimento",
+  APRESENTACAO_PROPOSTA: "Apresentação",
+  FECHAMENTO_PROJETO: "Fechamento",
+  ALINHAMENTO_INTERNO: "Kickoff interno",
+  ALINHAMENTO_EXTERNO: "Kickoff externo"
+};
+
+const KICKOFF_STATUS_LABELS = {
+  AGENDADA: "Agendada",
+  REALIZADA: "Realizada",
+  CANCELADA: "Cancelada",
+  REAGENDADA: "Reagendada"
 };
 
 const PERIODS = [
@@ -135,6 +179,8 @@ export default function Relatorios() {
     companies: [],
     activities: [],
     contracts: [],
+    projects: [],
+    kickoffMeetings: [],
     users: []
   });
   const [loading, setLoading] = useState(true);
@@ -159,12 +205,23 @@ export default function Relatorios() {
     setError("");
     try {
       const headers = getAuthHeaders();
-      const [dashboardRes, opportunitiesRes, companiesRes, activitiesRes, contractsRes, usersRes] = await Promise.all([
+      const [
+        dashboardRes,
+        opportunitiesRes,
+        companiesRes,
+        activitiesRes,
+        contractsRes,
+        projectsRes,
+        kickoffRes,
+        usersRes
+      ] = await Promise.all([
         axios.get(buildApiUrl("/dashboard?type=executive&period=12"), { headers }),
         axios.get(buildApiUrl("/opportunities"), { headers }),
         axios.get(buildApiUrl("/companies"), { headers }),
         axios.get(buildApiUrl("/activities"), { headers }),
         axios.get(buildApiUrl("/contracts?limit=500"), { headers }),
+        axios.get(buildApiUrl("/projetos?limit=500"), { headers }),
+        axios.get(buildApiUrl("/kickoff/meetings?limit=500"), { headers }),
         axios.get(buildApiUrl("/users"), { headers })
       ]);
 
@@ -174,6 +231,8 @@ export default function Relatorios() {
         companies: Array.isArray(companiesRes.data) ? companiesRes.data : [],
         activities: Array.isArray(activitiesRes.data) ? activitiesRes.data : [],
         contracts: Array.isArray(contractsRes.data) ? contractsRes.data : [],
+        projects: Array.isArray(projectsRes.data?.projects) ? projectsRes.data.projects : [],
+        kickoffMeetings: Array.isArray(kickoffRes.data?.meetings) ? kickoffRes.data.meetings : [],
         users: Array.isArray(usersRes.data) ? usersRes.data : []
       });
     } catch (loadError) {
@@ -248,6 +307,31 @@ export default function Relatorios() {
       return true;
     });
 
+    const projects = rawData.projects.filter((item) => {
+      const projectType = item.type || item.company?.clientType;
+      const dateBasis = item.actualEndDate || item.plannedEndDate || item.updatedAt || item.createdAt;
+
+      if (!isInRange(dateBasis, startDate)) return false;
+      if (filters.clientType !== "all" && projectType !== filters.clientType) return false;
+      if (filters.stage !== "all" && item.phase !== filters.stage) return false;
+      if (filters.ownerId !== "all" && item.projectManagerId !== filters.ownerId) return false;
+      if (filters.status !== "all" && item.status !== filters.status) return false;
+      if (minValue !== null && numberValue(item.budget) < minValue) return false;
+      if (search && !`${item.number || ""} ${item.name || ""} ${item.description || ""} ${item.company?.name || ""}`.toLowerCase().includes(search)) return false;
+      return true;
+    });
+
+    const kickoffMeetings = rawData.kickoffMeetings.filter((item) => {
+      if (!isInRange(item.scheduledDate || item.updatedAt || item.createdAt, startDate)) return false;
+      if (filters.clientType !== "all" && (item.company?.clientType || item.opportunity?.projectClientType) !== filters.clientType) return false;
+      if (filters.stage !== "all" && item.phase !== filters.stage) return false;
+      if (filters.ownerId !== "all" && item.ownerId !== filters.ownerId) return false;
+      if (filters.status !== "all" && item.status !== filters.status) return false;
+      if (minValue !== null && numberValue(item.opportunity?.value) < minValue) return false;
+      if (search && !`${item.number || ""} ${item.title || ""} ${item.company?.name || ""} ${item.opportunity?.title || ""}`.toLowerCase().includes(search)) return false;
+      return true;
+    });
+
     const openOpps = opportunities.filter((item) => OPEN_STAGES.has(item.stage));
     const wonOpps = opportunities.filter((item) => item.stage === "WON");
     const lostOpps = opportunities.filter((item) => item.stage === "LOST");
@@ -272,6 +356,28 @@ export default function Relatorios() {
       return diffDays >= 0 && diffDays <= 90;
     });
     const contractValue = activeContracts.reduce((sum, item) => sum + numberValue(item.value), 0);
+    const activeProjects = projects.filter((item) => !["CONCLUIDO", "CANCELADO"].includes(item.status));
+    const completedProjects = projects.filter((item) => item.status === "CONCLUIDO");
+    const delayedProjects = activeProjects.filter((item) => {
+      const end = dateValue(item.plannedEndDate);
+      return end && end < new Date();
+    });
+    const projectBudget = projects.reduce((sum, item) => sum + numberValue(item.budget), 0);
+    const avgProjectProgress = projects.length
+      ? projects.reduce((sum, item) => sum + numberValue(item.progressPercent), 0) / projects.length
+      : 0;
+    const avgProjectHealth = projects.length
+      ? projects.reduce((sum, item) => sum + numberValue(item.healthScore), 0) / projects.length
+      : 0;
+    const completedKickoffs = kickoffMeetings.filter((item) => item.status === "REALIZADA");
+    const scheduledKickoffs = kickoffMeetings.filter((item) => ["AGENDADA", "REAGENDADA"].includes(item.status));
+    const overdueKickoffs = scheduledKickoffs.filter((item) => {
+      const scheduled = dateValue(item.scheduledDate);
+      return scheduled && scheduled < new Date();
+    });
+    const kickoffCompletionRate = kickoffMeetings.length ? (completedKickoffs.length / kickoffMeetings.length) * 100 : 0;
+    const kickoffActionItems = kickoffMeetings.reduce((sum, item) => sum + numberValue(item._count?.actionItems), 0);
+    const kickoffParticipants = kickoffMeetings.reduce((sum, item) => sum + numberValue(item._count?.participants), 0);
 
     const byStage = STAGE_ORDER.map((stage) => {
       const rows = opportunities.filter((item) => item.stage === stage);
@@ -358,18 +464,75 @@ export default function Relatorios() {
       count: companies.filter((item) => numberValue(item.leadScore) >= band.min && numberValue(item.leadScore) <= band.max).length
     }));
 
+    const byProjectStatus = Object.keys(PROJECT_STATUS_LABELS).map((status) => {
+      const rows = projects.filter((item) => item.status === status);
+      return { status, label: PROJECT_STATUS_LABELS[status], count: rows.length };
+    }).filter((item) => item.count > 0);
+
+    const byProjectPhase = PROJECT_PHASE_ORDER.map((phase) => {
+      const rows = projects.filter((item) => item.phase === phase);
+      return {
+        phase,
+        label: PROJECT_PHASE_LABELS[phase] || phase,
+        count: rows.length,
+        budget: rows.reduce((sum, item) => sum + numberValue(item.budget), 0)
+      };
+    });
+
+    const byKickoffStatus = Object.keys(KICKOFF_STATUS_LABELS).map((status) => {
+      const rows = kickoffMeetings.filter((item) => item.status === status);
+      return { status, label: KICKOFF_STATUS_LABELS[status], count: rows.length };
+    }).filter((item) => item.count > 0);
+
+    const byKickoffPhase = KICKOFF_PHASE_ORDER.map((phase) => {
+      const rows = kickoffMeetings.filter((item) => item.phase === phase);
+      return {
+        phase,
+        label: KICKOFF_PHASE_LABELS[phase] || phase,
+        count: rows.length
+      };
+    });
+
+    const projectsByMonth = [...projects.reduce((map, item) => {
+      const key = monthKey(item.actualEndDate || item.plannedEndDate || item.updatedAt || item.createdAt);
+      const current = map.get(key) || { key, planned: 0, active: 0, completed: 0 };
+      if (item.status === "PLANEJADO") current.planned += 1;
+      if (item.status === "EM_ANDAMENTO") current.active += 1;
+      if (item.status === "CONCLUIDO") current.completed += 1;
+      map.set(key, current);
+      return map;
+    }, new Map()).values()].sort((a, b) => a.key.localeCompare(b.key));
+
+    const kickoffsByMonth = [...kickoffMeetings.reduce((map, item) => {
+      const key = monthKey(item.scheduledDate || item.updatedAt || item.createdAt);
+      const current = map.get(key) || { key, scheduled: 0, completed: 0, rescheduled: 0 };
+      if (item.status === "REALIZADA") current.completed += 1;
+      if (item.status === "REAGENDADA") current.rescheduled += 1;
+      if (item.status === "AGENDADA") current.scheduled += 1;
+      map.set(key, current);
+      return map;
+    }, new Map()).values()].sort((a, b) => a.key.localeCompare(b.key));
+
     return {
       startDate,
       opportunities,
       companies,
       activities,
       contracts,
+      projects,
+      kickoffMeetings,
       openOpps,
       wonOpps,
       lostOpps,
       overdueActivities,
       activeContracts,
       expiringContracts,
+      activeProjects,
+      completedProjects,
+      delayedProjects,
+      completedKickoffs,
+      scheduledKickoffs,
+      overdueKickoffs,
       kpis: {
         pipelineValue,
         weightedPipeline,
@@ -386,7 +549,21 @@ export default function Relatorios() {
         contractsCount: contracts.length,
         activeContractsCount: activeContracts.length,
         expiringContractsCount: expiringContracts.length,
-        contractValue
+        contractValue,
+        projectsCount: projects.length,
+        activeProjectsCount: activeProjects.length,
+        completedProjectsCount: completedProjects.length,
+        delayedProjectsCount: delayedProjects.length,
+        projectBudget,
+        avgProjectProgress,
+        avgProjectHealth,
+        kickoffCount: kickoffMeetings.length,
+        completedKickoffCount: completedKickoffs.length,
+        scheduledKickoffCount: scheduledKickoffs.length,
+        overdueKickoffCount: overdueKickoffs.length,
+        kickoffCompletionRate,
+        kickoffActionItems,
+        kickoffParticipants
       },
       byStage,
       byMonth,
@@ -394,7 +571,13 @@ export default function Relatorios() {
       byLoss,
       bySeller,
       byClientType,
-      leadScoreBands
+      leadScoreBands,
+      byProjectStatus,
+      byProjectPhase,
+      byKickoffStatus,
+      byKickoffPhase,
+      projectsByMonth,
+      kickoffsByMonth
     };
   }, [rawData, filters]);
 
@@ -406,7 +589,9 @@ export default function Relatorios() {
     const statuses = [...new Set([
       ...rawData.companies.map((item) => item.status).filter(Boolean),
       ...rawData.activities.map((item) => item.status).filter(Boolean),
-      ...rawData.contracts.map((item) => item.status).filter(Boolean)
+      ...rawData.contracts.map((item) => item.status).filter(Boolean),
+      ...rawData.projects.map((item) => item.status).filter(Boolean),
+      ...rawData.kickoffMeetings.map((item) => item.status).filter(Boolean)
     ])].sort();
     return { sources, owners, statuses };
   }, [rawData]);
@@ -497,7 +682,120 @@ export default function Relatorios() {
     ]
   };
 
+  const projectPhaseData = {
+    labels: analysis.byProjectPhase.map((item) => item.label),
+    datasets: [
+      {
+        label: "Projetos",
+        data: analysis.byProjectPhase.map((item) => item.count),
+        backgroundColor: ["#f97316", "#f59e0b", "#22c55e", "#18c8df", "#818cf8", "#10b981"],
+        borderRadius: 8,
+        borderSkipped: false
+      }
+    ]
+  };
+
+  const projectTimelineData = {
+    labels: analysis.projectsByMonth.map((item) => monthLabel(item.key)),
+    datasets: [
+      {
+        label: "Em andamento",
+        data: analysis.projectsByMonth.map((item) => item.active),
+        borderColor: "rgb(24, 200, 223)",
+        backgroundColor: "rgba(24, 200, 223, 0.14)",
+        borderWidth: 3,
+        fill: true,
+        tension: 0.35
+      },
+      {
+        label: "Concluídos",
+        data: analysis.projectsByMonth.map((item) => item.completed),
+        borderColor: "rgb(34, 197, 94)",
+        backgroundColor: "rgba(34, 197, 94, 0.12)",
+        borderWidth: 2,
+        fill: true,
+        tension: 0.35
+      }
+    ]
+  };
+
+  const kickoffPhaseData = {
+    labels: analysis.byKickoffPhase.map((item) => item.label),
+    datasets: [
+      {
+        label: "Reuniões",
+        data: analysis.byKickoffPhase.map((item) => item.count),
+        backgroundColor: ["#18c8df", "#818cf8", "#f59e0b", "#22c55e", "#f97316"],
+        borderRadius: 8,
+        borderSkipped: false
+      }
+    ]
+  };
+
+  const kickoffTimelineData = {
+    labels: analysis.kickoffsByMonth.map((item) => monthLabel(item.key)),
+    datasets: [
+      {
+        label: "Agendadas",
+        data: analysis.kickoffsByMonth.map((item) => item.scheduled),
+        borderColor: "rgb(249, 115, 22)",
+        backgroundColor: "rgba(249, 115, 22, 0.14)",
+        borderWidth: 3,
+        fill: true,
+        tension: 0.35
+      },
+      {
+        label: "Realizadas",
+        data: analysis.kickoffsByMonth.map((item) => item.completed),
+        borderColor: "rgb(34, 197, 94)",
+        backgroundColor: "rgba(34, 197, 94, 0.12)",
+        borderWidth: 2,
+        fill: true,
+        tension: 0.35
+      }
+    ]
+  };
+
   const exportReport = () => {
+    if (filters.reportType === "projects") {
+      downloadCsv("relatorio-gestao-projetos.csv", [
+        ["Número", "Projeto", "Cliente", "Tipo", "Fase", "Status", "Gestor", "Orçamento", "Progresso", "Saúde", "Fim previsto"],
+        ...analysis.projects.map((item) => [
+          item.number || "",
+          item.name || "",
+          item.company?.name || "",
+          item.type || "",
+          PROJECT_PHASE_LABELS[item.phase] || item.phase || "",
+          PROJECT_STATUS_LABELS[item.status] || item.status || "",
+          item.projectManager?.name || "",
+          numberValue(item.budget),
+          `${numberValue(item.progressPercent)}%`,
+          `${numberValue(item.healthScore)}%`,
+          formatDate(item.plannedEndDate)
+        ])
+      ]);
+      return;
+    }
+
+    if (filters.reportType === "kickoff") {
+      downloadCsv("relatorio-gestao-kickoff.csv", [
+        ["Número", "Reunião", "Cliente", "Oportunidade", "Fase", "Status", "Responsável", "Data", "Participantes", "Ações"],
+        ...analysis.kickoffMeetings.map((item) => [
+          item.number || "",
+          item.title || "",
+          item.company?.name || "",
+          item.opportunity?.title || "",
+          KICKOFF_PHASE_LABELS[item.phase] || item.phase || "",
+          KICKOFF_STATUS_LABELS[item.status] || item.status || "",
+          item.owner?.name || "",
+          formatDate(item.scheduledDate),
+          numberValue(item._count?.participants),
+          numberValue(item._count?.actionItems)
+        ])
+      ]);
+      return;
+    }
+
     downloadCsv(`relatorio-gestao-${filters.reportType}.csv`, [
       ["Número", "Oportunidade", "Cliente", "Tipo", "Etapa", "Responsável", "Origem", "Valor", "Probabilidade", "Previsão", "Atualizado"],
       ...analysis.opportunities.map((item) => [
@@ -554,6 +852,18 @@ export default function Relatorios() {
       { title: "Valor ativo", value: formatCurrency(analysis.kpis.contractValue), detail: "Receita contratada ativa", tone: "green" },
       { title: "Vencem em 90 dias", value: analysis.kpis.expiringContractsCount, detail: "Renovações prioritárias", tone: analysis.kpis.expiringContractsCount > 0 ? "amber" : "green" },
       { title: "Total no filtro", value: analysis.kpis.contractsCount, detail: "Contratos carregados" }
+    ],
+    projects: [
+      { title: "Projetos no filtro", value: analysis.kpis.projectsCount, detail: `${analysis.kpis.activeProjectsCount} ativos` },
+      { title: "Saúde média", value: formatPercent(analysis.kpis.avgProjectHealth), detail: "Health score médio", tone: analysis.kpis.avgProjectHealth < 70 ? "amber" : "green" },
+      { title: "Progresso médio", value: formatPercent(analysis.kpis.avgProjectProgress), detail: "Avanço consolidado das entregas" },
+      { title: "Atrasados", value: analysis.kpis.delayedProjectsCount, detail: "Fim previsto já vencido", tone: analysis.kpis.delayedProjectsCount > 0 ? "red" : "green" }
+    ],
+    kickoff: [
+      { title: "Kickoffs", value: analysis.kpis.kickoffCount, detail: `${analysis.kpis.scheduledKickoffCount} agendados ou reagendados` },
+      { title: "Realizados", value: analysis.kpis.completedKickoffCount, detail: "Reuniões concluídas", tone: "green" },
+      { title: "Taxa de realização", value: formatPercent(analysis.kpis.kickoffCompletionRate), detail: "Realizadas sobre total" },
+      { title: "Ações geradas", value: analysis.kpis.kickoffActionItems, detail: `${analysis.kpis.kickoffParticipants} participantes envolvidos`, tone: "amber" }
     ],
     losses: [
       { title: "Valor perdido", value: formatCurrency(analysis.kpis.lostValue), detail: "Soma das oportunidades perdidas", tone: analysis.kpis.lostValue > 0 ? "red" : "green" },
@@ -665,10 +975,18 @@ export default function Relatorios() {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-bold uppercase text-[var(--crm-muted)]">Etapa</span>
+              <span className="text-xs font-bold uppercase text-[var(--crm-muted)]">Etapa/Fase</span>
               <select value={filters.stage} onChange={(e) => setFilter("stage", e.target.value)} className="crm-input w-full">
                 <option value="all">Todas</option>
-                {STAGE_ORDER.map((stage) => <option key={stage} value={stage}>{STAGE_LABELS[stage]}</option>)}
+                <optgroup label="Comercial">
+                  {STAGE_ORDER.map((stage) => <option key={stage} value={stage}>{STAGE_LABELS[stage]}</option>)}
+                </optgroup>
+                <optgroup label="Projetos">
+                  {PROJECT_PHASE_ORDER.map((phase) => <option key={phase} value={phase}>{PROJECT_PHASE_LABELS[phase]}</option>)}
+                </optgroup>
+                <optgroup label="Kickoff">
+                  {KICKOFF_PHASE_ORDER.map((phase) => <option key={phase} value={phase}>{KICKOFF_PHASE_LABELS[phase]}</option>)}
+                </optgroup>
               </select>
             </label>
             <label className="space-y-1">
@@ -809,6 +1127,102 @@ export default function Relatorios() {
             </div>
           </GradientCard>
         </div>
+      )}
+
+      {activeReport === "projects" && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <AnimatedStats title="Projetos Ativos" value={analysis.kpis.activeProjectsCount} subtitle={`${analysis.kpis.projectsCount} projetos no filtro`} icon={FolderKanban} color="blue" />
+            <AnimatedStats title="Orçamento Total" value={formatCurrency(analysis.kpis.projectBudget)} subtitle="Budget consolidado" icon={Briefcase} color="orange" />
+            <AnimatedStats title="Saúde Média" value={formatPercent(analysis.kpis.avgProjectHealth)} subtitle="Health score dos projetos" icon={Gauge} color="green" />
+            <AnimatedStats title="Atrasados" value={analysis.kpis.delayedProjectsCount} subtitle="Fim previsto vencido" icon={CalendarDays} color="red" />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <GradientCard gradient="blue" className="p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)]">Projetos ao Longo do Tempo</h3>
+                  <p className="text-sm text-[var(--crm-muted)]">Andamento e conclusões por mês.</p>
+                </div>
+                <TrendingUp className="w-6 h-6 text-sky-300" />
+              </div>
+              <div className="h-80">
+                <Line data={projectTimelineData} options={chartOptions} />
+              </div>
+            </GradientCard>
+
+            <GradientCard gradient="orange" className="p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)]">Projetos por Fase</h3>
+                  <p className="text-sm text-[var(--crm-muted)]">Distribuição entre setup, kickoff, execução e encerramento.</p>
+                </div>
+                <Layers3 className="w-6 h-6 text-orange-300" />
+              </div>
+              <div className="h-80">
+                <Bar data={projectPhaseData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
+              </div>
+            </GradientCard>
+          </div>
+          <GradientCard gradient="green" className="p-6">
+            <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Status dos Projetos</h3>
+            <p className="text-sm text-[var(--crm-muted)] mb-5">Leitura rápida da carteira operacional.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+              {analysis.byProjectStatus.map((item) => (
+                <Insight key={item.status} title={item.label} value={item.count} detail="projetos" tone={item.status === "CONCLUIDO" ? "green" : item.status === "PAUSADO" ? "amber" : item.status === "CANCELADO" ? "red" : "slate"} />
+              ))}
+              {analysis.byProjectStatus.length === 0 && <p className="text-sm text-[var(--crm-muted)]">Nenhum projeto encontrado para os filtros atuais.</p>}
+            </div>
+          </GradientCard>
+        </>
+      )}
+
+      {activeReport === "kickoff" && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <AnimatedStats title="Reuniões de Kickoff" value={analysis.kpis.kickoffCount} subtitle="Internas, externas e comerciais" icon={Rocket} color="orange" />
+            <AnimatedStats title="Realizadas" value={analysis.kpis.completedKickoffCount} subtitle={formatPercent(analysis.kpis.kickoffCompletionRate)} icon={CheckCircle2} color="green" />
+            <AnimatedStats title="Agendadas" value={analysis.kpis.scheduledKickoffCount} subtitle={`${analysis.kpis.overdueKickoffCount} vencidas`} icon={CalendarDays} color="blue" />
+            <AnimatedStats title="Ações" value={analysis.kpis.kickoffActionItems} subtitle="Itens gerados nas atas" icon={Activity} color="purple" />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <GradientCard gradient="orange" className="p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)]">Kickoffs ao Longo do Tempo</h3>
+                  <p className="text-sm text-[var(--crm-muted)]">Agenda e realização por mês.</p>
+                </div>
+                <TrendingUp className="w-6 h-6 text-orange-300" />
+              </div>
+              <div className="h-80">
+                <Line data={kickoffTimelineData} options={chartOptions} />
+              </div>
+            </GradientCard>
+
+            <GradientCard gradient="green" className="p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold text-[var(--crm-ink)]">Kickoff por Fase</h3>
+                  <p className="text-sm text-[var(--crm-muted)]">Interno, externo e etapas comerciais conectadas.</p>
+                </div>
+                <Rocket className="w-6 h-6 text-emerald-300" />
+              </div>
+              <div className="h-80">
+                <Bar data={kickoffPhaseData} options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }} />
+              </div>
+            </GradientCard>
+          </div>
+          <GradientCard gradient="gray" className="p-6">
+            <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-1">Status dos Kickoffs</h3>
+            <p className="text-sm text-[var(--crm-muted)] mb-5">Controle executivo de agendas, remarcações e reuniões realizadas.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              {analysis.byKickoffStatus.map((item) => (
+                <Insight key={item.status} title={item.label} value={item.count} detail="reuniões" tone={item.status === "REALIZADA" ? "green" : item.status === "CANCELADA" ? "red" : item.status === "REAGENDADA" ? "amber" : "slate"} />
+              ))}
+              {analysis.byKickoffStatus.length === 0 && <p className="text-sm text-[var(--crm-muted)]">Nenhuma reunião encontrada para os filtros atuais.</p>}
+            </div>
+          </GradientCard>
+        </>
       )}
 
       {activeReport === "losses" && (
@@ -959,6 +1373,122 @@ export default function Relatorios() {
               <Filter className="w-14 h-14 mx-auto mb-3 text-[var(--crm-muted)] opacity-50" />
               <h3 className="text-lg font-bold text-[var(--crm-ink)]">Nenhuma oportunidade encontrada</h3>
               <p className="text-[var(--crm-muted)]">Ajuste os filtros para ampliar a análise.</p>
+            </div>
+          }
+        />
+      )}
+
+      {activeReport === "projects" && (
+        <ModernTable
+          title="Projetos do Relatório"
+          data={analysis.projects.slice(0, 200)}
+          columns={[
+            {
+              key: "project",
+              label: "Projeto",
+              render: (item) => (
+                <div>
+                  <div className="font-bold text-[var(--crm-ink)]">{item.name || "Sem nome"}</div>
+                  <div className="text-xs text-[var(--crm-muted)]">{item.number || "-"} · {item.company?.name || "Sem cliente"}</div>
+                </div>
+              )
+            },
+            {
+              key: "phase",
+              label: "Fase",
+              render: (item) => <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-200">{PROJECT_PHASE_LABELS[item.phase] || item.phase}</span>
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (item) => <span className="text-sm font-bold text-[var(--crm-ink)]">{PROJECT_STATUS_LABELS[item.status] || item.status}</span>
+            },
+            {
+              key: "manager",
+              label: "Gestor",
+              render: (item) => <span className="text-sm text-[var(--crm-ink)]">{item.projectManager?.name || "Não atribuído"}</span>
+            },
+            {
+              key: "progress",
+              label: "Progresso",
+              render: (item) => <span className="text-sm text-[var(--crm-muted)]">{numberValue(item.progressPercent)}%</span>
+            },
+            {
+              key: "health",
+              label: "Saúde",
+              render: (item) => <span className="font-bold text-emerald-300">{numberValue(item.healthScore)}%</span>
+            },
+            {
+              key: "plannedEndDate",
+              label: "Fim previsto",
+              render: (item) => <span className="text-sm text-[var(--crm-muted)]">{formatDate(item.plannedEndDate)}</span>
+            }
+          ]}
+          searchTerm={filters.search}
+          onSearchChange={(value) => setFilter("search", value)}
+          emptyState={
+            <div>
+              <Filter className="w-14 h-14 mx-auto mb-3 text-[var(--crm-muted)] opacity-50" />
+              <h3 className="text-lg font-bold text-[var(--crm-ink)]">Nenhum projeto encontrado</h3>
+              <p className="text-[var(--crm-muted)]">Ajuste período, fase, status ou responsável.</p>
+            </div>
+          }
+        />
+      )}
+
+      {activeReport === "kickoff" && (
+        <ModernTable
+          title="Reuniões de Kickoff"
+          data={analysis.kickoffMeetings.slice(0, 200)}
+          columns={[
+            {
+              key: "meeting",
+              label: "Reunião",
+              render: (item) => (
+                <div>
+                  <div className="font-bold text-[var(--crm-ink)]">{item.title || "Sem título"}</div>
+                  <div className="text-xs text-[var(--crm-muted)]">{item.number || "-"} · {item.company?.name || "Sem cliente"}</div>
+                </div>
+              )
+            },
+            {
+              key: "phase",
+              label: "Fase",
+              render: (item) => <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-200">{KICKOFF_PHASE_LABELS[item.phase] || item.phase}</span>
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (item) => <span className="text-sm font-bold text-[var(--crm-ink)]">{KICKOFF_STATUS_LABELS[item.status] || item.status}</span>
+            },
+            {
+              key: "owner",
+              label: "Responsável",
+              render: (item) => <span className="text-sm text-[var(--crm-ink)]">{item.owner?.name || "Não atribuído"}</span>
+            },
+            {
+              key: "scheduledDate",
+              label: "Data",
+              render: (item) => <span className="text-sm text-[var(--crm-muted)]">{formatDate(item.scheduledDate)}</span>
+            },
+            {
+              key: "participants",
+              label: "Participantes",
+              render: (item) => <span className="text-sm text-[var(--crm-muted)]">{numberValue(item._count?.participants)}</span>
+            },
+            {
+              key: "actions",
+              label: "Ações",
+              render: (item) => <span className="font-bold text-orange-200">{numberValue(item._count?.actionItems)}</span>
+            }
+          ]}
+          searchTerm={filters.search}
+          onSearchChange={(value) => setFilter("search", value)}
+          emptyState={
+            <div>
+              <Filter className="w-14 h-14 mx-auto mb-3 text-[var(--crm-muted)] opacity-50" />
+              <h3 className="text-lg font-bold text-[var(--crm-ink)]">Nenhuma reunião de kickoff encontrada</h3>
+              <p className="text-[var(--crm-muted)]">Ajuste fase, status, período ou busca.</p>
             </div>
           }
         />
