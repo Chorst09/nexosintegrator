@@ -661,7 +661,7 @@ router.post('/churn-alerts/detect', authenticateToken, async (req, res) => {
             }
           }
         },
-        npsSurveys: {
+        npssurveys: {
           where: {
             status: 'RESPONDED',
             respondedAt: {
@@ -703,7 +703,7 @@ router.post('/churn-alerts/detect', authenticateToken, async (req, res) => {
       }
 
       // 3. NPS baixo (35 pontos)
-      const recentNPS = company.npsSurveys.filter(survey => survey.score !== null);
+      const recentNPS = company.npssurveys.filter(survey => survey.score !== null);
       const avgNPS = recentNPS.length > 0 
         ? recentNPS.reduce((sum, survey) => sum + survey.score, 0) / recentNPS.length 
         : null;
