@@ -16,6 +16,13 @@ import {
   Trash2,
   X
 } from 'lucide-react';
+import {
+  COMPONENT_PRODUCT_RECOMMENDATION,
+  D,
+  TARGET_PRODUCT_GOAL,
+  calcRateio,
+  validateCompositionSelection,
+} from '../lib/rateio-calculator.mjs';
 
 const DEMO_ITEMS = [
   { sku: 'NB-001', desc: 'Notebook Dell Latitude i7 16GB', ncm: '8471.30.12', custo: 3200, preco: 4800, qty: 3, un: 'UN' },
@@ -37,7 +44,6 @@ const modeLabels = {
   peso: 'Peso manual',
 };
 
-const D = (value, decimals = 4) => Number((Number(value) || 0).toFixed(decimals));
 const fmt = (value) => new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
@@ -54,129 +60,6 @@ const cloneExpenses = () => DEMO_EXPENSES.map(expense => ({ ...expense }));
 const PRICING_SIMULATIONS_STORAGE_KEY = 'pre_sales_pricing_simulations_v1';
 const CALCULATOR_PROPOSALS_STORAGE_KEY = 'crm-calculadoras-propostas-v1';
 const CALCULATOR_PROPOSALS_LEGACY_KEY = 'crm-calculadoras-proposals';
-
-function calcRateio(items, expenses, manualWeights, scope, composition) {
-  const merged = Object.fromEntries(items.map(item => [item.sku, {
-    prod: item,
-    totalRateado: 0,
-    expenseRateado: undefined,
-    sourceCostTotal: 0,
-    composedSourceSkus: [],
-    compositionRole: undefined,
-    composedTargetSkus: undefined,
-  }]));
-  const totalExp = D(expenses.reduce((sum, expense) => sum + D(expense.valor, 4), 0), 4);
-
-  expenses.forEach(expense => {
-    const baseFor = (item) => {
-      if (expense.metodo === 'custo') return D(item.custo * item.qty, 4);
-      if (expense.metodo === 'venda') return D(item.preco * item.qty, 4);
-      if (expense.metodo === 'qty') return D(item.qty, 4);
-      return D(manualWeights[item.sku] || 0, 4);
-    };
-
-    const totalBase = scope.reduce((sum, item) => sum + baseFor(item), 0);
-    if (totalBase <= 0) return;
-
-    let accumulated = 0;
-    scope.forEach((item, index) => {
-      const rateado = index === scope.length - 1
-        ? D(expense.valor - accumulated, 4)
-        : D((baseFor(item) / totalBase) * expense.valor, 4);
-      if (index !== scope.length - 1) accumulated = D(accumulated + rateado, 4);
-      merged[item.sku].totalRateado = D(merged[item.sku].totalRateado + rateado, 4);
-    });
-  });
-
-  if (composition) {
-    const targetBuckets = composition.targetSkus.map(sku => merged[sku]).filter(Boolean);
-    const sourceBuckets = composition.sourceSkus.map(sku => merged[sku]).filter(Boolean);
-
-    if (targetBuckets.length > 0) {
-      const sourceCostTotal = D(sourceBuckets.reduce((sum, b) => sum + D(b.prod.custo * b.prod.qty, 4), 0), 4);
-      const composedExpenseTotal = D(scope.reduce((sum, item) => sum + (merged[item.sku]?.totalRateado || 0), 0), 4);
-      const composedTotal = D(sourceCostTotal + composedExpenseTotal, 4);
-      const targetCosts = targetBuckets.map(b => D(b.prod.custo * b.prod.qty, 4));
-      const totalCostBase = targetCosts.reduce((s, v) => s + v, 0);
-      const targetQtys = targetBuckets.map(b => b.prod.qty);
-      const totalQtyBase = targetQtys.reduce((s, v) => s + v, 0);
-      const useQty = totalCostBase === 0;
-      const totalBase = useQty ? totalQtyBase : totalCostBase;
-
-      scope.forEach(item => {
-        if (!composition.targetSkus.includes(item.sku) && merged[item.sku]) {
-          merged[item.sku].totalRateado = 0;
-          merged[item.sku].expenseRateado = 0;
-          merged[item.sku].compositionRole = composition.sourceSkus.includes(item.sku) ? 'source' : undefined;
-          merged[item.sku].composedTargetSkus = composition.targetSkus;
-        }
-      });
-
-      let accTotal = 0, accExpense = 0, accSource = 0;
-      targetBuckets.forEach((bucket, index) => {
-        const base = useQty ? bucket.prod.qty : D(bucket.prod.custo * bucket.prod.qty, 4);
-        const isLast = index === targetBuckets.length - 1;
-        const weight = totalBase > 0 ? base / totalBase : 1 / targetBuckets.length;
-
-        const allocTotal    = isLast ? D(composedTotal - accTotal, 4)         : D(weight * composedTotal, 4);
-        const allocExpense  = isLast ? D(composedExpenseTotal - accExpense, 4) : D(weight * composedExpenseTotal, 4);
-        const allocSource   = isLast ? D(sourceCostTotal - accSource, 4)      : D(weight * sourceCostTotal, 4);
-
-        accTotal   = D(accTotal + allocTotal, 4);
-        accExpense = D(accExpense + allocExpense, 4);
-        accSource  = D(accSource + allocSource, 4);
-
-        bucket.totalRateado    = allocTotal;
-        bucket.expenseRateado  = allocExpense;
-        bucket.sourceCostTotal = allocSource;
-        bucket.composedSourceSkus = composition.sourceSkus;
-        bucket.compositionRole = 'target';
-      });
-    }
-  }
-
-  let somaCheck = 0;
-  const results = Object.values(merged).map(({ prod, totalRateado, expenseRateado, sourceCostTotal, composedSourceSkus, compositionRole, composedTargetSkus }) => {
-    const rat = D(totalRateado, 4);
-    const expenseRat = D(expenseRateado ?? totalRateado, 4);
-    const ratUnit = prod.qty > 0 ? D(rat / prod.qty, 4) : 0;
-    const novoCusto = D(prod.custo + ratUnit, 4);
-    const importedMargin = typeof prod.margemProposta === 'number' ? D(prod.margemProposta, 4) : undefined;
-    const mgAnt = importedMargin ?? (prod.preco > 0 ? D((prod.preco - prod.custo) / prod.preco, 4) : 0);
-    const mgNova = importedMargin ?? (prod.preco > 0 ? D((prod.preco - novoCusto) / prod.preco, 4) : 0);
-    const totC = D(prod.custo * prod.qty, 4);
-    const totV = D(prod.preco * prod.qty, 4);
-    const part = totalExp > 0 ? D(expenseRat / totalExp, 4) : 0;
-    somaCheck = D(somaCheck + expenseRat, 4);
-    return {
-      prod,
-      rat,
-      expenseRat,
-      ratUnit,
-      novoCusto,
-      mgAnt,
-      mgNova,
-      totC,
-      totV,
-      part,
-      delta: D(mgNova - mgAnt, 4),
-      sourceCostTotal: D(sourceCostTotal || 0, 4),
-      composedSourceSkus,
-      compositionRole,
-      composedTargetSkus,
-    };
-  });
-
-  const effectiveResults = composition
-    ? results.filter(item => item.compositionRole === 'target')
-    : results;
-  const effectiveTotalVenda = effectiveResults.reduce((sum, item) => sum + item.totV, 0);
-  const avgMgAnt = effectiveTotalVenda > 0 ? D(effectiveResults.reduce((sum, item) => sum + item.mgAnt * item.totV, 0) / effectiveTotalVenda, 4) : 0;
-  const avgMgNova = effectiveTotalVenda > 0 ? D(effectiveResults.reduce((sum, item) => sum + item.mgNova * item.totV, 0) / effectiveTotalVenda, 4) : 0;
-  const diff = D(totalExp - somaCheck, 4);
-
-  return { results, avgMgAnt, avgMgNova, somaCheck, totalExp, diff, ok: Math.abs(diff) < 0.02 };
-}
 
 export default function RatearProdutos() {
   const [tab, setTab] = useState('nf');
@@ -245,6 +128,10 @@ export default function RatearProdutos() {
   const scopeLabel = compositionConfig
     ? `${targetItems.map(item => item.sku).join(', ') || 'Alvo'} composto por ${sourceItems.map(item => item.sku).join(', ') || 'sem fontes'}`
     : 'Distribuir entre todos';
+  const compositionIssues = scopeMode === 'alvo'
+    ? validateCompositionSelection({ targetItems, sourceItems })
+    : [];
+  const blockingCompositionIssues = compositionIssues.filter(issue => !issue.includes('20 itens base'));
 
   const manualWeightSum = D(Object.values(manualWeights).reduce((sum, value) => sum + value, 0), 2);
   const filteredAudit = auditLog.filter(entry =>
@@ -255,6 +142,15 @@ export default function RatearProdutos() {
   const setGlobalMode = (mode) => {
     setRateioMode(mode);
     setExpenses(current => current.map(expense => ({ ...expense, metodo: mode })));
+  };
+
+  const autoSelectComposition = () => {
+    const targetValues = items.slice(0, TARGET_PRODUCT_GOAL).map((_, index) => String(index));
+    const sourceValues = items.slice(TARGET_PRODUCT_GOAL).map((_, index) => String(index + TARGET_PRODUCT_GOAL));
+    setScopeMode('alvo');
+    setTargetIndexes(targetValues);
+    setSourceIndexes(sourceValues);
+    setMessage({ type: 'ok', text: `${targetValues.length} produto(s) alvo e ${sourceValues.length} componente(s) selecionados automaticamente.` });
   };
 
   const loadDemo = () => {
@@ -320,18 +216,34 @@ export default function RatearProdutos() {
     setSourceIndexes(current => reindex(current));
   };
 
+  const validateRateioInput = () => {
+    if (!items.length) {
+      window.alert('Adicione itens na aba NF-e.');
+      return false;
+    }
+    if (scopeMode === 'alvo') {
+      const issues = validateCompositionSelection({ targetItems, sourceItems });
+      const blockingIssues = issues.filter(issue => !issue.includes('20 itens base'));
+      if (blockingIssues.length > 0) {
+        window.alert(blockingIssues.join('\n'));
+        return false;
+      }
+      const advisoryIssues = issues.filter(issue => issue.includes('20 itens base'));
+      if (advisoryIssues.length > 0) {
+        setMessage({ type: 'warn', text: advisoryIssues[0] });
+      }
+    }
+    return true;
+  };
+
   const runPreview = () => {
-    if (!items.length) return window.alert('Adicione itens na aba NF-e.');
-    if (scopeMode === 'alvo' && targetItems.length === 0) return window.alert('Selecione ao menos um produto alvo.');
-    if (scopeMode === 'alvo' && sourceItems.length === 0) return window.alert('Selecione ao menos um produto para compor o custo do alvo.');
+    if (!validateRateioInput()) return;
     const result = calcRateio(items, expenses, manualWeights, scopedItems, compositionConfig);
     setPreview(result);
   };
 
   const executeRateio = () => {
-    if (!items.length) return window.alert('Adicione itens na aba NF-e.');
-    if (scopeMode === 'alvo' && targetItems.length === 0) return window.alert('Selecione ao menos um produto alvo.');
-    if (scopeMode === 'alvo' && sourceItems.length === 0) return window.alert('Selecione ao menos um produto para compor o custo do alvo.');
+    if (!validateRateioInput()) return;
     const result = calcRateio(items, expenses, manualWeights, scopedItems, compositionConfig);
     setLastResult(result);
     setAuditLog(current => [{
@@ -637,7 +549,7 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
 
   return (
     <div className="rp-app">
-      <style>{styles}</style>
+      <style>{`${styles}${designEnhancements}`}</style>
 
       <header className="rp-header">
         <div>
@@ -737,7 +649,7 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
                     <Field label="Quantidade" type="number" value={newItem.qty} onChange={value => setNewItem({ ...newItem, qty: Number(value) })} />
                     <label className="rp-field">Un. Medida
                       <select value={newItem.un} onChange={event => setNewItem({ ...newItem, un: event.target.value })}>
-                        {['UN', 'CX', 'KG', 'LT', 'M', 'PC'].map(unit => <option key={unit}>{unit}</option>)}
+                        {['UN', '/mês', 'CX', 'KG', 'LT', 'M', 'PC'].map(unit => <option key={unit}>{unit}</option>)}
                       </select>
                     </label>
                   </div>
@@ -802,9 +714,12 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
             <section className="rp-card">
               <div className="rp-card-head">
                 <h3>Definicao do escopo de rateio</h3>
-                <div className="rp-segment">
-                  <button className={scopeMode === 'todos' ? 'active' : ''} onClick={() => setScopeMode('todos')}>Distribuir entre todos</button>
-                  <button className={scopeMode === 'alvo' ? 'active' : ''} onClick={() => setScopeMode('alvo')}>Produto alvo + composicao</button>
+                <div className="rp-actions">
+                  <button className="rp-btn" onClick={autoSelectComposition} disabled={items.length < TARGET_PRODUCT_GOAL}>Auto 4 alvos</button>
+                  <div className="rp-segment">
+                    <button className={scopeMode === 'todos' ? 'active' : ''} onClick={() => setScopeMode('todos')}>Distribuir entre todos</button>
+                    <button className={scopeMode === 'alvo' ? 'active' : ''} onClick={() => setScopeMode('alvo')}>4 alvos + composicao</button>
+                  </div>
                 </div>
               </div>
 
@@ -813,19 +728,23 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
               ) : (
                 <>
                   <div className="rp-alert warn">
-                    Marque um ou mais produtos finais e os itens que compoem o custo deles. Exemplo: Notebook e outro kit como alvos, Monitor e Teclado como componentes.
-                    O custo dos componentes + despesas acessorias sera distribuido entre os alvos proporcionalmente ao custo total de cada alvo.
+                    Marque exatamente {TARGET_PRODUCT_GOAL} produtos finais e os itens que compoem o custo deles. O custo dos componentes + despesas acessorias sera distribuido entre os alvos proporcionalmente ao custo total de cada alvo.
                   </div>
+                  {compositionIssues.length > 0 && (
+                    <div className={`rp-alert ${blockingCompositionIssues.length > 0 ? 'err' : 'warn'}`}>
+                      {compositionIssues.join(' ')}
+                    </div>
+                  )}
                   <div className="rp-grid rp-grid-2">
                     <div className="rp-composition-summary">
                       <span>Produtos alvo</span>
-                      <strong>{targetItems.length}</strong>
+                      <strong>{targetItems.length}/{TARGET_PRODUCT_GOAL}</strong>
                       <small>{targetItems.length ? targetItems.map(item => item.sku).join(', ') : 'Nenhum alvo marcado'}</small>
                     </div>
                     <div className="rp-composition-summary">
                       <span>Itens componentes</span>
                       <strong>{sourceItems.length}</strong>
-                      <small>{sourceItems.length ? sourceItems.map(item => item.sku).join(', ') : 'Nenhum componente marcado'}</small>
+                      <small>{sourceItems.length ? `${sourceItems.map(item => item.sku).join(', ')}${sourceItems.length < COMPONENT_PRODUCT_RECOMMENDATION ? ` · revise se faltam itens base` : ''}` : 'Nenhum componente marcado'}</small>
                     </div>
                   </div>
                   <div className="rp-scope-title">Produtos alvo</div>
@@ -834,12 +753,13 @@ td{padding:8px 10px;border-bottom:1px solid #e2e8f0;}
                       const value = String(index);
                       const checked = targetIndexes.includes(value);
                       const isSource = sourceIndexes.includes(value);
+                      const targetLimitReached = !checked && targetIndexes.length >= TARGET_PRODUCT_GOAL;
                       return (
-                        <label key={item.sku} className={`rp-source-card ${checked ? 'active' : ''} ${isSource ? 'disabled' : ''}`}>
+                        <label key={item.sku} className={`rp-source-card ${checked ? 'active' : ''} ${isSource || targetLimitReached ? 'disabled' : ''}`}>
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={isSource}
+                            disabled={isSource || targetLimitReached}
                             onChange={event => {
                               setTargetIndexes(current => event.target.checked
                                 ? [...current, value]
@@ -1168,15 +1088,19 @@ function ResultKpis({ result }) {
   const originalValue = effectiveResults.reduce((sum, item) => sum + item.totV, 0);
   const componentCost = effectiveResults.reduce((sum, item) => sum + (item.sourceCostTotal || 0), 0);
   const allocatedValue = effectiveResults.reduce((sum, item) => sum + D(item.novoCusto * item.prod.qty, 4), 0);
+  const targetOwnCost = effectiveResults.reduce((sum, item) => sum + item.totC, 0);
+  const billingLabel = result.billing?.billingType === 'mensal' ? 'Mensalidade alvos' : 'Valor pontual alvos';
   const targetResult = result.results.find(item => item.compositionRole === 'target');
   return (
     <div className="rp-kpi-grid">
       <Kpi label="Desp. total rateada" value={fmtRound(result.totalExp)} tone="warn" />
-      {targetResult && <Kpi label={`Valor unit. ${targetResult.prod.sku}`} value={fmt(targetResult.novoCusto)} highlight />}
-      {targetResult && <Kpi label="Valor componentes" value={fmtRound(componentCost)} tone="warn" />}
-      <Kpi label="Valor original" value={fmtRound(originalValue)} />
-      <Kpi label="Valor rateado total" value={fmtRound(allocatedValue)} highlight />
+      {targetResult && <Kpi label="Alvos compostos" value={`${effectiveResults.length}/${TARGET_PRODUCT_GOAL}`} highlight />}
+      {targetResult && <Kpi label="Custo proprio alvos" value={fmtRound(targetOwnCost)} />}
+      {targetResult && <Kpi label="Componentes rateados" value={fmtRound(componentCost)} tone="warn" />}
+      <Kpi label="Venda original" value={fmtRound(originalValue)} />
+      <Kpi label={billingLabel} value={fmtRound(allocatedValue)} highlight />
       <Kpi label="Margem proposta" value={pct(result.avgMgNova)} tone="ok" />
+      {result.billing?.contractTotal > 0 && <Kpi label={`Contrato ${result.billing.periodMonths} meses`} value={fmtRound(result.billing.contractTotal)} tone="ok" />}
     </div>
   );
 }
@@ -1186,6 +1110,10 @@ function ResultTable({ result, compact = false, title }) {
   const displayItems = hasComposition
     ? result.results.filter(item => item.compositionRole === 'target')
     : result.results;
+  const billingLabel = result.billing?.billingType === 'mensal' ? 'Mensal' : 'Pontual';
+  const targetQuantityTotal = displayItems.reduce((sum, item) => sum + item.prod.qty, 0);
+  const finalTargetTotal = displayItems.reduce((sum, item) => sum + D(item.novoCusto * item.prod.qty, 4), 0);
+  const weightedUnitAverage = targetQuantityTotal > 0 ? D(finalTargetTotal / targetQuantityTotal, 4) : 0;
 
   return (
     <section className="rp-card">
@@ -1209,7 +1137,7 @@ function ResultTable({ result, compact = false, title }) {
               <th className="num">{hasComposition ? 'Valor Rateado Total' : 'Desp. Rateada'}</th>
               {hasComposition && <th className="num">Desp. Acessoria</th>}
               <th className="num" style={{background:'#e8f0fb',color:'#1a4f8a'}}>Valor Unit. Rateado</th>
-              <th className="num" style={{background:'#eaf4ee',color:'#2d7a4f'}}>Valor Total Rateado</th>
+              <th className="num" style={{background:'#eaf4ee',color:'#2d7a4f'}}>Valor Total {billingLabel}</th>
               {!compact && <>
                 <th className="num">Margem Proposta</th>
               </>}
@@ -1233,7 +1161,10 @@ function ResultTable({ result, compact = false, title }) {
                   {hasComposition && <td className="num">{item.sourceCostTotal ? fmt(item.sourceCostTotal) : '-'}</td>}
                   <td className="num strong-warn">{fmt(item.rat)}</td>
                   {hasComposition && <td className="num">{fmt(item.expenseRat)}</td>}
-                  <td className="num" style={{background:'#f0f7ff'}}><strong>{fmt(item.novoCusto)}</strong></td>
+                  <td className="num" style={{background:'#f0f7ff'}}>
+                    <strong>{fmt(item.novoCusto)}</strong>
+                    {hasComposition && <small className="rp-row-note">base {fmt(item.prod.custo)} + {fmt(item.ratUnit)}</small>}
+                  </td>
                   <td className="num" style={{background:'#f0fdf4'}}>
                     <strong style={{color:'#2d7a4f'}}>{fmt(custoTotalFinal)}</strong>
                     <small className="rp-row-note">x {item.prod.qty} un.</small>
@@ -1253,23 +1184,23 @@ function ResultTable({ result, compact = false, title }) {
             <tfoot>
               <tr>
                 <td colSpan={hasComposition ? 7 : 5} style={{textAlign:'right',fontWeight:800,fontSize:'12px',color:'#6b7280',textTransform:'uppercase'}}>
-                  Total dos Alvos
+                  Total dos Alvos ({billingLabel})
                 </td>
                 <td className="num" style={{background:'#e8f0fb',fontWeight:800,color:'#1a4f8a',fontSize:'14px'}}>
-                  {fmt(displayItems.reduce((s, i) => s + i.novoCusto, 0))}
+                  {fmt(weightedUnitAverage)}
                 </td>
                 <td className="num" style={{background:'#f0fdf4',fontWeight:800,color:'#2d7a4f',fontSize:'14px'}}>
-                  {fmt(displayItems.reduce((s, i) => s + D(i.novoCusto * i.prod.qty, 4), 0))}
+                  {fmt(finalTargetTotal)}
                 </td>
                 {!compact && <td />}
                 <td />
               </tr>
               <tr>
                 <td colSpan={hasComposition ? 7 : 5} style={{textAlign:'right',fontSize:'11px',color:'#6b7280'}}>
-                  Verificacao: valor rateado total dos produtos alvo
+                  Verificacao: custo proprio + componentes + despesas dos produtos alvo
                 </td>
                 <td colSpan={2} style={{background:'#fef3dc',fontWeight:800,color:'#8a5a00',fontSize:'12px',textAlign:'right',padding:'6px 8px'}}>
-                  {fmt(displayItems.reduce((s, i) => s + D(i.novoCusto * i.prod.qty, 4), 0))}
+                  {fmt(finalTargetTotal)}
                 </td>
                 {!compact && <td />}
                 <td />
@@ -1313,8 +1244,14 @@ function ScenarioTable({ items, scenarios }) {
 }
 
 function Integrity({ result, expenses, items, auditLog }) {
+  const composition = result.compositionTotals;
   const checks = [
     { ok: result.ok, label: 'Invariante de conservacao', detail: `Rateado ${fmtRound(result.somaCheck)} | Despesas ${fmtRound(result.totalExp)} | Delta ${fmtRound(result.diff)}` },
+    ...(composition ? [
+      { ok: composition.targetCount === TARGET_PRODUCT_GOAL, label: 'Quantidade de produtos alvo', detail: `${composition.targetCount}/${TARGET_PRODUCT_GOAL}` },
+      { ok: Math.abs(composition.expenseTotal - result.totalExp) < 0.02, label: 'Despesas concentradas nos alvos', detail: `${fmtRound(composition.expenseTotal)} de ${fmtRound(result.totalExp)}` },
+      { ok: Math.abs(composition.finalTargetCostTotal - (composition.targetOwnCostTotal + composition.sourceCostTotal + composition.expenseTotal)) < 0.02, label: 'Composicao final dos alvos', detail: `${fmtRound(composition.targetOwnCostTotal)} + ${fmtRound(composition.sourceCostTotal)} + ${fmtRound(composition.expenseTotal)} = ${fmtRound(composition.finalTargetCostTotal)}` },
+    ] : []),
     { ok: true, label: 'Margem preservada da proposta', detail: pct(result.avgMgNova) },
     { ok: true, label: 'Valor rateado tratado como valor comercial', detail: 'Sem comparacao custo x preco de venda' },
     { ok: items.length > 0, label: 'Base de itens nao vazia', detail: `${items.length} item(ns)` },
@@ -1554,3 +1491,79 @@ function SavedRateiosModal({ savedRateios, onLoad, onDelete, onPrint, onClose })
 }
 
 const styles = `.rp-app{min-height:100vh;background:#0b1120;color:#e2e8f0;font-family:Segoe UI,system-ui,-apple-system,sans-serif;font-size:13.5px}.rp-header{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#e2e8f0;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.4);border-bottom:1px solid rgba(255,255,255,.08)}.rp-brand{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#fff}.rp-brand span{font-size:11px;opacity:.65;background:rgba(255,255,255,.1);padding:2px 8px;border-radius:20px}.rp-sub{font-size:11px;opacity:.6;margin-top:2px;color:#94a3b8}.rp-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.rp-nav{display:flex;overflow-x:auto;background:#0f172a;border-bottom:1px solid rgba(255,255,255,.08);padding:0 16px}.rp-tab{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:#64748b;padding:11px 16px;border-bottom:3px solid transparent;white-space:nowrap;font-weight:600;font-size:12.5px;cursor:pointer}.rp-tab:hover{background:rgba(255,255,255,.05);color:#cbd5e1}.rp-tab.active{color:#38bdf8;border-bottom-color:#38bdf8}.rp-main{max-width:1280px;margin:0 auto;padding:20px 24px 42px}.rp-card{background:#111827;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)}.rp-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}.rp-card h3{font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:0}.rp-grid{display:grid;gap:12px}.rp-grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}.rp-grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}.rp-field{display:flex;flex-direction:column;gap:4px;color:#94a3b8;font-size:11.5px;font-weight:700}.rp-field.wide{grid-column:span 2}.rp-field input,.rp-field select,.rp-table input,.rp-table select,.rp-weight input{border:1px solid rgba(255,255,255,.12);background:#1e293b;color:#e2e8f0;border-radius:6px;padding:7px 9px;font-size:13px;min-width:0}.rp-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(255,255,255,.15);background:#1e293b;color:#e2e8f0;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s}.rp-btn:hover{background:#334155;border-color:rgba(255,255,255,.25)}.rp-primary{background:#1d4ed8!important;color:#fff!important;border-color:#1d4ed8!important}.rp-success{background:#065f46!important;color:#6ee7b7!important;border-color:#065f46!important}.rp-danger{background:transparent!important;color:#f87171!important;border-color:rgba(248,113,113,.4)!important}.rp-btn-light{background:rgba(255,255,255,.1);color:#e2e8f0;border-color:rgba(255,255,255,.2)}.rp-btn-light:hover{background:rgba(255,255,255,.18)}.rp-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.rp-segment{display:flex}.rp-segment button{border:1px solid rgba(255,255,255,.12);background:#1e293b;padding:6px 11px;font-size:12px;font-weight:700;color:#64748b;cursor:pointer}.rp-segment button:first-child{border-radius:6px 0 0 6px}.rp-segment button:last-child{border-radius:0 6px 6px 0}.rp-segment button.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.rp-form-panel{background:#0f172a;border:1px dashed rgba(255,255,255,.12);border-radius:8px;padding:14px;margin-bottom:12px}.rp-alert{border-radius:8px;padding:10px 12px;margin:10px 0;border:1px solid;font-size:12.5px}.rp-alert.info{background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.3);color:#7dd3fc}.rp-alert.warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fcd34d}.rp-alert.ok{background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.3);color:#6ee7b7}.rp-alert.err{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.3);color:#fca5a5}.rp-table-wrap{overflow:auto;border:1px solid rgba(255,255,255,.08);border-radius:10px}.rp-table{width:100%;border-collapse:collapse;min-width:900px}.rp-table th{background:#0f172a;color:#64748b;text-transform:uppercase;font-size:10.5px;letter-spacing:.04em;text-align:left;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08)}.rp-table td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle;color:#cbd5e1}.rp-table tr:hover td{background:rgba(255,255,255,.03)}.rp-table tfoot td{font-weight:800;background:#0f172a;color:#e2e8f0}.rp-table .num,.num{text-align:right;font-variant-numeric:tabular-nums}.num-input{text-align:right;width:110px}.empty{text-align:center;color:#475569;padding:24px!important}.rp-badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}.rp-blue{background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.3)}.rp-green{background:rgba(52,211,153,.12);color:#34d399;border:1px solid rgba(52,211,153,.3)}.rp-amber{background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.3)}.rp-red{background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.3)}.rp-gray{background:rgba(100,116,139,.15);color:#94a3b8;border:1px solid rgba(100,116,139,.3)}.rp-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}.rp-kpi{background:#111827;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px}.rp-kpi span{display:block;color:#64748b;font-size:11px;margin-bottom:5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.rp-kpi strong{font-size:21px;font-weight:800;color:#e2e8f0}.rp-kpi.hi{background:rgba(29,78,216,.15);border-color:rgba(29,78,216,.3)}.rp-kpi.ok{background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.25)}.rp-kpi.warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.25)}.rp-kpi.err{background:rgba(248,113,113,.08);border-color:rgba(248,113,113,.25)}.rp-wizard{display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#475569}.rp-wizard-step{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;white-space:nowrap}.rp-wizard-step span{width:23px;height:23px;border-radius:999px;background:#1e293b;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#64748b}.rp-wizard-step.active{color:#38bdf8}.rp-wizard-step.active span{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.rp-wizard-step.done{color:#34d399}.rp-wizard-step.done span{background:#065f46;color:#6ee7b7;border-color:#065f46}.rp-wizard-line{height:1px;flex:1;min-width:22px;background:rgba(255,255,255,.08)}.rp-mode-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.rp-mode-card{text-align:left;border:1px solid rgba(255,255,255,.08);background:#1e293b;border-radius:10px;padding:14px;cursor:pointer;transition:all .15s}.rp-mode-card:hover{border-color:rgba(56,189,248,.4);background:#1e3a5f}.rp-mode-card.active{border-color:#38bdf8;background:rgba(56,189,248,.1);box-shadow:inset 0 3px 0 #38bdf8}.rp-mode-card strong{display:block;color:#e2e8f0}.rp-mode-card span{display:block;color:#64748b;font-size:12px;margin:7px 0}.rp-mode-card small{display:block;color:#38bdf8;font-weight:800}.rp-weight-list{display:grid;gap:8px}.rp-weight{display:grid;grid-template-columns:auto 1fr 90px;gap:10px;align-items:center}.rp-icon-btn{border:1px solid rgba(255,255,255,.12);background:#1e293b;border-radius:6px;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8}.rp-icon-btn:hover{background:#334155}.rp-icon-btn.danger{color:#f87171;border-color:rgba(248,113,113,.3)}.strong-warn{color:#fbbf24;font-weight:800}.rp-progress{height:6px;background:#1e293b;border-radius:999px;margin-top:4px;overflow:hidden}.rp-progress span{display:block;height:100%;background:linear-gradient(90deg,#1d4ed8,#38bdf8);border-radius:999px}.rp-detail-row{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.06);padding:10px 0;gap:12px}.rp-detail-row small{color:#64748b;text-align:right}.rp-side{display:grid;grid-template-columns:280px 1fr;gap:14px}.rp-audit{border-bottom:1px solid rgba(255,255,255,.06);padding:12px 0}.rp-audit p{margin:8px 0 4px;color:#cbd5e1}.rp-audit small{color:#64748b}.rp-feature{background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:14px}.rp-feature strong{display:block;color:#e2e8f0}.rp-feature span{display:block;color:#64748b;margin-top:6px}.rp-code{background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:14px;margin-top:14px;overflow:auto;color:#94a3b8;font-family:monospace;font-size:12px}.rp-footer{background:#0f172a;border-top:1px solid rgba(255,255,255,.08);color:#475569;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 24px;font-size:11.5px}.rp-result-actions{justify-content:flex-end;margin-bottom:10px}.rp-source-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px}.rp-scope-title{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-top:14px}.rp-source-card{border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:11px;display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:center;cursor:pointer;background:#1e293b;transition:all .15s}.rp-source-card:hover{border-color:rgba(56,189,248,.4);background:#1e3a5f}.rp-source-card.active{background:rgba(56,189,248,.1);border-color:#38bdf8}.rp-source-card.disabled{opacity:.4;cursor:not-allowed}.rp-source-card strong{grid-column:2 / -1;font-size:12.5px;color:#e2e8f0}.rp-source-card small{grid-column:2 / -1;color:#64748b}.rp-composition-summary{background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px}.rp-composition-summary span,.rp-composition-summary small{display:block;color:#64748b;font-size:11px}.rp-composition-summary strong{font-size:20px;color:#e2e8f0}.rp-composition-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);border-radius:8px;padding:12px;margin-top:12px}.rp-composition-box span{display:block;color:#38bdf8;font-size:11px;font-weight:800}.rp-composition-box strong{display:block;margin-top:4px;color:#e2e8f0}.rp-scope-users{margin-top:12px}.rp-row-note{display:block;color:#475569;font-size:10.5px;margin-top:3px;text-align:left}.rp-audit-entry{border-bottom:1px solid rgba(255,255,255,.06);padding:8px 0;font-size:12px;color:#94a3b8}.rp-audit-ts{color:#38bdf8;margin-right:8px;font-family:monospace}.rp-audit-hash{display:block;color:#475569;font-family:monospace;font-size:10px;margin-top:4px}@media(max-width:900px){.rp-header{align-items:flex-start;flex-direction:column}.rp-grid-2,.rp-grid-3,.rp-grid-4,.rp-mode-grid,.rp-side{grid-template-columns:1fr}.rp-main{padding:16px}.rp-wizard{align-items:flex-start;flex-direction:column}.rp-wizard-line{display:none}.rp-table{min-width:760px}}`;
+
+const designEnhancements = `
+.rp-app{background:#0a1020;color:#e5edf8;border-radius:18px;overflow:hidden;box-shadow:0 24px 70px rgba(2,6,23,.28);}
+.rp-header{position:relative;top:auto;max-width:1280px;margin:16px auto 0;border-radius:16px;padding:18px 20px;background:linear-gradient(135deg,#132033 0%,#17363c 58%,#332f18 100%);box-shadow:0 18px 48px rgba(2,6,23,.32);border:1px solid rgba(148,163,184,.20);}
+.rp-brand{font-size:18px;letter-spacing:0;}
+.rp-brand span{border:1px solid rgba(148,163,184,.28);background:rgba(15,23,42,.42);color:#cbd5e1;}
+.rp-sub{font-size:12.5px;color:#b6c2d2;opacity:1;}
+.rp-nav{position:sticky;top:0;z-index:18;max-width:1280px;margin:12px auto 0;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(13,20,36,.92);backdrop-filter:blur(14px);box-shadow:0 12px 34px rgba(2,6,23,.24);padding:6px;}
+.rp-tab{border-radius:10px;border-bottom:0;padding:9px 14px;color:#90a0b6;letter-spacing:0;}
+.rp-tab:hover{background:rgba(148,163,184,.10);color:#e5edf8;}
+.rp-tab.active{background:#e5edf8;color:#0f172a;box-shadow:0 8px 20px rgba(229,237,248,.16);border-bottom-color:transparent;}
+.rp-main{max-width:1280px;padding:18px 18px 44px;}
+.rp-card{background:linear-gradient(180deg,rgba(19,29,48,.92),rgba(14,22,38,.96));border-color:rgba(148,163,184,.16);border-radius:12px;padding:18px 20px;margin-bottom:16px;box-shadow:0 14px 36px rgba(2,6,23,.18);}
+.rp-card-head{padding-bottom:10px;border-bottom:1px solid rgba(148,163,184,.10);}
+.rp-card h3{color:#aebbd0;font-size:11.5px;letter-spacing:.12em;}
+.rp-field{color:#aebbd0;letter-spacing:.02em;}
+.rp-field input,.rp-field select,.rp-table input,.rp-table select,.rp-weight input{height:38px;border-color:rgba(148,163,184,.22);background:#101a2c;color:#f8fafc;border-radius:9px;padding:8px 10px;}
+.rp-field input:focus,.rp-field select:focus,.rp-table input:focus,.rp-table select:focus,.rp-weight input:focus{outline:2px solid rgba(45,212,191,.35);border-color:#2dd4bf;}
+.rp-btn{min-height:36px;border-radius:10px;border-color:rgba(148,163,184,.22);background:#142033;color:#dbe7f6;box-shadow:0 1px 0 rgba(255,255,255,.04) inset;}
+.rp-btn:hover{background:#1c2a42;border-color:rgba(203,213,225,.34);transform:translateY(-1px);}
+.rp-btn:disabled{cursor:not-allowed;opacity:.45;transform:none;}
+.rp-primary{background:#2563eb!important;border-color:#3b82f6!important;}
+.rp-success{background:#047857!important;border-color:#10b981!important;color:#ecfdf5!important;}
+.rp-danger{background:rgba(185,28,28,.10)!important;}
+.rp-btn-light{background:rgba(226,232,240,.10);border-color:rgba(226,232,240,.18);}
+.rp-segment{background:#0b1220;border:1px solid rgba(148,163,184,.16);border-radius:11px;padding:3px;gap:3px;}
+.rp-segment button{border:0;border-radius:8px!important;background:transparent;color:#9aa8bb;}
+.rp-segment button.active{background:#2dd4bf;color:#05201d;box-shadow:0 8px 18px rgba(45,212,191,.18);}
+.rp-alert{border-radius:10px;line-height:1.45;}
+.rp-alert.info{background:rgba(14,116,144,.16);border-color:rgba(34,211,238,.28);color:#a5f3fc;}
+.rp-alert.warn{background:rgba(180,83,9,.14);border-color:rgba(245,158,11,.28);color:#fde68a;}
+.rp-alert.ok{background:rgba(4,120,87,.16);border-color:rgba(16,185,129,.30);color:#bbf7d0;}
+.rp-alert.err{background:rgba(190,18,60,.13);border-color:rgba(244,63,94,.30);color:#fecdd3;}
+.rp-wizard{background:rgba(15,23,42,.58);border:1px solid rgba(148,163,184,.12);border-radius:14px;padding:10px 12px;margin-bottom:16px;}
+.rp-wizard-step{color:#8493a8;}
+.rp-wizard-step span{background:#101a2c;border-color:rgba(148,163,184,.18);}
+.rp-wizard-step.active{color:#67e8f9;}
+.rp-wizard-step.active span{background:#0891b2;border-color:#22d3ee;}
+.rp-wizard-step.done{color:#86efac;}
+.rp-kpi-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+.rp-kpi{background:#101a2c;border-color:rgba(148,163,184,.14);border-radius:12px;padding:15px 16px;}
+.rp-kpi span{color:#98a7ba;letter-spacing:.08em;}
+.rp-kpi strong{font-size:22px;color:#f8fafc;letter-spacing:0;}
+.rp-kpi.hi{background:rgba(37,99,235,.18);border-color:rgba(96,165,250,.32);}
+.rp-kpi.ok{background:rgba(4,120,87,.16);border-color:rgba(52,211,153,.28);}
+.rp-kpi.warn{background:rgba(180,83,9,.14);border-color:rgba(251,191,36,.25);}
+.rp-mode-grid{gap:12px;}
+.rp-mode-card{min-height:116px;background:#101a2c;border-color:rgba(148,163,184,.16);border-radius:12px;padding:16px;}
+.rp-mode-card:hover{background:#17243a;border-color:rgba(45,212,191,.35);}
+.rp-mode-card.active{background:rgba(13,148,136,.16);border-color:#2dd4bf;box-shadow:inset 0 4px 0 #2dd4bf;}
+.rp-mode-card span{color:#9aa8bb;line-height:1.35;}
+.rp-mode-card small{color:#5eead4;}
+.rp-table-wrap{border-color:rgba(148,163,184,.16);border-radius:12px;background:#0d1627;}
+.rp-table th{position:sticky;top:0;z-index:1;background:#111c2f;color:#98a7ba;padding:11px 10px;}
+.rp-table td{padding:11px 10px;color:#d7e2f0;border-bottom-color:rgba(148,163,184,.08);}
+.rp-table tr:hover td{background:rgba(45,212,191,.045);}
+.rp-table tfoot td{background:#111c2f;}
+.rp-badge{border-radius:8px;padding:3px 8px;}
+.rp-blue{background:rgba(14,165,233,.14);color:#7dd3fc;border-color:rgba(125,211,252,.28);}
+.rp-green{background:rgba(34,197,94,.14);color:#86efac;border-color:rgba(134,239,172,.28);}
+.rp-amber{background:rgba(245,158,11,.14);color:#fcd34d;border-color:rgba(252,211,77,.30);}
+.rp-red{background:rgba(244,63,94,.14);color:#fda4af;border-color:rgba(253,164,175,.30);}
+.rp-gray{background:rgba(148,163,184,.12);color:#cbd5e1;border-color:rgba(203,213,225,.22);}
+.rp-source-grid{grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+.rp-source-card{border-radius:12px;background:#101a2c;border-color:rgba(148,163,184,.15);padding:13px;min-height:92px;}
+.rp-source-card:hover{background:#17243a;border-color:rgba(45,212,191,.34);}
+.rp-source-card.active{background:rgba(13,148,136,.16);border-color:#2dd4bf;}
+.rp-source-card.disabled{opacity:.38;}
+.rp-composition-summary{background:#101a2c;border-color:rgba(148,163,184,.15);border-radius:12px;padding:14px;}
+.rp-composition-summary strong{font-size:24px;color:#f8fafc;}
+.rp-composition-box{background:rgba(13,148,136,.12);border-color:rgba(45,212,191,.26);border-radius:12px;}
+.rp-detail-row{background:#101a2c;border:1px solid rgba(148,163,184,.10);border-radius:10px;margin-bottom:8px;padding:11px 12px;}
+.rp-form-panel{background:#0d1627;border-color:rgba(148,163,184,.20);border-radius:12px;}
+.rp-footer{max-width:1280px;margin:0 auto 18px;border:1px solid rgba(148,163,184,.14);border-radius:12px;background:#0d1627;padding:12px 16px;}
+@media(max-width:900px){.rp-header,.rp-nav{margin-left:12px;margin-right:12px}.rp-header{border-radius:14px}.rp-main{padding:14px 12px 36px}.rp-card{padding:15px}.rp-tab{padding:8px 10px}.rp-kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}.rp-table{min-width:820px}}
+`;
