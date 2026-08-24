@@ -8,7 +8,13 @@ import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import ArchitectureDiagram from './ArchitectureDiagram';
 
-export function HomeView() {
+export function HomeView({
+  onCreateProject,
+  onOpenDashboard
+}: {
+  onCreateProject?: () => void;
+  onOpenDashboard?: () => void;
+}) {
   const projectPhotos = [
     {
       title: 'Implantação e campo',
@@ -61,11 +67,19 @@ export function HomeView() {
                 Organize escopo, cronograma, responsáveis, entregáveis e acompanhamentos com leitura executiva para cada iniciativa em andamento.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
-                <button className="flex items-center gap-2 rounded-md bg-[#ff7a00] px-5 py-2.5 text-sm font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]">
+                <button
+                  type="button"
+                  onClick={onCreateProject}
+                  className="flex items-center gap-2 rounded-md bg-[#ff7a00] px-5 py-2.5 text-sm font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]"
+                >
                   <Plus className="h-4 w-4" />
                   Novo projeto
                 </button>
-                <button className="flex items-center gap-2 rounded-md border border-[#374151] bg-[#111827]/80 px-5 py-2.5 text-sm font-bold text-slate-200 transition-colors hover:border-[#ff7a00] hover:text-white">
+                <button
+                  type="button"
+                  onClick={onOpenDashboard}
+                  className="flex items-center gap-2 rounded-md border border-[#374151] bg-[#111827]/80 px-5 py-2.5 text-sm font-bold text-slate-200 transition-colors hover:border-[#ff7a00] hover:text-white"
+                >
                   <BarChart2 className="h-4 w-4 text-[#22c55e]" />
                   Ver painel
                 </button>

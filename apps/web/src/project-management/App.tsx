@@ -394,7 +394,18 @@ export default function App({ onBack }: { onBack?: () => void }) {
           </>
         ) : (
           <div className="flex-1 overflow-hidden relative bg-[#070b16]">
-            {globalView === 'home' && <HomeView />}
+            {globalView === 'home' && (
+              <HomeView
+                onCreateProject={() => {
+                  setIsCreatingSpace(true);
+                  setGlobalView('spaces');
+                }}
+                onOpenDashboard={() => {
+                  setGlobalView('spaces');
+                  setActiveView('dashboard');
+                }}
+              />
+            )}
             {globalView === 'planned' && <PlannedView />}
             {globalView === 'teams' && <TeamView />}
             {globalView === 'docs' && <DocsView />}
