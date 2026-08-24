@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Home, CheckCircle2, FileText, LayoutTemplate, Clock, Calendar,
   Search, Plus, Filter, MoreVertical, LayoutGrid, List, Sparkles, Folder, ArrowLeft,
   BarChart2, Briefcase, Users, ArrowUpRight, Target, GitBranch, AlertTriangle,
-  ClipboardCheck, Lightbulb, Gauge, Layers3, TimerReset, Route, Wand2
+  ClipboardCheck, Lightbulb, Gauge, Layers3, TimerReset, Route, Wand2, Trash2, RotateCcw, Save
 } from 'lucide-react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
@@ -445,7 +445,115 @@ export function WhiteboardsView() {
   );
 }
 
-function BoardShell({ title, subtitle, icon: Icon, onBack, children }: { title: string; subtitle: string; icon: any; onBack: () => void; children: React.ReactNode }) {
+type ProcessStep = {
+  title: string;
+  owner: string;
+  time: string;
+  status: string;
+  color: string;
+  items: string[];
+};
+
+type Swimlane = {
+  area: string;
+  entries: string[];
+  color: string;
+};
+
+type ProductIdea = {
+  title: string;
+  cluster: string;
+  score: number;
+  color: string;
+};
+
+type MatrixQuadrant = {
+  quadrant: string;
+  hint: string;
+  ideas: string[];
+  color: string;
+};
+
+type RoadmapWave = {
+  wave: string;
+  title: string;
+  text: string;
+  color: string;
+};
+
+const editableInputClass = 'w-full rounded-md border border-[#263345] bg-[#070b16] px-2.5 py-2 text-sm font-semibold text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00]';
+const editableSmallInputClass = 'w-full rounded-md border border-[#263345] bg-[#070b16] px-2 py-1.5 text-xs font-semibold text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00]';
+const editableTextAreaClass = 'w-full resize-none rounded-md border border-[#263345] bg-[#070b16] px-2.5 py-2 text-sm font-semibold leading-relaxed text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00]';
+const boardActionButtonClass = 'flex items-center gap-2 rounded-md border border-[#374151] bg-[#111827] px-3 py-2 text-xs font-black text-slate-200 transition-colors hover:border-[#ff7a00] hover:text-white';
+const dangerIconButtonClass = 'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-[#374151] bg-[#111827] text-slate-500 transition-colors hover:border-[#ef4444] hover:text-[#ef4444]';
+
+const PROCESS_DEFAULT_BOARD: { steps: ProcessStep[]; swimlanes: Swimlane[]; actions: string[] } = {
+  steps: [
+    { title: 'Entrada', owner: 'Comercial', time: '1 dia', status: 'OK', color: '#18c8df', items: ['Pedido recebido', 'Dados mínimos', 'Prioridade inicial'] },
+    { title: 'Triagem', owner: 'PMO', time: '2 dias', status: 'Atenção', color: '#f6b40b', items: ['Escopo validado', 'Dependências', 'Critérios de aceite'] },
+    { title: 'Execução', owner: 'Operações', time: '5 dias', status: 'Em curso', color: '#ff7a00', items: ['Tarefas abertas', 'Bloqueios visíveis', 'Evidências'] },
+    { title: 'Validação', owner: 'Cliente', time: '2 dias', status: 'Risco', color: '#ef4444', items: ['Homologação', 'Correções', 'Aceite formal'] },
+    { title: 'Encerramento', owner: 'CS', time: '1 dia', status: 'Pronto', color: '#22c55e', items: ['Ata final', 'Documentação', 'Próximo ciclo'] }
+  ],
+  swimlanes: [
+    { area: 'Cliente', entries: ['Enviar requisitos', 'Validar solução', 'Aprovar aceite'], color: '#22c55e' },
+    { area: 'Comercial', entries: ['Registrar oportunidade', 'Confirmar contrato', 'Comunicar mudança'], color: '#ff7a00' },
+    { area: 'Operações', entries: ['Planejar execução', 'Executar entregas', 'Documentar evidências'], color: '#18c8df' },
+    { area: 'Gestão', entries: ['Acompanhar SLA', 'Remover bloqueios', 'Report executivo'], color: '#f6b40b' }
+  ],
+  actions: ['Criar checklist de entrada obrigatório', 'Definir SLA por etapa e responsável', 'Automatizar aviso de bloqueio', 'Padronizar evidências de aceite']
+};
+
+const PRODUCT_DEFAULT_BOARD: { ideas: ProductIdea[]; matrix: MatrixQuadrant[]; roadmap: RoadmapWave[] } = {
+  ideas: [
+    { title: 'Assistente de escopo com IA', cluster: 'Eficiência', score: 92, color: '#22c55e' },
+    { title: 'Painel de saúde do cliente', cluster: 'Retenção', score: 86, color: '#18c8df' },
+    { title: 'Portal de aprovações externas', cluster: 'Governança', score: 78, color: '#f6b40b' },
+    { title: 'Resumo automático de reuniões', cluster: 'Produtividade', score: 81, color: '#ff7a00' }
+  ],
+  matrix: [
+    { quadrant: 'Apostar agora', hint: 'Alto impacto · baixo esforço', ideas: ['Ata automática', 'Templates por fase'], color: '#22c55e' },
+    { quadrant: 'Planejar', hint: 'Alto impacto · alto esforço', ideas: ['Portal do cliente', 'Integração BI'], color: '#f6b40b' },
+    { quadrant: 'Quick wins', hint: 'Baixo impacto · baixo esforço', ideas: ['Tags inteligentes', 'Favoritos'], color: '#18c8df' },
+    { quadrant: 'Evitar agora', hint: 'Baixo impacto · alto esforço', ideas: ['Customização extrema'], color: '#ff7a00' }
+  ],
+  roadmap: [
+    { wave: 'Onda 1', title: 'Validar valor', text: 'Protótipos rápidos, entrevistas e métricas de adoção.', color: '#22c55e' },
+    { wave: 'Onda 2', title: 'Construir MVP', text: 'Fluxos essenciais, integrações mínimas e telemetria.', color: '#f6b40b' },
+    { wave: 'Onda 3', title: 'Escalar produto', text: 'Automação, governança, permissões e expansão comercial.', color: '#ff7a00' }
+  ]
+};
+
+function cloneBoard<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function loadBoard<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return cloneBoard(fallback);
+  const stored = window.localStorage.getItem(key);
+  if (!stored) return cloneBoard(fallback);
+  try {
+    return JSON.parse(stored) as T;
+  } catch {
+    return cloneBoard(fallback);
+  }
+}
+
+function BoardShell({
+  title,
+  subtitle,
+  icon: Icon,
+  onBack,
+  actions,
+  children
+}: {
+  title: string;
+  subtitle: string;
+  icon: any;
+  onBack: () => void;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="h-full overflow-y-auto bg-[radial-gradient(circle_at_16%_0%,rgba(255,122,0,0.18),transparent_26%),radial-gradient(circle_at_86%_8%,rgba(34,197,94,0.14),transparent_30%),linear-gradient(135deg,#050914,#070b16_46%,#111827)] p-6 text-slate-300 custom-scrollbar">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -471,10 +579,13 @@ function BoardShell({ title, subtitle, icon: Icon, onBack, children }: { title: 
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{subtitle}</p>
             </div>
           </div>
-          <button className="flex items-center gap-2 rounded-md bg-[#ff7a00] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]">
-            <Sparkles className="h-4 w-4" />
-            Gerar com IA
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-2 rounded-md border border-[#22c55e]/35 bg-[#22c55e]/10 px-3 py-2 text-xs font-black text-[#5ee2a0]">
+              <Save className="h-4 w-4" />
+              Autosalvo
+            </span>
+            {actions}
+          </div>
         </header>
         {children}
       </div>
@@ -483,20 +594,44 @@ function BoardShell({ title, subtitle, icon: Icon, onBack, children }: { title: 
 }
 
 function ProcessMappingBoard({ onBack }: { onBack: () => void }) {
-  const steps = [
-    { title: 'Entrada', owner: 'Comercial', time: '1 dia', status: 'OK', color: '#18c8df', items: ['Pedido recebido', 'Dados mínimos', 'Prioridade inicial'] },
-    { title: 'Triagem', owner: 'PMO', time: '2 dias', status: 'Atenção', color: '#f6b40b', items: ['Escopo validado', 'Dependências', 'Critérios de aceite'] },
-    { title: 'Execução', owner: 'Operações', time: '5 dias', status: 'Em curso', color: '#ff7a00', items: ['Tarefas abertas', 'Bloqueios visíveis', 'Evidências'] },
-    { title: 'Validação', owner: 'Cliente', time: '2 dias', status: 'Risco', color: '#ef4444', items: ['Homologação', 'Correções', 'Aceite formal'] },
-    { title: 'Encerramento', owner: 'CS', time: '1 dia', status: 'Pronto', color: '#22c55e', items: ['Ata final', 'Documentação', 'Próximo ciclo'] }
-  ];
+  const [board, setBoard] = useState(() => loadBoard('pm-process-map-board', PROCESS_DEFAULT_BOARD));
+  const leadTime = board.steps.reduce((sum, step) => sum + (Number.parseInt(step.time, 10) || 0), 0);
+  const bottlenecks = board.steps.filter(step => /risco|aten|bloq/i.test(step.status)).length;
+  const controls = board.steps.reduce((sum, step) => sum + step.items.length, 0);
 
-  const swimlanes = [
-    { area: 'Cliente', entries: ['Enviar requisitos', 'Validar solução', 'Aprovar aceite'], color: '#22c55e' },
-    { area: 'Comercial', entries: ['Registrar oportunidade', 'Confirmar contrato', 'Comunicar mudança'], color: '#ff7a00' },
-    { area: 'Operações', entries: ['Planejar execução', 'Executar entregas', 'Documentar evidências'], color: '#18c8df' },
-    { area: 'Gestão', entries: ['Acompanhar SLA', 'Remover bloqueios', 'Report executivo'], color: '#f6b40b' }
-  ];
+  useEffect(() => {
+    window.localStorage.setItem('pm-process-map-board', JSON.stringify(board));
+  }, [board]);
+
+  const updateStep = (index: number, patch: Partial<ProcessStep>) => {
+    setBoard(current => ({
+      ...current,
+      steps: current.steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step)
+    }));
+  };
+
+  const updateStepItem = (stepIndex: number, itemIndex: number, value: string) => {
+    setBoard(current => ({
+      ...current,
+      steps: current.steps.map((step, index) => index === stepIndex
+        ? { ...step, items: step.items.map((item, currentItemIndex) => currentItemIndex === itemIndex ? value : item) }
+        : step)
+    }));
+  };
+
+  const addStep = () => {
+    setBoard(current => ({
+      ...current,
+      steps: [...current.steps, { title: 'Nova etapa', owner: 'Responsável', time: '1 dia', status: 'Novo', color: '#22c55e', items: ['Novo controle'] }]
+    }));
+  };
+
+  const updateLane = (index: number, patch: Partial<Swimlane>) => {
+    setBoard(current => ({
+      ...current,
+      swimlanes: current.swimlanes.map((lane, laneIndex) => laneIndex === index ? { ...lane, ...patch } : lane)
+    }));
+  };
 
   return (
     <BoardShell
@@ -504,13 +639,25 @@ function ProcessMappingBoard({ onBack }: { onBack: () => void }) {
       subtitle="Visualize etapas, donos, tempos, gargalos e ações para transformar um processo solto em um fluxo governado."
       icon={GitBranch}
       onBack={onBack}
+      actions={
+        <>
+          <button type="button" onClick={addStep} className={boardActionButtonClass}>
+            <Plus className="h-4 w-4" />
+            Etapa
+          </button>
+          <button type="button" onClick={() => setBoard(cloneBoard(PROCESS_DEFAULT_BOARD))} className={boardActionButtonClass}>
+            <RotateCcw className="h-4 w-4" />
+            Restaurar
+          </button>
+        </>
+      }
     >
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { icon: Route, label: 'Etapas', value: '5', tone: '#18c8df' },
-          { icon: AlertTriangle, label: 'Gargalos', value: '2', tone: '#ff7a00' },
-          { icon: TimerReset, label: 'Lead time', value: '11d', tone: '#f6b40b' },
-          { icon: ClipboardCheck, label: 'Controles', value: '8', tone: '#22c55e' }
+          { icon: Route, label: 'Etapas', value: String(board.steps.length), tone: '#18c8df' },
+          { icon: AlertTriangle, label: 'Gargalos', value: String(bottlenecks), tone: '#ff7a00' },
+          { icon: TimerReset, label: 'Lead time', value: `${leadTime || 0}d`, tone: '#f6b40b' },
+          { icon: ClipboardCheck, label: 'Controles', value: String(controls), tone: '#22c55e' }
         ].map(item => {
           const Icon = item.icon;
           return (
@@ -533,27 +680,38 @@ function ProcessMappingBoard({ onBack }: { onBack: () => void }) {
         </div>
 
         <div className="grid gap-3 xl:grid-cols-5">
-          {steps.map((step, index) => (
-            <div key={step.title} className="relative rounded-lg border border-[#263345] bg-[#070b16] p-4">
-              {index < steps.length - 1 && <div className="absolute -right-3 top-1/2 hidden h-0.5 w-3 bg-[#374151] xl:block" />}
+          {board.steps.map((step, index) => (
+            <div key={`${step.title}-${index}`} className="relative rounded-lg border border-[#263345] bg-[#070b16] p-4">
+              {index < board.steps.length - 1 && <div className="absolute -right-3 top-1/2 hidden h-0.5 w-3 bg-[#374151] xl:block" />}
               <div className="mb-4 flex items-center justify-between">
                 <span className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-black text-white" style={{ backgroundColor: `${step.color}22`, color: step.color, border: `1px solid ${step.color}55` }}>
                   {index + 1}
                 </span>
-                <span className="rounded-full px-2 py-1 text-[10px] font-black uppercase" style={{ backgroundColor: `${step.color}16`, color: step.color }}>
-                  {step.status}
-                </span>
+                <input value={step.status} onChange={event => updateStep(index, { status: event.target.value })} className="w-24 rounded-full border border-transparent bg-transparent px-2 py-1 text-right text-[10px] font-black uppercase outline-none focus:border-[#ff7a00]" style={{ backgroundColor: `${step.color}16`, color: step.color }} />
               </div>
-              <h3 className="text-base font-black text-slate-100">{step.title}</h3>
-              <p className="mt-1 text-xs text-slate-500">{step.owner} · {step.time}</p>
+              <input value={step.title} onChange={event => updateStep(index, { title: event.target.value })} className={editableInputClass} />
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <input value={step.owner} onChange={event => updateStep(index, { owner: event.target.value })} className={editableSmallInputClass} />
+                <input value={step.time} onChange={event => updateStep(index, { time: event.target.value })} className={editableSmallInputClass} />
+              </div>
               <div className="mt-4 space-y-2">
-                {step.items.map(item => (
-                  <div key={item} className="flex items-center gap-2 text-xs text-slate-400">
+                {step.items.map((item, itemIndex) => (
+                  <div key={`${item}-${itemIndex}`} className="flex items-center gap-2 text-xs text-slate-400">
                     <CheckCircle2 className="h-3.5 w-3.5" style={{ color: step.color }} />
-                    {item}
+                    <input value={item} onChange={event => updateStepItem(index, itemIndex, event.target.value)} className="min-w-0 flex-1 bg-transparent font-semibold text-slate-300 outline-none focus:text-white" />
+                    <button type="button" onClick={() => updateStep(index, { items: step.items.filter((_, currentIndex) => currentIndex !== itemIndex) })} className="text-slate-600 hover:text-[#ef4444]" title="Remover item">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 ))}
+                <button type="button" onClick={() => updateStep(index, { items: [...step.items, 'Novo controle'] })} className="mt-2 flex items-center gap-1 text-xs font-black text-[#18c8df] hover:text-[#5ee2a0]">
+                  <Plus className="h-3.5 w-3.5" />
+                  Controle
+                </button>
               </div>
+              <button type="button" onClick={() => setBoard(current => ({ ...current, steps: current.steps.filter((_, stepIndex) => stepIndex !== index) }))} className="mt-4 text-xs font-black text-slate-600 hover:text-[#ef4444]">
+                Remover etapa
+              </button>
             </div>
           ))}
         </div>
@@ -563,33 +721,48 @@ function ProcessMappingBoard({ onBack }: { onBack: () => void }) {
         <div className="rounded-lg border border-[#263345] bg-[#0b1020]/88 p-5">
           <h2 className="text-xl font-black text-white">Raias de responsabilidade</h2>
           <div className="mt-4 space-y-3">
-            {swimlanes.map(lane => (
-              <div key={lane.area} className="grid gap-3 rounded-lg border border-[#263345] bg-[#070b16] p-3 md:grid-cols-[150px_1fr]">
+            {board.swimlanes.map((lane, laneIndex) => (
+              <div key={`${lane.area}-${laneIndex}`} className="grid gap-3 rounded-lg border border-[#263345] bg-[#070b16] p-3 md:grid-cols-[170px_1fr_36px]">
                 <div className="flex items-center gap-2 text-sm font-black text-slate-100">
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: lane.color }} />
-                  {lane.area}
+                  <input value={lane.area} onChange={event => updateLane(laneIndex, { area: event.target.value })} className="min-w-0 flex-1 bg-transparent outline-none focus:text-white" />
                 </div>
                 <div className="grid gap-2 md:grid-cols-3">
-                  {lane.entries.map(entry => (
-                    <div key={entry} className="rounded-md border border-[#263345] bg-[#111827] px-3 py-2 text-xs font-semibold text-slate-300">
-                      {entry}
-                    </div>
+                  {lane.entries.map((entry, entryIndex) => (
+                    <input key={`${entry}-${entryIndex}`} value={entry} onChange={event => updateLane(laneIndex, { entries: lane.entries.map((current, index) => index === entryIndex ? event.target.value : current) })} className={editableSmallInputClass} />
                   ))}
+                  <button type="button" onClick={() => updateLane(laneIndex, { entries: [...lane.entries, 'Nova ação'] })} className="rounded-md border border-dashed border-[#374151] px-3 py-2 text-xs font-black text-[#18c8df] hover:border-[#18c8df]">
+                    + Ação
+                  </button>
                 </div>
+                <button type="button" onClick={() => setBoard(current => ({ ...current, swimlanes: current.swimlanes.filter((_, index) => index !== laneIndex) }))} className={dangerIconButtonClass} title="Remover raia">
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             ))}
+            <button type="button" onClick={() => setBoard(current => ({ ...current, swimlanes: [...current.swimlanes, { area: 'Nova raia', entries: ['Nova ação'], color: '#22c55e' }] }))} className={boardActionButtonClass}>
+              <Plus className="h-4 w-4" />
+              Nova raia
+            </button>
           </div>
         </div>
 
         <div className="rounded-lg border border-[#263345] bg-[linear-gradient(135deg,rgba(255,122,0,0.14),rgba(17,24,39,0.96))] p-5">
           <h2 className="text-xl font-black text-white">Ações de melhoria</h2>
           <div className="mt-4 space-y-3">
-            {['Criar checklist de entrada obrigatório', 'Definir SLA por etapa e responsável', 'Automatizar aviso de bloqueio', 'Padronizar evidências de aceite'].map((action, index) => (
-              <div key={action} className="flex gap-3 rounded-lg border border-[#374151] bg-[#070b16]/70 p-3">
+            {board.actions.map((action, index) => (
+              <div key={`${action}-${index}`} className="flex gap-3 rounded-lg border border-[#374151] bg-[#070b16]/70 p-3">
                 <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-[#ff7a00]/15 text-xs font-black text-[#ffb15c]">{index + 1}</span>
-                <p className="text-sm font-semibold text-slate-300">{action}</p>
+                <input value={action} onChange={event => setBoard(current => ({ ...current, actions: current.actions.map((item, actionIndex) => actionIndex === index ? event.target.value : item) }))} className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-300 outline-none focus:text-white" />
+                <button type="button" onClick={() => setBoard(current => ({ ...current, actions: current.actions.filter((_, actionIndex) => actionIndex !== index) }))} className="text-slate-600 hover:text-[#ef4444]" title="Remover ação">
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             ))}
+            <button type="button" onClick={() => setBoard(current => ({ ...current, actions: [...current.actions, 'Nova ação de melhoria'] }))} className={boardActionButtonClass}>
+              <Plus className="h-4 w-4" />
+              Nova ação
+            </button>
           </div>
         </div>
       </section>
@@ -598,19 +771,34 @@ function ProcessMappingBoard({ onBack }: { onBack: () => void }) {
 }
 
 function ProductBrainstormBoard({ onBack }: { onBack: () => void }) {
-  const ideas = [
-    { title: 'Assistente de escopo com IA', cluster: 'Eficiência', score: 92, color: '#22c55e' },
-    { title: 'Painel de saúde do cliente', cluster: 'Retenção', score: 86, color: '#18c8df' },
-    { title: 'Portal de aprovações externas', cluster: 'Governança', score: 78, color: '#f6b40b' },
-    { title: 'Resumo automático de reuniões', cluster: 'Produtividade', score: 81, color: '#ff7a00' }
-  ];
+  const [board, setBoard] = useState(() => loadBoard('pm-product-brainstorm-board', PRODUCT_DEFAULT_BOARD));
+  const averageScore = board.ideas.length ? Math.round(board.ideas.reduce((sum, idea) => sum + Number(idea.score || 0), 0) / board.ideas.length) : 0;
+  const personas = new Set(board.ideas.map(idea => idea.cluster).filter(Boolean)).size;
 
-  const matrix = [
-    { quadrant: 'Apostar agora', hint: 'Alto impacto · baixo esforço', ideas: ['Ata automática', 'Templates por fase'], color: '#22c55e' },
-    { quadrant: 'Planejar', hint: 'Alto impacto · alto esforço', ideas: ['Portal do cliente', 'Integração BI'], color: '#f6b40b' },
-    { quadrant: 'Quick wins', hint: 'Baixo impacto · baixo esforço', ideas: ['Tags inteligentes', 'Favoritos'], color: '#18c8df' },
-    { quadrant: 'Evitar agora', hint: 'Baixo impacto · alto esforço', ideas: ['Customização extrema'], color: '#ff7a00' }
-  ];
+  useEffect(() => {
+    window.localStorage.setItem('pm-product-brainstorm-board', JSON.stringify(board));
+  }, [board]);
+
+  const updateIdea = (index: number, patch: Partial<ProductIdea>) => {
+    setBoard(current => ({
+      ...current,
+      ideas: current.ideas.map((idea, ideaIndex) => ideaIndex === index ? { ...idea, ...patch } : idea)
+    }));
+  };
+
+  const updateMatrix = (index: number, patch: Partial<MatrixQuadrant>) => {
+    setBoard(current => ({
+      ...current,
+      matrix: current.matrix.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item)
+    }));
+  };
+
+  const updateRoadmap = (index: number, patch: Partial<RoadmapWave>) => {
+    setBoard(current => ({
+      ...current,
+      roadmap: current.roadmap.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item)
+    }));
+  };
 
   return (
     <BoardShell
@@ -618,13 +806,25 @@ function ProductBrainstormBoard({ onBack }: { onBack: () => void }) {
       subtitle="Organize hipóteses, ideias, dores, oportunidades e priorização para transformar colaboração em roadmap."
       icon={Lightbulb}
       onBack={onBack}
+      actions={
+        <>
+          <button type="button" onClick={() => setBoard(current => ({ ...current, ideas: [...current.ideas, { title: 'Nova ideia', cluster: 'Oportunidade', score: 70, color: '#22c55e' }] }))} className={boardActionButtonClass}>
+            <Plus className="h-4 w-4" />
+            Ideia
+          </button>
+          <button type="button" onClick={() => setBoard(cloneBoard(PRODUCT_DEFAULT_BOARD))} className={boardActionButtonClass}>
+            <RotateCcw className="h-4 w-4" />
+            Restaurar
+          </button>
+        </>
+      }
     >
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { icon: Lightbulb, label: 'Ideias', value: '24', tone: '#f6b40b' },
-          { icon: Users, label: 'Personas', value: '4', tone: '#18c8df' },
-          { icon: Gauge, label: 'Score médio', value: '84', tone: '#22c55e' },
-          { icon: Layers3, label: 'Roadmap', value: '3 ondas', tone: '#ff7a00' }
+          { icon: Lightbulb, label: 'Ideias', value: String(board.ideas.length), tone: '#f6b40b' },
+          { icon: Users, label: 'Clusters', value: String(personas), tone: '#18c8df' },
+          { icon: Gauge, label: 'Score médio', value: String(averageScore), tone: '#22c55e' },
+          { icon: Layers3, label: 'Roadmap', value: `${board.roadmap.length} ondas`, tone: '#ff7a00' }
         ].map(item => {
           const Icon = item.icon;
           return (
@@ -644,19 +844,20 @@ function ProductBrainstormBoard({ onBack }: { onBack: () => void }) {
             <span className="rounded-full border border-[#22c55e]/35 bg-[#22c55e]/10 px-3 py-1 text-xs font-black text-[#5ee2a0]">Priorizado</span>
           </div>
           <div className="space-y-3">
-            {ideas.map(idea => (
-              <div key={idea.title} className="rounded-lg border border-[#263345] bg-[#070b16] p-4">
+            {board.ideas.map((idea, index) => (
+              <div key={`${idea.title}-${index}`} className="rounded-lg border border-[#263345] bg-[#070b16] p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-100">{idea.title}</h3>
-                    <p className="mt-1 text-xs text-slate-500">{idea.cluster}</p>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input value={idea.title} onChange={event => updateIdea(index, { title: event.target.value })} className={editableInputClass} />
+                    <input value={idea.cluster} onChange={event => updateIdea(index, { cluster: event.target.value })} className={editableSmallInputClass} />
                   </div>
-                  <span className="rounded-full px-2.5 py-1 text-xs font-black" style={{ color: idea.color, backgroundColor: `${idea.color}16` }}>
-                    {idea.score}
-                  </span>
+                  <input type="number" min="0" max="100" value={idea.score} onChange={event => updateIdea(index, { score: Number(event.target.value) })} className="w-16 rounded-full border border-transparent px-2.5 py-1 text-center text-xs font-black outline-none focus:border-[#ff7a00]" style={{ color: idea.color, backgroundColor: `${idea.color}16` }} />
+                  <button type="button" onClick={() => setBoard(current => ({ ...current, ideas: current.ideas.filter((_, ideaIndex) => ideaIndex !== index) }))} className={dangerIconButtonClass} title="Remover ideia">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#263345]">
-                  <div className="h-full rounded-full" style={{ width: `${idea.score}%`, background: `linear-gradient(90deg, ${idea.color}, #f6b40b)` }} />
+                  <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, Number(idea.score || 0)))}%`, background: `linear-gradient(90deg, ${idea.color}, #f6b40b)` }} />
                 </div>
               </div>
             ))}
@@ -666,19 +867,20 @@ function ProductBrainstormBoard({ onBack }: { onBack: () => void }) {
         <div className="rounded-lg border border-[#263345] bg-[#0b1020]/88 p-5">
           <h2 className="text-xl font-black text-white">Matriz impacto x esforço</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {matrix.map(item => (
-              <div key={item.quadrant} className="min-h-[150px] rounded-lg border border-[#263345] bg-[#070b16] p-4">
+            {board.matrix.map((item, index) => (
+              <div key={`${item.quadrant}-${index}`} className="min-h-[150px] rounded-lg border border-[#263345] bg-[#070b16] p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-black text-slate-100">{item.quadrant}</h3>
+                  <input value={item.quadrant} onChange={event => updateMatrix(index, { quadrant: event.target.value })} className="min-w-0 flex-1 bg-transparent text-sm font-black text-slate-100 outline-none focus:text-white" />
                   <Wand2 className="h-4 w-4" style={{ color: item.color }} />
                 </div>
-                <p className="mb-4 text-xs text-slate-500">{item.hint}</p>
+                <input value={item.hint} onChange={event => updateMatrix(index, { hint: event.target.value })} className="mb-4 w-full bg-transparent text-xs font-semibold text-slate-500 outline-none focus:text-slate-300" />
                 <div className="space-y-2">
-                  {item.ideas.map(idea => (
-                    <div key={idea} className="rounded-md border px-3 py-2 text-xs font-bold text-slate-300" style={{ borderColor: `${item.color}33`, backgroundColor: `${item.color}10` }}>
-                      {idea}
-                    </div>
+                  {item.ideas.map((idea, ideaIndex) => (
+                    <input key={`${idea}-${ideaIndex}`} value={idea} onChange={event => updateMatrix(index, { ideas: item.ideas.map((current, currentIndex) => currentIndex === ideaIndex ? event.target.value : current) })} className="w-full rounded-md border px-3 py-2 text-xs font-bold text-slate-300 outline-none focus:border-[#ff7a00]" style={{ borderColor: `${item.color}33`, backgroundColor: `${item.color}10` }} />
                   ))}
+                  <button type="button" onClick={() => updateMatrix(index, { ideas: [...item.ideas, 'Nova hipótese'] })} className="text-xs font-black text-[#18c8df] hover:text-[#5ee2a0]">
+                    + Hipótese
+                  </button>
                 </div>
               </div>
             ))}
@@ -689,19 +891,19 @@ function ProductBrainstormBoard({ onBack }: { onBack: () => void }) {
       <section className="rounded-lg border border-[#263345] bg-[#0b1020]/88 p-5">
         <h2 className="text-xl font-black text-white">Roadmap sugerido</h2>
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          {[
-            { wave: 'Onda 1', title: 'Validar valor', text: 'Protótipos rápidos, entrevistas e métricas de adoção.', color: '#22c55e' },
-            { wave: 'Onda 2', title: 'Construir MVP', text: 'Fluxos essenciais, integrações mínimas e telemetria.', color: '#f6b40b' },
-            { wave: 'Onda 3', title: 'Escalar produto', text: 'Automação, governança, permissões e expansão comercial.', color: '#ff7a00' }
-          ].map(item => (
-            <div key={item.wave} className="rounded-lg border border-[#263345] bg-[#070b16] p-4">
-              <span className="rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide" style={{ color: item.color, backgroundColor: `${item.color}14` }}>
-                {item.wave}
-              </span>
-              <h3 className="mt-4 text-base font-black text-slate-100">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.text}</p>
+          {board.roadmap.map((item, index) => (
+            <div key={`${item.wave}-${index}`} className="rounded-lg border border-[#263345] bg-[#070b16] p-4">
+              <input value={item.wave} onChange={event => updateRoadmap(index, { wave: event.target.value })} className="w-28 rounded-full border border-transparent px-3 py-1 text-[11px] font-black uppercase tracking-wide outline-none focus:border-[#ff7a00]" style={{ color: item.color, backgroundColor: `${item.color}14` }} />
+              <input value={item.title} onChange={event => updateRoadmap(index, { title: event.target.value })} className="mt-4 w-full bg-transparent text-base font-black text-slate-100 outline-none focus:text-white" />
+              <textarea value={item.text} onChange={event => updateRoadmap(index, { text: event.target.value })} rows={3} className={`${editableTextAreaClass} mt-2`} />
+              <button type="button" onClick={() => setBoard(current => ({ ...current, roadmap: current.roadmap.filter((_, roadmapIndex) => roadmapIndex !== index) }))} className="mt-3 text-xs font-black text-slate-600 hover:text-[#ef4444]">
+                Remover onda
+              </button>
             </div>
           ))}
+          <button type="button" onClick={() => setBoard(current => ({ ...current, roadmap: [...current.roadmap, { wave: 'Nova onda', title: 'Nova entrega', text: 'Descreva a próxima entrega do roadmap.', color: '#18c8df' }] }))} className="min-h-[170px] rounded-lg border border-dashed border-[#374151] bg-[#070b16]/60 p-4 text-sm font-black text-[#18c8df] transition-colors hover:border-[#18c8df] hover:text-[#5ee2a0]">
+            + Nova onda
+          </button>
         </div>
       </section>
     </BoardShell>
