@@ -56,7 +56,17 @@ const getTitleColor = (id: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-export default function KanbanBoard({ issues, setIssues, onTaskClick }: { issues: Issue[], setIssues: React.Dispatch<React.SetStateAction<Issue[]>>, onTaskClick?: (issue: Issue) => void }) {
+export default function KanbanBoard({
+  issues,
+  setIssues,
+  onTaskClick,
+  onCreateTask
+}: {
+  issues: Issue[],
+  setIssues: React.Dispatch<React.SetStateAction<Issue[]>>,
+  onTaskClick?: (issue: Issue) => void,
+  onCreateTask?: (title: string, data: any) => void
+}) {
   const [columns, setColumns] = useState<Column[]>(() => {
     const saved = localStorage.getItem('pm_columns_v4');
     if (saved) {
@@ -104,6 +114,13 @@ export default function KanbanBoard({ issues, setIssues, onTaskClick }: { issues
 
   const handleCreateNewTask = (title: string, data: any) => {
     if (!newTaskStatus) return;
+
+    if (onCreateTask) {
+      onCreateTask(title, { ...data, status: data.status || newTaskStatus });
+      setIsCreatingTask(false);
+      setNewTaskStatus(null);
+      return;
+    }
 
     const newId = `i-${Date.now()}`;
     const newTask: Issue = {
@@ -399,4 +416,3 @@ export default function KanbanBoard({ issues, setIssues, onTaskClick }: { issues
     </div>
   );
 }
-

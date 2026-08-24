@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Home, Compass, CheckSquare, Sparkles, Users, FileText,
   BarChart2, LayoutTemplate, MoreHorizontal,
@@ -50,6 +51,7 @@ const emptyProjectForm = {
 type ProjectForm = typeof emptyProjectForm;
 
 export default function App({ onBack }: { onBack?: () => void }) {
+  const navigate = useNavigate();
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [globalView, setGlobalView] = useState('spaces');
 
@@ -153,10 +155,11 @@ export default function App({ onBack }: { onBack?: () => void }) {
   };
 
   const handleGlobalCreateTaskSubmit = (title: string, data: any) => {
+    const normalizedTitle = title.trim();
     const newTask: Issue = {
       id: `new-${Date.now()}`,
       key: `TSK-${Math.floor(Math.random() * 1000) + 100}`,
-      title: title.trim(),
+      title: normalizedTitle,
       description: data.description || '',
       status: data.status || 'PENDENTE',
       projectId: activeSpaceId,
@@ -169,6 +172,25 @@ export default function App({ onBack }: { onBack?: () => void }) {
     };
     setIssues(prev => [newTask, ...prev]);
     setIsCreatingTaskGlobal(false);
+
+    if (data.phaseKind === 'KICKOFF_INTERNO' || data.phaseKind === 'KICKOFF_EXTERNO') {
+      const kickoffContext = {
+        source: 'project-management',
+        projectId: activeProject?.id,
+        projectName: activeProject?.name,
+        projectClient: activeProject?.client,
+        projectManager: activeProject?.manager,
+        projectScope: activeProject?.scope,
+        projectObjective: activeProject?.objective,
+        phaseId: newTask.id,
+        phaseTitle: normalizedTitle,
+        phaseDescription: data.description || '',
+        kickoffType: data.phaseKind === 'KICKOFF_INTERNO' ? 'internal' : 'external',
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('pm_kickoff_context', JSON.stringify(kickoffContext));
+      navigate(`/kickoff?from=project&openCreate=1&type=${kickoffContext.kickoffType}`);
+    }
   };
 
   const handleUpdateIssue = (updatedIssue: Issue) => {
@@ -404,7 +426,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
 
         {/* View Renderer */}
         <div className="flex-1 overflow-hidden relative bg-[#070b16]">
-          {activeView === 'board' && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} />}
+          {activeView === 'board' && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} />}
           {activeView === 'list' && <ListView issues={issues} onTaskClick={setSelectedTask} />}
           {activeView === 'dashboard' && (
             <Dashboard

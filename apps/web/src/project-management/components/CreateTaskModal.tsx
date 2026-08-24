@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Maximize2, List as ListIcon, Calendar, Flag, Tag, Users, MoreHorizontal, Sparkles, Paperclip, Bell, ChevronDown, CheckCircle2, Circle, Plus, Trash2 } from 'lucide-react';
+import { X, Maximize2, List as ListIcon, Calendar, Flag, Tag, Users, MoreHorizontal, Sparkles, Paperclip, Bell, ChevronDown, CheckCircle2, Circle, Plus, Trash2, Rocket } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { mockUsers, mockColumns } from '../data';
@@ -18,6 +18,7 @@ interface CreateTaskModalProps {
 export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PENDENTE' }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [phaseKind, setPhaseKind] = useState<'DEFAULT' | 'KICKOFF_INTERNO' | 'KICKOFF_EXTERNO'>('DEFAULT');
   const [showTaskType, setShowTaskType] = useState(false);
 
   const [showPriority, setShowPriority] = useState(false);
@@ -35,7 +36,24 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
   const [customFields, setCustomFields] = useState<{ id: string, name: string, value: string }[]>([]);
 
   const handleCreate = () => {
-    onCreate(title, { description, priority, status, assignee, dueDate, customFields });
+    onCreate(title, { description, priority, status, assignee, dueDate, customFields, phaseKind });
+  };
+
+  const selectPhaseKind = (kind: 'DEFAULT' | 'KICKOFF_INTERNO' | 'KICKOFF_EXTERNO') => {
+    setPhaseKind(kind);
+    setShowTaskType(false);
+
+    if (kind === 'KICKOFF_INTERNO') {
+      if (!title.trim()) setTitle('Reunião de kickoff interna');
+      if (!description.trim()) setDescription('Alinhamento interno de escopo, responsáveis, riscos, entregáveis e plano para o kickoff com o cliente.');
+      setStatus('PLANEJAMENTO');
+    }
+
+    if (kind === 'KICKOFF_EXTERNO') {
+      if (!title.trim()) setTitle('Reunião de kickoff externa');
+      if (!description.trim()) setDescription('Kickoff com o cliente para confirmar escopo, governança, cronograma, dependências, responsáveis e próximos passos.');
+      setStatus('PLANEJAMENTO');
+    }
   };
 
   const handleAddCustomField = () => {
@@ -95,7 +113,9 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
 
             <div className="relative">
               <button onClick={() => setShowTaskType(!showTaskType)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0d1423] border border-[#374151] hover:bg-[#0d1423] text-slate-300 text-xs font-medium transition-colors">
-                <Circle className="w-3.5 h-3.5" /> Fase <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
+                {phaseKind === 'DEFAULT' ? <Circle className="w-3.5 h-3.5" /> : <Rocket className="w-3.5 h-3.5 text-[#ff7a00]" />}
+                {phaseKind === 'KICKOFF_INTERNO' ? 'Kickoff interno' : phaseKind === 'KICKOFF_EXTERNO' ? 'Kickoff externo' : 'Fase'}
+                <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
               </button>
 
               {showTaskType && (
@@ -105,11 +125,23 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
                     <button className="text-[#ff7a00] font-medium hover:text-[#22c55e]">Editar</button>
                   </div>
                   <div className="px-1 space-y-0.5">
-                    <button className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-[#1f2937]/50 hover:bg-[#1f2937] text-left transition-colors">
+                    <button onClick={() => selectPhaseKind('DEFAULT')} className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-[#1f2937]/50 hover:bg-[#1f2937] text-left transition-colors">
                       <div className="flex items-center gap-2 text-sm text-slate-200">
                         <CheckCircle2 className="w-4 h-4 text-slate-400" /> Fase <span className="text-slate-500 text-xs">(padrão)</span>
                       </div>
-                      <CheckCircle2 className="w-4 h-4 text-[#ff7a00]" />
+                      {phaseKind === 'DEFAULT' && <CheckCircle2 className="w-4 h-4 text-[#ff7a00]" />}
+                    </button>
+                    <button onClick={() => selectPhaseKind('KICKOFF_INTERNO')} className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#1f2937] text-left text-sm text-slate-300 transition-colors">
+                      <span className="flex items-center gap-2">
+                        <Rocket className="w-4 h-4 text-[#f6b40b]" /> Kickoff interno
+                      </span>
+                      {phaseKind === 'KICKOFF_INTERNO' && <CheckCircle2 className="w-4 h-4 text-[#ff7a00]" />}
+                    </button>
+                    <button onClick={() => selectPhaseKind('KICKOFF_EXTERNO')} className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#1f2937] text-left text-sm text-slate-300 transition-colors">
+                      <span className="flex items-center gap-2">
+                        <Rocket className="w-4 h-4 text-[#22c55e]" /> Kickoff externo
+                      </span>
+                      {phaseKind === 'KICKOFF_EXTERNO' && <CheckCircle2 className="w-4 h-4 text-[#ff7a00]" />}
                     </button>
                     <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#1f2937] text-left text-sm text-slate-300 transition-colors">
                       <div className="w-4 h-4 rotate-45 border-2 border-slate-400 rounded-sm" /> Marco
@@ -154,6 +186,22 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
               )}
             </div>
           </div>
+
+          {phaseKind !== 'DEFAULT' && (
+            <div className="rounded-lg border border-[#ff7a00]/35 bg-[linear-gradient(135deg,rgba(255,122,0,0.14),rgba(34,197,94,0.08),rgba(13,20,35,0.96))] p-4">
+              <div className="flex items-start gap-3">
+                <Rocket className="mt-0.5 h-5 w-5 text-[#ff7a00]" />
+                <div>
+                  <p className="text-sm font-bold text-slate-100">
+                    Esta fase abrirá a Gestão de Kickoff
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                    Ao criar, a fase fica salva no projeto e você será levado para cadastrar a reunião de {phaseKind === 'KICKOFF_INTERNO' ? 'kickoff interno' : 'kickoff externo'} com os dados do projeto já encaminhados.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Task Metadata row */}
           <div className="flex items-center flex-wrap gap-2 pt-4">

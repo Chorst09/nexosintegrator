@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Rocket,
   Plus,
@@ -245,6 +246,7 @@ Ficou acordado que os próximos acompanhamentos serão conduzidos conforme a gov
 };
 
 const Kickoff = () => {
+  const [searchParams] = useSearchParams();
   const [meetings, setMeetings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -257,6 +259,7 @@ const Kickoff = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [detailMeeting, setDetailMeeting] = useState(null);
+  const [projectKickoffContext, setProjectKickoffContext] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -291,6 +294,22 @@ const Kickoff = () => {
   useEffect(() => {
     fetchData();
   }, [statusFilter, phaseFilter, searchTerm]);
+
+  useEffect(() => {
+    if (searchParams.get('openCreate') !== '1' || searchParams.get('from') !== 'project') return;
+
+    try {
+      const rawContext = localStorage.getItem('pm_kickoff_context');
+      const parsedContext = rawContext ? JSON.parse(rawContext) : null;
+      setProjectKickoffContext(parsedContext);
+      setEditingMeeting(null);
+      setShowCreateModal(true);
+      if (parsedContext?.kickoffType === 'internal') setPhaseFilter('ALINHAMENTO_INTERNO');
+      if (parsedContext?.kickoffType === 'external') setPhaseFilter('ALINHAMENTO_EXTERNO');
+    } catch (error) {
+      console.error('Erro ao carregar contexto do projeto:', error);
+    }
+  }, [searchParams]);
 
   const filteredMeetings = useMemo(() => meetings, [meetings]);
 
@@ -622,6 +641,7 @@ const Kickoff = () => {
             await fetchData();
           }}
           meeting={editingMeeting}
+          initialContext={!editingMeeting ? projectKickoffContext : null}
         />
       )}
 
@@ -694,11 +714,32 @@ const MeetingCard = ({ meeting, onView, onEdit }) => {
 };
 
 // ===== MODAL CRIAÇÃO/EDIÇÃO =====
-const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
+const kickoffPhaseFromContext = (context) => {
+  if (context?.kickoffType === 'internal') return 'ALINHAMENTO_INTERNO';
+  if (context?.kickoffType === 'external') return 'ALINHAMENTO_EXTERNO';
+  return null;
+};
+
+const kickoffTitleFromContext = (context) => {
+  if (!context) return '';
+  const label = context.kickoffType === 'internal' ? 'Kickoff interno' : 'Kickoff externo';
+  return `${label} - ${context.projectName || context.phaseTitle || 'Projeto'}`;
+};
+
+const kickoffDescriptionFromContext = (context) => {
+  if (!context) return '';
+  return [
+    context.phaseDescription,
+    context.projectObjective ? `Objetivo do projeto: ${context.projectObjective}` : '',
+    context.projectScope ? `Escopo: ${context.projectScope}` : ''
+  ].filter(Boolean).join('\n\n');
+};
+
+const KickoffFormModal = ({ onClose, onSaved, meeting, initialContext = null }) => {
   const [formData, setFormData] = useState({
-    title: meeting?.title || '',
-    description: meeting?.description || '',
-    phase: meeting?.phase || 'ENTENDIMENTO_OPORTUNIDADE',
+    title: meeting?.title || kickoffTitleFromContext(initialContext),
+    description: meeting?.description || kickoffDescriptionFromContext(initialContext),
+    phase: meeting?.phase || kickoffPhaseFromContext(initialContext) || 'ENTENDIMENTO_OPORTUNIDADE',
     platform: meeting?.platform || 'MEET',
     meetingLink: meeting?.meetingLink || '',
     scheduledDate: meeting?.scheduledDate ? meeting.scheduledDate.slice(0, 10) : '',
@@ -737,7 +778,20 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
       ]);
       if (oppRes.ok) {
         const data = await oppRes.json();
-        setOpportunities(Array.isArray(data) ? data : data.opportunities || []);
+        const loadedOpportunities = Array.isArray(data) ? data : data.opportunities || [];
+        setOpportunities(loadedOpportunities);
+        if (!meeting && initialContext && !formData.opportunityId) {
+          const projectName = (initialContext.projectName || '').toLowerCase();
+          const projectClient = (initialContext.projectClient || '').toLowerCase();
+          const matched = loadedOpportunities.find((opp) => {
+            const title = (opp.title || '').toLowerCase();
+            const company = (opp.company?.name || '').toLowerCase();
+            return (projectName && title.includes(projectName)) || (projectClient && company.includes(projectClient));
+          });
+          if (matched) {
+            setFormData((prev) => ({ ...prev, opportunityId: matched.id }));
+          }
+        }
       }
       if (usersRes.ok) {
         const data = await usersRes.json();
@@ -938,6 +992,38 @@ const KickoffFormModal = ({ onClose, onSaved, meeting }) => {
               </select>
             </div>
           </div>
+
+          {initialContext && !meeting && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-500/25 dark:bg-orange-500/10">
+              <div className="flex items-start gap-3">
+                <Rocket className="mt-0.5 h-5 w-5 text-orange-600 dark:text-orange-300" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-orange-900 dark:text-orange-200">
+                    Fluxo iniciado pela Gestão de Projetos
+                  </p>
+                  <div className="mt-2 grid gap-2 text-xs text-orange-800 dark:text-orange-200 md:grid-cols-3">
+                    <div>
+                      <span className="block font-semibold opacity-70">Projeto</span>
+                      <span className="block truncate">{initialContext.projectName || 'Projeto não informado'}</span>
+                    </div>
+                    <div>
+                      <span className="block font-semibold opacity-70">Fase</span>
+                      <span className="block truncate">{initialContext.phaseTitle || 'Fase de kickoff'}</span>
+                    </div>
+                    <div>
+                      <span className="block font-semibold opacity-70">Tipo</span>
+                      <span className="block">{initialContext.kickoffType === 'internal' ? 'Kickoff interno' : 'Kickoff externo'}</span>
+                    </div>
+                  </div>
+                  {!formData.opportunityId && (
+                    <p className="mt-3 text-xs text-orange-700 dark:text-orange-200">
+                      Selecione uma oportunidade/projeto para concluir o cadastro da reunião no módulo Kickoff.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Dados herdados do cliente */}
           {preview && (
