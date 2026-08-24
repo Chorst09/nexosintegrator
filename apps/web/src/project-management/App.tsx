@@ -101,6 +101,12 @@ export default function App({ onBack }: { onBack?: () => void }) {
   }, [spaces]);
 
   const activeProject = spaces.find(s => s.id === activeSpaceId) || spaces[0];
+  const activeProjectIssues = issues.filter(issue => {
+    if (!activeProject) return false;
+    if (issue.projectId === activeProject.id) return true;
+    return !issue.projectId && activeProject.id === spaces[0]?.id;
+  });
+  const isDashboardFocus = (globalView === 'spaces' && activeView === 'dashboard') || globalView === 'dashboards';
 
   const submitNewSpace = () => {
     const name = projectForm.name.trim();
@@ -153,6 +159,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
       title: title.trim(),
       description: data.description || '',
       status: data.status || 'PENDENTE',
+      projectId: activeSpaceId,
       priority: data.priority || 'Normal',
       assignee: data.assignee,
       dueDate: data.dueDate,
@@ -173,6 +180,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
     <div className="flex h-screen bg-[#050914] font-sans overflow-hidden text-slate-300 text-sm">
 
       {/* Far Left Thin Navigation */}
+      {!isDashboardFocus && (
       <nav className="w-16 bg-[#050914] flex-shrink-0 flex flex-col items-center py-4 border-r border-[#263345] z-30">
         <div className="w-8 h-8 bg-[#22c55e] rounded text-white flex items-center justify-center font-bold mb-6 cursor-pointer shadow-[0_0_22px_rgba(34,197,94,0.25)]">
           C
@@ -188,9 +196,10 @@ export default function App({ onBack }: { onBack?: () => void }) {
           <NavItem icon={LayoutTemplate} label="Quadros" active={globalView === 'whiteboards'} onClick={() => setGlobalView('whiteboards')} />
         </div>
       </nav>
+      )}
 
       {/* Second Sidebar (Spaces) */}
-      {globalView === 'spaces' && (
+      {globalView === 'spaces' && !isDashboardFocus && (
         <aside className="w-[280px] bg-[#111827] flex-shrink-0 flex flex-col h-full border-r border-[#263345] z-20">
           <div className="p-4 flex items-center justify-between border-b border-[#263345] bg-[linear-gradient(90deg,rgba(255,122,0,0.13),transparent)]">
           <h2 className="font-semibold text-slate-100">Projetos</h2>
@@ -255,6 +264,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
       <main className="flex-1 flex flex-col min-w-0 bg-[#070b16]">
 
         {/* Top Global Bar */}
+        {!isDashboardFocus && (
         <header className="h-12 border-b border-[#263345] px-4 flex items-center justify-between bg-[#111827] flex-shrink-0">
           <div className="flex items-center gap-2">
             {onBack && (
@@ -300,8 +310,21 @@ export default function App({ onBack }: { onBack?: () => void }) {
             </div>
           </div>
         </header>
+        )}
 
         {globalView === 'spaces' ? (
+          isDashboardFocus ? (
+            <div className="flex-1 overflow-hidden bg-[#070b16]">
+              <Dashboard
+                projects={spaces}
+                issues={issues}
+                activeProjectId={activeSpaceId}
+                onProjectChange={setActiveSpaceId}
+                onBack={() => setActiveView('list')}
+                onCreateProject={() => setIsCreatingSpace(true)}
+              />
+            </div>
+          ) : (
           <>
             {/* Project Header & Tabs */}
             <div className="bg-[#111827] border-b border-[#263345] flex-shrink-0">
@@ -358,7 +381,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 </div>
                 <div className="rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(34,197,94,0.14),rgba(17,24,39,0.98))] p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Fases</p>
-                  <p className="mt-1 text-sm font-black text-[#22c55e]">{issues.length}</p>
+                  <p className="mt-1 text-sm font-black text-[#22c55e]">{activeProjectIssues.length}</p>
                 </div>
               </div>
             </div>
@@ -383,7 +406,16 @@ export default function App({ onBack }: { onBack?: () => void }) {
         <div className="flex-1 overflow-hidden relative bg-[#070b16]">
           {activeView === 'board' && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'list' && <ListView issues={issues} onTaskClick={setSelectedTask} />}
-          {activeView === 'dashboard' && <Dashboard />}
+          {activeView === 'dashboard' && (
+            <Dashboard
+              projects={spaces}
+              issues={issues}
+              activeProjectId={activeSpaceId}
+              onProjectChange={setActiveSpaceId}
+              onBack={() => setActiveView('list')}
+              onCreateProject={() => setIsCreatingSpace(true)}
+            />
+          )}
           {activeView === 'team' && <TeamView />}
           {activeView === 'calendar' && <CalendarView issues={issues} onTaskClick={setSelectedTask} />}
           {activeView === 'gantt' && <GanttView issues={issues} />}
@@ -392,6 +424,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
         </div>
 
           </>
+          )
         ) : (
           <div className="flex-1 overflow-hidden relative bg-[#070b16]">
             {globalView === 'home' && (
@@ -409,7 +442,19 @@ export default function App({ onBack }: { onBack?: () => void }) {
             {globalView === 'planned' && <PlannedView />}
             {globalView === 'teams' && <TeamView />}
             {globalView === 'docs' && <DocsView />}
-            {globalView === 'dashboards' && <Dashboard />}
+            {globalView === 'dashboards' && (
+              <Dashboard
+                projects={spaces}
+                issues={issues}
+                activeProjectId={activeSpaceId}
+                onProjectChange={setActiveSpaceId}
+                onBack={() => setGlobalView('home')}
+                onCreateProject={() => {
+                  setGlobalView('spaces');
+                  setIsCreatingSpace(true);
+                }}
+              />
+            )}
             {globalView === 'whiteboards' && <WhiteboardsView />}
           </div>
         )}

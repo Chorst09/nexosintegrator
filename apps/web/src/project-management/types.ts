@@ -41,6 +41,7 @@ export interface CustomField {
 
 export interface Issue {
   id: string;
+  projectId?: string;
   key?: string;
   title: string;
   description?: string;
