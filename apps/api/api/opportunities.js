@@ -77,6 +77,17 @@ const resolveRequestedClientType = (body = {}, query = {}) => {
   return 'B2B';
 };
 
+const normalizeRole = (user = {}) => String(user.actualRole || user.role || '').trim().toUpperCase();
+
+const canSeeAllOpportunities = (user = {}) =>
+  ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR'].includes(normalizeRole(user));
+
+const canAccessClientType = (user = {}, clientType = 'B2B') => {
+  const type = normalizeClientType(clientType) || 'B2B';
+  if (type === 'B2G') return Boolean(user.accessB2G);
+  return Boolean(user.accessB2B);
+};
+
 const generateOpportunityNumber = async (tx, clientType = 'B2B') => {
   const type = normalizeClientType(clientType) || 'B2B';
   const year = new Date().getFullYear();
@@ -192,8 +203,11 @@ export default async function handler(req) {
 
     const where = {};
     if (stage) where.stage = stage;
-    if (ownerId) where.ownerId = ownerId;
-    if (req.user?.role === 'SELLER') where.ownerId = req.user.userId;
+    if (canSeeAllOpportunities(req.user)) {
+      if (ownerId) where.ownerId = ownerId;
+    } else {
+      where.ownerId = req.user.userId;
+    }
 
     const opportunities = await prisma.opportunity.findMany({
       where,
@@ -236,7 +250,8 @@ export default async function handler(req) {
         ...item,
         clientType: inferOpportunityClientType(item)
       }))
-      .filter((item) => isOpportunityInClientType(item, clientType));
+      .filter((item) => isOpportunityInClientType(item, clientType))
+      .filter((item) => canAccessClientType(req.user, item.clientType));
 
     return Response.json(filtered);
   }
@@ -244,14 +259,19 @@ export default async function handler(req) {
   if (req.method === "POST") {
     const body = await req.json();
 
-    const resolvedOwnerId = req.user?.role === 'SELLER' ? req.user.userId : body.ownerId;
+    const clientType = resolveRequestedClientType(body, req.query || {});
+
+    if (!canAccessClientType(req.user, clientType)) {
+      return new Response('Sem acesso ao módulo desta oportunidade', { status: 403 });
+    }
+
+    const resolvedOwnerId = canSeeAllOpportunities(req.user) ? body.ownerId : req.user.userId;
     if (!resolvedOwnerId) {
       return new Response('ownerId é obrigatório', { status: 400 });
     }
 
     const projectType = normalizeProjectType(body.projectType);
     const projectMonths = normalizeProjectMonths(projectType, body.projectMonths);
-    const clientType = resolveRequestedClientType(body, req.query || {});
     
     const opportunity = await prisma.$transaction(async (tx) => {
       const number = body.number || await generateOpportunityNumber(tx, clientType);
@@ -321,14 +341,17 @@ export default async function handler(req) {
       return new Response('id é obrigatório', { status: 400 });
     }
 
-    if (req.user?.role === 'SELLER') {
+    if (!canSeeAllOpportunities(req.user)) {
       const existing = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
-        select: { ownerId: true }
+        select: { ownerId: true, clientType: true }
       });
       if (!existing) return new Response('Not found', { status: 404 });
       if (existing.ownerId !== req.user.userId) {
         return new Response('Forbidden', { status: 403 });
+      }
+      if (!canAccessClientType(req.user, existing.clientType)) {
+        return new Response('Sem acesso ao módulo desta oportunidade', { status: 403 });
       }
     }
     
@@ -421,8 +444,10 @@ export default async function handler(req) {
       return new Response('Oportunidade não encontrada', { status: 404 });
     }
 
-    if (req.user?.role === 'SELLER' && existing.ownerId !== req.user.userId) {
-      return new Response('Forbidden', { status: 403 });
+    if (!canSeeAllOpportunities(req.user)) {
+      if (existing.ownerId !== req.user.userId) {
+        return new Response('Forbidden', { status: 403 });
+      }
     }
 
     await prisma.$transaction(async (tx) => {

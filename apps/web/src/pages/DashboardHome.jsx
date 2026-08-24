@@ -199,6 +199,38 @@ export default function DashboardHome() {
       highlight: false
     },
     {
+      id: 'management',
+      name: 'Gestão',
+      price: 'R$ 129,90',
+      period: '/mês',
+      description: 'Projetos, kickoff e operação em uma visão única',
+      icon: Workflow,
+      features: [
+        'Gestão de projetos e fases',
+        'Kickoff interno e externo',
+        'Painéis executivos por projeto',
+        'Acompanhamentos e responsáveis',
+        'Relatórios operacionais'
+      ],
+      highlight: false
+    },
+    {
+      id: 'automation',
+      name: 'Automações',
+      price: 'R$ 149,90',
+      period: '/mês',
+      description: 'Workflows, gatilhos e integrações para escalar processos',
+      icon: Zap,
+      features: [
+        'Construtor de workflows',
+        'Gatilhos por evento e data',
+        'Ações automáticas',
+        'Integrações com sistemas externos',
+        'Monitoramento de execuções'
+      ],
+      highlight: false
+    },
+    {
       id: 'completo',
       name: 'Plano Completo',
       price: 'R$ 289,90',
@@ -206,7 +238,7 @@ export default function DashboardHome() {
       description: 'Todos os módulos em um único plano',
       icon: Crown,
       features: [
-        'B2B Privado + B2G Governo + Pré-Vendas',
+        'B2B + B2G + Pré-Vendas + Gestão + Automações',
         'Usuários ilimitados',
         'Suporte prioritário',
         'Relatórios avançados',

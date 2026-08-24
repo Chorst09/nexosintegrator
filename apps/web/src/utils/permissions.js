@@ -61,10 +61,14 @@ export const ROLE_ACCESS_POLICY = {
     manufacturerRegistry: true,
     documentation: true,
     strategicReports: true,
+    management: false,
+    automation: false,
     administration: false,
     accessB2B: true,
     accessB2G: false,
-    accessPreSales: false
+    accessPreSales: false,
+    accessManagement: false,
+    accessAutomation: false
   },
   [ROLES.PRE_SALES]: {
     dashboard: true,
@@ -75,10 +79,14 @@ export const ROLE_ACCESS_POLICY = {
     manufacturerRegistry: false,
     documentation: false,
     strategicReports: false,
+    management: false,
+    automation: false,
     administration: false,
     accessB2B: false,
     accessB2G: false,
-    accessPreSales: true
+    accessPreSales: true,
+    accessManagement: false,
+    accessAutomation: false
   },
   [ROLES.ADMIN]: {
     dashboard: true,
@@ -89,10 +97,14 @@ export const ROLE_ACCESS_POLICY = {
     manufacturerRegistry: true,
     documentation: true,
     strategicReports: true,
+    management: true,
+    automation: true,
     administration: false, // ADMIN não tem acesso à administração MASTER
     accessB2B: true,
     accessB2G: true,
-    accessPreSales: true
+    accessPreSales: true,
+    accessManagement: true,
+    accessAutomation: true
   },
   [ROLES.MASTER]: {
     dashboard: true,
@@ -103,10 +115,14 @@ export const ROLE_ACCESS_POLICY = {
     manufacturerRegistry: true,
     documentation: true,
     strategicReports: true,
+    management: true,
+    automation: true,
     administration: true, // Apenas MASTER tem acesso à administração
     accessB2B: true,
     accessB2G: true,
-    accessPreSales: true
+    accessPreSales: true,
+    accessManagement: true,
+    accessAutomation: true
   }
 };
 
@@ -152,16 +168,22 @@ export const getUserAccess = (user) => {
   const role = toCanonicalRole(user.role);
   const policy = getRolePolicy(role);
 
-  if (role === ROLES.USER) {
-    const accessB2B = user.accessB2B !== undefined ? Boolean(user.accessB2B) : policy.accessB2B;
-    const accessB2G = user.accessB2G !== undefined ? Boolean(user.accessB2G) : policy.accessB2G;
-    return { accessB2B, accessB2G, accessPreSales: policy.accessPreSales };
+  if (role === ROLES.MASTER) {
+    return {
+      accessB2B: true,
+      accessB2G: true,
+      accessPreSales: true,
+      accessManagement: true,
+      accessAutomation: true
+    };
   }
 
   return {
-    accessB2B: policy.accessB2B,
-    accessB2G: policy.accessB2G,
-    accessPreSales: policy.accessPreSales
+    accessB2B: user.accessB2B !== undefined ? Boolean(user.accessB2B) : policy.accessB2B,
+    accessB2G: user.accessB2G !== undefined ? Boolean(user.accessB2G) : policy.accessB2G,
+    accessPreSales: user.accessPreSales !== undefined ? Boolean(user.accessPreSales) : policy.accessPreSales,
+    accessManagement: user.accessManagement !== undefined ? Boolean(user.accessManagement) : policy.accessManagement,
+    accessAutomation: user.accessAutomation !== undefined ? Boolean(user.accessAutomation) : policy.accessAutomation
   };
 };
 
@@ -191,6 +213,27 @@ export const moduleFromPath = (pathname = '') => {
     return 'PRE_SALES';
   }
 
+  if (
+    path.startsWith('/projetos') ||
+    path.startsWith('/kickoff') ||
+    path.startsWith('/produtos') ||
+    path.startsWith('/vendedores') ||
+    path.startsWith('/comissoes') ||
+    path.startsWith('/metas-performance') ||
+    path.startsWith('/pos-venda') ||
+    path.startsWith('/relatorios')
+  ) {
+    return 'GESTAO';
+  }
+
+  if (
+    path.startsWith('/automacoes') ||
+    path.startsWith('/integracoes') ||
+    path.startsWith('/funcionalidades-avancadas')
+  ) {
+    return 'AUTOMATION';
+  }
+
   if (path.startsWith('/b2g-')) {
     return 'B2G';
   }
@@ -216,6 +259,8 @@ export const canAccessModule = (user, moduleName) => {
   if (mod === 'B2B') return access.accessB2B;
   if (mod === 'B2G') return access.accessB2G;
   if (mod === 'PRE_SALES') return access.accessPreSales;
+  if (mod === 'GESTAO' || mod === 'MANAGEMENT') return access.accessManagement;
+  if (mod === 'AUTOMATION' || mod === 'AUTOMACOES') return access.accessAutomation;
 
   return false;
 };

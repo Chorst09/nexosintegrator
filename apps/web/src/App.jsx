@@ -83,7 +83,7 @@ export default function App() {
           path="/projetos"
           element={
             <ProtectedRoute>
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Suspense fallback={<div className="min-h-screen grid place-items-center bg-[#0b1120] text-slate-400">Carregando gestão de projetos...</div>}>
                   <Projetos />
                 </Suspense>
@@ -117,7 +117,7 @@ export default function App() {
           <Route
             path="empresas"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <Empresas />
               </RoleGuard>
             }
@@ -126,7 +126,7 @@ export default function App() {
           <Route
             path="oportunidades"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <Oportunidades />
               </RoleGuard>
             }
@@ -135,7 +135,7 @@ export default function App() {
           <Route
             path="b2g-portal-busca"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <PortalBusca />
               </RoleGuard>
             }
@@ -145,7 +145,7 @@ export default function App() {
           <Route
             path="b2g-dashboard"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -153,7 +153,7 @@ export default function App() {
           <Route
             path="b2g-leads"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -161,7 +161,7 @@ export default function App() {
           <Route
             path="b2g-orgaos"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <Empresas clientType="B2G" />
               </RoleGuard>
             }
@@ -169,7 +169,7 @@ export default function App() {
           <Route
             path="b2g-oportunidades"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -177,7 +177,7 @@ export default function App() {
           <Route
             path="b2g-analise"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <Navigate to="/b2g-analise-editais-tr" replace />
               </RoleGuard>
             }
@@ -185,7 +185,7 @@ export default function App() {
           <Route
             path="b2g-analise-editais-tr"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GAnaliseEditaisTR />
               </RoleGuard>
             }
@@ -193,7 +193,7 @@ export default function App() {
           <Route
             path="b2g-resumos"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -201,7 +201,7 @@ export default function App() {
           <Route
             path="b2g-atas"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -209,7 +209,7 @@ export default function App() {
           <Route
             path="b2g-atividades"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -217,7 +217,7 @@ export default function App() {
           <Route
             path="b2g-documentacao"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -225,7 +225,7 @@ export default function App() {
           <Route
             path="b2g-relatorios"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -233,7 +233,7 @@ export default function App() {
           <Route
             path="b2g-historico"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER]}>
                 <B2GRouteScreen />
               </RoleGuard>
             }
@@ -251,7 +251,7 @@ export default function App() {
           <Route
             path="kickoff"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Kickoff />
               </RoleGuard>
             }
@@ -260,7 +260,7 @@ export default function App() {
           <Route
             path="projetos/:id"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <ProjetoDetalhe />
               </RoleGuard>
             }
@@ -269,7 +269,7 @@ export default function App() {
           <Route
             path="produtos"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Produtos />
               </RoleGuard>
             }
@@ -277,7 +277,7 @@ export default function App() {
           <Route
             path="propostas"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Propostas />
               </RoleGuard>
             }
@@ -285,7 +285,7 @@ export default function App() {
           <Route
             path="templates-propostas"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <TemplatesPropostas />
               </RoleGuard>
             }
@@ -293,7 +293,7 @@ export default function App() {
           <Route
             path="contratos"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Contratos />
               </RoleGuard>
             }
@@ -301,7 +301,7 @@ export default function App() {
           <Route
             path="pos-venda"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <PosVenda />
               </RoleGuard>
             }
@@ -309,7 +309,7 @@ export default function App() {
           <Route
             path="automacoes"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Automacoes />
               </RoleGuard>
             }
@@ -317,7 +317,7 @@ export default function App() {
           <Route
             path="leads"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <LeadManagement />
               </RoleGuard>
             }
@@ -445,7 +445,7 @@ export default function App() {
           <Route
             path="relatorios"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.USER]}>
                 <Relatorios />
               </RoleGuard>
             }

@@ -27,6 +27,18 @@ const isMasterEmail = (value) => getMasterEmails().has(normalizeEmail(value));
 const sanitizeUserPayload = (user = {}) => {
   const role = normalizeRole(user.role);
   const access = resolveUserAccess(role, user);
+  const tenantAccess = user.tenantCompany;
+  const effectiveAccess = isMaster({ actualRole: role })
+    ? access
+    : tenantAccess
+      ? {
+          accessB2B: Boolean(access.accessB2B && tenantAccess.accessB2B),
+          accessB2G: Boolean(access.accessB2G && tenantAccess.accessB2G),
+          accessPreSales: Boolean(access.accessPreSales && tenantAccess.accessPreSales),
+          accessManagement: Boolean(access.accessManagement && tenantAccess.accessManagement),
+          accessAutomation: Boolean(access.accessAutomation && tenantAccess.accessAutomation)
+        }
+      : access;
   return {
     id: user.id,
     name: user.name,
@@ -35,9 +47,11 @@ const sanitizeUserPayload = (user = {}) => {
     regionId: user.regionId || null,
     quota: user.quota ?? null,
     tenantCompanyId: user.tenantCompanyId || null,
-    accessB2B: access.accessB2B,
-    accessB2G: access.accessB2G,
-    accessPreSales: access.accessPreSales,
+    accessB2B: effectiveAccess.accessB2B,
+    accessB2G: effectiveAccess.accessB2G,
+    accessPreSales: effectiveAccess.accessPreSales,
+    accessManagement: effectiveAccess.accessManagement,
+    accessAutomation: effectiveAccess.accessAutomation,
     isCompanyOwner: Boolean(user.isCompanyOwner),
     permissions: getPermissionTemplate(role, user.permissionOverrides || {}),
     createdAt: user.createdAt || null
@@ -76,6 +90,17 @@ router.post('/login', async (req, res) => {
           accessB2B: true,
           accessB2G: true,
           accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
+          tenantCompany: {
+            select: {
+              accessB2B: true,
+              accessB2G: true,
+              accessPreSales: true,
+              accessManagement: true,
+              accessAutomation: true
+            }
+          },
           permissionOverrides: true,
           isCompanyOwner: true,
           createdAt: true
@@ -180,7 +205,9 @@ router.post('/register', async (req, res) => {
     const roleAccess = resolveUserAccess(finalRole, {
       accessB2B: req.body?.accessB2B,
       accessB2G: req.body?.accessB2G,
-      accessPreSales: req.body?.accessPreSales
+      accessPreSales: req.body?.accessPreSales,
+      accessManagement: req.body?.accessManagement,
+      accessAutomation: req.body?.accessAutomation
     });
 
     const user = await prisma.user.create({
@@ -192,6 +219,8 @@ router.post('/register', async (req, res) => {
         accessB2B: roleAccess.accessB2B,
         accessB2G: roleAccess.accessB2G,
         accessPreSales: roleAccess.accessPreSales,
+        accessManagement: roleAccess.accessManagement,
+        accessAutomation: roleAccess.accessAutomation,
         isCompanyOwner: finalRole === 'ADMIN'
       },
       select: {
@@ -205,6 +234,17 @@ router.post('/register', async (req, res) => {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
         isCompanyOwner: true,
         permissionOverrides: true,
         createdAt: true
@@ -306,6 +346,17 @@ router.get('/me', authenticateToken, async (req, res) => {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
         isCompanyOwner: true,
         permissionOverrides: true,
         createdAt: true
@@ -378,6 +429,8 @@ router.get('/users', authenticateToken, requireRole(['ADMIN', 'DIRECTOR', 'MANAG
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
         isCompanyOwner: true,
         permissionOverrides: true,
         createdAt: true
@@ -427,7 +480,9 @@ router.post('/users', authenticateToken, requireRole(['ADMIN']), async (req, res
     const access = resolveUserAccess(normalizedRole, {
       accessB2B: req.body?.accessB2B,
       accessB2G: req.body?.accessB2G,
-      accessPreSales: req.body?.accessPreSales
+      accessPreSales: req.body?.accessPreSales,
+      accessManagement: req.body?.accessManagement,
+      accessAutomation: req.body?.accessAutomation
     });
 
     const user = await prisma.user.create({
@@ -442,6 +497,8 @@ router.post('/users', authenticateToken, requireRole(['ADMIN']), async (req, res
         accessB2B: access.accessB2B,
         accessB2G: access.accessB2G,
         accessPreSales: access.accessPreSales,
+        accessManagement: access.accessManagement,
+        accessAutomation: access.accessAutomation,
         permissionOverrides: permissionOverrides && typeof permissionOverrides === 'object' ? permissionOverrides : {},
         isCompanyOwner: normalizeRole(role) === 'ADMIN'
       },
@@ -456,6 +513,17 @@ router.post('/users', authenticateToken, requireRole(['ADMIN']), async (req, res
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
         isCompanyOwner: true,
         permissionOverrides: true,
         createdAt: true
@@ -524,7 +592,9 @@ router.put('/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, 
     const access = resolveUserAccess(nextRole, {
       accessB2B: req.body?.accessB2B,
       accessB2G: req.body?.accessB2G,
-      accessPreSales: req.body?.accessPreSales
+      accessPreSales: req.body?.accessPreSales,
+      accessManagement: req.body?.accessManagement,
+      accessAutomation: req.body?.accessAutomation
     });
 
     const updateData = {
@@ -536,6 +606,8 @@ router.put('/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, 
       accessB2B: access.accessB2B,
       accessB2G: access.accessB2G,
       accessPreSales: access.accessPreSales,
+      accessManagement: access.accessManagement,
+      accessAutomation: access.accessAutomation,
       permissionOverrides:
         req.body?.permissionOverrides && typeof req.body.permissionOverrides === 'object'
           ? req.body.permissionOverrides
@@ -572,6 +644,17 @@ router.put('/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, 
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
         isCompanyOwner: true,
         permissionOverrides: true,
         createdAt: true

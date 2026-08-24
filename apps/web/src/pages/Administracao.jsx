@@ -75,23 +75,28 @@ const resolveAccessByRole = (role, currentAccess) => {
   const normalizedRole = normalizeRole(role);
 
   if (['MASTER', 'ADMIN'].includes(normalizedRole)) {
-    return { accessB2B: true, accessB2G: true, accessPreSales: true };
+    return { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true };
   }
 
   if (normalizedRole === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true };
+    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
   }
 
   const accessB2B = currentAccess.accessB2B !== undefined ? Boolean(currentAccess.accessB2B) : true;
   const accessB2G = currentAccess.accessB2G !== undefined ? Boolean(currentAccess.accessB2G) : true;
-  if (!accessB2B && !accessB2G) {
-    return { accessB2B: true, accessB2G: true, accessPreSales: false };
+  const accessPreSales = currentAccess.accessPreSales !== undefined ? Boolean(currentAccess.accessPreSales) : false;
+  const accessManagement = currentAccess.accessManagement !== undefined ? Boolean(currentAccess.accessManagement) : false;
+  const accessAutomation = currentAccess.accessAutomation !== undefined ? Boolean(currentAccess.accessAutomation) : false;
+  if (!accessB2B && !accessB2G && !accessPreSales && !accessManagement && !accessAutomation) {
+    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
   }
 
   return {
     accessB2B,
     accessB2G,
-    accessPreSales: false
+    accessPreSales,
+    accessManagement,
+    accessAutomation
   };
 };
 
@@ -100,11 +105,14 @@ const normalizeCompanyModuleAccess = (company) => {
   const accessB2B = company.accessB2B !== undefined ? Boolean(company.accessB2B) : true;
   const accessB2G = company.accessB2G !== undefined ? Boolean(company.accessB2G) : false;
   const accessPreSales = company.accessPreSales !== undefined ? Boolean(company.accessPreSales) : false;
+  const accessManagement = company.accessManagement !== undefined ? Boolean(company.accessManagement) : false;
+  const accessAutomation = company.accessAutomation !== undefined ? Boolean(company.accessAutomation) : false;
   return {
     accessB2B,
     accessB2G,
     accessPreSales,
-    accessManagement: accessB2B && accessB2G
+    accessManagement,
+    accessAutomation
   };
 };
 
@@ -114,7 +122,8 @@ const companyModuleBadges = (company = {}) => {
     access.accessB2B && 'B2B',
     access.accessB2G && 'B2G',
     access.accessPreSales && 'Pré-vendas',
-    access.accessManagement && 'Gestão'
+    access.accessManagement && 'Gestão',
+    access.accessAutomation && 'Automações'
   ].filter(Boolean);
 };
 
@@ -125,7 +134,9 @@ const constrainAccessToCompanyModules = (access, company) => {
   return {
     accessB2B: Boolean(access.accessB2B && companyAccess.accessB2B),
     accessB2G: Boolean(access.accessB2G && companyAccess.accessB2G),
-    accessPreSales: Boolean(access.accessPreSales && companyAccess.accessPreSales)
+    accessPreSales: Boolean(access.accessPreSales && companyAccess.accessPreSales),
+    accessManagement: Boolean(access.accessManagement && companyAccess.accessManagement),
+    accessAutomation: Boolean(access.accessAutomation && companyAccess.accessAutomation)
   };
 };
 
@@ -379,6 +390,8 @@ export default function Administracao() {
     accessB2B: true,
     accessB2G: true,
     accessPreSales: false,
+    accessManagement: false,
+    accessAutomation: false,
     isCompanyOwner: false
   });
   const [savingUser, setSavingUser] = useState(false);
@@ -407,7 +420,9 @@ export default function Administracao() {
     notes: '',
     accessB2B: true,
     accessB2G: false,
-    accessPreSales: false
+    accessPreSales: false,
+    accessManagement: false,
+    accessAutomation: false
   });
   const [savingCompany, setSavingCompany] = useState(false);
   const [licenseDrafts, setLicenseDrafts] = useState({});
@@ -421,7 +436,9 @@ export default function Administracao() {
     role: 'USER',
     accessB2B: true,
     accessB2G: true,
-    accessPreSales: false
+    accessPreSales: false,
+    accessManagement: false,
+    accessAutomation: false
   });
   const [savingCompanyUser, setSavingCompanyUser] = useState(false);
   const [alertsPrefs, setAlertsPrefs] = useState({
@@ -456,7 +473,9 @@ export default function Administracao() {
     notes: '',
     accessB2B: true,
     accessB2G: false,
-    accessPreSales: false
+    accessPreSales: false,
+    accessManagement: false,
+    accessAutomation: false
   });
   const [savingCompanyEdit, setSavingCompanyEdit] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
@@ -784,6 +803,8 @@ export default function Administracao() {
       accessB2B: true,
       accessB2G: true,
       accessPreSales: false,
+      accessManagement: false,
+      accessAutomation: false,
       isCompanyOwner: false
     });
     setShowUserModal(true);
@@ -794,7 +815,9 @@ export default function Administracao() {
     const resolvedAccess = resolveAccessByRole(normalizedRole, {
       accessB2B: user?.accessB2B,
       accessB2G: user?.accessB2G,
-      accessPreSales: user?.accessPreSales
+      accessPreSales: user?.accessPreSales,
+      accessManagement: user?.accessManagement,
+      accessAutomation: user?.accessAutomation
     });
 
     setEditingUser(user);
@@ -814,6 +837,8 @@ export default function Administracao() {
       accessB2B: resolvedAccess.accessB2B,
       accessB2G: resolvedAccess.accessB2G,
       accessPreSales: resolvedAccess.accessPreSales,
+      accessManagement: resolvedAccess.accessManagement,
+      accessAutomation: resolvedAccess.accessAutomation,
       isCompanyOwner: user?.isCompanyOwner !== undefined ? Boolean(user.isCompanyOwner) : false
     });
     setShowUserModal(true);
@@ -841,6 +866,8 @@ export default function Administracao() {
         accessB2B: Boolean(userForm.accessB2B),
         accessB2G: Boolean(userForm.accessB2G),
         accessPreSales: Boolean(userForm.accessPreSales),
+        accessManagement: Boolean(userForm.accessManagement),
+        accessAutomation: Boolean(userForm.accessAutomation),
         isCompanyOwner: Boolean(userForm.isCompanyOwner)
       };
 
@@ -1544,7 +1571,9 @@ export default function Administracao() {
       notes: '',
       accessB2B: true,
       accessB2G: false,
-      accessPreSales: false
+      accessPreSales: false,
+      accessManagement: false,
+      accessAutomation: false
     });
     setShowCompanyModal(true);
   };
@@ -1603,7 +1632,9 @@ export default function Administracao() {
           phone: companyForm.phone.trim(),
           accessB2B: Boolean(companyForm.accessB2B),
           accessB2G: Boolean(companyForm.accessB2G),
-          accessPreSales: Boolean(companyForm.accessPreSales)
+          accessPreSales: Boolean(companyForm.accessPreSales),
+          accessManagement: Boolean(companyForm.accessManagement),
+          accessAutomation: Boolean(companyForm.accessAutomation)
         },
         adminUser: {
           name: companyForm.adminName.trim(),
@@ -1645,7 +1676,9 @@ export default function Administracao() {
         status: 'ACTIVE',
         accessB2B: true,
         accessB2G: false,
-        accessPreSales: false
+        accessPreSales: false,
+        accessManagement: false,
+        accessAutomation: false
       });
 
       // Recarregar lista de empresas
@@ -1765,7 +1798,9 @@ export default function Administracao() {
         notes: String(companyEditForm.notes || '').trim() || null,
         accessB2B: Boolean(companyEditForm.accessB2B),
         accessB2G: Boolean(companyEditForm.accessB2G),
-        accessPreSales: Boolean(companyEditForm.accessPreSales)
+        accessPreSales: Boolean(companyEditForm.accessPreSales),
+        accessManagement: Boolean(companyEditForm.accessManagement),
+        accessAutomation: Boolean(companyEditForm.accessAutomation)
       };
 
       const res = await fetch(API_ENDPOINTS.licensing.updateCompany(editingManagementCompany.id), {
@@ -1814,7 +1849,7 @@ export default function Administracao() {
 
   const openCreateCompanyUser = (company) => {
     const defaultAccess = constrainAccessToCompanyModules(
-      { accessB2B: true, accessB2G: true, accessPreSales: false },
+      { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: false, accessAutomation: false },
       company
     );
     setTargetCompanyForUser(company);
@@ -1844,7 +1879,9 @@ export default function Administracao() {
         role: normalizeRole(companyUserForm.role),
         accessB2B: userAccess.accessB2B,
         accessB2G: userAccess.accessB2G,
-        accessPreSales: userAccess.accessPreSales
+        accessPreSales: userAccess.accessPreSales,
+        accessManagement: userAccess.accessManagement,
+        accessAutomation: userAccess.accessAutomation
       };
 
       if (!payload.name || !payload.email) {
@@ -1895,8 +1932,8 @@ export default function Administracao() {
         return { ...prev, ...resolveAccessByRole(role, prev) };
       }
 
-      const next = { ...prev, [moduleKey]: Boolean(checked), accessPreSales: false };
-      if (!next.accessB2B && !next.accessB2G) {
+      const next = { ...prev, [moduleKey]: Boolean(checked) };
+      if (!next.accessB2B && !next.accessB2G && !next.accessPreSales && !next.accessManagement && !next.accessAutomation) {
         next.accessB2B = true;
       }
       return next;
@@ -1923,13 +1960,16 @@ export default function Administracao() {
       }
 
       const next = constrainAccessToCompanyModules(
-        { ...prev, [moduleKey]: Boolean(checked), accessPreSales: false },
+        { ...prev, [moduleKey]: Boolean(checked) },
         targetCompanyForUser
       );
-      if (!next.accessB2B && !next.accessB2G) {
+      if (!next.accessB2B && !next.accessB2G && !next.accessPreSales && !next.accessManagement && !next.accessAutomation) {
         const companyAccess = normalizeCompanyModuleAccess(targetCompanyForUser);
         next.accessB2B = Boolean(companyAccess.accessB2B);
         next.accessB2G = !next.accessB2B && Boolean(companyAccess.accessB2G);
+        next.accessPreSales = !next.accessB2B && !next.accessB2G && Boolean(companyAccess.accessPreSales);
+        next.accessManagement = !next.accessB2B && !next.accessB2G && !next.accessPreSales && Boolean(companyAccess.accessManagement);
+        next.accessAutomation = !next.accessB2B && !next.accessB2G && !next.accessPreSales && !next.accessManagement && Boolean(companyAccess.accessAutomation);
       }
       return next;
     });
@@ -1937,9 +1977,7 @@ export default function Administracao() {
 
   const handleCompanyModuleToggle = (setter, moduleKey, checked) => {
     setter((prev) => {
-      const next = { ...prev, [moduleKey]: Boolean(checked) };
-      next.accessManagement = Boolean(next.accessB2B && next.accessB2G);
-      return next;
+      return { ...prev, [moduleKey]: Boolean(checked) };
     });
   };
 
@@ -2386,7 +2424,9 @@ export default function Administracao() {
                         status: 'ACTIVE',
                         accessB2B: true,
                         accessB2G: false,
-                        accessPreSales: false
+                        accessPreSales: false,
+                        accessManagement: false,
+                        accessAutomation: false
                     });
                   }}
                   className="crm-btn crm-btn-primary"
@@ -3182,7 +3222,9 @@ export default function Administracao() {
                 {[
                   ['accessB2B', 'Módulo B2B'],
                   ['accessB2G', 'Módulo B2G'],
-                  ['accessPreSales', 'Pré-vendas']
+                  ['accessPreSales', 'Pré-vendas'],
+                  ['accessManagement', 'Gestão'],
+                  ['accessAutomation', 'Automações']
                 ].map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-blue-500/20">
                     <input
@@ -3194,15 +3236,6 @@ export default function Administracao() {
                     <span className="font-medium text-gray-800 dark:text-slate-100">{label}</span>
                   </label>
                 ))}
-                <div className={[
-                  'rounded-lg border p-3 text-sm',
-                  companyEditForm.accessB2B && companyEditForm.accessB2G
-                    ? 'border-emerald-300/40 bg-emerald-500/10 text-emerald-100'
-                    : 'border-gray-200 text-gray-500 dark:border-blue-500/20 dark:text-slate-400'
-                ].join(' ')}>
-                  <div className="font-semibold">Módulo Gestão</div>
-                  <div className="text-xs">Liberado automaticamente quando B2B e B2G estão ativos.</div>
-                </div>
               </div>
             </div>
 
@@ -3385,33 +3418,23 @@ export default function Administracao() {
           <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-3 space-y-2">
             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acesso por módulo</div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(userForm.accessB2B)}
-                  disabled={['MASTER', 'ADMIN', 'PRE_SALES'].includes(normalizeRole(userForm.role))}
-                  onChange={(e) => handleUserModuleToggle('accessB2B', e.target.checked)}
-                />
-                B2B
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(userForm.accessB2G)}
-                  disabled={['MASTER', 'ADMIN', 'PRE_SALES'].includes(normalizeRole(userForm.role))}
-                  onChange={(e) => handleUserModuleToggle('accessB2G', e.target.checked)}
-                />
-                B2G
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(userForm.accessPreSales)}
-                  disabled={normalizeRole(userForm.role) !== 'PRE_SALES'}
-                  onChange={(e) => handleUserModuleToggle('accessPreSales', e.target.checked)}
-                />
-                Pré-Vendas
-              </label>
+              {[
+                ['accessB2B', 'B2B'],
+                ['accessB2G', 'B2G'],
+                ['accessPreSales', 'Pré-Vendas'],
+                ['accessManagement', 'Gestão'],
+                ['accessAutomation', 'Automações']
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(userForm[key])}
+                    disabled={['MASTER', 'ADMIN', 'PRE_SALES'].includes(normalizeRole(userForm.role))}
+                    onChange={(e) => handleUserModuleToggle(key, e.target.checked)}
+                  />
+                  {label}
+                </label>
+              ))}
             </div>
           </div>
 
@@ -3627,7 +3650,9 @@ export default function Administracao() {
                 {[
                   ['accessB2B', 'Módulo B2B'],
                   ['accessB2G', 'Módulo B2G'],
-                  ['accessPreSales', 'Pré-vendas']
+                  ['accessPreSales', 'Pré-vendas'],
+                  ['accessManagement', 'Gestão'],
+                  ['accessAutomation', 'Automações']
                 ].map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-blue-500/20">
                     <input
@@ -3639,15 +3664,6 @@ export default function Administracao() {
                     <span className="font-medium text-gray-800 dark:text-slate-100">{label}</span>
                   </label>
                 ))}
-                <div className={[
-                  'rounded-lg border p-3 text-sm',
-                  companyForm.accessB2B && companyForm.accessB2G
-                    ? 'border-emerald-300/40 bg-emerald-500/10 text-emerald-100'
-                    : 'border-gray-200 text-gray-500 dark:border-blue-500/20 dark:text-slate-400'
-                ].join(' ')}>
-                  <div className="font-semibold">Módulo Gestão</div>
-                  <div className="text-xs">Liberado automaticamente quando B2B e B2G estão ativos.</div>
-                </div>
               </div>
             </div>
           </div>
@@ -3864,33 +3880,26 @@ export default function Administracao() {
           <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-3 space-y-2">
             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acesso por módulo</div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(companyUserForm.accessB2B)}
-                  disabled={!normalizeCompanyModuleAccess(targetCompanyForUser).accessB2B || ['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
-                  onChange={(e) => handleCompanyUserModuleToggle('accessB2B', e.target.checked)}
-                />
-                B2B
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(companyUserForm.accessB2G)}
-                  disabled={!normalizeCompanyModuleAccess(targetCompanyForUser).accessB2G || ['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
-                  onChange={(e) => handleCompanyUserModuleToggle('accessB2G', e.target.checked)}
-                />
-                B2G
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                <input
-                  type="checkbox"
-                  checked={Boolean(companyUserForm.accessPreSales)}
-                  disabled={!normalizeCompanyModuleAccess(targetCompanyForUser).accessPreSales || normalizeRole(companyUserForm.role) !== 'PRE_SALES'}
-                  onChange={(e) => handleCompanyUserModuleToggle('accessPreSales', e.target.checked)}
-                />
-                Pré-Vendas
-              </label>
+              {[
+                ['accessB2B', 'B2B'],
+                ['accessB2G', 'B2G'],
+                ['accessPreSales', 'Pré-Vendas'],
+                ['accessManagement', 'Gestão'],
+                ['accessAutomation', 'Automações']
+              ].map(([key, label]) => {
+                const companyAccess = normalizeCompanyModuleAccess(targetCompanyForUser);
+                return (
+                  <label key={key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(companyUserForm[key])}
+                      disabled={!companyAccess[key] || ['ADMIN', 'PRE_SALES', 'MASTER'].includes(normalizeRole(companyUserForm.role))}
+                      onChange={(e) => handleCompanyUserModuleToggle(key, e.target.checked)}
+                    />
+                    {label}
+                  </label>
+                );
+              })}
             </div>
           </div>
 

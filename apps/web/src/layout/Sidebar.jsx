@@ -310,6 +310,20 @@ export default function Sidebar({
           }
           if (section.id === 'b2g' && access.accessB2G) return section;
           if (section.id === 'prevendas' && access.accessPreSales) return section;
+          if (section.id === 'gestao' && access.accessManagement) {
+            return {
+              ...section,
+              items: section.items.filter((item) =>
+                ['/projetos', '/kickoff', '/pos-venda', '/relatorios'].includes(item.path)
+              )
+            };
+          }
+          if (section.id === 'automacao' && access.accessAutomation) {
+            return {
+              ...section,
+              items: section.items.filter((item) => item.path === '/automacoes')
+            };
+          }
           // Deny other sections for these roles.
           return null;
         }
@@ -319,11 +333,17 @@ export default function Sidebar({
           if (section.id === 'prevendas') return null;
         }
 
+        if (section.id === 'vendas' && !access.accessB2B) return null;
+        if (section.id === 'b2g' && !access.accessB2G) return null;
+        if (section.id === 'prevendas' && !access.accessPreSales) return null;
+        if (section.id === 'gestao' && !access.accessManagement) return null;
+        if (section.id === 'automacao' && !access.accessAutomation) return null;
+
         return section;
       })
       .filter(Boolean)
       .filter((section) => section.items && section.items.length > 0);
-  }, [menuSections, role, access.accessB2B, access.accessB2G, access.accessPreSales, user]);
+  }, [menuSections, role, access.accessB2B, access.accessB2G, access.accessPreSales, access.accessManagement, access.accessAutomation, user]);
 
   useEffect(() => {
     const activeSection = filteredMenuSections.find((section) =>

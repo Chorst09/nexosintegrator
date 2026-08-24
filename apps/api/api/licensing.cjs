@@ -27,6 +27,8 @@ const DEFAULT_LICENSE_PLANS = [
       b2b: true,
       b2g: true,
       preSales: true,
+      management: true,
+      automation: true,
       integrations: true,
       supportLevel: 'standard'
     }
@@ -43,6 +45,8 @@ const DEFAULT_LICENSE_PLANS = [
       b2b: true,
       b2g: true,
       preSales: true,
+      management: true,
+      automation: true,
       integrations: true,
       supportLevel: 'priority'
     }
@@ -59,6 +63,8 @@ const DEFAULT_LICENSE_PLANS = [
       b2b: true,
       b2g: true,
       preSales: true,
+      management: true,
+      automation: true,
       integrations: true,
       supportLevel: 'priority'
     }
@@ -75,6 +81,8 @@ const DEFAULT_LICENSE_PLANS = [
       b2b: true,
       b2g: true,
       preSales: true,
+      management: true,
+      automation: true,
       integrations: true,
       supportLevel: 'enterprise'
     }
@@ -127,18 +135,23 @@ const normalizeModuleAccess = (body = {}, fallback = {}) => {
   const accessB2B = body.accessB2B !== undefined ? Boolean(body.accessB2B) : fallback.accessB2B !== undefined ? Boolean(fallback.accessB2B) : true;
   const accessB2G = body.accessB2G !== undefined ? Boolean(body.accessB2G) : fallback.accessB2G !== undefined ? Boolean(fallback.accessB2G) : false;
   const accessPreSales = body.accessPreSales !== undefined ? Boolean(body.accessPreSales) : fallback.accessPreSales !== undefined ? Boolean(fallback.accessPreSales) : false;
+  const accessManagement = body.accessManagement !== undefined ? Boolean(body.accessManagement) : fallback.accessManagement !== undefined ? Boolean(fallback.accessManagement) : false;
+  const accessAutomation = body.accessAutomation !== undefined ? Boolean(body.accessAutomation) : fallback.accessAutomation !== undefined ? Boolean(fallback.accessAutomation) : false;
   return {
     accessB2B,
     accessB2G,
     accessPreSales,
-    accessManagement: accessB2B && accessB2G
+    accessManagement,
+    accessAutomation
   };
 };
 
 const constrainAccessToTenant = (access = {}, tenantCompany = {}) => ({
   accessB2B: Boolean(access.accessB2B && tenantCompany.accessB2B),
   accessB2G: Boolean(access.accessB2G && tenantCompany.accessB2G),
-  accessPreSales: Boolean(access.accessPreSales && tenantCompany.accessPreSales)
+  accessPreSales: Boolean(access.accessPreSales && tenantCompany.accessPreSales),
+  accessManagement: Boolean(access.accessManagement && tenantCompany.accessManagement),
+  accessAutomation: Boolean(access.accessAutomation && tenantCompany.accessAutomation)
 });
 
 const toPublicPlan = (plan) => ({
@@ -246,20 +259,27 @@ const mapCompanyWithLicense = (company) => {
     accessB2B: Boolean(company.accessB2B),
     accessB2G: Boolean(company.accessB2G),
     accessPreSales: Boolean(company.accessPreSales),
-    accessManagement: Boolean(company.accessManagement || (company.accessB2B && company.accessB2G)),
+    accessManagement: Boolean(company.accessManagement),
+    accessAutomation: Boolean(company.accessAutomation),
     usersCount: company.users?.length || 0,
     adminsCount: (company.users || []).filter((user) => normalizeRole(user.role) === 'ADMIN').length,
-    users: (company.users || []).map((user) => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: normalizeRole(user.role),
-      accessB2B: Boolean(user.accessB2B),
-      accessB2G: Boolean(user.accessB2G),
-      accessPreSales: Boolean(user.accessPreSales),
-      isCompanyOwner: Boolean(user.isCompanyOwner),
-      createdAt: user.createdAt
-    })),
+    users: (company.users || []).map((user) => {
+      const role = normalizeRole(user.role);
+      const access = constrainAccessToTenant(resolveUserAccess(role, user), company);
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role,
+        accessB2B: access.accessB2B,
+        accessB2G: access.accessB2G,
+        accessPreSales: access.accessPreSales,
+        accessManagement: access.accessManagement,
+        accessAutomation: access.accessAutomation,
+        isCompanyOwner: Boolean(user.isCompanyOwner),
+        createdAt: user.createdAt
+      };
+    }),
     license: activeLicense
       ? {
           id: activeLicense.id,
@@ -382,7 +402,13 @@ router.post('/public/checkout/confirm', async (req, res) => {
     const startDate = normalizeDate(req.body?.startDate) || new Date();
     const endDate = normalizeDate(req.body?.endDate) || calculateEndDate(startDate, plan.billingCycle);
     const seats = normalizeInt(req.body?.seats) || plan.seatsIncluded || 1;
-    const moduleAccess = normalizeModuleAccess(req.body?.company, { accessB2B: true, accessB2G: true, accessPreSales: true });
+    const moduleAccess = normalizeModuleAccess(req.body?.company, {
+      accessB2B: true,
+      accessB2G: true,
+      accessPreSales: true,
+      accessManagement: true,
+      accessAutomation: true
+    });
 
     const result = await prisma.$transaction(async (tx) => {
       let tenantCompany = null;
@@ -476,6 +502,8 @@ router.post('/public/checkout/confirm', async (req, res) => {
             accessB2B: moduleAccess.accessB2B,
             accessB2G: moduleAccess.accessB2G,
             accessPreSales: moduleAccess.accessPreSales,
+            accessManagement: moduleAccess.accessManagement,
+            accessAutomation: moduleAccess.accessAutomation,
             isCompanyOwner: true
           }
         });
@@ -490,6 +518,8 @@ router.post('/public/checkout/confirm', async (req, res) => {
             accessB2B: moduleAccess.accessB2B,
             accessB2G: moduleAccess.accessB2G,
             accessPreSales: moduleAccess.accessPreSales,
+            accessManagement: moduleAccess.accessManagement,
+            accessAutomation: moduleAccess.accessAutomation,
             isCompanyOwner: true
           }
         });
@@ -648,6 +678,8 @@ router.get('/companies', requireRole(['ADMIN']), async (req, res) => {
             accessB2B: true,
             accessB2G: true,
             accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true,
             isCompanyOwner: true,
             createdAt: true
           }
@@ -728,7 +760,7 @@ router.put('/companies/:id', requireRole(['ADMIN']), async (req, res) => {
 
     const existing = await prisma.tenantCompany.findUnique({
       where: { id: companyId },
-      select: { id: true, accessB2B: true, accessB2G: true, accessPreSales: true }
+      select: { id: true, accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true }
     });
     if (!existing) return res.status(404).json({ error: 'Empresa não encontrada' });
 
@@ -897,6 +929,9 @@ router.get('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => {
       return res.status(403).json({ error: 'Sem permissão para listar usuários desta empresa' });
     }
 
+    const tenantCompany = await prisma.tenantCompany.findUnique({ where: { id: companyId } });
+    if (!tenantCompany) return res.status(404).json({ error: 'Empresa não encontrada' });
+
     const users = await prisma.user.findMany({
       where: {
         tenantCompanyId: companyId
@@ -909,6 +944,8 @@ router.get('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
         isCompanyOwner: true,
         createdAt: true
       },
@@ -917,7 +954,21 @@ router.get('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => {
       }
     });
 
-    return res.json({ data: users });
+    return res.json({
+      data: users.map((user) => {
+        const role = normalizeRole(user.role);
+        const access = constrainAccessToTenant(resolveUserAccess(role, user), tenantCompany);
+        return {
+          ...user,
+          role,
+          accessB2B: access.accessB2B,
+          accessB2G: access.accessB2G,
+          accessPreSales: access.accessPreSales,
+          accessManagement: access.accessManagement,
+          accessAutomation: access.accessAutomation
+        };
+      })
+    });
   } catch (error) {
     console.error('Erro ao listar usuários da empresa:', error);
     return res.status(500).json({ error: 'Erro ao listar usuários da empresa' });
@@ -967,9 +1018,11 @@ router.post('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => 
     }
 
     const access = constrainAccessToTenant(resolveUserAccess(role, {
-      accessB2B: req.body?.accessB2B,
-      accessB2G: req.body?.accessB2G,
-      accessPreSales: req.body?.accessPreSales
+        accessB2B: req.body?.accessB2B,
+        accessB2G: req.body?.accessB2G,
+        accessPreSales: req.body?.accessPreSales,
+        accessManagement: req.body?.accessManagement,
+        accessAutomation: req.body?.accessAutomation
     }), tenantCompany);
 
     const permissionOverrides = req.body?.permissionOverrides && typeof req.body.permissionOverrides === 'object'
@@ -988,6 +1041,8 @@ router.post('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => 
         accessB2B: access.accessB2B,
         accessB2G: access.accessB2G,
         accessPreSales: access.accessPreSales,
+        accessManagement: access.accessManagement,
+        accessAutomation: access.accessAutomation,
         permissionOverrides,
         isCompanyOwner: false
       },
@@ -1000,6 +1055,8 @@ router.post('/companies/:id/users', requireRole(['ADMIN']), async (req, res) => 
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
         createdAt: true
       }
     });
@@ -1041,7 +1098,9 @@ router.patch('/users/:id/access', requireRole(['ADMIN']), async (req, res) => {
     const access = constrainAccessToTenant(resolveUserAccess(role, {
       accessB2B: req.body?.accessB2B,
       accessB2G: req.body?.accessB2G,
-      accessPreSales: req.body?.accessPreSales
+      accessPreSales: req.body?.accessPreSales,
+      accessManagement: req.body?.accessManagement,
+      accessAutomation: req.body?.accessAutomation
     }), tenantCompany || {});
 
     const permissionOverrides = req.body?.permissionOverrides && typeof req.body.permissionOverrides === 'object'
@@ -1055,6 +1114,8 @@ router.patch('/users/:id/access', requireRole(['ADMIN']), async (req, res) => {
         accessB2B: access.accessB2B,
         accessB2G: access.accessB2G,
         accessPreSales: access.accessPreSales,
+        accessManagement: access.accessManagement,
+        accessAutomation: access.accessAutomation,
         permissionOverrides
       },
       select: {
@@ -1065,6 +1126,8 @@ router.patch('/users/:id/access', requireRole(['ADMIN']), async (req, res) => {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
         permissionOverrides: true,
         tenantCompanyId: true,
         isCompanyOwner: true

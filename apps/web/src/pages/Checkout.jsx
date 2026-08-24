@@ -84,6 +84,22 @@ export default function Checkout() {
       description: 'Pré-vendas e POCs',
       features: ['Até 5 usuários', 'POCs técnicas', 'Pré-vendas', 'Propostas técnicas']
     },
+    management: {
+      id: 'management',
+      name: 'Gestão',
+      price: 129.90,
+      priceFormatted: 'R$ 129,90',
+      description: 'Projetos, kickoff e operação',
+      features: ['Até 5 usuários', 'Gestão de projetos', 'Kickoff interno e externo', 'Painéis executivos']
+    },
+    automation: {
+      id: 'automation',
+      name: 'Automações',
+      price: 149.90,
+      priceFormatted: 'R$ 149,90',
+      description: 'Workflows e integrações',
+      features: ['Até 5 usuários', 'Workflows visuais', 'Gatilhos e ações', 'Integrações']
+    },
     completo: {
       id: 'completo',
       name: 'Plano Completo',
@@ -106,6 +122,29 @@ export default function Checkout() {
 
   const resolveLicensingPlan = (checkoutPlanId) => {
     return { planId: 'plan-mensal', planCode: 'MENSAL' };
+  };
+
+  const resolveModuleAccess = (checkoutPlanId) => {
+    const defaults = {
+      accessB2B: false,
+      accessB2G: false,
+      accessPreSales: false,
+      accessManagement: false,
+      accessAutomation: false
+    };
+    const planKey = String(checkoutPlanId || '').trim().toLowerCase();
+    if (planKey === 'b2b') return { ...defaults, accessB2B: true };
+    if (planKey === 'b2g') return { ...defaults, accessB2G: true };
+    if (planKey === 'presales') return { ...defaults, accessPreSales: true };
+    if (planKey === 'management') return { ...defaults, accessManagement: true };
+    if (planKey === 'automation') return { ...defaults, accessAutomation: true };
+    return {
+      accessB2B: true,
+      accessB2G: true,
+      accessPreSales: true,
+      accessManagement: true,
+      accessAutomation: true
+    };
   };
 
   const loadPendingCheckout = () => {
@@ -214,6 +253,7 @@ export default function Checkout() {
       try {
         const checkoutPlanId = pending.planId || planId || selectedPlan.id;
         const { planId: licensingPlanId, planCode } = resolveLicensingPlan(checkoutPlanId);
+        const moduleAccess = resolveModuleAccess(checkoutPlanId);
         const confirmResponse = await fetch(`${API_ENDPOINTS.licensing.publicCheckoutConfirm}`, {
           method: 'POST',
           headers: getHeaders(),
@@ -225,7 +265,8 @@ export default function Checkout() {
               name: pending.companyData.companyName,
               email: pending.companyData.email,
               cnpj: pending.companyData.document,
-              phone: pending.companyData.phone
+              phone: pending.companyData.phone,
+              ...moduleAccess
             },
             adminUser: {
               name: pendingAdmin.name,
@@ -359,6 +400,7 @@ export default function Checkout() {
         // Criar conta diretamente via API de confirmação
         try {
           const { planId: licensingPlanId, planCode } = resolveLicensingPlan(selectedPlan.id);
+          const moduleAccess = resolveModuleAccess(selectedPlan.id);
           
           console.log('📤 Chamando API de confirmação...');
           console.log('   Endpoint:', API_ENDPOINTS.licensing.publicCheckoutConfirm);
@@ -374,7 +416,8 @@ export default function Checkout() {
               name: formData.companyName,
               email: formData.email,
               cnpj: formData.document,
-              phone: formData.phone
+              phone: formData.phone,
+              ...moduleAccess
             },
             adminUser: {
               name: String(adminForm.name || '').trim(),

@@ -14,36 +14,43 @@ const isMaster = (reqUser = {}) => normalizeRole(reqUser.actualRole || reqUser.r
 const resolveUserAccess = (role, input = {}) => {
   const r = normalizeRole(role);
   if (r === 'MASTER' || r === 'ADMIN' || r === 'MANAGER') {
-    return { accessB2B: true, accessB2G: true, accessPreSales: true };
+    return { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true };
   }
   if (r === 'DIRECTOR') {
-    return { accessB2B: true, accessB2G: true, accessPreSales: false };
+    return { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false };
   }
   if (r === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true };
+    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
   }
 
   const accessB2B = input.accessB2B !== undefined ? Boolean(input.accessB2B) : true;
   const accessB2G = input.accessB2G !== undefined ? Boolean(input.accessB2G) : false;
-  if (!accessB2B && !accessB2G) {
-    return { accessB2B: true, accessB2G: false, accessPreSales: false };
+  const accessPreSales = input.accessPreSales !== undefined ? Boolean(input.accessPreSales) : false;
+  const accessManagement = input.accessManagement !== undefined ? Boolean(input.accessManagement) : false;
+  const accessAutomation = input.accessAutomation !== undefined ? Boolean(input.accessAutomation) : false;
+  if (!accessB2B && !accessB2G && !accessPreSales && !accessManagement && !accessAutomation) {
+    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
   }
 
   return {
     accessB2B,
     accessB2G,
-    accessPreSales: false
+    accessPreSales,
+    accessManagement,
+    accessAutomation
   };
 };
 
 const sanitizeUser = (user) => {
   if (!user) return user;
+  const role = normalizeRole(user.role);
+  const access = resolveUserAccess(role, user);
 
   return {
     id: user.id,
     name: user.name,
     email: user.email,
-    role: normalizeRole(user.role),
+    role,
     region: user.region,
     regionId: user.regionId || user.region?.id || null,
     quota: user.quota,
@@ -54,9 +61,11 @@ const sanitizeUser = (user) => {
     commissionProject48: user.commissionProject48 ?? null,
     commissionProject60: user.commissionProject60 ?? null,
     tenantCompanyId: user.tenantCompanyId || null,
-    accessB2B: Boolean(user.accessB2B),
-    accessB2G: Boolean(user.accessB2G),
-    accessPreSales: Boolean(user.accessPreSales),
+    accessB2B: Boolean(access.accessB2B),
+    accessB2G: Boolean(access.accessB2G),
+    accessPreSales: Boolean(access.accessPreSales),
+    accessManagement: Boolean(access.accessManagement),
+    accessAutomation: Boolean(access.accessAutomation),
     isCompanyOwner: Boolean(user.isCompanyOwner),
     permissionOverrides: user.permissionOverrides || {},
     createdAt: user.createdAt,
@@ -96,6 +105,8 @@ export default async function handler(req) {
           accessB2B: true,
           accessB2G: true,
           accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
           permissionOverrides: true,
           isCompanyOwner: true,
           createdAt: true,
@@ -134,6 +145,8 @@ export default async function handler(req) {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
         permissionOverrides: true,
         isCompanyOwner: true,
         createdAt: true,
@@ -197,7 +210,9 @@ export default async function handler(req) {
     const access = resolveUserAccess(role, {
       accessB2B: body.accessB2B,
       accessB2G: body.accessB2G,
-      accessPreSales: body.accessPreSales
+      accessPreSales: body.accessPreSales,
+      accessManagement: body.accessManagement,
+      accessAutomation: body.accessAutomation
     });
 
     const hashedPassword = await bcrypt.hash(body.password, 10);
@@ -220,6 +235,8 @@ export default async function handler(req) {
         accessB2B: access.accessB2B,
         accessB2G: access.accessB2G,
         accessPreSales: access.accessPreSales,
+        accessManagement: access.accessManagement,
+        accessAutomation: access.accessAutomation,
         permissionOverrides:
           body.permissionOverrides && typeof body.permissionOverrides === 'object'
             ? body.permissionOverrides
@@ -246,6 +263,8 @@ export default async function handler(req) {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
         permissionOverrides: true,
         isCompanyOwner: true,
         createdAt: true
@@ -297,7 +316,9 @@ export default async function handler(req) {
     const access = resolveUserAccess(nextRole, {
       accessB2B: body.accessB2B,
       accessB2G: body.accessB2G,
-      accessPreSales: body.accessPreSales
+      accessPreSales: body.accessPreSales,
+      accessManagement: body.accessManagement,
+      accessAutomation: body.accessAutomation
     });
 
     const updateData = {
@@ -314,6 +335,8 @@ export default async function handler(req) {
       accessB2B: access.accessB2B,
       accessB2G: access.accessB2G,
       accessPreSales: access.accessPreSales,
+      accessManagement: access.accessManagement,
+      accessAutomation: access.accessAutomation,
       permissionOverrides:
         body.permissionOverrides && typeof body.permissionOverrides === 'object'
           ? body.permissionOverrides
@@ -373,6 +396,8 @@ export default async function handler(req) {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
         permissionOverrides: true,
         isCompanyOwner: true,
         createdAt: true
