@@ -28,6 +28,8 @@ model User {
   accessB2B Boolean @default(true)
   accessB2G Boolean @default(true)
   accessPreSales Boolean @default(false)
+  accessManagement Boolean @default(false)
+  accessAutomation Boolean @default(false)
   permissionOverrides Json @default("{}")
   isCompanyOwner Boolean @default(false)
   createdAt DateTime @default(now())
@@ -88,6 +90,7 @@ model Company {
   accessB2G   Boolean  @default(false)
   accessPreSales Boolean @default(false)
   accessManagement Boolean @default(false)
+  accessAutomation Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -119,6 +122,7 @@ model TenantCompany {
   accessB2G   Boolean             @default(false)
   accessPreSales Boolean          @default(false)
   accessManagement Boolean        @default(false)
+  accessAutomation Boolean        @default(false)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 

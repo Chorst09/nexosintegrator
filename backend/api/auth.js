@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth');
+const { normalizeRole, resolveUserAccess, getPermissionTemplate, isMaster } = require('../lib/permissions.cjs');
 
 const router = express.Router();
 
@@ -12,6 +13,41 @@ const JWT_SECRET = (() => {
   return secret;
 })();
 const JWT_EXPIRES_IN = '7d';
+
+const sanitizeUserPayload = (user = {}) => {
+  const role = normalizeRole(user.role);
+  const access = resolveUserAccess(role, user);
+  const tenantAccess = user.tenantCompany;
+  const effectiveAccess = isMaster({ actualRole: role })
+    ? access
+    : tenantAccess
+      ? {
+          accessB2B: Boolean(access.accessB2B && tenantAccess.accessB2B),
+          accessB2G: Boolean(access.accessB2G && tenantAccess.accessB2G),
+          accessPreSales: Boolean(access.accessPreSales && tenantAccess.accessPreSales),
+          accessManagement: Boolean(access.accessManagement && tenantAccess.accessManagement),
+          accessAutomation: Boolean(access.accessAutomation && tenantAccess.accessAutomation)
+        }
+      : access;
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role,
+    regionId: user.regionId || null,
+    quota: user.quota ?? null,
+    tenantCompanyId: user.tenantCompanyId || null,
+    accessB2B: effectiveAccess.accessB2B,
+    accessB2G: effectiveAccess.accessB2G,
+    accessPreSales: effectiveAccess.accessPreSales,
+    accessManagement: effectiveAccess.accessManagement,
+    accessAutomation: effectiveAccess.accessAutomation,
+    isCompanyOwner: Boolean(user.isCompanyOwner),
+    permissions: getPermissionTemplate(role, user.permissionOverrides || {}),
+    createdAt: user.createdAt || null
+  };
+};
 
 // Login
 router.post('/login', async (req, res) => {
@@ -25,14 +61,34 @@ router.post('/login', async (req, res) => {
     // Buscar usuário com timeout para evitar que conexões lentas
     // ao banco causem timeout do nginx (502)
     const user = await Promise.race([
-      prisma.user.findUnique({
-        where: { email: email.toLowerCase().trim() },
+      prisma.user.findFirst({
+        where: { email: { equals: email.toLowerCase().trim(), mode: 'insensitive' } },
         select: {
           id: true,
           name: true,
           email: true,
           password: true,
-          role: true
+          role: true,
+          regionId: true,
+          quota: true,
+          tenantCompanyId: true,
+          accessB2B: true,
+          accessB2G: true,
+          accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
+          tenantCompany: {
+            select: {
+              accessB2B: true,
+              accessB2G: true,
+              accessPreSales: true,
+              accessManagement: true,
+              accessAutomation: true
+            }
+          },
+          permissionOverrides: true,
+          isCompanyOwner: true,
+          createdAt: true
         }
       }),
       new Promise((_, reject) =>
@@ -70,7 +126,7 @@ router.post('/login', async (req, res) => {
     const { password: _, ...userWithoutPassword } = user;
 
     res.json({
-      user: userWithoutPassword,
+      user: sanitizeUserPayload(userWithoutPassword),
       token
     });
   } catch (error) {
@@ -94,37 +150,39 @@ router.post('/logout', async (req, res) => {
 });
 
 // Verificar token
-router.get('/me', async (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ error: 'Token não fornecido' });
-    }
-
-    // Verificar JWT
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      
-      // Buscar usuário atual
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true
-        }
-      });
-
-      if (!user) {
-        return res.status(401).json({ error: 'Usuário não encontrado' });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        regionId: true,
+        quota: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
+        isCompanyOwner: true,
+        permissionOverrides: true,
+        createdAt: true
       }
+    });
 
-      res.json({ user });
-    } catch (jwtError) {
-      return res.status(401).json({ error: 'Token inválido' });
-    }
+    res.json({ user: sanitizeUserPayload(user) });
   } catch (error) {
     console.error('Erro na verificação do token:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });

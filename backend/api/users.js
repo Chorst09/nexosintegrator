@@ -1,91 +1,126 @@
 import { prisma } from '../lib/prisma.js';
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = (() => {
-  const secret = String(process.env.JWT_SECRET || '').trim();
-  if (!secret) throw new Error('JWT_SECRET precisa estar configurado');
-  return secret;
-})();
-
-const getSessionRole = (req) => {
-  const authHeader = req?.headers?.authorization || req?.headers?.Authorization;
-  const token = typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : '';
-
-  if (!token) {
-    return {
-      error: new Response(
-        JSON.stringify({ error: 'Token de acesso requerido' }),
-        { status: 401 }
-      )
-    };
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return { role: decoded?.role || null };
-  } catch {
-    return {
-      error: new Response(
-        JSON.stringify({ error: 'Token inválido ou expirado' }),
-        { status: 403 }
-      )
-    };
-  }
-};
-
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => {
   const raw = String(value || '').trim().toUpperCase();
   if (raw === 'PRE-VENDAS' || raw === 'PREVENDAS') return 'PRE_SALES';
   if (raw === 'USUARIO') return 'USER';
-  return raw || 'SELLER';
+  return raw || 'USER';
 };
 
-const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const isMaster = (reqUser = {}) => normalizeRole(reqUser.actualRole || reqUser.role) === 'MASTER';
 
 const resolveUserAccess = (role, input = {}) => {
-  const normalizedRole = normalizeRole(role);
-
-  if (normalizedRole === 'MASTER' || normalizedRole === 'ADMIN' || normalizedRole === 'MANAGER') {
-    return { accessB2B: true, accessB2G: true, accessPreSales: true };
+  const r = normalizeRole(role);
+  if (r === 'MASTER' || r === 'ADMIN' || r === 'MANAGER') {
+    return { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true };
   }
-
-  if (normalizedRole === 'DIRECTOR') {
-    return { accessB2B: true, accessB2G: true, accessPreSales: false };
+  if (r === 'DIRECTOR') {
+    return { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false };
   }
-
-  if (normalizedRole === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true };
+  if (r === 'PRE_SALES') {
+    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
   }
 
   const accessB2B = input.accessB2B !== undefined ? Boolean(input.accessB2B) : true;
   const accessB2G = input.accessB2G !== undefined ? Boolean(input.accessB2G) : false;
+  const accessPreSales = input.accessPreSales !== undefined ? Boolean(input.accessPreSales) : false;
+  const accessManagement = input.accessManagement !== undefined ? Boolean(input.accessManagement) : false;
+  const accessAutomation = input.accessAutomation !== undefined ? Boolean(input.accessAutomation) : false;
+  if (!accessB2B && !accessB2G && !accessPreSales && !accessManagement && !accessAutomation) {
+    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
+  }
 
   return {
-    accessB2B: accessB2B || !accessB2G,
+    accessB2B,
     accessB2G,
-    accessPreSales: false
+    accessPreSales,
+    accessManagement,
+    accessAutomation
   };
+};
+
+const sanitizeUser = (user) => {
+  if (!user) return user;
+  const role = normalizeRole(user.role);
+  const access = resolveUserAccess(role, user);
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role,
+    region: user.region,
+    regionId: user.regionId || user.region?.id || null,
+    quota: user.quota,
+    commissionSalePercentage: user.commissionSalePercentage ?? null,
+    commissionProject12: user.commissionProject12 ?? null,
+    commissionProject24: user.commissionProject24 ?? null,
+    commissionProject36: user.commissionProject36 ?? null,
+    commissionProject48: user.commissionProject48 ?? null,
+    commissionProject60: user.commissionProject60 ?? null,
+    tenantCompanyId: user.tenantCompanyId || null,
+    accessB2B: Boolean(access.accessB2B),
+    accessB2G: Boolean(access.accessB2G),
+    accessPreSales: Boolean(access.accessPreSales),
+    accessManagement: Boolean(access.accessManagement),
+    accessAutomation: Boolean(access.accessAutomation),
+    isCompanyOwner: Boolean(user.isCompanyOwner),
+    permissionOverrides: user.permissionOverrides || {},
+    createdAt: user.createdAt,
+    _count: user._count
+  };
+};
+
+const canManageUsers = (reqUser) => {
+  const role = normalizeRole(reqUser?.actualRole || reqUser?.role);
+  return role === 'ADMIN' || role === 'MASTER';
 };
 
 export default async function handler(req) {
   if (req.method === 'GET') {
-    const { role, active } = req.query || {};
-    const session = getSessionRole(req);
-    if (session.error) return session.error;
-    const userRole = session.role;
-    const isMasterSession = userRole === 'MASTER';
-    
-    const where = {};
-    if (role) where.role = normalizeRole(role);
-    
-    if (!isMasterSession && role === 'MASTER') {
-      return Response.json([]);
+    const { role } = req.query || {};
+
+    const requesterRole = normalizeRole(req.user?.actualRole || req.user?.role);
+
+    if (requesterRole === 'USER' || requesterRole === 'SELLER' || requesterRole === 'PRE_SALES') {
+      const me = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          regionId: true,
+          region: { select: { id: true, name: true, code: true } },
+          quota: true,
+          commissionSalePercentage: true,
+          commissionProject12: true,
+          commissionProject24: true,
+          commissionProject36: true,
+          commissionProject48: true,
+          commissionProject60: true,
+          tenantCompanyId: true,
+          accessB2B: true,
+          accessB2G: true,
+          accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
+          permissionOverrides: true,
+          isCompanyOwner: true,
+          createdAt: true,
+          _count: { select: { opportunities: true, activities: true, commissions: true } }
+        }
+      });
+      return Response.json(me ? [sanitizeUser(me)] : []);
     }
 
-    // Apenas MASTER pode listar usuários MASTER.
-    if (!isMasterSession && !role) {
-      where.role = { not: 'MASTER' };
+    const where = {};
+    if (role) where.role = normalizeRole(role);
+
+    if (!isMaster(req.user) && req.user?.tenantCompanyId) {
+      where.tenantCompanyId = req.user.tenantCompanyId;
     }
 
     const users = await prisma.user.findMany({
@@ -95,17 +130,25 @@ export default async function handler(req) {
         name: true,
         email: true,
         role: true,
-        region: true,
+        regionId: true,
+        region: {
+          select: { id: true, name: true, code: true }
+        },
         quota: true,
-        accessB2B: true,
-        accessB2G: true,
-        accessPreSales: true,
         commissionSalePercentage: true,
         commissionProject12: true,
         commissionProject24: true,
         commissionProject36: true,
         commissionProject48: true,
         commissionProject60: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        permissionOverrides: true,
+        isCompanyOwner: true,
         createdAt: true,
         _count: {
           select: {
@@ -117,24 +160,15 @@ export default async function handler(req) {
       },
       orderBy: { name: 'asc' }
     });
-    
-    return Response.json(users);
+
+    return Response.json(users.map(sanitizeUser));
   }
 
   if (req.method === 'POST') {
     const body = await req.json();
-    const session = getSessionRole(req);
-    if (session.error) return session.error;
-    const userRole = session.role;
-    const isMasterSession = userRole === 'MASTER';
-    const role = normalizeRole(body.role || 'SELLER');
-    
-    // Apenas MASTER pode criar usuários MASTER.
-    if (!isMasterSession && role === 'MASTER') {
-      return new Response(
-        JSON.stringify({ error: 'Apenas usuários MASTER podem criar usuários MASTER' }),
-        { status: 403 }
-      );
+
+    if (!canManageUsers(req.user)) {
+      return new Response('Forbidden', { status: 403 });
     }
 
     if (!body?.name || !body?.email || !body?.password) {
@@ -144,112 +178,201 @@ export default async function handler(req) {
       );
     }
 
-    const email = normalizeEmail(body.email);
-    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const normalizedEmail = normalizeEmail(body.email);
+    const role = normalizeRole(body.role || 'USER');
+
+    if (role === 'MASTER' && !isMaster(req.user)) {
+      return Response.json({ error: 'Apenas MASTER pode criar usuário MASTER' }, { status: 403 });
+    }
+
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive'
+        }
+      },
+      select: { id: true }
+    });
+
     if (existing) {
       return Response.json({ error: 'Email já está em uso' }, { status: 409 });
     }
 
-    const access = resolveUserAccess(role, body);
+    const tenantCompanyId = isMaster(req.user)
+      ? (body.tenantCompanyId || null)
+      : (req.user?.tenantCompanyId || null);
+
+    if (!isMaster(req.user) && body.tenantCompanyId && body.tenantCompanyId !== req.user?.tenantCompanyId) {
+      return Response.json({ error: 'Sem permissão para criar usuário em outra empresa' }, { status: 403 });
+    }
+
+    const access = resolveUserAccess(role, {
+      accessB2B: body.accessB2B,
+      accessB2G: body.accessB2G,
+      accessPreSales: body.accessPreSales,
+      accessManagement: body.accessManagement,
+      accessAutomation: body.accessAutomation
+    });
+
     const hashedPassword = await bcrypt.hash(body.password, 10);
-    
+
     const user = await prisma.user.create({
       data: {
         name: body.name,
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         role,
         regionId: body.regionId || null,
         quota: body.quota,
-        accessB2B: access.accessB2B,
-        accessB2G: access.accessB2G,
-        accessPreSales: access.accessPreSales,
         commissionSalePercentage: body.commissionSalePercentage ?? null,
         commissionProject12: body.commissionProject12 ?? null,
         commissionProject24: body.commissionProject24 ?? null,
         commissionProject36: body.commissionProject36 ?? null,
         commissionProject48: body.commissionProject48 ?? null,
-        commissionProject60: body.commissionProject60 ?? null
+        commissionProject60: body.commissionProject60 ?? null,
+        tenantCompanyId,
+        accessB2B: access.accessB2B,
+        accessB2G: access.accessB2G,
+        accessPreSales: access.accessPreSales,
+        accessManagement: access.accessManagement,
+        accessAutomation: access.accessAutomation,
+        permissionOverrides:
+          body.permissionOverrides && typeof body.permissionOverrides === 'object'
+            ? body.permissionOverrides
+            : {},
+        isCompanyOwner: Boolean(body.isCompanyOwner) && role === 'ADMIN'
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
-        region: true,
+        regionId: true,
+        region: {
+          select: { id: true, name: true, code: true }
+        },
         quota: true,
-        accessB2B: true,
-        accessB2G: true,
-        accessPreSales: true,
         commissionSalePercentage: true,
         commissionProject12: true,
         commissionProject24: true,
         commissionProject36: true,
         commissionProject48: true,
         commissionProject60: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
+        permissionOverrides: true,
+        isCompanyOwner: true,
         createdAt: true
       }
     });
-    return Response.json(user);
+
+    return Response.json(sanitizeUser(user), { status: 201 });
   }
 
   if (req.method === 'PUT') {
     const body = await req.json();
-    const session = getSessionRole(req);
-    if (session.error) return session.error;
-    const userRole = session.role;
-    const isMasterSession = userRole === 'MASTER';
-    
-    // Verificar se está tentando editar um usuário MASTER
-    const targetUser = await prisma.user.findUnique({
+
+    if (!canManageUsers(req.user)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    if (!body?.id) {
+      return Response.json({ error: 'id é obrigatório' }, { status: 400 });
+    }
+
+    const current = await prisma.user.findUnique({
       where: { id: body.id },
-      select: { role: true }
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        tenantCompanyId: true,
+        isCompanyOwner: true
+      }
     });
-    
-    if (targetUser?.role === 'MASTER' && !isMasterSession) {
-      return new Response(
-        JSON.stringify({ error: 'Apenas usuários MASTER podem editar usuários MASTER' }),
-        { status: 403 }
-      );
-    }
-    
-    // Apenas MASTER pode promover usuários para MASTER.
-    const nextRole = body.role ? normalizeRole(body.role) : normalizeRole(targetUser?.role);
 
-    if (!isMasterSession && nextRole === 'MASTER') {
-      return new Response(
-        JSON.stringify({ error: 'Apenas usuários MASTER podem promover usuários para MASTER' }),
-        { status: 403 }
-      );
+    if (!current) {
+      return Response.json({ error: 'Usuário não encontrado' }, { status: 404 });
     }
 
-    const access = resolveUserAccess(nextRole, body);
+    if (!isMaster(req.user) && current.tenantCompanyId !== req.user?.tenantCompanyId) {
+      return Response.json({ error: 'Sem permissão para editar usuário de outra empresa' }, { status: 403 });
+    }
+
+    const nextRole = body.role ? normalizeRole(body.role) : normalizeRole(current.role);
+    if (nextRole === 'MASTER' && !isMaster(req.user)) {
+      return Response.json({ error: 'Apenas MASTER pode atribuir role MASTER' }, { status: 403 });
+    }
+
+    if (current.isCompanyOwner && !isMaster(req.user) && nextRole !== 'ADMIN') {
+      return Response.json({ error: 'Não é permitido remover role ADMIN do dono da empresa' }, { status: 403 });
+    }
+
+    const access = resolveUserAccess(nextRole, {
+      accessB2B: body.accessB2B,
+      accessB2G: body.accessB2G,
+      accessPreSales: body.accessPreSales,
+      accessManagement: body.accessManagement,
+      accessAutomation: body.accessAutomation
+    });
 
     const updateData = {
       name: body.name,
-      email: body.email ? normalizeEmail(body.email) : undefined,
       role: nextRole,
       regionId: body.regionId || null,
       quota: body.quota,
-      accessB2B: access.accessB2B,
-      accessB2G: access.accessB2G,
-      accessPreSales: access.accessPreSales,
       commissionSalePercentage: body.commissionSalePercentage ?? null,
       commissionProject12: body.commissionProject12 ?? null,
       commissionProject24: body.commissionProject24 ?? null,
       commissionProject36: body.commissionProject36 ?? null,
       commissionProject48: body.commissionProject48 ?? null,
-      commissionProject60: body.commissionProject60 ?? null
+      commissionProject60: body.commissionProject60 ?? null,
+      accessB2B: access.accessB2B,
+      accessB2G: access.accessB2G,
+      accessPreSales: access.accessPreSales,
+      accessManagement: access.accessManagement,
+      accessAutomation: access.accessAutomation,
+      permissionOverrides:
+        body.permissionOverrides && typeof body.permissionOverrides === 'object'
+          ? body.permissionOverrides
+          : undefined,
+      isCompanyOwner: body.isCompanyOwner !== undefined ? Boolean(body.isCompanyOwner) : undefined,
+      tenantCompanyId:
+        isMaster(req.user) && body.tenantCompanyId !== undefined
+          ? body.tenantCompanyId
+          : undefined
     };
 
     if (body.password) {
       updateData.password = await bcrypt.hash(body.password, 10);
     }
 
+    if (body.email) {
+      const normalizedEmail = normalizeEmail(body.email);
+      if (normalizedEmail !== current.email) {
+        const emailTaken = await prisma.user.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            id: { not: body.id }
+          },
+          select: { id: true }
+        });
+        if (emailTaken) {
+          return Response.json({ error: 'Email já está em uso' }, { status: 409 });
+        }
+        updateData.email = normalizedEmail;
+      }
+    }
+
     Object.keys(updateData).forEach((key) => {
       if (updateData[key] === undefined) delete updateData[key];
     });
-    
+
     const user = await prisma.user.update({
       where: { id: body.id },
       data: updateData,
@@ -258,53 +381,69 @@ export default async function handler(req) {
         name: true,
         email: true,
         role: true,
-        region: true,
+        regionId: true,
+        region: {
+          select: { id: true, name: true, code: true }
+        },
         quota: true,
-        accessB2B: true,
-        accessB2G: true,
-        accessPreSales: true,
         commissionSalePercentage: true,
         commissionProject12: true,
         commissionProject24: true,
         commissionProject36: true,
         commissionProject48: true,
         commissionProject60: true,
+        tenantCompanyId: true,
+        accessB2B: true,
+        accessB2G: true,
+        accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        permissionOverrides: true,
+        isCompanyOwner: true,
         createdAt: true
       }
     });
-    return Response.json(user);
+
+    return Response.json(sanitizeUser(user));
   }
 
   if (req.method === 'DELETE') {
-    const body = await req.json().catch(() => ({}));
-    const id = body?.id || req.query?.id;
-    const session = getSessionRole(req);
-    if (session.error) return session.error;
-    const userRole = session.role;
-    const isMasterSession = userRole === 'MASTER';
+    const body = await req.json();
+    const { id } = body;
 
-    if (!id) {
-      return Response.json({ error: 'ID do usuário é obrigatório' }, { status: 400 });
+    if (!canManageUsers(req.user)) {
+      return new Response('Forbidden', { status: 403 });
     }
 
-    // Verificar se está tentando excluir um usuário MASTER
-    const targetUser = await prisma.user.findUnique({
+    if (!id) {
+      return Response.json({ error: 'id é obrigatório' }, { status: 400 });
+    }
+
+    const user = await prisma.user.findUnique({
       where: { id },
-      select: { role: true }
+      select: {
+        id: true,
+        tenantCompanyId: true,
+        isCompanyOwner: true
+      }
     });
 
-    if (!targetUser) {
+    if (!user) {
       return Response.json({ error: 'Usuário não encontrado' }, { status: 404 });
     }
 
-    if (targetUser.role === 'MASTER' && !isMasterSession) {
-      return new Response(
-        JSON.stringify({ error: 'Apenas usuários MASTER podem excluir usuários MASTER' }),
-        { status: 403 }
-      );
+    if (!isMaster(req.user) && user.tenantCompanyId !== req.user?.tenantCompanyId) {
+      return Response.json({ error: 'Sem permissão para excluir usuário de outra empresa' }, { status: 403 });
     }
 
-    await prisma.user.delete({ where: { id } });
+    if (user.isCompanyOwner) {
+      return Response.json({ error: 'Não é permitido excluir usuário dono da empresa' }, { status: 403 });
+    }
+
+    await prisma.user.delete({
+      where: { id }
+    });
+
     return Response.json({ message: 'Usuário excluído com sucesso' });
   }
 

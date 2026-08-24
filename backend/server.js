@@ -187,7 +187,7 @@ const handleLegacyAPI = (apiPath) => {
 // Rotas das APIs antigas (ES modules)
 app.use('/api/clients', handleLegacyAPI('./api/clients.js'));
 app.use('/api/companies', handleLegacyAPI('./api/companies.js'));
-app.use('/api/opportunities', handleLegacyAPI('./api/opportunities.js'));
+app.use('/api/opportunities', authenticateToken, handleLegacyAPI('./api/opportunities.js'));
 app.use('/api/activities', handleLegacyAPI('./api/activities.js'));
 app.use('/api/activities-simple', authenticateToken, require('./api/activities-simple.cjs'));
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS

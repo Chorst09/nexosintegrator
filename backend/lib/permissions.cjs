@@ -1,11 +1,11 @@
 const ROLE_ACCESS_DEFAULTS = {
-  MASTER: { accessB2B: true, accessB2G: true, accessPreSales: true },
-  ADMIN: { accessB2B: true, accessB2G: true, accessPreSales: true },
-  MANAGER: { accessB2B: true, accessB2G: true, accessPreSales: true },
-  DIRECTOR: { accessB2B: true, accessB2G: true, accessPreSales: false },
-  SELLER: { accessB2B: true, accessB2G: true, accessPreSales: false },
-  USER: { accessB2B: true, accessB2G: false, accessPreSales: false },
-  PRE_SALES: { accessB2B: false, accessB2G: false, accessPreSales: true }
+  MASTER: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+  ADMIN: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+  MANAGER: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+  DIRECTOR: { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false },
+  SELLER: { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: false, accessAutomation: false },
+  USER: { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false },
+  PRE_SALES: { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false }
 };
 
 const ROLE_PERMISSION_TEMPLATES = {
@@ -23,7 +23,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: true,
     administracaoUsuarios: true,
     billing: true,
-    integrations: true
+    integrations: true,
+    gestao: true,
+    automacoes: true
   },
   ADMIN: {
     dashboard: true,
@@ -39,7 +41,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: true,
     administracaoUsuarios: true,
     billing: true,
-    integrations: true
+    integrations: true,
+    gestao: true,
+    automacoes: true
   },
   USER: {
     dashboard: true,
@@ -55,7 +59,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: false,
     administracaoUsuarios: false,
     billing: false,
-    integrations: false
+    integrations: false,
+    gestao: false,
+    automacoes: false
   },
   PRE_SALES: {
     dashboard: true,
@@ -71,7 +77,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: false,
     administracaoUsuarios: false,
     billing: false,
-    integrations: false
+    integrations: false,
+    gestao: false,
+    automacoes: false
   },
   MANAGER: {
     dashboard: true,
@@ -87,7 +95,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: false,
     administracaoUsuarios: true,
     billing: false,
-    integrations: true
+    integrations: true,
+    gestao: true,
+    automacoes: true
   },
   DIRECTOR: {
     dashboard: true,
@@ -103,7 +113,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: false,
     administracaoUsuarios: false,
     billing: false,
-    integrations: false
+    integrations: false,
+    gestao: true,
+    automacoes: false
   },
   SELLER: {
     dashboard: true,
@@ -119,7 +131,9 @@ const ROLE_PERMISSION_TEMPLATES = {
     administracaoLicenciamento: false,
     administracaoUsuarios: false,
     billing: false,
-    integrations: false
+    integrations: false,
+    gestao: false,
+    automacoes: false
   }
 };
 
@@ -144,22 +158,26 @@ function resolveUserAccess(role, inputAccess = {}) {
   }
 
   if (normalizedRole === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true };
+    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
   }
 
   const accessB2B = inputAccess.accessB2B !== undefined ? Boolean(inputAccess.accessB2B) : base.accessB2B;
   const accessB2G = inputAccess.accessB2G !== undefined ? Boolean(inputAccess.accessB2G) : base.accessB2G;
   const accessPreSales = inputAccess.accessPreSales !== undefined ? Boolean(inputAccess.accessPreSales) : base.accessPreSales;
+  const accessManagement = inputAccess.accessManagement !== undefined ? Boolean(inputAccess.accessManagement) : base.accessManagement;
+  const accessAutomation = inputAccess.accessAutomation !== undefined ? Boolean(inputAccess.accessAutomation) : base.accessAutomation;
 
   // Usuario USER precisa ter ao menos um modulo ativo
   if (normalizedRole === 'USER' && !accessB2B && !accessB2G) {
-    return { accessB2B: true, accessB2G: false, accessPreSales: false };
+    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement, accessAutomation };
   }
 
   return {
     accessB2B,
     accessB2G,
-    accessPreSales
+    accessPreSales,
+    accessManagement,
+    accessAutomation
   };
 }
 
@@ -184,10 +202,14 @@ function canAccessModule(user = {}, moduleName) {
   const accessB2B = Boolean(user.accessB2B);
   const accessB2G = Boolean(user.accessB2G);
   const accessPreSales = Boolean(user.accessPreSales);
+  const accessManagement = Boolean(user.accessManagement);
+  const accessAutomation = Boolean(user.accessAutomation);
 
   if (moduleUpper === 'B2B') return accessB2B;
   if (moduleUpper === 'B2G') return accessB2G;
   if (moduleUpper === 'PRE_SALES') return accessPreSales;
+  if (moduleUpper === 'GESTAO' || moduleUpper === 'MANAGEMENT') return accessManagement;
+  if (moduleUpper === 'AUTOMATION' || moduleUpper === 'AUTOMACOES') return accessAutomation;
 
   return false;
 }

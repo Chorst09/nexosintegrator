@@ -1,6 +1,7 @@
 
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+const { normalizeRole, resolveUserAccess, getPermissionTemplate, isMaster } = require('./permissions.cjs');
 
 const prisma = new PrismaClient();
 const JWT_SECRET = (() => {
@@ -43,6 +44,17 @@ const authenticateToken = async (req, res, next) => {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
         permissionOverrides: true,
         isCompanyOwner: true
       }
@@ -52,8 +64,21 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Usuário não encontrado' });
     }
 
-    const actualRole = String(user.role || 'USER').toUpperCase();
+    const actualRole = normalizeRole(user.role);
     const legacyRole = actualRole === 'USER' ? 'SELLER' : actualRole;
+    const access = resolveUserAccess(actualRole, user);
+    const tenantAccess = user.tenantCompany;
+    const effectiveAccess = isMaster({ actualRole })
+      ? access
+      : tenantAccess
+        ? {
+            accessB2B: Boolean(access.accessB2B && tenantAccess.accessB2B),
+            accessB2G: Boolean(access.accessB2G && tenantAccess.accessB2G),
+            accessPreSales: Boolean(access.accessPreSales && tenantAccess.accessPreSales),
+            accessManagement: Boolean(access.accessManagement && tenantAccess.accessManagement),
+            accessAutomation: Boolean(access.accessAutomation && tenantAccess.accessAutomation)
+          }
+        : access;
 
     req.user = {
       userId: user.id,
@@ -64,10 +89,13 @@ const authenticateToken = async (req, res, next) => {
       name: user.name,
       regionId: user.regionId,
       tenantCompanyId: user.tenantCompanyId,
-      accessB2B: Boolean(user.accessB2B),
-      accessB2G: Boolean(user.accessB2G),
-      accessPreSales: Boolean(user.accessPreSales),
+      accessB2B: Boolean(effectiveAccess.accessB2B),
+      accessB2G: Boolean(effectiveAccess.accessB2G),
+      accessPreSales: Boolean(effectiveAccess.accessPreSales),
+      accessManagement: Boolean(effectiveAccess.accessManagement),
+      accessAutomation: Boolean(effectiveAccess.accessAutomation),
       permissionOverrides: user.permissionOverrides || {},
+      permissions: getPermissionTemplate(actualRole, user.permissionOverrides || {}),
       isCompanyOwner: Boolean(user.isCompanyOwner)
     };
     next();
@@ -77,8 +105,6 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-const isMaster = (user) => String(user?.role || '').toUpperCase() === 'MASTER';
-
 const requireRole = (roles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -87,7 +113,9 @@ const requireRole = (roles) => {
 
     if (isMaster(req.user)) return next();
 
-    if (!roles.includes(req.user.role)) {
+    const allowed = roles.map((item) => normalizeRole(item));
+    const currentRoles = [req.user.role, req.user.actualRole].filter(Boolean);
+    if (!allowed.some((role) => currentRoles.includes(role))) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 

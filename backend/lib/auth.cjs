@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { prisma } = require('./prisma.cjs');
-const { normalizeRole, getPermissionTemplate, isMaster } = require('./permissions.cjs');
+const { normalizeRole, resolveUserAccess, getPermissionTemplate, isMaster } = require('./permissions.cjs');
 const { getJwtSecret } = require('./security.cjs');
 
 
@@ -26,13 +26,8 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Token inválido' });
     }
 
-    const userId = decoded?.userId || decoded?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'Token inválido' });
-    }
-
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: decoded.userId },
       select: {
         id: true,
         name: true,
@@ -43,6 +38,17 @@ const authenticateToken = async (req, res, next) => {
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
+        accessManagement: true,
+        accessAutomation: true,
+        tenantCompany: {
+          select: {
+            accessB2B: true,
+            accessB2G: true,
+            accessPreSales: true,
+            accessManagement: true,
+            accessAutomation: true
+          }
+        },
         permissionOverrides: true,
         isCompanyOwner: true
       }
@@ -54,6 +60,19 @@ const authenticateToken = async (req, res, next) => {
 
     const actualRole = normalizeRole(user.role);
     const legacyRole = actualRole === 'USER' ? 'SELLER' : actualRole;
+    const access = resolveUserAccess(actualRole, user);
+    const tenantAccess = user.tenantCompany;
+    const effectiveAccess = isMaster({ actualRole })
+      ? access
+      : tenantAccess
+        ? {
+            accessB2B: Boolean(access.accessB2B && tenantAccess.accessB2B),
+            accessB2G: Boolean(access.accessB2G && tenantAccess.accessB2G),
+            accessPreSales: Boolean(access.accessPreSales && tenantAccess.accessPreSales),
+            accessManagement: Boolean(access.accessManagement && tenantAccess.accessManagement),
+            accessAutomation: Boolean(access.accessAutomation && tenantAccess.accessAutomation)
+          }
+        : access;
 
     // Normalizar formato usado no código atual
     req.user = {
@@ -65,9 +84,11 @@ const authenticateToken = async (req, res, next) => {
       actualRole,
       regionId: user.regionId,
       tenantCompanyId: user.tenantCompanyId,
-      accessB2B: Boolean(user.accessB2B),
-      accessB2G: Boolean(user.accessB2G),
-      accessPreSales: Boolean(user.accessPreSales),
+      accessB2B: Boolean(effectiveAccess.accessB2B),
+      accessB2G: Boolean(effectiveAccess.accessB2G),
+      accessPreSales: Boolean(effectiveAccess.accessPreSales),
+      accessManagement: Boolean(effectiveAccess.accessManagement),
+      accessAutomation: Boolean(effectiveAccess.accessAutomation),
       isCompanyOwner: Boolean(user.isCompanyOwner),
       permissions: getPermissionTemplate(actualRole, user.permissionOverrides || {})
     };
