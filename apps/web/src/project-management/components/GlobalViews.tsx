@@ -1,24 +1,156 @@
 import React, { useState } from 'react';
 import {
   Home, CheckCircle2, FileText, LayoutTemplate, Clock, Calendar,
-  Search, Plus, Filter, MoreVertical, LayoutGrid, List, Sparkles, Folder, ArrowLeft
+  Search, Plus, Filter, MoreVertical, LayoutGrid, List, Sparkles, Folder, ArrowLeft,
+  BarChart2, Briefcase, Users, ArrowUpRight, Target
 } from 'lucide-react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import ArchitectureDiagram from './ArchitectureDiagram';
 
 export function HomeView() {
+  const projectPhotos = [
+    {
+      title: 'Implantação e campo',
+      label: 'Execução',
+      image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+      title: 'Planejamento executivo',
+      label: 'Governança',
+      image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=900&q=80'
+    },
+    {
+      title: 'Equipe integrada',
+      label: 'Colaboração',
+      image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80'
+    }
+  ];
+
   return (
-    <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3">
-          <Home className="w-6 h-6 text-[#ff7a00]" />
-          Início
-        </h1>
-        <div className="bg-[#111827] border border-[#263345] rounded-md p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-200 mb-2">Bom dia!</h2>
-          <p className="text-slate-400">Aqui está um resumo do seu ambiente hoje. Navegue para a aba Projetos para acessar seus projetos.</p>
+    <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300 custom-scrollbar">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+            <Home className="w-6 h-6 text-[#ff7a00]" />
+            Início
+          </h1>
+          <div className="hidden items-center gap-2 rounded-full border border-[#263345] bg-[#111827] px-4 py-2 text-xs font-semibold text-slate-400 md:flex">
+            <Sparkles className="h-4 w-4 text-[#18c8df]" />
+            Central executiva de projetos
+          </div>
         </div>
+
+        <section className="relative min-h-[360px] overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
+          <img
+            src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1800&q=80"
+            alt="Equipe em sala de planejamento de projetos"
+            className="absolute inset-0 h-full w-full object-cover opacity-35"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#070b16_0%,rgba(7,11,22,0.92)_34%,rgba(7,11,22,0.58)_100%)]" />
+          <div className="relative z-10 grid min-h-[360px] gap-6 p-8 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="flex max-w-3xl flex-col justify-center">
+              <span className="mb-4 flex w-fit items-center gap-2 rounded-full border border-[#ff7a00]/35 bg-[#ff7a00]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#ffb15c]">
+                <Briefcase className="h-3.5 w-3.5" />
+                Gestão de Projetos
+              </span>
+              <h2 className="text-4xl font-black leading-tight text-white">
+                Controle projetos, fases, equipe e decisões em uma visão única.
+              </h2>
+              <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-300">
+                Organize escopo, cronograma, responsáveis, entregáveis e acompanhamentos com leitura executiva para cada iniciativa em andamento.
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <button className="flex items-center gap-2 rounded-md bg-[#ff7a00] px-5 py-2.5 text-sm font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]">
+                  <Plus className="h-4 w-4" />
+                  Novo projeto
+                </button>
+                <button className="flex items-center gap-2 rounded-md border border-[#374151] bg-[#111827]/80 px-5 py-2.5 text-sm font-bold text-slate-200 transition-colors hover:border-[#ff7a00] hover:text-white">
+                  <BarChart2 className="h-4 w-4 text-[#22c55e]" />
+                  Ver painel
+                </button>
+              </div>
+            </div>
+
+            <div className="grid content-center gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  ['22', 'Módulos OK', '#22c55e'],
+                  ['3', 'Fases críticas', '#f6b40b'],
+                  ['97%', 'Aderência', '#18c8df']
+                ].map(([value, label, color]) => (
+                  <div key={label} className="rounded-lg border border-[#263345] bg-[#070b16]/80 p-4 backdrop-blur">
+                    <p className="text-2xl font-black text-white" style={{ color }}>{value}</p>
+                    <p className="mt-1 text-[11px] font-semibold uppercase text-slate-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-lg border border-[#263345] bg-[#070b16]/85 p-5 backdrop-blur">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-slate-100">Projeto em destaque</p>
+                    <p className="text-xs text-slate-500">Paranacidade · implantação</p>
+                  </div>
+                  <span className="rounded-full bg-[#22c55e]/10 px-3 py-1 text-xs font-bold text-[#22c55e]">Em controle</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[#1f2937]">
+                  <div className="h-full w-[68%] rounded-full bg-[linear-gradient(90deg,#ff7a00,#f6b40b,#22c55e)]" />
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <p className="font-black text-slate-100">68%</p>
+                    <p className="text-slate-500">Progresso</p>
+                  </div>
+                  <div>
+                    <p className="font-black text-slate-100">11</p>
+                    <p className="text-slate-500">Fases</p>
+                  </div>
+                  <div>
+                    <p className="font-black text-slate-100">4</p>
+                    <p className="text-slate-500">Equipe</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          {projectPhotos.map(item => (
+            <article key={item.title} className="group overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
+              <div className="relative h-44 overflow-hidden">
+                <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(7,11,22,0.88))]" />
+                <span className="absolute left-4 top-4 rounded-full bg-[#070b16]/80 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#ffb15c]">
+                  {item.label}
+                </span>
+              </div>
+              <div className="p-5">
+                <h3 className="text-lg font-black text-slate-100">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                  Acompanhe responsabilidades, marcos, riscos e decisões para manter cada entrega visível do início ao encerramento.
+                </p>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
+          {[
+            { icon: Target, title: 'Escopo claro', text: 'Cada projeto começa com objetivo, escopo, entregáveis, critérios de sucesso e responsáveis.', color: 'text-[#ff7a00]' },
+            { icon: Users, title: 'Equipe conectada', text: 'Convites por e-mail, papéis definidos e acompanhamento das pessoas envolvidas.', color: 'text-[#22c55e]' },
+            { icon: ArrowUpRight, title: 'Visão executiva', text: 'Indicadores, fases e decisões ficam em evidência para acelerar a tomada de decisão.', color: 'text-[#18c8df]' }
+          ].map(item => {
+            const Icon = item.icon;
+            return (
+              <div key={item.title} className="rounded-lg border border-[#263345] bg-[#111827] p-5">
+                <Icon className={`mb-4 h-6 w-6 ${item.color}`} />
+                <h3 className="text-base font-black text-slate-100">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.text}</p>
+              </div>
+            );
+          })}
+        </section>
       </div>
     </div>
   );
