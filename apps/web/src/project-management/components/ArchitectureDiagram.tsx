@@ -67,10 +67,10 @@ const ArchNode = ({ id, data, selected }: any) => {
   };
 
   return (
-    <div className={`bg-[#13233b] border ${selected ? 'border-[#38bdf8] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#294a70]'} rounded-md p-4 shadow-lg min-w-[180px] flex items-center gap-3 text-slate-200 transition-colors`}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#13233b] bg-[#38bdf8]" />
+    <div className={`bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[180px] flex items-center gap-3 text-slate-200 transition-colors`}>
+      <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
       <div
-        className="w-12 h-12 rounded-lg bg-[#0e1b32] border border-[#294a70] text-[#38bdf8] flex items-center justify-center shrink-0 overflow-hidden p-1.5 cursor-pointer relative group"
+        className="w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 cursor-pointer relative group"
         onClick={() => fileInputRef.current?.click()}
         title="Clique para alterar a imagem"
       >
@@ -99,7 +99,7 @@ const ArchNode = ({ id, data, selected }: any) => {
         <div className="font-bold text-sm leading-tight">{data.label}</div>
         {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 border-2 border-[#13233b] bg-[#38bdf8]" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
     </div>
   );
 };
@@ -107,11 +107,11 @@ const ArchNode = ({ id, data, selected }: any) => {
 const nodeTypes = { arch: ArchNode };
 
 const defaultEdgeOptions = {
-  style: { stroke: '#315d87', strokeWidth: 2 },
+  style: { stroke: '#374151', strokeWidth: 2 },
   type: 'smoothstep',
   markerEnd: {
     type: MarkerType.ArrowClosed,
-    color: '#315d87',
+    color: '#374151',
   },
 };
 
@@ -225,7 +225,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     const translateY = -minY + padding;
 
     toPng(viewportElement, {
-      backgroundColor: '#0e1b32',
+      backgroundColor: '#070b16',
       width: imageWidth,
       height: imageHeight,
       style: {
@@ -292,8 +292,8 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0e1b32] overflow-hidden w-full absolute inset-0 z-50">
-      <div className="h-14 border-b border-[#294a70] bg-[#13233b] flex items-center justify-between px-4 flex-shrink-0">
+    <div className="h-full flex flex-col bg-[#070b16] overflow-hidden w-full absolute inset-0 z-50">
+      <div className="h-14 border-b border-[#263345] bg-[#111827] flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
@@ -301,45 +301,45 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           >
             <ArrowLeft className="w-4 h-4" /> Voltar
           </button>
-          <div className="w-px h-6 bg-[#294a70]"></div>
+          <div className="w-px h-6 bg-[#263345]"></div>
           <h2 className="text-slate-200 font-semibold flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#38bdf8]" /> Diagrama de Arquitetura
+            <Layers className="w-4 h-4 text-[#ff7a00]" /> Diagrama de Arquitetura
           </h2>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-[#0e1b32] p-1 rounded-lg border border-[#294a70]">
+          <div className="flex items-center gap-2 bg-[#070b16] p-1 rounded-lg border border-[#263345]">
             {hasSaved && (
               <button
                 onClick={() => loadTemplate('saved')}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'saved' ? 'bg-[#38bdf8] text-white' : 'text-[#38bdf8] hover:bg-[#38bdf8]/10'}`}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'saved' ? 'bg-[#ff7a00] text-white' : 'text-[#ff7a00] hover:bg-[#ff7a00]/10'}`}
               >Meu Diagrama</button>
             )}
-            <div className="w-px h-4 bg-[#294a70] mx-1"></div>
+            <div className="w-px h-4 bg-[#263345] mx-1"></div>
             <button
               onClick={() => loadTemplate('blank')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'blank' ? 'bg-[#294a70] text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'blank' ? 'bg-[#263345] text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >Em Branco</button>
             <button
               onClick={() => loadTemplate('3-tier')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === '3-tier' ? 'bg-[#294a70] text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === '3-tier' ? 'bg-[#263345] text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >Web 3-Tier</button>
             <button
               onClick={() => loadTemplate('microservices')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'microservices' ? 'bg-[#294a70] text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'microservices' ? 'bg-[#263345] text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >Microserviços</button>
           </div>
 
-          <div className="flex items-center gap-2 border-l border-[#294a70] pl-3">
+          <div className="flex items-center gap-2 border-l border-[#263345] pl-3">
             <button
               onClick={saveDiagram}
-              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-[#13233b] hover:bg-[#294a70] border border-[#294a70] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
+              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-[#111827] hover:bg-[#263345] border border-[#263345] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
             >
               <Save className="w-4 h-4" /> Salvar
             </button>
             <button
               onClick={downloadPDF}
-              className="flex items-center gap-2 text-sm text-white bg-[#38bdf8] hover:bg-[#0ea5e9] px-4 py-1.5 rounded-md transition-colors font-medium shadow-lg"
+              className="flex items-center gap-2 text-sm text-white bg-[#ff7a00] hover:bg-[#f6b40b] px-4 py-1.5 rounded-md transition-colors font-medium shadow-lg"
             >
               <Download className="w-4 h-4" /> Exportar PDF
             </button>
@@ -358,40 +358,40 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           defaultEdgeOptions={defaultEdgeOptions}
           colorMode="dark"
           fitView
-          className="bg-[#0e1b32]"
+          className="bg-[#070b16]"
         >
-          <Background color="#294a70" gap={24} size={2} />
-          <Controls className="bg-[#13233b] border-[#294a70] fill-slate-300" />
+          <Background color="#263345" gap={24} size={2} />
+          <Controls className="bg-[#111827] border-[#263345] fill-slate-300" />
           <MiniMap
-            nodeColor={(n) => '#38bdf8'}
+            nodeColor={(n) => '#ff7a00'}
             maskColor="rgba(15, 23, 42, 0.7)"
-            className="bg-[#13233b] border border-[#294a70] rounded-md"
+            className="bg-[#111827] border border-[#263345] rounded-md"
           />
 
-          <Panel position="top-left" className="bg-[#13233b]/90 backdrop-blur-md border border-[#294a70] p-3 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto">
+          <Panel position="top-left" className="bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-3 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Componentes</h3>
-            <button onClick={() => addNode('globe', 'Web Client')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
-              <Globe className="w-4 h-4 text-[#38bdf8]" /> Web App
+            <button onClick={() => addNode('globe', 'Web Client')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
+              <Globe className="w-4 h-4 text-[#ff7a00]" /> Web App
             </button>
-            <button onClick={() => addNode('smartphone', 'Mobile App')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
-              <Smartphone className="w-4 h-4 text-[#38bdf8]" /> Mobile App
+            <button onClick={() => addNode('smartphone', 'Mobile App')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
+              <Smartphone className="w-4 h-4 text-[#ff7a00]" /> Mobile App
             </button>
-            <button onClick={() => addNode('server', 'Servidor API')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
-              <Server className="w-4 h-4 text-[#38bdf8]" /> Servidor
+            <button onClick={() => addNode('server', 'Servidor API')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
+              <Server className="w-4 h-4 text-[#ff7a00]" /> Servidor
             </button>
-            <button onClick={() => addNode('database', 'Banco de Dados')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
-              <Database className="w-4 h-4 text-[#38bdf8]" /> Banco de Dados
+            <button onClick={() => addNode('database', 'Banco de Dados')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
+              <Database className="w-4 h-4 text-[#ff7a00]" /> Banco de Dados
             </button>
-            <button onClick={() => addNode('cloud', 'Cloud Service')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#294a70] p-2 rounded-lg transition-colors text-left">
-              <Cloud className="w-4 h-4 text-[#38bdf8]" /> Cloud Service
+            <button onClick={() => addNode('cloud', 'Cloud Service')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
+              <Cloud className="w-4 h-4 text-[#ff7a00]" /> Cloud Service
             </button>
 
-            <div className="mt-2 pt-3 border-t border-[#294a70] flex flex-col gap-2">
+            <div className="mt-2 pt-3 border-t border-[#263345] flex flex-col gap-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tecnologia Específica</h3>
               <input
                 type="text"
                 placeholder="Ex: React, Docker, AWS"
-                className="bg-[#0e1b32] border border-[#294a70] rounded-md px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-[#38bdf8]"
+                className="bg-[#070b16] border border-[#263345] rounded-md px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-[#ff7a00]"
                 value={customNodeName}
                 onChange={(e) => setCustomNodeName(e.target.value)}
                 onKeyDown={(e) => {
@@ -400,13 +400,13 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               />
               <button
                 onClick={addCustomNode}
-                className="bg-[#38bdf8] hover:bg-[#0ea5e9] text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
+                className="bg-[#ff7a00] hover:bg-[#f6b40b] text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
               >
                 Adicionar ao Diagrama
               </button>
             </div>
 
-            <div className="mt-2 pt-3 border-t border-[#294a70] flex flex-col gap-2">
+            <div className="mt-2 pt-3 border-t border-[#263345] flex flex-col gap-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Upload de Imagem</h3>
               <input
                 type="file"
@@ -417,7 +417,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 bg-[#13233b] hover:bg-[#294a70] border border-[#294a70] text-slate-300 hover:text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
+                className="flex items-center justify-center gap-2 bg-[#111827] hover:bg-[#263345] border border-[#263345] text-slate-300 hover:text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
               >
                 <Upload className="w-4 h-4" /> Enviar Arquivo
               </button>

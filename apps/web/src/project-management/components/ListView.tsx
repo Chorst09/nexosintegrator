@@ -9,14 +9,14 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const statusColors: Record<IssueStatus, string> = {
-  'PENDENTE': 'bg-[#13233b] text-slate-300',
-  'PLANEJAMENTO': 'bg-[#13233b] text-slate-300',
+  'PENDENTE': 'bg-[#111827] text-slate-300',
+  'PLANEJAMENTO': 'bg-[#111827] text-slate-300',
   'EM PROGRESSO': 'bg-[#3b82f6] text-white',
-  'EM RISCO': 'bg-[#38bdf8] text-white',
+  'EM RISCO': 'bg-[#ff7a00] text-white',
   'ATUALIZAÇÃO NECESSÁRIA': 'bg-[#eab308] text-slate-900',
   'EM ESPERA': 'bg-[#78716c] text-white',
-  'CONCLUÍDO': 'bg-[#2dd4bf] text-white',
-  'CANCELADO': 'bg-[#2dd4bf] text-white'
+  'CONCLUÍDO': 'bg-[#22c55e] text-white',
+  'CANCELADO': 'bg-[#22c55e] text-white'
 };
 
 const priorityColors: Record<string, string> = {
@@ -28,24 +28,24 @@ const priorityColors: Record<string, string> = {
 
 export default function ListView({ issues, onTaskClick }: { issues: Issue[], onTaskClick?: (issue: Issue) => void }) {
   return (
-    <div className="h-full bg-[#0e1b32] flex flex-col text-slate-300">
+    <div className="h-full bg-[#070b16] flex flex-col text-slate-300">
       <div className="flex-1 overflow-auto p-6">
-        <div className="border border-[#294a70] rounded-lg shadow-sm overflow-hidden bg-[#13233b]">
+        <div className="border border-[#263345] rounded-lg shadow-sm overflow-hidden bg-[#111827]">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-[#13233b] border-b border-[#294a70] text-slate-400">
+            <thead className="bg-[#111827] border-b border-[#263345] text-slate-400">
               <tr>
-                <th className="px-6 py-3 font-semibold w-full">Nome da Tarefa</th>
+                <th className="px-6 py-3 font-semibold w-full">Nome da Fase</th>
                 <th className="px-6 py-3 font-semibold">Status</th>
                 <th className="px-6 py-3 font-semibold">Prioridade</th>
                 <th className="px-6 py-3 font-semibold">Responsável</th>
                 <th className="px-6 py-3 font-semibold">Data Final</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#1a2e4b]">
+            <tbody className="divide-y divide-[#0d1423]">
               {issues.map(issue => (
                 <tr
                   key={issue.id}
-                  className="hover:bg-[#13233b] transition-colors group cursor-pointer"
+                  className="hover:bg-[#111827] transition-colors group cursor-pointer"
                   onClick={() => onTaskClick?.(issue)}
                 >
                   <td className="px-6 py-3 font-medium text-slate-200 group-hover:text-white transition-colors truncate max-w-md flex items-center gap-2">

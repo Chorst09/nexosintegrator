@@ -1,11 +1,11 @@
 .project-management-embed {
-  --pm-bg: #070f1f;
-  --pm-bg-elevated: #0e1b32;
-  --pm-surface: #13233b;
-  --pm-surface-strong: #1a2e4b;
-  --pm-border: #294a70;
-  --pm-accent: #18c8df;
-  --pm-success: #2dd4bf;
+  --pm-bg: #070b16;
+  --pm-bg-elevated: #070b16;
+  --pm-surface: #111827;
+  --pm-surface-strong: #0d1423;
+  --pm-border: #263345;
+  --pm-accent: #ff7a00;
+  --pm-success: #22c55e;
   width: 100vw;
   height: 100vh;
   overflow: hidden;

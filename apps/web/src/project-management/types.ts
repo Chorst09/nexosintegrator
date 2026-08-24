@@ -7,6 +7,21 @@ export interface Space {
   name: string;
   initial: string;
   color: string;
+  client?: string;
+  sponsor?: string;
+  manager?: string;
+  status?: 'PLANEJAMENTO' | 'EM EXECUCAO' | 'EM RISCO' | 'CONCLUIDO';
+  priority?: IssuePriority;
+  startDate?: string;
+  endDate?: string;
+  budget?: string;
+  objective?: string;
+  scope?: string;
+  deliverables?: string;
+  successCriteria?: string;
+  risks?: string;
+  notes?: string;
+  createdAt?: string;
 }
 
 export interface User {
