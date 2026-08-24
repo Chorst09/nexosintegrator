@@ -73,6 +73,177 @@ const PARTICIPANT_STATUS = {
   PRESENTE: { label: 'Presente', color: 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-emerald-300' }
 };
 
+const formatMeetingDate = (value) => {
+  if (!value) return '[data da reunião]';
+  return new Date(value).toLocaleDateString('pt-BR');
+};
+
+const participantNames = (meeting, role) => {
+  const names = (meeting.participants || [])
+    .filter((participant) => !role || participant.role === role)
+    .map((participant) => participant.user?.name || participant.contact?.name)
+    .filter(Boolean);
+  return names.length ? names.join(', ') : '[participantes]';
+};
+
+const MINUTES_TEMPLATES = {
+  INTERNAL: {
+    title: 'Ata de Kickoff Interno',
+    badge: 'Alinhamento interno',
+    description: 'Modelo para organizar escopo, responsabilidades, riscos e plano antes da reunião com o cliente.',
+    accent: 'indigo',
+    actions: [
+      {
+        title: 'Validar escopo e premissas com time interno',
+        description: 'Revisar limites do projeto, entregáveis contratados, dependências e riscos antes do kickoff externo.',
+        priority: 'HIGH'
+      },
+      {
+        title: 'Confirmar responsáveis por frente de trabalho',
+        description: 'Definir dono técnico, dono comercial, PM/CS e responsáveis por documentação, cronograma e comunicação.',
+        priority: 'MEDIUM'
+      },
+      {
+        title: 'Preparar materiais para kickoff externo',
+        description: 'Separar apresentação, cronograma macro, matriz de responsabilidades, próximos passos e perguntas ao cliente.',
+        priority: 'HIGH'
+      }
+    ],
+    buildNotes: (meeting) => `ATA DE KICKOFF INTERNO
+
+Projeto/Oportunidade: ${meeting.opportunity?.title || '[nome do projeto]'}
+Cliente: ${meeting.company?.name || '[cliente]'}
+Data: ${formatMeetingDate(meeting.scheduledDate)}
+Horário: ${meeting.startTime || '[início]'}${meeting.endTime ? ` às ${meeting.endTime}` : ''}
+Responsável pela reunião: ${meeting.owner?.name || '[responsável]'}
+Participantes internos: ${participantNames(meeting, 'INTERNO')}
+
+1. Objetivo da reunião
+Alinhar internamente o entendimento da oportunidade, escopo contratado, expectativas do cliente, responsabilidades da equipe e plano de condução do kickoff externo.
+
+2. Contexto comercial e técnico
+- Oportunidade: ${meeting.opportunity?.number || '[número]'}
+- Valor estimado: R$ ${Number(meeting.opportunity?.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+- Solução/serviço contratado: [descrever]
+- Premissas comerciais: [descrever]
+- Restrições ou pontos de atenção: [descrever]
+
+3. Escopo preliminar
+- Entregáveis principais: [listar]
+- Itens fora de escopo: [listar]
+- Dependências do cliente: [listar]
+- Dependências internas: [listar]
+
+4. Papéis e responsabilidades
+- Comercial: [nome / responsabilidade]
+- Pré-vendas / Engenharia: [nome / responsabilidade]
+- Operações / Implantação: [nome / responsabilidade]
+- Gestão do projeto: [nome / responsabilidade]
+- Financeiro / Administrativo: [nome / responsabilidade]
+
+5. Riscos e pontos de atenção
+- Risco 1: [impacto / ação preventiva]
+- Risco 2: [impacto / ação preventiva]
+- Pendências para esclarecimento com o cliente: [listar]
+
+6. Plano para kickoff externo
+- Objetivo do kickoff externo: [descrever]
+- Pauta proposta ao cliente: [listar]
+- Informações que precisam ser solicitadas ao cliente: [listar]
+- Próximos passos esperados após a reunião: [listar]
+
+7. Decisões internas
+- [decisão 1]
+- [decisão 2]
+
+8. Ações definidas
+- [ação] | Responsável: [nome] | Prazo: [data]
+- [ação] | Responsável: [nome] | Prazo: [data]`
+  },
+  EXTERNAL: {
+    title: 'Ata de Kickoff Externo',
+    badge: 'Cliente e projeto',
+    description: 'Modelo para registrar alinhamento com cliente, governança, cronograma, entregáveis e próximos passos.',
+    accent: 'green',
+    actions: [
+      {
+        title: 'Enviar ata de kickoff para validação do cliente',
+        description: 'Compartilhar resumo da reunião, decisões, responsáveis, próximos passos e solicitar aceite ou ajustes.',
+        priority: 'HIGH'
+      },
+      {
+        title: 'Publicar cronograma inicial do projeto',
+        description: 'Formalizar marcos, janelas de execução, responsáveis, dependências e datas de acompanhamento.',
+        priority: 'HIGH'
+      },
+      {
+        title: 'Solicitar acessos e informações ao cliente',
+        description: 'Enviar lista de acessos, contatos técnicos, documentos, ambientes e informações necessárias para início.',
+        priority: 'MEDIUM'
+      }
+    ],
+    buildNotes: (meeting) => `ATA DE KICKOFF EXTERNO
+
+Projeto/Oportunidade: ${meeting.opportunity?.title || '[nome do projeto]'}
+Cliente: ${meeting.company?.name || '[cliente]'}
+CNPJ: ${meeting.company?.document || '[CNPJ]'}
+Data: ${formatMeetingDate(meeting.scheduledDate)}
+Horário: ${meeting.startTime || '[início]'}${meeting.endTime ? ` às ${meeting.endTime}` : ''}
+Plataforma/Local: ${PLATFORMS[meeting.platform]?.label || meeting.platform || '[plataforma]'}
+Responsável Chorst: ${meeting.owner?.name || '[responsável]'}
+Participantes internos: ${participantNames(meeting, 'INTERNO')}
+Participantes cliente: ${participantNames(meeting, 'EXTERNO')}
+
+1. Objetivo da reunião
+Realizar o alinhamento inicial entre Chorst e cliente, confirmar escopo, responsabilidades, governança, cronograma macro, canais de comunicação e próximos passos para início do projeto.
+
+2. Contexto do projeto
+- Necessidade do cliente: [descrever]
+- Solução contratada: [descrever]
+- Resultado esperado: [descrever]
+- Critérios de sucesso: [descrever]
+
+3. Escopo e entregáveis
+- Entregável 1: [descrever]
+- Entregável 2: [descrever]
+- Entregável 3: [descrever]
+- Fora de escopo / premissas: [descrever]
+
+4. Governança e comunicação
+- Patrocinador do cliente: [nome]
+- Ponto focal do cliente: [nome]
+- Ponto focal Chorst: [nome]
+- Canal oficial de comunicação: [e-mail / Teams / WhatsApp / portal]
+- Frequência de acompanhamento: [semanal / quinzenal / sob demanda]
+
+5. Cronograma macro
+- Início previsto: [data]
+- Marcos principais: [listar]
+- Data estimada de entrega/homologação: [data]
+- Janelas ou restrições de execução: [descrever]
+
+6. Dependências do cliente
+- Acessos necessários: [listar]
+- Documentos/informações pendentes: [listar]
+- Validações ou aprovações necessárias: [listar]
+
+7. Riscos e pontos de atenção
+- [risco/ponto] | Impacto: [baixo/médio/alto] | Mitigação: [ação]
+- [risco/ponto] | Impacto: [baixo/médio/alto] | Mitigação: [ação]
+
+8. Decisões tomadas
+- [decisão 1]
+- [decisão 2]
+
+9. Próximos passos
+- [ação] | Responsável: [nome] | Prazo: [data]
+- [ação] | Responsável: [nome] | Prazo: [data]
+
+10. Encerramento
+Ficou acordado que os próximos acompanhamentos serão conduzidos conforme a governança definida nesta reunião. Esta ata será compartilhada para validação dos participantes.`
+  }
+};
+
 const Kickoff = () => {
   const [meetings, setMeetings] = useState([]);
   const [stats, setStats] = useState(null);
@@ -1226,6 +1397,24 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
     if (res.ok) await refresh();
   };
 
+  const applyMinutesTemplate = (templateKey) => {
+    const template = MINUTES_TEMPLATES[templateKey];
+    if (!template) return;
+    if (notes.trim() && !window.confirm('Substituir o texto atual da ata por este modelo?')) return;
+    setNotes(template.buildNotes(meeting));
+  };
+
+  const applyActionTemplate = (action) => {
+    setActionForm({
+      title: action.title,
+      description: action.description,
+      priority: action.priority,
+      dueDate: '',
+      assigneeId: ''
+    });
+    setShowActionForm(true);
+  };
+
   const addParticipant = async (e) => {
     e.preventDefault();
     const res = await fetch(buildApiUrl(`/kickoff/meetings/${meeting.id}/participants`), {
@@ -1712,6 +1901,59 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           {/* Ata & Ações */}
           {activeTab === 'minutes' && (
             <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {Object.entries(MINUTES_TEMPLATES).map(([key, template]) => (
+                  <div
+                    key={key}
+                    className={`rounded-2xl border p-4 ${
+                      template.accent === 'green'
+                        ? 'border-green-200 bg-green-50 dark:border-emerald-500/25 dark:bg-emerald-500/10'
+                        : 'border-indigo-200 bg-indigo-50 dark:border-indigo-500/25 dark:bg-indigo-500/10'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className={`inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide rounded-full ${
+                          template.accent === 'green'
+                            ? 'bg-green-100 text-green-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                            : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                        }`}>
+                          {template.badge}
+                        </span>
+                        <h4 className="mt-3 text-base font-bold text-gray-900 dark:text-slate-100">{template.title}</h4>
+                        <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">{template.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => applyMinutesTemplate(key)}
+                        className={`flex-shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors ${
+                          template.accent === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                      >
+                        Usar modelo
+                      </button>
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-slate-300">Ações sugeridas</p>
+                      <div className="space-y-2">
+                        {template.actions.map((action) => (
+                          <button
+                            key={action.title}
+                            type="button"
+                            onClick={() => applyActionTemplate(action)}
+                            className="w-full rounded-lg border border-white/70 bg-white/70 p-3 text-left transition-colors hover:border-indigo-300 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:border-indigo-400/40 dark:hover:bg-white/10"
+                          >
+                            <span className="block text-xs font-bold text-gray-900 dark:text-slate-100">{action.title}</span>
+                            <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">{action.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2 flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-indigo-500" /> Ata da Reunião
