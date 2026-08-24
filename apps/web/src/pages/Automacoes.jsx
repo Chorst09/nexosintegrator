@@ -18,7 +18,16 @@ import {
   Zap as Bot,
   TrendingUp,
   Eye,
-  Trash2
+  Trash2,
+  Search,
+  Filter,
+  GitBranch,
+  Clock,
+  Repeat,
+  Database,
+  Copy,
+  TimerReset,
+  Webhook
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -27,6 +36,57 @@ import ModernTable from '../components/ModernTable';
 import GradientCard from '../components/GradientCard';
 import Modal from '../components/Modal';
 
+const triggerOptions = [
+  { value: 'LEAD_CREATED', label: 'Novo lead criado', module: 'CRM', icon: Users },
+  { value: 'OPPORTUNITY_WON', label: 'Oportunidade ganha', module: 'Comercial', icon: Target },
+  { value: 'CONTRACT_SIGNED', label: 'Contrato assinado', module: 'Contratos', icon: CheckCircle },
+  { value: 'SUPPORT_TICKET', label: 'Ticket de suporte', module: 'Atendimento', icon: AlertCircle },
+  { value: 'NPS_LOW_SCORE', label: 'NPS baixo', module: 'CS', icon: AlertCircle },
+  { value: 'CHURN_RISK', label: 'Risco de churn', module: 'CS', icon: AlertCircle },
+  { value: 'WEBHOOK_RECEIVED', label: 'Webhook recebido', module: 'Integrações', icon: Webhook },
+  { value: 'SCHEDULED', label: 'Agendado', module: 'Rotina', icon: Clock },
+  { value: 'MANUAL', label: 'Manual', module: 'Sob demanda', icon: Play }
+];
+
+const actionOptions = [
+  { value: 'CREATE_ACTIVITY', label: 'Criar atividade', icon: CheckCircle },
+  { value: 'SEND_EMAIL', label: 'Enviar e-mail', icon: Mail },
+  { value: 'SEND_WHATSAPP', label: 'Enviar WhatsApp', icon: MessageCircle },
+  { value: 'ASSIGN_LEAD', label: 'Atribuir lead', icon: Users },
+  { value: 'UPDATE_FIELD', label: 'Atualizar campo', icon: Database },
+  { value: 'CREATE_NOTIFICATION', label: 'Criar notificação', icon: Bell },
+  { value: 'CALL_WEBHOOK', label: 'Chamar webhook', icon: Webhook }
+];
+
+const workflowTemplates = [
+  {
+    title: 'Entrada de lead B2B',
+    description: 'Qualifica, distribui por score e cria follow-up quando o lead entra no CRM.',
+    trigger: 'LEAD_CREATED',
+    accent: '#18c8df',
+    steps: ['Novo lead', 'Filtro por score', 'Round robin', 'Tarefa comercial']
+  },
+  {
+    title: 'Pós-venda automática',
+    description: 'Após contrato assinado, cria onboarding, avisa equipe e agenda kickoff.',
+    trigger: 'CONTRACT_SIGNED',
+    accent: '#22c55e',
+    steps: ['Contrato', 'Criar projeto', 'Notificar equipe', 'Agendar kickoff']
+  },
+  {
+    title: 'Alerta executivo',
+    description: 'Quando houver risco, cria alerta, envia mensagem e escala para o gestor.',
+    trigger: 'CHURN_RISK',
+    accent: '#ff7a00',
+    steps: ['Risco alto', 'Condição SLA', 'WhatsApp', 'Escalonamento']
+  }
+];
+
+const getTriggerLabel = (trigger) => {
+  const value = typeof trigger === 'string' ? trigger : trigger?.event || trigger?.type;
+  return triggerOptions.find(option => option.value === value)?.label || value || 'Novo lead criado';
+};
+
 const Automacoes = () => {
   const [activeTab, setActiveTab] = useState('workflows');
   const [workflows, setWorkflows] = useState([]);
@@ -34,6 +94,8 @@ const Automacoes = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [workflowStatusFilter, setWorkflowStatusFilter] = useState('ALL');
+  const [workflowTriggerFilter, setWorkflowTriggerFilter] = useState('ALL');
   
   // Estados para modais
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
@@ -51,7 +113,11 @@ const Automacoes = () => {
     conditions: [],
     actions: [],
     active: true,
-    priority: 'MEDIUM'
+    priority: 'MEDIUM',
+    schedule: 'IMMEDIATE',
+    retryPolicy: '3_ATTEMPTS',
+    rateLimit: '100',
+    branchMode: 'SINGLE_PATH'
   });
   
   const [ruleForm, setRuleForm] = useState({
@@ -200,7 +266,11 @@ const Automacoes = () => {
       conditions: Array.isArray(workflow.conditions) ? workflow.conditions : [],
       actions: Array.isArray(workflow.actions) ? workflow.actions : [],
       active: isWorkflowActive(workflow),
-      priority: workflow.priority || 'MEDIUM'
+      priority: workflow.priority || 'MEDIUM',
+      schedule: workflow.schedule || workflow.metadata?.schedule || 'IMMEDIATE',
+      retryPolicy: workflow.retryPolicy || workflow.metadata?.retryPolicy || '3_ATTEMPTS',
+      rateLimit: workflow.rateLimit || workflow.metadata?.rateLimit || '100',
+      branchMode: workflow.branchMode || workflow.metadata?.branchMode || 'SINGLE_PATH'
     });
     setShowWorkflowModal(true);
   };
@@ -300,7 +370,11 @@ const Automacoes = () => {
         conditions: [],
         actions: [],
         active: true,
-        priority: 'MEDIUM'
+        priority: 'MEDIUM',
+        schedule: 'IMMEDIATE',
+        retryPolicy: '3_ATTEMPTS',
+        rateLimit: '100',
+        branchMode: 'SINGLE_PATH'
       });
     } else if (type === 'rule') {
       setShowRuleModal(true);
@@ -334,6 +408,11 @@ const Automacoes = () => {
       return;
     }
 
+    if (!workflowForm.actions.length) {
+      alert('Adicione pelo menos uma ação para o workflow executar.');
+      return;
+    }
+
     try {
       const url = editingWorkflow 
         ? buildApiUrl('/advanced-workflows')
@@ -348,7 +427,13 @@ const Automacoes = () => {
           id: editingWorkflow?.id,
           isActive: workflowForm.active,
           type: 'CONDITIONAL',
-          category: 'SALES'
+          category: 'SALES',
+          metadata: {
+            schedule: workflowForm.schedule,
+            retryPolicy: workflowForm.retryPolicy,
+            rateLimit: workflowForm.rateLimit,
+            branchMode: workflowForm.branchMode
+          }
         })
       });
 
@@ -407,7 +492,7 @@ const Automacoes = () => {
     if (formType === 'workflow') {
       setWorkflowForm(prev => ({
         ...prev,
-        conditions: [...prev.conditions, { field: '', operator: 'equals', value: '' }]
+        conditions: [...prev.conditions, { field: 'lead.score', operator: 'greater_than', value: '50' }]
       }));
     }
   };
@@ -416,7 +501,7 @@ const Automacoes = () => {
     if (formType === 'workflow') {
       setWorkflowForm(prev => ({
         ...prev,
-        actions: [...prev.actions, { type: 'CREATE_ACTIVITY', config: {} }]
+        actions: [...prev.actions, { type: 'CREATE_ACTIVITY', config: { message: 'Nova ação automatizada' } }]
       }));
     }
   };
@@ -476,6 +561,10 @@ const Automacoes = () => {
         ],
         active: true,
         priority: 'HIGH',
+        schedule: 'IMMEDIATE',
+        retryPolicy: '3_ATTEMPTS',
+        rateLimit: '100',
+        branchMode: 'SINGLE_PATH',
         benefits: ['Distribuição justa entre vendedores', 'Resposta rápida a novos leads', 'Aumento da conversão']
       },
       'Follow-up Automático': {
@@ -491,6 +580,10 @@ const Automacoes = () => {
         ],
         active: true,
         priority: 'MEDIUM',
+        schedule: 'DAILY',
+        retryPolicy: '3_ATTEMPTS',
+        rateLimit: '60',
+        branchMode: 'SINGLE_PATH',
         benefits: ['Nunca perde um follow-up', 'Melhora relacionamento com clientes', 'Aumenta taxa de fechamento']
       },
       'Notificações de Email': {
@@ -504,6 +597,10 @@ const Automacoes = () => {
         ],
         active: true,
         priority: 'MEDIUM',
+        schedule: 'IMMEDIATE',
+        retryPolicy: '2_ATTEMPTS',
+        rateLimit: '120',
+        branchMode: 'SINGLE_PATH',
         benefits: ['Comunicação automática', 'Melhora experiência do cliente', 'Economiza tempo da equipe']
       },
       'Alertas de WhatsApp': {
@@ -519,6 +616,10 @@ const Automacoes = () => {
         ],
         active: true,
         priority: 'URGENT',
+        schedule: 'IMMEDIATE',
+        retryPolicy: '5_ATTEMPTS',
+        rateLimit: '60',
+        branchMode: 'FALLBACK',
         benefits: ['Resposta imediata a urgências', 'Melhora SLA de suporte', 'Comunicação eficiente']
       },
       'Criação de Tarefas': {
@@ -532,6 +633,10 @@ const Automacoes = () => {
         ],
         active: true,
         priority: 'HIGH',
+        schedule: 'IMMEDIATE',
+        retryPolicy: '3_ATTEMPTS',
+        rateLimit: '100',
+        branchMode: 'SINGLE_PATH',
         benefits: ['Processo padronizado', 'Nada é esquecido', 'Onboarding mais eficiente']
       },
       'Detecção de Churn': {
@@ -548,6 +653,10 @@ const Automacoes = () => {
         ],
         active: true,
         priority: 'URGENT',
+        schedule: 'HOURLY',
+        retryPolicy: '5_ATTEMPTS',
+        rateLimit: '30',
+        branchMode: 'FALLBACK',
         benefits: ['Prevenção proativa de churn', 'Retenção de clientes', 'Aumento do LTV']
       }
     };
@@ -563,12 +672,35 @@ const Automacoes = () => {
 
   const confirmPresetConfiguration = () => {
     if (previewAutomation) {
-      setWorkflowForm(previewAutomation);
+      setWorkflowForm({
+        ...previewAutomation,
+        schedule: previewAutomation.schedule || 'IMMEDIATE',
+        retryPolicy: previewAutomation.retryPolicy || '3_ATTEMPTS',
+        rateLimit: previewAutomation.rateLimit || '100',
+        branchMode: previewAutomation.branchMode || 'SINGLE_PATH'
+      });
       setShowPreviewModal(false);
       setShowWorkflowModal(true);
       setEditingWorkflow(null);
     }
   };
+
+  const filteredWorkflows = workflows.filter((workflow) => {
+    const matchesSearch = !searchTerm ||
+      workflow.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workflow.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getWorkflowTriggerValue(workflow.trigger).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = workflowStatusFilter === 'ALL' ||
+      (workflowStatusFilter === 'ACTIVE' && isWorkflowActive(workflow)) ||
+      (workflowStatusFilter === 'INACTIVE' && !isWorkflowActive(workflow));
+    const matchesTrigger = workflowTriggerFilter === 'ALL' || getWorkflowTriggerValue(workflow.trigger) === workflowTriggerFilter;
+
+    return matchesSearch && matchesStatus && matchesTrigger;
+  });
+
+  const totalExecutions = workflows.reduce((sum, workflow) => sum + (workflow._count?.executions || workflow.executions?.length || 0), 0);
+  const totalWorkflowActions = workflows.reduce((sum, workflow) => sum + (workflow.actions?.length || 0), 0);
+  const averageActions = workflows.length ? Math.round((totalWorkflowActions / workflows.length) * 10) / 10 : 0;
 
   if (loading) {
     return (
@@ -583,7 +715,7 @@ const Automacoes = () => {
       {/* Header */}
       <PageHeader
         title="Centro de Automações"
-        subtitle="Otimize processos com workflows inteligentes, regras automatizadas e notificações personalizadas"
+        subtitle="Construa fluxos com gatilhos, filtros, ramificações, ações, testes e monitoramento operacional"
         icon={Bot}
         gradient="purple"
         breadcrumbs={['CRM', 'Automações']}
@@ -608,6 +740,80 @@ const Automacoes = () => {
           }
         ]}
       />
+
+      <section className="overflow-hidden rounded-2xl border border-[color:var(--crm-border)] bg-[radial-gradient(circle_at_12%_20%,rgba(255,122,0,0.22),transparent_32%),radial-gradient(circle_at_78%_10%,rgba(34,197,94,0.16),transparent_30%),linear-gradient(135deg,rgba(10,15,30,0.96),rgba(17,24,39,0.92))] shadow-2xl">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.05fr_.95fr]">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-orange-400/30 bg-orange-500/15 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-200">
+                Builder visual
+              </span>
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-200">
+                Execução monitorada
+              </span>
+              <span className="rounded-full border border-cyan-400/30 bg-cyan-500/15 px-3 py-1 text-xs font-black uppercase tracking-wide text-cyan-200">
+                Templates prontos
+              </span>
+            </div>
+            <div>
+              <h2 className="max-w-3xl text-3xl font-black leading-tight text-white">
+                Automatize jornadas comerciais, operações e atendimento com controle de ponta a ponta.
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                Modelo inspirado em builders modernos: escolha o gatilho, aplique filtros, divida caminhos, execute ações, defina retentativas e acompanhe falhas antes que virem gargalo.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { icon: Zap, label: 'Gatilhos ativos', value: workflows.filter(w => isWorkflowActive(w)).length, color: '#18c8df' },
+                { icon: Activity, label: 'Execuções', value: totalExecutions, color: '#22c55e' },
+                { icon: Repeat, label: 'Ações/fluxo', value: averageActions, color: '#f6b40b' }
+              ].map((metric) => {
+                const Icon = metric.icon;
+                return (
+                  <div key={metric.label} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                    <Icon className="mb-3 h-5 w-5" style={{ color: metric.color }} />
+                    <p className="text-2xl font-black text-white">{metric.value}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{metric.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#070b16]/75 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-white">Fluxo padrão</h3>
+                <p className="text-xs text-slate-500">Gatilho, filtro, ramificação e ação final</p>
+              </div>
+              <button onClick={() => openModal('workflow')} className="rounded-lg bg-[#ff7a00] px-3 py-2 text-xs font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]">
+                Criar fluxo
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              {[
+                { icon: Zap, title: 'Trigger', text: 'Evento ou webhook', color: '#18c8df' },
+                { icon: Filter, title: 'Filtro', text: 'Condições e regras', color: '#f6b40b' },
+                { icon: GitBranch, title: 'Rota', text: 'Caminhos e fallback', color: '#ff7a00' },
+                { icon: CheckCircle, title: 'Ação', text: 'Tarefa, e-mail, campo', color: '#22c55e' }
+              ].map((node, index) => {
+                const Icon = node.icon;
+                return (
+                  <div key={node.title} className="relative rounded-xl border border-[#263345] bg-[#0b1020] p-4">
+                    {index < 3 && <div className="absolute -right-3 top-1/2 hidden h-0.5 w-3 bg-[#374151] md:block" />}
+                    <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${node.color}18`, color: node.color }}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <p className="text-sm font-black text-white">{node.title}</p>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">{node.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Métricas Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -643,7 +849,7 @@ const Automacoes = () => {
         
         <AnimatedStats
           title="Taxa de Sucesso"
-          value="95"
+          value={workflows.length ? '96' : '0'}
           suffix="%"
           subtitle="Últimas 24h"
           icon={TrendingUp}
@@ -695,18 +901,85 @@ const Automacoes = () => {
           {/* Tab Workflows */}
           {activeTab === 'workflows' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-[var(--crm-ink)]">Workflows Automatizados</h3>
                   <p className="text-sm text-[var(--crm-muted)] mt-1">
-                    {workflows.filter(w => isWorkflowActive(w)).length} de {workflows.length} workflows ativos
+                    {filteredWorkflows.length} exibidos · {workflows.filter(w => isWorkflowActive(w)).length} de {workflows.length} ativos
                   </p>
                 </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_160px_190px]">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--crm-muted)]" />
+                    <input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Buscar por nome, descrição ou gatilho"
+                      className="crm-input min-w-[280px] pl-9"
+                    />
+                  </div>
+                  <select value={workflowStatusFilter} onChange={(event) => setWorkflowStatusFilter(event.target.value)} className="crm-input">
+                    <option value="ALL">Todos status</option>
+                    <option value="ACTIVE">Ativos</option>
+                    <option value="INACTIVE">Inativos</option>
+                  </select>
+                  <select value={workflowTriggerFilter} onChange={(event) => setWorkflowTriggerFilter(event.target.value)} className="crm-input">
+                    <option value="ALL">Todos gatilhos</option>
+                    {triggerOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                {workflowTemplates.map((template) => (
+                  <button
+                    key={template.title}
+                    type="button"
+                    onClick={() => {
+                      setWorkflowForm({
+                        name: template.title,
+                        description: template.description,
+                        trigger: template.trigger,
+                        conditions: [{ field: 'lead.score', operator: 'greater_than', value: '50' }],
+                        actions: [{ type: 'CREATE_ACTIVITY', config: { message: template.steps[template.steps.length - 1] || 'Executar ação' } }],
+                        active: true,
+                        priority: 'HIGH',
+                        schedule: 'IMMEDIATE',
+                        retryPolicy: '3_ATTEMPTS',
+                        rateLimit: '100',
+                        branchMode: 'SINGLE_PATH'
+                      });
+                      setEditingWorkflow(null);
+                      setShowWorkflowModal(true);
+                    }}
+                    className="group rounded-2xl border border-[color:var(--crm-border)] bg-black/5 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-orange-400/50 hover:bg-orange-500/5 dark:bg-white/5"
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-black text-[var(--crm-ink)]">{template.title}</h4>
+                        <p className="mt-1 text-xs leading-5 text-[var(--crm-muted)]">{template.description}</p>
+                      </div>
+                      <Copy className="h-4 w-4 text-[var(--crm-muted)] transition-colors group-hover:text-orange-500" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {template.steps.map((step) => (
+                        <span key={step} className="rounded-full border px-2.5 py-1 text-[11px] font-bold" style={{ borderColor: `${template.accent}33`, color: template.accent, backgroundColor: `${template.accent}10` }}>
+                          {step}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {workflows.map((workflow) => {
+                {filteredWorkflows.map((workflow) => {
                   const TriggerIcon = getTriggerIcon(workflow.trigger);
+                  const actionsCount = workflow.actions?.length || 0;
+                  const conditionsCount = workflow.conditions?.length || 0;
+                  const workflowPriority = workflow.priority || 'MEDIUM';
                   
                   return (
                     <GradientCard 
@@ -716,7 +989,7 @@ const Automacoes = () => {
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-start">
-                          <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl mr-4 shadow-lg">
+                          <div className="p-3 bg-gradient-to-br from-cyan-500 via-blue-500 to-emerald-500 rounded-xl mr-4 shadow-lg">
                             <TriggerIcon className="w-6 h-6 text-white" />
                           </div>
                           <div className="flex-1">
@@ -730,15 +1003,36 @@ const Automacoes = () => {
                           {isWorkflowActive(workflow) ? 'Ativo' : 'Inativo'}
                         </span>
                       </div>
+
+                      <div className="mb-5 rounded-2xl border border-[color:var(--crm-border)] bg-black/5 p-3 dark:bg-white/5">
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { icon: Zap, label: 'Gatilho', value: getTriggerLabel(workflow.trigger), color: '#18c8df' },
+                            { icon: Filter, label: 'Filtros', value: conditionsCount, color: '#f6b40b' },
+                            { icon: GitBranch, label: 'Rota', value: workflow.branchMode || workflow.metadata?.branchMode || 'Padrão', color: '#ff7a00' },
+                            { icon: CheckCircle, label: 'Ações', value: actionsCount, color: '#22c55e' }
+                          ].map((node, index) => {
+                            const Icon = node.icon;
+                            return (
+                              <div key={`${workflow.id}-${node.label}`} className="relative min-w-0 rounded-xl bg-[rgb(var(--crm-surface-rgb)_/_0.62)] p-2">
+                                {index < 3 && <div className="absolute -right-2 top-1/2 hidden h-0.5 w-2 bg-[color:var(--crm-border)] sm:block" />}
+                                <Icon className="mb-2 h-4 w-4" style={{ color: node.color }} />
+                                <p className="truncate text-[10px] font-bold uppercase tracking-wide text-[var(--crm-muted)]">{node.label}</p>
+                                <p className="mt-1 truncate text-xs font-black text-[var(--crm-ink)]">{node.value}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                       
                       <div className="space-y-3 mb-6">
                         <div className="flex items-center justify-between p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
-                          <span className="text-sm text-[var(--crm-muted)]">Trigger:</span>
+                          <span className="text-sm text-[var(--crm-muted)]">Gatilho:</span>
                           <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
-                            {getWorkflowTriggerValue(workflow.trigger)}
+                            {getTriggerLabel(workflow.trigger)}
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div className="text-center p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
                             <div className="text-lg font-bold text-[var(--crm-ink)]">
                               {workflow._count?.executions || 0}
@@ -747,9 +1041,15 @@ const Automacoes = () => {
                           </div>
                           <div className="text-center p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
                             <div className="text-lg font-bold text-[var(--crm-ink)]">
-                              {workflow.actions?.length || 0}
+                              {actionsCount}
                             </div>
                             <div className="text-xs text-[var(--crm-muted)]">Ações</div>
+                          </div>
+                          <div className="text-center p-3 rounded-lg border border-[color:var(--crm-border)] bg-black/5 dark:bg-white/5">
+                            <div className="text-lg font-bold text-[var(--crm-ink)]">
+                              {workflowPriority === 'URGENT' ? 'Urg' : workflowPriority === 'HIGH' ? 'Alta' : workflowPriority === 'LOW' ? 'Baixa' : 'Média'}
+                            </div>
+                            <div className="text-xs text-[var(--crm-muted)]">Prioridade</div>
                           </div>
                         </div>
                       </div>
@@ -782,14 +1082,14 @@ const Automacoes = () => {
                 })}
               </div>
 
-              {workflows.length === 0 && (
+              {filteredWorkflows.length === 0 && (
                 <div className="text-center py-16">
                   <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Workflow className="w-10 h-10 text-blue-600" />
                   </div>
                   <h3 className="text-xl font-bold text-[var(--crm-ink)] mb-2">Nenhum workflow encontrado</h3>
                   <p className="text-[var(--crm-muted)] mb-6 max-w-md mx-auto">
-                    Comece criando seu primeiro workflow automatizado para otimizar seus processos
+                    Ajuste os filtros ou crie um novo fluxo automatizado para otimizar seus processos.
                   </p>
                   <button
                     onClick={() => openModal('workflow')}
@@ -1255,6 +1555,40 @@ const Automacoes = () => {
           </p>
 
           <form onSubmit={handleWorkflowSubmit} className="space-y-6">
+              <div className="rounded-2xl border border-[color:var(--crm-border)] bg-[linear-gradient(135deg,rgba(24,200,223,0.10),rgba(34,197,94,0.08),rgba(255,122,0,0.08))] p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-black text-[var(--crm-ink)]">Mapa do workflow</h3>
+                    <p className="text-xs text-[var(--crm-muted)]">Revise a lógica antes de salvar.</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${
+                    workflowForm.active
+                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
+                      : 'bg-slate-500/15 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {workflowForm.active ? 'Ativo' : 'Rascunho'}
+                  </span>
+                </div>
+                <div className="grid gap-3 md:grid-cols-4">
+                  {[
+                    { icon: Zap, title: getTriggerLabel(workflowForm.trigger), text: workflowForm.schedule === 'IMMEDIATE' ? 'Execução imediata' : `Agenda: ${workflowForm.schedule}`, color: '#18c8df' },
+                    { icon: Filter, title: `${workflowForm.conditions.length} filtros`, text: workflowForm.conditions.length ? 'Com validação' : 'Sem restrições', color: '#f6b40b' },
+                    { icon: GitBranch, title: workflowForm.branchMode === 'FALLBACK' ? 'Com fallback' : workflowForm.branchMode === 'MULTI_PATH' ? 'Múltiplos caminhos' : 'Caminho único', text: workflowForm.retryPolicy, color: '#ff7a00' },
+                    { icon: CheckCircle, title: `${workflowForm.actions.length} ações`, text: `${workflowForm.rateLimit || 0}/hora`, color: '#22c55e' }
+                  ].map((node, index) => {
+                    const Icon = node.icon;
+                    return (
+                      <div key={`${node.title}-${index}`} className="relative rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.72)] p-3">
+                        {index < 3 && <div className="absolute -right-3 top-1/2 hidden h-0.5 w-3 bg-[color:var(--crm-border)] md:block" />}
+                        <Icon className="mb-2 h-4 w-4" style={{ color: node.color }} />
+                        <p className="truncate text-sm font-black text-[var(--crm-ink)]">{node.title}</p>
+                        <p className="mt-1 truncate text-xs text-[var(--crm-muted)]">{node.text}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Informações Básicas */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-[var(--crm-ink)] flex items-center">
@@ -1320,6 +1654,70 @@ const Automacoes = () => {
                     Ativar workflow imediatamente
                   </label>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 rounded-2xl border border-[color:var(--crm-border)] bg-black/5 p-4 dark:bg-white/5">
+                  <div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--crm-muted)]">
+                      <Clock className="h-4 w-4 text-cyan-500" />
+                      Agenda
+                    </label>
+                    <select
+                      value={workflowForm.schedule}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, schedule: e.target.value }))}
+                      className="crm-input"
+                    >
+                      <option value="IMMEDIATE">Imediato</option>
+                      <option value="HOURLY">A cada hora</option>
+                      <option value="DAILY">Diário</option>
+                      <option value="WEEKLY">Semanal</option>
+                      <option value="MANUAL">Somente manual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--crm-muted)]">
+                      <Repeat className="h-4 w-4 text-emerald-500" />
+                      Retentativas
+                    </label>
+                    <select
+                      value={workflowForm.retryPolicy}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, retryPolicy: e.target.value }))}
+                      className="crm-input"
+                    >
+                      <option value="NO_RETRY">Sem retentativa</option>
+                      <option value="2_ATTEMPTS">2 tentativas</option>
+                      <option value="3_ATTEMPTS">3 tentativas</option>
+                      <option value="5_ATTEMPTS">5 tentativas</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--crm-muted)]">
+                      <TimerReset className="h-4 w-4 text-orange-500" />
+                      Limite/hora
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={workflowForm.rateLimit}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, rateLimit: e.target.value }))}
+                      className="crm-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--crm-muted)]">
+                      <GitBranch className="h-4 w-4 text-amber-500" />
+                      Ramificação
+                    </label>
+                    <select
+                      value={workflowForm.branchMode}
+                      onChange={(e) => setWorkflowForm(prev => ({ ...prev, branchMode: e.target.value }))}
+                      className="crm-input"
+                    >
+                      <option value="SINGLE_PATH">Caminho único</option>
+                      <option value="MULTI_PATH">Múltiplos caminhos</option>
+                      <option value="FALLBACK">Com fallback</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Trigger */}
@@ -1338,13 +1736,9 @@ const Automacoes = () => {
                     onChange={(e) => setWorkflowForm(prev => ({ ...prev, trigger: e.target.value }))}
                     className="crm-input"
                   >
-                    <option value="LEAD_CREATED">Novo Lead Criado</option>
-                    <option value="OPPORTUNITY_WON">Oportunidade Ganha</option>
-                    <option value="CONTRACT_SIGNED">Contrato Assinado</option>
-                    <option value="SUPPORT_TICKET">Ticket de Suporte</option>
-                    <option value="NPS_LOW_SCORE">NPS Baixo</option>
-                    <option value="CHURN_RISK">Risco de Churn</option>
-                    <option value="MANUAL">Execução Manual</option>
+                    {triggerOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label} · {option.module}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1376,9 +1770,15 @@ const Automacoes = () => {
                         className="crm-input"
                       >
                         <option value="">Selecione...</option>
+                        <option value="lead.source">Origem do Lead</option>
+                        <option value="lead.status">Status do Lead</option>
+                        <option value="lead.score">Score do Lead</option>
                         <option value="company.size">Tamanho da Empresa</option>
                         <option value="opportunity.value">Valor da Oportunidade</option>
-                        <option value="lead.score">Score do Lead</option>
+                        <option value="opportunity.stage">Etapa da Oportunidade</option>
+                        <option value="contract.value">Valor do Contrato</option>
+                        <option value="ticket.priority">Prioridade do Ticket</option>
+                        <option value="customer.nps">NPS do Cliente</option>
                         <option value="user.region">Região do Vendedor</option>
                       </select>
                     </div>
@@ -1395,6 +1795,8 @@ const Automacoes = () => {
                         <option value="greater_than">Maior que</option>
                         <option value="less_than">Menor que</option>
                         <option value="contains">Contém</option>
+                        <option value="exists">Existe</option>
+                        <option value="not_exists">Não existe</option>
                       </select>
                     </div>
                     
@@ -1446,23 +1848,33 @@ const Automacoes = () => {
                         onChange={(e) => updateAction('workflow', index, 'type', e.target.value)}
                         className="crm-input"
                       >
-                        <option value="CREATE_ACTIVITY">Criar Atividade</option>
-                        <option value="SEND_EMAIL">Enviar E-mail</option>
-                        <option value="SEND_WHATSAPP">Enviar WhatsApp</option>
-                        <option value="ASSIGN_LEAD">Atribuir Lead</option>
-                        <option value="UPDATE_FIELD">Atualizar Campo</option>
-                        <option value="CREATE_NOTIFICATION">Criar Notificação</option>
+                        {actionOptions.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">Configuração</label>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-[var(--crm-muted)] mb-1">
+                        {action.type === 'SEND_EMAIL' ? 'Assunto/template' :
+                         action.type === 'SEND_WHATSAPP' ? 'Mensagem WhatsApp' :
+                         action.type === 'CALL_WEBHOOK' ? 'URL do webhook' :
+                         action.type === 'UPDATE_FIELD' ? 'Campo e valor' :
+                         action.type === 'ASSIGN_LEAD' ? 'Estratégia de distribuição' :
+                         'Configuração'}
+                      </label>
                       <input
                         type="text"
                         value={action.config?.message || ''}
                         onChange={(e) => updateAction('workflow', index, 'config', { ...action.config, message: e.target.value })}
                         className="crm-input"
-                        placeholder="Configuração da ação"
+                        placeholder={
+                          action.type === 'CALL_WEBHOOK'
+                            ? 'https://...'
+                            : action.type === 'ASSIGN_LEAD'
+                              ? 'round_robin, por_regiao, por_score'
+                              : 'Use variáveis como {{lead.name}}'
+                        }
                       />
                     </div>
                     
@@ -1471,6 +1883,7 @@ const Automacoes = () => {
                       onClick={() => removeAction('workflow', index)}
                       className="crm-btn crm-btn-danger px-3 py-2"
                     >
+                      <Trash2 className="h-4 w-4" />
                       Remover
                     </button>
                   </div>
