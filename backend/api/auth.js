@@ -103,7 +103,7 @@ router.post('/login', async (req, res) => {
     });
 
     // Se já respondeu com timeout, interrompe
-    if (!user || res.headersSent) return;
+    if (res.headersSent) return;
 
     if (!user) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
