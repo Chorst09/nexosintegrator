@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ModernTable from '../components/ModernTable';
 import Modal from '../components/Modal';
 import { API_BASE_URL, API_ENDPOINTS, buildApiUrl, getAuthHeaders } from '../config/api';
@@ -393,6 +393,7 @@ const formatDateLabel = (value) => {
 
 export default function Administracao() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('perfil');
   const [users, setUsers] = useState([]);
   const [regions, setRegions] = useState([]);
@@ -558,6 +559,15 @@ export default function Administracao() {
     }),
     [licensingCompanies]
   );
+
+  const resetSessionAndGoToLogin = (message) => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    if (message) {
+      window.alert(message);
+    }
+    navigate('/login', { replace: true });
+  };
 
   const loadManagementCompanies = async () => {
     console.log('🔵 loadManagementCompanies chamada');
@@ -774,6 +784,11 @@ export default function Administracao() {
         fetch(API_ENDPOINTS.regions, { headers: getAuthHeaders() }),
         fetch(API_ENDPOINTS.settings, { headers: getAuthHeaders() })
       ]);
+
+      if ([usersRes, regionsRes, settingsRes].some((response) => response.status === 401)) {
+        resetSessionAndGoToLogin('Sessão expirada ou alterada pela restauração do backup. Faça login novamente.');
+        return;
+      }
 
       if (!usersRes.ok) throw new Error(`Erro ao carregar usuários: ${usersRes.status}`);
       if (!regionsRes.ok) throw new Error(`Erro ao carregar regiões: ${regionsRes.status}`);
@@ -1298,11 +1313,11 @@ export default function Administracao() {
           throw new Error(restoreData?.error || `Erro ao restaurar backup completo: ${restoreRes.status}`);
         }
 
-        await loadAll();
         setRestoreFile(null);
         setBackupResult(
           `Backup completo restaurado: ${restoreData?.database?.tableCount || 0} tabela(s), ${restoreData?.database?.totalRows || 0} registro(s), ${restoreData?.uploads?.restoredFiles || 0} arquivo(s) de upload.`
         );
+        resetSessionAndGoToLogin('Backup completo restaurado com sucesso. Faça login novamente com um usuário existente no backup restaurado.');
         return;
       }
 
