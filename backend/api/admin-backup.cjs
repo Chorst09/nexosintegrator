@@ -14,10 +14,9 @@ const migrationsPath = path.join(__dirname, '..', 'prisma', 'migrations');
 const DEFAULT_UPLOAD_CONTENT_LIMIT = 100 * 1024 * 1024;
 
 const normalizeRole = (user = {}) => String(user.actualRole || user.role || '').trim().toUpperCase();
-const isGlobalBackupAdmin = (user = {}) => {
+const canManageFullBackup = (user = {}) => {
   const role = normalizeRole(user);
-  if (role === 'MASTER') return true;
-  return role === 'ADMIN' && !user.tenantCompanyId;
+  return role === 'MASTER' || role === 'ADMIN';
 };
 
 const escapeIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
@@ -374,9 +373,9 @@ const restoreUploads = async (uploads) => {
 
 router.use(requireRole(['ADMIN', 'MASTER']));
 router.use((req, res, next) => {
-  if (isGlobalBackupAdmin(req.user)) return next();
+  if (canManageFullBackup(req.user)) return next();
   return res.status(403).json({
-    error: 'Backup completo restrito ao administrador global. Usuários de uma empresa não podem acessar dados de outros tenants.'
+    error: 'Backup completo restrito a usuários Admin ou Master.'
   });
 });
 
