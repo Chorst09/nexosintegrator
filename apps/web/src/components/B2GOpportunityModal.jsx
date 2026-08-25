@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Save, Info, DollarSign, Calendar, Users,
   ShieldAlert, FileCheck, Check, X, Loader2, Pencil,
@@ -588,6 +589,8 @@ const EMPTY_FORM = {
 };
 
 export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, onSaved, mode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('identificacao');
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
@@ -737,6 +740,9 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
       console.log('[B2GOpportunityEditModal] Resposta:', { ok: response.ok, data });
       if (!response.ok) throw new Error(data?.error || data?.message || 'Erro ao salvar.');
       if (onSaved) onSaved(data, mode);
+      if (location.pathname.replace(/\/+$/, '') === '/oportunidades' && (data?.id || opportunity?.id)) {
+        navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data?.id || opportunity.id)}&mode=edit`, { replace: true });
+      }
       console.log('[B2GOpportunityEditModal] Chamando onClose()');
       onClose();
     } catch (err) {

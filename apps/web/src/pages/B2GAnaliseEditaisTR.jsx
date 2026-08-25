@@ -587,10 +587,10 @@ const B2GAnaliseEditaisTR = () => {
       if (!response.ok || !data?.opportunity?.id) {
         throw new Error(data?.error || 'Não foi possível converter em oportunidade.');
       }
-      const message = 'Resumo convertido com sucesso. Redirecionando para Oportunidades...';
+      const message = 'Resumo convertido com sucesso. Redirecionando para Oportunidades B2G...';
       setActionFeedback({ type: 'success', message });
       addLog(message, 'success');
-      navigate(`/oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data.opportunity.id)}&mode=edit`);
+      navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(data.opportunity.id)}&mode=edit`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao converter resumo em oportunidade.';
       setActionFeedback({ type: 'error', message });
