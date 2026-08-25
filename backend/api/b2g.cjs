@@ -1764,4 +1764,96 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
   }
 });
 
+// ============================================================
+// ALERTAS DE ABERTURA DE EDITAL (5 DIAS ANTES)
+// ============================================================
+
+const parseOpportunityB2GData = (description) => {
+  if (!description) return {};
+  if (typeof description === 'object') return description;
+  const raw = String(description || '').trim();
+  if (!raw.startsWith('{')) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const parseAlertDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+router.get('/oportunidades/alertas/abertura', requireRole(USER_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const tenantCompanyId = getTenantCompanyId(req.user);
+    const opportunities = await prisma.opportunity.findMany({
+      where: {
+        ...(tenantCompanyId ? { tenantCompanyId } : {}),
+        OR: [
+          { stage: 'PROPOSAL' },
+          { b2gStage: 'PROPOSTA_ENVIADA' }
+        ]
+      },
+      include: {
+        company: true,
+        owner: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const alerts = opportunities
+      .map((opp) => {
+        const b2gData = parseOpportunityB2GData(opp.description);
+        const openingDate = parseAlertDate(
+          b2gData.openingDate ||
+          b2gData.dataAbertura ||
+          b2gData.dataSessao ||
+          opp.expectedCloseDate
+        );
+
+        if (!openingDate) return null;
+
+        const openingDay = new Date(openingDate.getFullYear(), openingDate.getMonth(), openingDate.getDate());
+        const daysUntilOpening = Math.ceil((openingDay - today) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilOpening > 5 || daysUntilOpening < 0) return null;
+
+        return {
+          opportunityId: opp.id,
+          title: opp.title,
+          projectName: prismaModelHasField('Opportunity', 'projectName') ? opp.projectName : null,
+          company: opp.company,
+          owner: opp.owner,
+          value: opp.value,
+          probability: opp.probability,
+          openingDate,
+          daysUntilOpening,
+          stage: opp.stage,
+          b2gStage: opp.b2gStage,
+          description: b2gData,
+          alertType: daysUntilOpening === 0 ? 'TODAY' : daysUntilOpening === 1 ? 'TOMORROW' : 'UPCOMING'
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.daysUntilOpening - b.daysUntilOpening);
+
+    return res.json({
+      success: true,
+      count: alerts.length,
+      alerts
+    });
+  } catch (error) {
+    console.error('Erro ao buscar alertas de abertura:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 module.exports = router;
