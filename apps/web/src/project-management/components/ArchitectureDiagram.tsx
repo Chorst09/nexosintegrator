@@ -189,6 +189,9 @@ const ArchNode = ({ id, data, selected }: any) => {
 
 const nodeTypes = { arch: ArchNode, backgroundImage: BackgroundImageNode };
 
+const BACKGROUND_IMAGE_NODE_ID = 'diagram-background-image';
+const BACKGROUND_IMAGE_NODE_POSITION = { x: -120, y: -80 };
+const BACKGROUND_IMAGE_NODE_SIZE = { width: 1280, height: 760 };
 const DIAGRAMS_STORAGE_KEY = 'architecture_diagrams_v1';
 const LEGACY_DIAGRAM_STORAGE_KEY = 'saved_diagram';
 
@@ -369,14 +372,14 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     if (!backgroundImage) return diagramNodes;
     return [
       {
-        id: 'diagram-background-image',
+        id: BACKGROUND_IMAGE_NODE_ID,
         type: 'backgroundImage',
-        position: { x: -120, y: -80 },
+        position: BACKGROUND_IMAGE_NODE_POSITION,
         data: {
           src: backgroundImage,
           opacity: backgroundOpacity,
-          width: 1280,
-          height: 760
+          width: BACKGROUND_IMAGE_NODE_SIZE.width,
+          height: BACKGROUND_IMAGE_NODE_SIZE.height
         },
         selectable: false,
         draggable: false,
@@ -485,9 +488,31 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const downloadPDF = () => {
-    const nodes = getNodes();
-    if (nodes.length === 0) return;
+  const preloadImage = (src: string) => new Promise<void>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = src;
+  });
+
+  const downloadPDF = async () => {
+    if (backgroundImage) {
+      await preloadImage(backgroundImage);
+    }
+
+    const exportNodes = getNodes();
+    if (backgroundImage && !exportNodes.some((node) => node.id === BACKGROUND_IMAGE_NODE_ID)) {
+      exportNodes.push({
+        id: BACKGROUND_IMAGE_NODE_ID,
+        type: 'backgroundImage',
+        position: BACKGROUND_IMAGE_NODE_POSITION,
+        data: {
+          width: BACKGROUND_IMAGE_NODE_SIZE.width,
+          height: BACKGROUND_IMAGE_NODE_SIZE.height,
+        },
+      } as any);
+    }
+    if (exportNodes.length === 0) return;
 
     // Calculate bounds manually since exports might differ by version
     let minX = Infinity;
@@ -495,9 +520,13 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     let maxX = -Infinity;
     let maxY = -Infinity;
 
-    nodes.forEach((n) => {
-      const width = n.measured?.width || 200;
-      const height = n.measured?.height || 150;
+    exportNodes.forEach((n) => {
+      const width = n.id === BACKGROUND_IMAGE_NODE_ID
+        ? Number(n.data?.width || BACKGROUND_IMAGE_NODE_SIZE.width)
+        : n.measured?.width || 200;
+      const height = n.id === BACKGROUND_IMAGE_NODE_ID
+        ? Number(n.data?.height || BACKGROUND_IMAGE_NODE_SIZE.height)
+        : n.measured?.height || 150;
       minX = Math.min(minX, n.position.x);
       minY = Math.min(minY, n.position.y);
       maxX = Math.max(maxX, n.position.x + width);
@@ -519,16 +548,18 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     const translateX = -minX + padding;
     const translateY = -minY + padding;
 
-    toPng(viewportElement, {
-      backgroundColor: '#070b16',
-      width: imageWidth,
-      height: imageHeight,
-      style: {
-        width: `${imageWidth}px`,
-        height: `${imageHeight}px`,
-        transform: `translate(${translateX}px, ${translateY}px) scale(1)`,
-      },
-    }).then((dataUrl) => {
+    try {
+      const dataUrl = await toPng(viewportElement, {
+        backgroundColor: '#070b16',
+        width: imageWidth,
+        height: imageHeight,
+        cacheBust: true,
+        style: {
+          width: `${imageWidth}px`,
+          height: `${imageHeight}px`,
+          transform: `translate(${translateX}px, ${translateY}px) scale(1)`,
+        },
+      });
       const pdf = new jsPDF({
         orientation: imageWidth > imageHeight ? 'landscape' : 'portrait',
         unit: 'px',
@@ -536,10 +567,10 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
       });
       pdf.addImage(dataUrl, 'PNG', 0, 0, imageWidth, imageHeight);
       pdf.save('diagrama.pdf');
-    }).catch(err => {
+    } catch (err) {
       console.error('Erro ao gerar PDF', err);
       alert('Erro ao gerar o PDF. Tente novamente.');
-    });
+    }
   };
 
   const addNode = (icon: string, label: string) => {
