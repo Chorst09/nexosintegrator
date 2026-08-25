@@ -12,7 +12,10 @@ import {
   RefreshCw,
   Shuffle,
   Plus,
-  Trash2
+  Trash2,
+  CheckCircle2,
+  ThumbsDown,
+  X
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -51,6 +54,13 @@ const MANUAL_LEAD_INITIAL_STATE = {
   autoDistribute: false
 };
 
+const LEAD_DECISION_INITIAL_STATE = {
+  projectName: '',
+  projectClientType: 'NEW_CLIENT',
+  sellerId: '',
+  noGoReason: ''
+};
+
 export default function LeadManagement() {
   const [leadStats, setLeadStats] = useState({});
   const [companies, setCompanies] = useState([]);
@@ -66,6 +76,9 @@ export default function LeadManagement() {
   const [showManualLeadModal, setShowManualLeadModal] = useState(false);
   const [savingManualLead, setSavingManualLead] = useState(false);
   const [manualLeadForm, setManualLeadForm] = useState(MANUAL_LEAD_INITIAL_STATE);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [leadDecisionForm, setLeadDecisionForm] = useState(LEAD_DECISION_INITIAL_STATE);
+  const [processingLeadDecision, setProcessingLeadDecision] = useState(false);
   const [searchParams] = useSearchParams();
   const requestedClientType = normalizeClientType(searchParams.get('clientType'));
   const leadClientType = requestedClientType || 'B2B';
@@ -185,6 +198,30 @@ export default function LeadManagement() {
     }
   };
 
+  const openLeadDecision = (company) => {
+    if (!company?.id || company.status !== 'LEAD') return;
+    setSelectedLead(company);
+    setLeadDecisionForm({
+      projectName: projectNameByCompany[company.id] || `Projeto ${company.name}`,
+      projectClientType: projectClientTypeByCompany[company.id] || 'NEW_CLIENT',
+      sellerId: selectedSellerByCompany[company.id] || '',
+      noGoReason: ''
+    });
+  };
+
+  const closeLeadDecision = (force = false) => {
+    if (processingLeadDecision && !force) return;
+    setSelectedLead(null);
+    setLeadDecisionForm(LEAD_DECISION_INITIAL_STATE);
+  };
+
+  const updateLeadDecisionField = (field, value) => {
+    setLeadDecisionForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const recalculateAllScores = async () => {
     if (!confirm('Tem certeza que deseja recalcular todos os lead scores? Esta operação pode demorar alguns minutos.')) {
       return;
@@ -252,11 +289,11 @@ export default function LeadManagement() {
     }
   };
 
-  const createOpportunityForLead = async (companyId, sellerId = null) => {
+  const createOpportunityForLead = async (companyId, sellerId = null, options = {}) => {
     try {
       const company = companies.find((item) => item.id === companyId);
-      const projectName = (projectNameByCompany[companyId] || `Projeto ${company?.name || ''}`).trim();
-      const projectClientType = projectClientTypeByCompany[companyId] || 'NEW_CLIENT';
+      const projectName = (options.projectName || projectNameByCompany[companyId] || `Projeto ${company?.name || ''}`).trim();
+      const projectClientType = options.projectClientType || projectClientTypeByCompany[companyId] || 'NEW_CLIENT';
 
       const response = await fetch(buildApiUrl(`/leadDistribution?${scopedClientTypeQuery}`), {
         method: 'POST',
@@ -283,12 +320,80 @@ export default function LeadManagement() {
         );
         await fetchSellers();
         await fetchCompanies();
+        return result;
       } else {
         alert(`❌ ${result.error || 'Erro ao distribuir lead'}`);
+        return null;
       }
     } catch (error) {
       console.error('Erro ao distribuir lead:', error);
       alert('❌ Erro de conexão ao distribuir lead');
+      return null;
+    }
+  };
+
+  const convertSelectedLeadToOpportunity = async () => {
+    if (!selectedLead?.id || processingLeadDecision) return;
+
+    try {
+      setProcessingLeadDecision(true);
+      setCompanyProjectName(selectedLead.id, leadDecisionForm.projectName);
+      setCompanyProjectClientType(selectedLead.id, leadDecisionForm.projectClientType);
+      setCompanySeller(selectedLead.id, leadDecisionForm.sellerId);
+
+      const result = await createOpportunityForLead(
+        selectedLead.id,
+        leadDecisionForm.sellerId || null,
+        {
+          projectName: leadDecisionForm.projectName,
+          projectClientType: leadDecisionForm.projectClientType
+        }
+      );
+
+      if (result) {
+        closeLeadDecision(true);
+      }
+    } finally {
+      setProcessingLeadDecision(false);
+    }
+  };
+
+  const markSelectedLeadNoGo = async () => {
+    if (!selectedLead?.id || processingLeadDecision) return;
+    const reason = leadDecisionForm.noGoReason.trim();
+    if (!reason) {
+      alert('Informe o motivo do No Go.');
+      return;
+    }
+
+    try {
+      setProcessingLeadDecision(true);
+      const response = await fetch(buildApiUrl(`/leadDistribution?${scopedClientTypeQuery}`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          action: 'no-go',
+          companyId: selectedLead.id,
+          reason,
+          clientType: leadClientType
+        })
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        alert(`❌ ${result.error || 'Erro ao registrar No Go'}`);
+        return;
+      }
+
+      alert(`✅ ${result.message || 'Lead marcado como No Go.'}`);
+      closeLeadDecision(true);
+      await Promise.all([fetchLeadStats(), fetchCompanies(), fetchSellers()]);
+    } catch (error) {
+      console.error('Erro ao registrar No Go:', error);
+      alert('❌ Erro de conexão ao registrar No Go');
+    } finally {
+      setProcessingLeadDecision(false);
     }
   };
 
@@ -550,6 +655,133 @@ export default function LeadManagement() {
         </form>
       </Modal>
 
+      <Modal
+        isOpen={Boolean(selectedLead)}
+        onClose={closeLeadDecision}
+        title="Decisão do Lead"
+      >
+        {selectedLead && (
+          <div className="space-y-5">
+            <div className="crm-panel-muted p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-black text-[var(--crm-ink)]">{selectedLead.name}</h3>
+                  <p className="mt-1 text-sm text-[var(--crm-muted)]">
+                    {selectedLead.segment || 'Sem segmento'} • Score {selectedLead.leadScore || 0} • {getScoreLabel(selectedLead.leadScore || 0)}
+                  </p>
+                </div>
+                <span
+                  className="rounded-full px-3 py-1 text-xs font-bold text-white"
+                  style={{ backgroundColor: getScoreColor(selectedLead.leadScore || 0) }}
+                >
+                  {selectedLead.status || 'LEAD'}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-[var(--crm-muted)] md:grid-cols-2">
+                <div>Contatos: {selectedLead.contacts?.length || 0}</div>
+                <div>Oportunidades: {selectedLead.opportunities?.length || 0}</div>
+                <div>Cidade/UF: {[selectedLead.city, selectedLead.state].filter(Boolean).join('/') || '-'}</div>
+                <div>CNPJ: {selectedLead.document || '-'}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="crm-card p-4 border border-emerald-500/25">
+                <div className="mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  <h4 className="font-black text-[var(--crm-ink)]">Converter em oportunidade</h4>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[var(--crm-muted)]">Nome do projeto</label>
+                    <input
+                      type="text"
+                      value={leadDecisionForm.projectName}
+                      onChange={(e) => updateLeadDecisionField('projectName', e.target.value)}
+                      className="crm-input"
+                      placeholder="Nome do projeto/oportunidade"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[var(--crm-muted)]">Tipo</label>
+                    <select
+                      value={leadDecisionForm.projectClientType}
+                      onChange={(e) => updateLeadDecisionField('projectClientType', e.target.value)}
+                      className="crm-input"
+                    >
+                      {PROJECT_CLIENT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[var(--crm-muted)]">Vendedor</label>
+                    <select
+                      value={leadDecisionForm.sellerId}
+                      onChange={(e) => updateLeadDecisionField('sellerId', e.target.value)}
+                      className="crm-input"
+                    >
+                      <option value="">Automático ({selectedStrategy})</option>
+                      {sellers.map((seller) => (
+                        <option key={seller.id} value={seller.id}>
+                          {seller.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={convertSelectedLeadToOpportunity}
+                    disabled={processingLeadDecision}
+                    className="crm-btn crm-btn-primary w-full justify-center bg-emerald-600 hover:bg-emerald-500"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {processingLeadDecision ? 'Convertendo...' : 'Converter em oportunidade'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="crm-card p-4 border border-red-500/25">
+                <div className="mb-3 flex items-center gap-2">
+                  <ThumbsDown className="h-5 w-5 text-red-500" />
+                  <h4 className="font-black text-[var(--crm-ink)]">Registrar No Go</h4>
+                </div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[var(--crm-muted)]">Motivo</label>
+                <textarea
+                  value={leadDecisionForm.noGoReason}
+                  onChange={(e) => updateLeadDecisionField('noGoReason', e.target.value)}
+                  className="crm-input min-h-[156px] resize-y"
+                  placeholder="Explique por que este lead nao deve avançar agora..."
+                />
+                <button
+                  type="button"
+                  onClick={markSelectedLeadNoGo}
+                  disabled={processingLeadDecision}
+                  className="crm-btn mt-3 w-full justify-center bg-red-600 text-white hover:bg-red-500"
+                >
+                  <ThumbsDown className="h-4 w-4" />
+                  {processingLeadDecision ? 'Registrando...' : 'Registrar No Go'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => closeLeadDecision()}
+                className="crm-btn crm-btn-secondary"
+                disabled={processingLeadDecision}
+              >
+                <X className="h-4 w-4" />
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Header */}
       <PageHeader
         title="Lead"
@@ -705,8 +937,8 @@ export default function LeadManagement() {
           <GradientCard gradient="blue" className="p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Empresas por Lead Score</h2>
-                <p className="text-gray-600 dark:text-slate-200 mt-1">Ordenadas por pontuação (maior para menor)</p>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Leads por Lead Score</h2>
+                <p className="text-gray-600 dark:text-slate-200 mt-1">Clique em um lead para converter em oportunidade ou registrar No Go</p>
               </div>
               <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-400/10">
                 <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-200" />
@@ -714,13 +946,29 @@ export default function LeadManagement() {
             </div>
             
             <div className="space-y-3">
+              {companies.filter((company) => company.status === 'LEAD').length === 0 && (
+                <div className="crm-card p-4 text-sm text-gray-600 dark:text-slate-200">
+                  Nenhum lead em aberto para análise.
+                </div>
+              )}
+
               {[...companies]
+                .filter((company) => company.status === 'LEAD')
                 .sort((a, b) => b.leadScore - a.leadScore)
                 .slice(0, 20)
                 .map(company => (
                 <div 
                   key={company.id}
-                  className="crm-card flex items-center justify-between p-4 hover:shadow-md dark:hover:shadow-soft-xl transition-all duration-200"
+                  role={company.status === 'LEAD' ? 'button' : undefined}
+                  tabIndex={company.status === 'LEAD' ? 0 : undefined}
+                  onClick={() => openLeadDecision(company)}
+                  onKeyDown={(event) => {
+                    if (company.status === 'LEAD' && (event.key === 'Enter' || event.key === ' ')) {
+                      event.preventDefault();
+                      openLeadDecision(company);
+                    }
+                  }}
+                  className={`crm-card flex items-center justify-between p-4 hover:shadow-md dark:hover:shadow-soft-xl transition-all duration-200 ${company.status === 'LEAD' ? 'cursor-pointer hover:border-[rgb(var(--crm-accent-rgb)_/_0.45)]' : ''}`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
@@ -749,6 +997,11 @@ export default function LeadManagement() {
                         <Users className="w-4 h-4" />
                         {company.contacts?.length || 0} contatos
                       </span>
+                      {company.status === 'LEAD' && (
+                        <span className="font-bold text-[rgb(var(--crm-accent-rgb)_/_0.95)]">
+                          Clique para converter ou No Go
+                        </span>
+                      )}
                     </div>
                   </div>
                   
@@ -758,12 +1011,16 @@ export default function LeadManagement() {
                         type="text"
                         value={projectNameByCompany[company.id] || `Projeto ${company.name}`}
                         onChange={(e) => setCompanyProjectName(company.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         className="px-3 py-2 rounded-lg border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1c2f4a] text-gray-900 dark:text-slate-100 text-sm min-w-[230px]"
                         placeholder="Nome do projeto"
                       />
                       <select
                         value={projectClientTypeByCompany[company.id] || 'NEW_CLIENT'}
                         onChange={(e) => setCompanyProjectClientType(company.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         className="px-3 py-2 rounded-lg border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1c2f4a] text-gray-900 dark:text-slate-100 text-sm min-w-[190px]"
                       >
                         {PROJECT_CLIENT_TYPE_OPTIONS.map((option) => (
@@ -775,6 +1032,8 @@ export default function LeadManagement() {
                       <select
                         value={selectedSellerByCompany[company.id] || ''}
                         onChange={(e) => setCompanySeller(company.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         className="px-3 py-2 rounded-lg border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1c2f4a] text-gray-900 dark:text-slate-100 text-sm min-w-[220px]"
                       >
                         <option value="">Automático ({selectedStrategy})</option>
@@ -785,14 +1044,20 @@ export default function LeadManagement() {
                         ))}
                       </select>
                       <button
-                        onClick={() => createOpportunityForLead(company.id, selectedSellerByCompany[company.id] || null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          createOpportunityForLead(company.id, selectedSellerByCompany[company.id] || null);
+                        }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-sm flex items-center gap-2"
                       >
                         <Zap className="w-4 h-4" />
-                        Distribuir Lead
+                        Converter
                       </button>
                       <button
-                        onClick={() => deleteLead(company)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteLead(company);
+                        }}
                         className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 font-medium text-sm flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -947,12 +1212,24 @@ export default function LeadManagement() {
                 .map((company) => (
                   <div
                     key={`distribution-${company.id}`}
-                    className="crm-card flex items-center justify-between p-4 hover:shadow-md dark:hover:shadow-soft-xl transition-all duration-200"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openLeadDecision(company)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openLeadDecision(company);
+                      }
+                    }}
+                    className="crm-card flex cursor-pointer items-center justify-between p-4 hover:shadow-md dark:hover:shadow-soft-xl transition-all duration-200 hover:border-[rgb(var(--crm-accent-rgb)_/_0.45)]"
                   >
                     <div>
                       <div className="text-base font-semibold text-gray-900 dark:text-gray-100">{company.name}</div>
                       <div className="text-sm text-gray-600 dark:text-slate-200 mt-1">
                         Score {company.leadScore} • {company.segment || 'Sem segmento'}
+                      </div>
+                      <div className="mt-1 text-xs font-bold text-[rgb(var(--crm-accent-rgb)_/_0.95)]">
+                        Clique para converter ou registrar No Go
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -960,12 +1237,16 @@ export default function LeadManagement() {
                         type="text"
                         value={projectNameByCompany[company.id] || `Projeto ${company.name}`}
                         onChange={(e) => setCompanyProjectName(company.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         className="px-3 py-2 rounded-lg border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1c2f4a] text-gray-900 dark:text-slate-100 text-sm min-w-[230px]"
                         placeholder="Nome do projeto"
                       />
                       <select
                         value={projectClientTypeByCompany[company.id] || 'NEW_CLIENT'}
                         onChange={(e) => setCompanyProjectClientType(company.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         className="px-3 py-2 rounded-lg border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1c2f4a] text-gray-900 dark:text-slate-100 text-sm min-w-[190px]"
                       >
                         {PROJECT_CLIENT_TYPE_OPTIONS.map((option) => (
@@ -977,6 +1258,8 @@ export default function LeadManagement() {
                       <select
                         value={selectedSellerByCompany[company.id] || ''}
                         onChange={(e) => setCompanySeller(company.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                         className="px-3 py-2 rounded-lg border border-gray-300 dark:border-white/20 bg-white dark:bg-[#1c2f4a] text-gray-900 dark:text-slate-100 text-sm min-w-[220px]"
                       >
                         <option value="">Automático ({selectedStrategy})</option>
@@ -987,14 +1270,20 @@ export default function LeadManagement() {
                         ))}
                       </select>
                       <button
-                        onClick={() => createOpportunityForLead(company.id, selectedSellerByCompany[company.id] || null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          createOpportunityForLead(company.id, selectedSellerByCompany[company.id] || null);
+                        }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-sm flex items-center gap-2"
                       >
                         <Zap className="w-4 h-4" />
-                        Distribuir
+                        Converter
                       </button>
                       <button
-                        onClick={() => deleteLead(company)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteLead(company);
+                        }}
                         className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 font-medium text-sm flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />

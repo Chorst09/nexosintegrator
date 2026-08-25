@@ -54,7 +54,16 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json();
-    const { action, companyId, strategy, daysThreshold } = body;
+    const {
+      action,
+      companyId,
+      strategy,
+      daysThreshold,
+      sellerId,
+      projectName,
+      projectClientType,
+      reason
+    } = body;
     
     try {
       if (action === 'distribute') {
@@ -93,10 +102,76 @@ export default async function handler(req) {
         
         const result = await createOpportunityForLead(
           companyId,
-          strategy || DISTRIBUTION_STRATEGIES.LOAD_BALANCE
+          strategy || DISTRIBUTION_STRATEGIES.LOAD_BALANCE,
+          sellerId || null,
+          projectName || null,
+          projectClientType || null
         );
         
         return Response.json(result);
+      }
+
+      if (action === 'no-go') {
+        if (!companyId) {
+          return new Response('Company ID is required', { status: 400 });
+        }
+        const accessCheck = await assertCompanyAccess(req.user, companyId);
+        if (accessCheck.error) {
+          return Response.json({ error: accessCheck.error }, { status: accessCheck.status });
+        }
+
+        const noGoReason = String(reason || '').trim();
+        if (!noGoReason) {
+          return Response.json({ error: 'Motivo do No Go é obrigatório' }, { status: 400 });
+        }
+
+        const updatedCompany = await prisma.$transaction(async (tx) => {
+          const company = await tx.company.findUnique({
+            where: { id: companyId },
+            select: {
+              id: true,
+              name: true,
+              segment: true,
+              tenantCompanyId: true
+            }
+          });
+
+          if (!company) {
+            throw new Error('Empresa não encontrada');
+          }
+
+          await tx.activity.create({
+            data: {
+              type: 'TASK',
+              subject: `No Go registrado: ${company.name}`,
+              description: noGoReason,
+              status: 'COMPLETED',
+              priority: 'LOW',
+              companyId,
+              assignedToId: req.user.id,
+              tenantCompanyId: company.tenantCompanyId
+            }
+          });
+
+          const segment = String(company.segment || '').includes('[NO GO]')
+            ? company.segment
+            : `${company.segment || 'Lead'} [NO GO]`;
+
+          return tx.company.update({
+            where: { id: companyId },
+            data: {
+              status: 'INACTIVE',
+              leadScore: 0,
+              segment
+            }
+          });
+        });
+
+        return Response.json({
+          company: updatedCompany,
+          companyStatus: updatedCompany.status,
+          message: 'Lead marcado como No Go com sucesso.'
+        });
       }
       
       if (action === 'redistribute-unattended') {

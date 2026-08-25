@@ -274,7 +274,25 @@ async function generateOpportunityNumber(tx, clientType = 'B2B') {
   return `${prefix}${String(latestSequence + 1).padStart(5, '0')}`;
 }
 
-export async function createOpportunityForLead(companyId, strategy = DISTRIBUTION_STRATEGIES.LOAD_BALANCE) {
+const normalizeProjectName = (value, fallback) => {
+  const text = String(value || '').trim();
+  return text || fallback;
+};
+
+const normalizeProjectClientTypeLabel = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'BASE_CLIENT') return 'Cliente da Base';
+  if (raw === 'RENEWAL') return 'Renovação';
+  return 'Cliente Novo';
+};
+
+export async function createOpportunityForLead(
+  companyId,
+  strategy = DISTRIBUTION_STRATEGIES.LOAD_BALANCE,
+  sellerId = null,
+  projectName = null,
+  projectClientType = null
+) {
   try {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -297,28 +315,55 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
         stage: {
           notIn: ['WON', 'LOST']
         }
+      },
+      include: {
+        owner: {
+          select: { id: true, name: true, email: true }
+        }
       }
     });
 
     if (existingOpportunity) {
       return {
         opportunity: existingOpportunity,
+        assignedSeller: existingOpportunity.owner,
+        convertedToOpportunity: existingOpportunity.stage !== 'LEAD',
+        companyStatus: company.status,
         message: 'Oportunidade já existe para esta empresa'
       };
     }
 
-    // Distribuir para vendedor
-    const assignedSeller = await distributeLeadToSeller(companyId, strategy, company.tenantCompanyId);
+    // Distribuir para vendedor manual ou automático
+    let assignedSeller = null;
+    if (sellerId) {
+      assignedSeller = await prisma.user.findFirst({
+        where: {
+          id: sellerId,
+          role: 'SELLER',
+          ...(company.tenantCompanyId ? { tenantCompanyId: company.tenantCompanyId } : {})
+        },
+        select: { id: true, name: true, email: true }
+      });
+
+      if (!assignedSeller) {
+        throw new Error('Vendedor selecionado não encontrado ou inválido');
+      }
+    } else {
+      assignedSeller = await distributeLeadToSeller(companyId, strategy, company.tenantCompanyId);
+    }
+
+    const resolvedProjectName = normalizeProjectName(projectName, `Projeto ${company.name}`);
+    const resolvedProjectClientType = normalizeProjectClientTypeLabel(projectClientType);
 
     // Criar oportunidade
     const opportunity = await prisma.$transaction(async (tx) => {
       const clientType = String(company.clientType || '').toUpperCase() === 'B2G' ? 'B2G' : 'B2B';
       const number = await generateOpportunityNumber(tx, clientType);
-      return tx.opportunity.create({
+      const createdOpportunity = await tx.opportunity.create({
         data: {
           number,
-          title: `Lead - ${company.name}`,
-          description: `Lead automático gerado para ${company.name}`,
+          title: `Oportunidade - ${resolvedProjectName}`,
+          description: `Lead convertido para oportunidade.\nEmpresa: ${company.name}\nProjeto: ${resolvedProjectName}\nTipo: ${resolvedProjectClientType}`,
           value: 0, // Será atualizado pelo vendedor
           probability: 25, // Probabilidade inicial baixa
           stage: 'LEAD',
@@ -334,6 +379,11 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
           }
         }
       });
+      await tx.company.update({
+        where: { id: companyId },
+        data: { status: 'PROSPECT' }
+      });
+      return createdOpportunity;
     });
 
     // Criar atividade de follow-up automática
@@ -355,6 +405,8 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
     return {
       opportunity,
       assignedSeller,
+      convertedToOpportunity: true,
+      companyStatus: 'PROSPECT',
       message: 'Lead distribuído com sucesso'
     };
   } catch (error) {
