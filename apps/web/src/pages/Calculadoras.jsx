@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Calculator,
   Package,
@@ -407,7 +407,10 @@ const buildDistributorCostsFromCotacoes = (cotacoes = [], solicitacao = {}) => {
       costs.push({
         id: `cost_${Date.now()}_${cotacaoIndex}_${itemIndex}`,
         modalidade: cotacao.modalidade || solicitacao.modalidade || 'VENDA',
-        distribuidor: cotacao.distribuidor || cotacao.fornecedor || 'Fornecedor não especificado',
+        distribuidorId: cotacao.distribuidorId || item.distribuidorId || '',
+        distribuidor: cotacao.distribuidor || item.distribuidor || '',
+        fornecedorId: cotacao.fornecedorId || item.fornecedorId || '',
+        fornecedor: cotacao.fornecedor || item.fornecedor || '',
         numeroOrcamento: cotacao.numeroOrcamento || solicitacao.numero || '',
         item: normalizedItem.descricao,
         quantidade: normalizedItem.quantidade,
@@ -424,8 +427,10 @@ const buildDistributorCostsFromSolicitacaoItems = (solicitacao = {}) => (
   getItemsFromSolicitacao(solicitacao).map((item, index) => ({
     id: `cost_req_${Date.now()}_${index}`,
     modalidade: item.modalidade || solicitacao.modalidade || 'VENDA',
-    distribuidor: 'Solicitação',
-    numeroOrcamento: solicitacao.__matchedBudgetNumber || solicitacao.numero || '',
+      distribuidor: 'Solicitação',
+      fornecedorId: '',
+      fornecedor: '',
+      numeroOrcamento: solicitacao.__matchedBudgetNumber || solicitacao.numero || '',
     item: item.descricao,
     quantidade: item.quantidade,
     custoUnitario: item.custoUnitario,
@@ -453,7 +458,10 @@ const buildDistributorCostsFromCotacaoPayload = (cotacaoData = {}) => {
         return {
           id: `cost_${Date.now()}_${index}`,
           modalidade: item.modalidade || cotacaoData.modalidade || 'VENDA',
-          distribuidor: item.distribuidor || item.fornecedor || cotacaoData.distribuidor || cotacaoData.fornecedor || 'Fornecedor não especificado',
+          distribuidorId: item.distribuidorId || cotacaoData.distribuidorId || '',
+          distribuidor: item.distribuidor || cotacaoData.distribuidor || '',
+          fornecedorId: item.fornecedorId || cotacaoData.fornecedorId || '',
+          fornecedor: item.fornecedor || cotacaoData.fornecedor || '',
           numeroOrcamento: item.numeroOrcamento || cotacaoData.numeroOrcamento || '',
           item: normalizedItem.descricao,
           quantidade: normalizedItem.quantidade,
@@ -469,32 +477,17 @@ const findBudgetRequestByNumber = async (number) => {
   const normalizedNumber = String(number || '').trim().toUpperCase();
   if (!normalizedNumber) return null;
 
-  const response = await fetch(buildApiUrl('/pre-vendas?limit=500'), { headers: getAuthHeaders() });
-  if (!response.ok) throw new Error('Falha ao consultar a Fila de Orçamentos');
+  const response = await fetch(buildApiUrl(`/pre-vendas/by-number/${encodeURIComponent(normalizedNumber)}`), {
+    headers: getAuthHeaders()
+  });
+  if (response.status === 404) return null;
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || 'Falha ao consultar o módulo Orçamentos');
 
-  const data = await response.json();
-  const solicitacoes = Array.isArray(data?.solicitacoes)
-    ? data.solicitacoes
-    : Array.isArray(data?.data) ? data.data
-      : Array.isArray(data) ? data
-        : [];
-
-  return solicitacoes.find((solicitacao) => {
-    const requestNumber = String(solicitacao?.numero || '').trim().toUpperCase();
-    if (requestNumber === normalizedNumber) {
-      solicitacao.__matchedBudgetNumber = solicitacao?.numero || number;
-      return true;
-    }
-
-    const matchedQuote = getCotacoesFromSolicitacao(solicitacao).find((cotacao) => (
-      String(cotacao?.numeroOrcamento || '').trim().toUpperCase() === normalizedNumber
-    ));
-    if (matchedQuote) {
-      solicitacao.__matchedBudgetNumber = matchedQuote.numeroOrcamento || number;
-      return true;
-    }
-    return false;
-  }) || null;
+  const solicitacao = payload?.data || payload?.solicitacao || payload;
+  if (!solicitacao || typeof solicitacao !== 'object') return null;
+  solicitacao.__matchedBudgetNumber = solicitacao.__matchedBudgetNumber || normalizedNumber;
+  return solicitacao;
 };
 
 const mapQuotedItemsToOperationItems = (items = [], targetTab) => {
@@ -1229,9 +1222,12 @@ export default function Calculadoras({
   // Estados para Custos (Orçamentos de Distribuidores)
   const [distributorCosts, setDistributorCosts] = useState([]); // Lista de custos adicionados
   const [preSalesDistributors, setPreSalesDistributors] = useState([]);
+  const [preSalesSuppliers, setPreSalesSuppliers] = useState([]);
   const [currentBudget, setCurrentBudget] = useState({
     distribuidorId: '',
     distribuidor: '',
+    fornecedorId: '',
+    fornecedor: '',
     numeroOrcamento: ''
   });
   const [currentCost, setCurrentCost] = useState({
@@ -1251,6 +1247,7 @@ export default function Calculadoras({
   const [opportunities, setOpportunities] = useState([]);
   const [activeProposalId, setActiveProposalId] = useState(null);
   const [proposalSearchNumber, setProposalSearchNumber] = useState('');
+  const lastAutoBudgetSearchRef = useRef('');
   const [proposalFeedback, setProposalFeedback] = useState(null);
   const [homeFeedback, setHomeFeedback] = useState(null);
   const [previewProposal, setPreviewProposal] = useState(null);
@@ -1330,8 +1327,9 @@ export default function Calculadoras({
         if (!response.ok) return;
         const data = await response.json();
         setPreSalesDistributors(Array.isArray(data?.distribuidores) ? data.distribuidores : []);
+        setPreSalesSuppliers(Array.isArray(data?.fornecedores) ? data.fornecedores : []);
       } catch (error) {
-        console.error('Erro ao carregar distribuidores de pré-vendas:', error);
+        console.error('Erro ao carregar distribuidores/fornecedores de pré-vendas:', error);
       }
     };
     loadPreSalesDistributors();
@@ -1344,6 +1342,20 @@ export default function Calculadoras({
     }, 5000);
     return () => clearTimeout(timer);
   }, [homeFeedback]);
+
+  useEffect(() => {
+    if (!showModal || calculatorStep !== 'proposal') return undefined;
+    const normalizedNumber = String(proposalSearchNumber || '').trim().toUpperCase();
+    if (!/^ORC-\d{3,}/.test(normalizedNumber)) return undefined;
+    if (lastAutoBudgetSearchRef.current === normalizedNumber) return undefined;
+
+    const timer = setTimeout(() => {
+      lastAutoBudgetSearchRef.current = normalizedNumber;
+      searchBudgetByNumber(normalizedNumber, { silentNotFound: true });
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [calculatorStep, proposalSearchNumber, showModal]);
 
   useEffect(() => {
     if (!regimeAtivoId) return;
@@ -1421,6 +1433,8 @@ export default function Calculadoras({
       setCurrentBudget({
         distribuidorId: '',
         distribuidor: cotacaoCosts[0]?.distribuidor || '',
+        fornecedorId: cotacaoCosts[0]?.fornecedorId || '',
+        fornecedor: cotacaoCosts[0]?.fornecedor || '',
         numeroOrcamento: cotacaoCosts[0]?.numeroOrcamento || cotacaoData.numeroOrcamento || ''
       });
       setCurrentCost((prev) => ({
@@ -1840,6 +1854,8 @@ export default function Calculadoras({
     setCurrentBudget({
       distribuidorId: '',
       distribuidor: '',
+      fornecedorId: '',
+      fornecedor: '',
       numeroOrcamento: ''
     });
   };
@@ -1965,6 +1981,8 @@ export default function Calculadoras({
     setCurrentBudget({
       distribuidorId: '',
       distribuidor: custosDistribuidores[0]?.distribuidor || '',
+      fornecedorId: custosDistribuidores[0]?.fornecedorId || '',
+      fornecedor: custosDistribuidores[0]?.fornecedor || '',
       numeroOrcamento: solicitacao.__matchedBudgetNumber || custosDistribuidores[0]?.numeroOrcamento || solicitacao.numero || ''
     });
     setCurrentCost((prev) => ({
@@ -2030,10 +2048,19 @@ export default function Calculadoras({
     }));
   };
 
+  const handleBudgetSupplierChange = (fornecedorId) => {
+    const selected = preSalesSuppliers.find((item) => item.id === fornecedorId);
+    setCurrentBudget((prev) => ({
+      ...prev,
+      fornecedorId,
+      fornecedor: selected?.nome || ''
+    }));
+  };
+
   const handleAddDistributorCost = () => {
     // Validação básica
-    if (!currentBudget.distribuidor.trim()) {
-      alert('Por favor, selecione o distribuidor');
+    if (!currentBudget.distribuidor.trim() && !currentBudget.fornecedor.trim()) {
+      alert('Por favor, selecione o distribuidor ou fornecedor');
       return;
     }
     if (!currentBudget.numeroOrcamento.trim()) {
@@ -2058,6 +2085,8 @@ export default function Calculadoras({
       ...currentCost,
       distribuidorId: currentBudget.distribuidorId,
       distribuidor: currentBudget.distribuidor,
+      fornecedorId: currentBudget.fornecedorId,
+      fornecedor: currentBudget.fornecedor,
       numeroOrcamento: currentBudget.numeroOrcamento,
       id: `cost_${Date.now()}`,
       data: new Date().toISOString()
@@ -2181,6 +2210,8 @@ export default function Calculadoras({
     setCurrentBudget({
       distribuidorId: loadedDistributorCosts[0]?.distribuidorId || '',
       distribuidor: loadedDistributorCosts[0]?.distribuidor || '',
+      fornecedorId: loadedDistributorCosts[0]?.fornecedorId || '',
+      fornecedor: loadedDistributorCosts[0]?.fornecedor || '',
       numeroOrcamento: loadedDistributorCosts[0]?.numeroOrcamento || ''
     });
 
@@ -2559,7 +2590,7 @@ export default function Calculadoras({
     setHomeFeedback('Proposta salva com sucesso');
   };
 
-  const searchBudgetByNumber = async (number) => {
+  const searchBudgetByNumber = async (number, options = {}) => {
     const normalizedNumber = (number || '').trim().toUpperCase();
     if (!normalizedNumber) {
       await openBudgetQueueForSelection();
@@ -2573,9 +2604,13 @@ export default function Calculadoras({
         selecionarCotacao(budgetRequest);
         return true;
       }
-      setProposalFeedback({ type: 'error', text: `Orçamento ${normalizedNumber} não encontrado na Fila de Orçamentos.` });
+      if (!options.silentNotFound) {
+        setProposalFeedback({ type: 'error', text: `Orçamento ${normalizedNumber} não encontrado no módulo Orçamentos.` });
+      }
     } catch (error) {
-      setProposalFeedback({ type: 'error', text: error.message || 'Erro ao buscar orçamento na Fila de Orçamentos.' });
+      if (!options.silentNotFound) {
+        setProposalFeedback({ type: 'error', text: error.message || 'Erro ao buscar orçamento no módulo Orçamentos.' });
+      }
     } finally {
       setLoadingCotacoes(false);
     }
@@ -2791,7 +2826,8 @@ export default function Calculadoras({
       const qty = Math.max(0, toNumber(dc?.quantidade, 0));
       const unitCost = toNumber(dc?.custoUnitario, 0);
       return `<tr>
-        <td>${escRow(dc.distribuidor)}</td>
+        <td>${escRow(dc.distribuidor || '-')}</td>
+        <td>${escRow(dc.fornecedor || '-')}</td>
         <td>${escRow(dc.numeroOrcamento)}</td>
         <td>${escRow(dc.modalidade)}</td>
         <td>${escRow(dc.item)}</td>
@@ -3032,10 +3068,11 @@ export default function Calculadoras({
 
         ${distributorCostsData.length > 0 ? `
         <section class="distributor-section">
-          <h3>Custos de Distribuidores</h3>
+          <h3>Custos de Distribuidores e Fornecedores</h3>
           <table>
             <thead><tr>
               <th style="text-align:left">Distribuidor</th>
+              <th style="text-align:left">Fornecedor</th>
               <th style="text-align:left">Nº Orçamento</th>
               <th style="text-align:left">Modalidade</th>
               <th style="text-align:left">Item</th>
@@ -3679,6 +3716,17 @@ export default function Calculadoras({
                   type="text"
                   value={proposalSearchNumber}
                   onChange={(event) => setProposalSearchNumber(event.target.value)}
+                  onBlur={() => {
+                    if (String(proposalSearchNumber || '').trim().toUpperCase().startsWith('ORC-')) {
+                      searchBudgetByNumber(proposalSearchNumber);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      searchProposalByNumber();
+                    }
+                  }}
                   className="crm-input px-4 py-3 text-base font-semibold"
                 />
               </div>
@@ -3740,7 +3788,7 @@ export default function Calculadoras({
                     <h3 className="text-xl font-bold text-[var(--crm-ink)]">Custos (Orçamentos de Distribuidores)</h3>
                   </div>
                   <div className="p-5 space-y-4">
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1fr)_220px] md:items-end">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_220px] xl:items-end">
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
                         <select
@@ -3757,6 +3805,21 @@ export default function Calculadoras({
                         </select>
                       </div>
                       <div>
+                        <label className="block text-xs text-slate-400 mb-1">Fornecedor</label>
+                        <select
+                          value={currentBudget.fornecedorId}
+                          onChange={(e) => handleBudgetSupplierChange(e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                        >
+                          <option value="">Selecione um fornecedor cadastrado</option>
+                          {preSalesSuppliers.map((supplier) => (
+                            <option key={supplier.id} value={supplier.id}>
+                              {supplier.nome}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
                         <label className="block text-xs text-slate-400 mb-1">N° Orçamento</label>
                         <div className="flex gap-2">
                           <input
@@ -3764,6 +3827,17 @@ export default function Calculadoras({
                             placeholder="ORC-0001"
                             value={currentBudget.numeroOrcamento}
                             onChange={(e) => setCurrentBudget((prev) => ({ ...prev, numeroOrcamento: e.target.value }))}
+                            onBlur={() => {
+                              if (String(currentBudget.numeroOrcamento || '').trim().toUpperCase().startsWith('ORC-')) {
+                                searchBudgetByNumber(currentBudget.numeroOrcamento);
+                              }
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                searchBudgetByNumber(currentBudget.numeroOrcamento);
+                              }
+                            }}
                             className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                           />
                           <button
@@ -3847,9 +3921,10 @@ export default function Calculadoras({
                     </div>
 
                     <div className="rounded-xl border border-slate-700/50 overflow-hidden mt-4">
-                      <div className="grid grid-cols-8 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-700/40">
+                      <div className="grid grid-cols-9 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400 border-b border-slate-700/40">
                         <span>Modalidade</span>
                         <span>Distribuidor</span>
+                        <span>Fornecedor</span>
                         <span>Orçamento</span>
                         <span className="col-span-2">Item</span>
                         <span>Qtde</span>
@@ -3863,9 +3938,10 @@ export default function Calculadoras({
                       ) : (
                         <div className="divide-y divide-slate-700/30">
                           {distributorCosts.map((cost) => (
-                            <div key={cost.id} className="grid grid-cols-8 gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/40">
+                            <div key={cost.id} className="grid grid-cols-9 gap-2 px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/40">
                               <span className="truncate">{cost.modalidade}</span>
-                              <span className="truncate">{cost.distribuidor}</span>
+                              <span className="truncate">{cost.distribuidor || '-'}</span>
+                              <span className="truncate">{cost.fornecedor || '-'}</span>
                               <span className="truncate">{cost.numeroOrcamento || '-'}</span>
                               <span className="col-span-2 truncate" title={cost.item}>{cost.item}</span>
                               <span>{cost.quantidade}</span>

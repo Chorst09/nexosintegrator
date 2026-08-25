@@ -115,6 +115,38 @@ const sanitizePreSalesItems = (items = []) => (
     : []
 );
 
+const preSalesRequestInclude = {
+  solicitante: {
+    select: { id: true, name: true, email: true, tenantCompanyId: true }
+  },
+  lead: {
+    select: { id: true, name: true }
+  },
+  opportunity: {
+    select: { id: true, title: true, value: true, stage: true }
+  },
+  items: {
+    include: {
+      product: {
+        select: { id: true, name: true, price: true, category: true }
+      }
+    }
+  }
+};
+
+const matchesBudgetNumber = (solicitacao = {}, normalizedNumber = '') => {
+  const requestNumber = String(solicitacao?.numero || '').trim().toUpperCase();
+  if (requestNumber === normalizedNumber) return true;
+
+  const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+    ? solicitacao.calculoDetalhes
+    : {};
+  const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+  return cotacoes.some((cotacao) => (
+    String(cotacao?.numeroOrcamento || '').trim().toUpperCase() === normalizedNumber
+  ));
+};
+
 // GET /api/pre-vendas - Listar todas as solicitações de precificação
 router.get('/', async (req, res) => {
   try {
@@ -256,6 +288,55 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// GET /api/pre-vendas/by-number/:number - Buscar orçamento/cotação pelo número
+router.get('/by-number/:number', async (req, res) => {
+  try {
+    const normalizedNumber = String(req.params.number || '').trim().toUpperCase();
+    if (!normalizedNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Número do orçamento é obrigatório'
+      });
+    }
+
+    const scopedWhere = scopePreSalesWhere(req, {});
+    const directMatch = await prisma.preSalesRequest.findFirst({
+      where: scopePreSalesWhere(req, { numero: { equals: normalizedNumber, mode: 'insensitive' } }),
+      include: preSalesRequestInclude
+    });
+
+    if (directMatch) {
+      directMatch.__matchedBudgetNumber = directMatch.numero;
+      return res.json({ success: true, data: directMatch });
+    }
+
+    const candidates = await prisma.preSalesRequest.findMany({
+      where: scopedWhere,
+      include: preSalesRequestInclude,
+      orderBy: { updatedAt: 'desc' },
+      take: 1000
+    });
+
+    const matched = candidates.find((solicitacao) => matchesBudgetNumber(solicitacao, normalizedNumber));
+    if (!matched) {
+      return res.status(404).json({
+        success: false,
+        message: 'Orçamento não encontrado'
+      });
+    }
+
+    matched.__matchedBudgetNumber = normalizedNumber;
+    return res.json({ success: true, data: matched });
+  } catch (error) {
+    console.error('Erro ao buscar orçamento por número:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/pre-vendas/:id - Buscar solicitação por ID
 router.get('/:id', async (req, res) => {
   try {
@@ -264,22 +345,7 @@ router.get('/:id', async (req, res) => {
     const solicitacao = await prisma.preSalesRequest.findUnique({
       where: { id },
       include: {
-        solicitante: {
-          select: { id: true, name: true, email: true, tenantCompanyId: true }
-        },
-        lead: {
-          select: { id: true, name: true }
-        },
-        opportunity: {
-          select: { id: true, title: true, value: true, stage: true }
-        },
-        items: {
-          include: {
-            product: {
-              select: { id: true, name: true, price: true, category: true }
-            }
-          }
-        },
+        ...preSalesRequestInclude,
         aprovacoes: {
           include: {
             aprovador: {

@@ -153,7 +153,10 @@ const buildPrecificacaoPayload = (solicitacao) => {
         quantidade: Number(item.quantidade) || 1,
         custoUnitario: Number(item.custoUnitario) || 0,
         modalidade: cotacao.modalidade || modalidade,
+        distribuidorId: cotacao.distribuidorId || '',
         distribuidor: cotacao.distribuidor || cotacao.fornecedor || '',
+        fornecedorId: cotacao.fornecedorId || '',
+        fornecedor: cotacao.fornecedor || '',
         numeroOrcamento: cotacao.numeroOrcamento || solicitacao?.numero || '',
         observacoes: cotacao.observacoesCotacao || cotacao.observacoes || ''
       });
@@ -166,6 +169,8 @@ const buildPrecificacaoPayload = (solicitacao) => {
         ...item,
         modalidade,
         distribuidor: 'Solicitação',
+        fornecedorId: '',
+        fornecedor: '',
         numeroOrcamento: solicitacao?.numero || '',
         observacoes: ''
       });
@@ -567,7 +572,10 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
 function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
   const [form, setForm] = useState({
     modalidade: 'VENDA',
+    distribuidorId: '',
     distribuidor: '',
+    fornecedorId: '',
+    fornecedor: '',
     numeroOrcamento: fallbackBudgetNumber(),
     descricaoItem: '',
     quantidade: 1,
@@ -575,8 +583,23 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
     observacoes: ''
   });
   const [custos, setCustos] = useState([]);
+  const [registry, setRegistry] = useState({ distribuidores: [], fornecedores: [] });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+
+  const loadRegistry = useCallback(async () => {
+    try {
+      const res = await fetch(buildApiUrl('/prevendas-cadastros'), { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      const payload = await res.json();
+      setRegistry({
+        distribuidores: Array.isArray(payload?.distribuidores) ? payload.distribuidores : [],
+        fornecedores: Array.isArray(payload?.fornecedores) ? payload.fornecedores : []
+      });
+    } catch {
+      setRegistry({ distribuidores: [], fornecedores: [] });
+    }
+  }, []);
 
   useEffect(() => {
     if (isOpen && solicitacao) {
@@ -585,13 +608,32 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
       setCustos(Array.isArray(details.cotacoes) ? details.cotacoes : []);
       setForm((p) => ({ ...p, numeroOrcamento: solicitacao.numero || fallbackBudgetNumber() }));
       setFeedback('');
+      loadRegistry();
     }
-  }, [isOpen, solicitacao]);
+  }, [isOpen, solicitacao, loadRegistry]);
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
+  const handleDistributorChange = (distribuidorId) => {
+    const selected = registry.distribuidores.find((item) => item.id === distribuidorId);
+    setForm((p) => ({
+      ...p,
+      distribuidorId,
+      distribuidor: selected?.nome || ''
+    }));
+  };
+
+  const handleSupplierChange = (fornecedorId) => {
+    const selected = registry.fornecedores.find((item) => item.id === fornecedorId);
+    setForm((p) => ({
+      ...p,
+      fornecedorId,
+      fornecedor: selected?.nome || ''
+    }));
+  };
+
   const handleAdd = async () => {
-    if (!form.distribuidor.trim()) { setFeedback('Informe o distribuidor.'); return; }
+    if (!form.distribuidor.trim() && !form.fornecedor.trim()) { setFeedback('Selecione o distribuidor ou fornecedor.'); return; }
     if (!form.descricaoItem.trim()) { setFeedback('Informe a descrição do item.'); return; }
     try {
       setSaving(true);
@@ -602,7 +644,10 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
       const newEntry = {
         id: `COT-${Date.now()}`,
         modalidade: form.modalidade,
+        distribuidorId: form.distribuidorId || '',
         distribuidor: form.distribuidor.trim(),
+        fornecedorId: form.fornecedorId || '',
+        fornecedor: form.fornecedor.trim(),
         numeroOrcamento: form.numeroOrcamento.trim() || solicitacao.numero || fallbackBudgetNumber(),
         itens: [{ descricao: form.descricaoItem.trim(), quantidade: Number(form.quantidade) || 1, custoUnitario: Number(form.custoUnitario) || 0 }],
         subtotal: (Number(form.quantidade) || 1) * (Number(form.custoUnitario) || 0),
@@ -617,7 +662,18 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
       });
       if (!res.ok) throw new Error('Erro ao salvar custo');
       setCustos([newEntry, ...prevCotacoes]);
-      setForm((p) => ({ ...p, distribuidor: '', descricaoItem: '', quantidade: 1, custoUnitario: 0, observacoes: '', numeroOrcamento: solicitacao.numero || fallbackBudgetNumber() }));
+      setForm((p) => ({
+        ...p,
+        distribuidorId: '',
+        distribuidor: '',
+        fornecedorId: '',
+        fornecedor: '',
+        descricaoItem: '',
+        quantidade: 1,
+        custoUnitario: 0,
+        observacoes: '',
+        numeroOrcamento: solicitacao.numero || fallbackBudgetNumber()
+      }));
       onSaved?.();
     } catch (err) {
       setFeedback(err.message || 'Erro ao salvar');
@@ -661,7 +717,7 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
 
         <div className="p-6 space-y-5">
           {/* form row */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 items-end">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Modalidade</label>
               <select value={form.modalidade} onChange={(e) => setField('modalidade', e.target.value)}
@@ -671,18 +727,32 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
                 <option value="SERVICOS">Serviços</option>
               </select>
             </div>
-            <div>
+            <div className="lg:col-span-2">
               <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
-              <input type="text" value={form.distribuidor} onChange={(e) => setField('distribuidor', e.target.value)}
-                placeholder="Nome do distribui..."
-                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50" />
+              <select value={form.distribuidorId} onChange={(e) => handleDistributorChange(e.target.value)}
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50">
+                <option value="">Selecione um distribuidor</option>
+                {registry.distribuidores.map((item) => (
+                  <option key={item.id} value={item.id}>{item.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block text-xs text-slate-400 mb-1">Fornecedor</label>
+              <select value={form.fornecedorId} onChange={(e) => handleSupplierChange(e.target.value)}
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50">
+                <option value="">Selecione um fornecedor</option>
+                {registry.fornecedores.map((item) => (
+                  <option key={item.id} value={item.id}>{item.nome}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Nº Orçamento</label>
               <input type="text" value={form.numeroOrcamento} onChange={(e) => setField('numeroOrcamento', e.target.value)}
                 className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50" />
             </div>
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-2">
               <label className="block text-xs text-slate-400 mb-1">Item / Descrição</label>
               <input type="text" value={form.descricaoItem} onChange={(e) => setField('descricaoItem', e.target.value)}
                 placeholder="Switch 48 portas, servidor..."
@@ -721,8 +791,8 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
 
           {/* custos table */}
           <div className="rounded-xl border border-slate-700/50 overflow-hidden">
-            <div className="grid grid-cols-7 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400">
-              <span>Modalidade</span><span>Distribuidor</span><span>Orçamento</span>
+            <div className="grid grid-cols-8 gap-2 bg-slate-900/60 px-4 py-2.5 text-xs font-medium text-slate-400">
+              <span>Modalidade</span><span>Distribuidor</span><span>Fornecedor</span><span>Orçamento</span>
               <span className="col-span-2">Item</span><span>Qtde</span><span>Custo Unit.</span>
             </div>
             {custos.length === 0 ? (
@@ -732,9 +802,10 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
             ) : (
               custos.map((c) =>
                 (c.itens || []).map((it, idx) => (
-                  <div key={`${c.id}-${idx}`} className="grid grid-cols-7 gap-2 border-t border-slate-700/40 px-4 py-2.5 text-sm text-slate-200">
+                  <div key={`${c.id}-${idx}`} className="grid grid-cols-8 gap-2 border-t border-slate-700/40 px-4 py-2.5 text-sm text-slate-200">
                     <span>{c.modalidade}</span>
-                    <span className="truncate">{c.distribuidor}</span>
+                    <span className="truncate">{c.distribuidor || '-'}</span>
+                    <span className="truncate">{c.fornecedor || '-'}</span>
                     <span className="truncate text-sky-400 font-mono">{c.numeroOrcamento}</span>
                     <span className="col-span-2 truncate">{it.descricao}</span>
                     <span>{it.quantidade}</span>
@@ -888,6 +959,7 @@ export default function OrcamentosPrevendas() {
             return `<tr>
               <td>${escapeHtml(cotacao?.modalidade || '-')}</td>
               <td>${escapeHtml(cotacao?.distribuidor || '-')}</td>
+              <td>${escapeHtml(cotacao?.fornecedor || '-')}</td>
               <td>${escapeHtml(cotacao?.numeroOrcamento || item?.numero || '-')}</td>
               <td>${escapeHtml(quotedItem?.descricao || '-')}</td>
               <td style="text-align:center">${escapeHtml(quantidade)}</td>
@@ -896,7 +968,7 @@ export default function OrcamentosPrevendas() {
             </tr>`;
           });
         }).join('')
-      : '<tr><td colspan="7" class="empty">Sem cotações de distribuidores registradas.</td></tr>';
+      : '<tr><td colspan="8" class="empty">Sem cotações de distribuidores registradas.</td></tr>';
 
     const html = `
       <!doctype html>
@@ -1046,6 +1118,7 @@ export default function OrcamentosPrevendas() {
             <tr>
               <th>Modalidade</th>
               <th>Distribuidor</th>
+              <th>Fornecedor</th>
               <th>Orçamento</th>
               <th>Item</th>
               <th style="text-align:center">Qtde</th>
