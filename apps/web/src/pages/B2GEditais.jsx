@@ -85,6 +85,7 @@ import DashboardAdvancedChart from '../components/DashboardAdvancedChart';
 import TemperatureGauge from '../components/TemperatureGauge';
 import Modal from '../components/Modal';
 import OpportunityForm from '../components/OpportunityForm';
+import CloseOpportunityModal from '../components/CloseOpportunityModal';
 import { B2GOpportunityDetailModal, B2GOpportunityEditModal } from '../components/B2GOpportunityModal';
 import B2GOpportunityAlerts from '../components/B2GOpportunityAlerts';
 import PresentationControls from '../components/PresentationControls';
@@ -1263,6 +1264,7 @@ export default function B2GEditais() {
   const [draggedOpportunitySnapshot, setDraggedOpportunitySnapshot] = useState(null);
   const [dragOverOpportunityColumn, setDragOverOpportunityColumn] = useState('');
   const [movingOpportunityId, setMovingOpportunityId] = useState('');
+  const [pendingOpportunityOutcome, setPendingOpportunityOutcome] = useState(null);
   const [selectedOpportunityId, setSelectedOpportunityId] = useState('');
   const [deletingLeadId, setDeletingLeadId] = useState('');
   // Estados do modal de edição de oportunidade B2G
@@ -3975,22 +3977,41 @@ export default function B2GEditais() {
     setDragOverOpportunityColumn('');
   };
 
-  const moveOpportunityToKanbanColumn = async (opportunity, targetColumnId) => {
+  const moveOpportunityToKanbanColumn = async (opportunity, targetColumnId, outcomePayload = null) => {
     const opportunityId = normalizeEntityId(opportunity?.id);
     if (!opportunityId || !targetColumnId) return;
 
     const currentColumnId = resolveKanbanColumnId(opportunity?.b2gStage || opportunity?.stage);
     if (currentColumnId === targetColumnId) return;
 
+    if (KANBAN_FINAL_COLUMNS.has(targetColumnId) && !outcomePayload) {
+      setPendingOpportunityOutcome({ opportunity, targetColumnId });
+      return;
+    }
+
     const nextPipelineStage = mapKanbanColumnToPipelineStage(targetColumnId);
     const prevStage = opportunity.stage;
     const prevB2gStage = opportunity.b2gStage || null;
+    const prevStageDecisionDetails = opportunity.stageDecisionDetails || null;
+    const prevLossReason = opportunity.lossReason || null;
+    const nextStageDecisionDetails = KANBAN_FINAL_COLUMNS.has(targetColumnId)
+      ? outcomePayload?.stageDecisionDetails
+      : null;
+    const nextLossReason = KANBAN_FINAL_COLUMNS.has(targetColumnId)
+      ? outcomePayload?.lossReason || null
+      : null;
 
     setMovingOpportunityId(opportunityId);
     setOpportunities((prev) =>
       prev.map((item) =>
         normalizeEntityId(item.id) === opportunityId
-          ? { ...item, stage: nextPipelineStage, b2gStage: targetColumnId }
+          ? {
+              ...item,
+              stage: nextPipelineStage,
+              b2gStage: targetColumnId,
+              stageDecisionDetails: nextStageDecisionDetails,
+              lossReason: nextLossReason
+            }
           : item
       )
     );
@@ -4003,7 +4024,9 @@ export default function B2GEditais() {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           stage: nextPipelineStage,
-          b2gStage: targetColumnId
+          b2gStage: targetColumnId,
+          stageDecisionDetails: nextStageDecisionDetails,
+          lossReason: nextLossReason
         })
       }
       );
@@ -4018,7 +4041,7 @@ export default function B2GEditais() {
         setOpportunities((prev) =>
           prev.map((item) =>
             normalizeEntityId(item.id) === updatedId
-              ? { ...item, stage: nextPipelineStage, b2gStage: targetColumnId }
+              ? { ...item, ...data }
               : item
           )
         );
@@ -4027,7 +4050,13 @@ export default function B2GEditais() {
       setOpportunities((prev) =>
         prev.map((item) =>
           normalizeEntityId(item.id) === opportunityId
-            ? { ...item, stage: prevStage, b2gStage: prevB2gStage }
+            ? {
+                ...item,
+                stage: prevStage,
+                b2gStage: prevB2gStage,
+                stageDecisionDetails: prevStageDecisionDetails,
+                lossReason: prevLossReason
+              }
             : item
         )
       );
@@ -4035,6 +4064,13 @@ export default function B2GEditais() {
     } finally {
       setMovingOpportunityId('');
     }
+  };
+
+  const handleConfirmOpportunityOutcome = async (payload) => {
+    const request = pendingOpportunityOutcome;
+    setPendingOpportunityOutcome(null);
+    if (!request?.opportunity || !request.targetColumnId) return;
+    await moveOpportunityToKanbanColumn(request.opportunity, request.targetColumnId, payload);
   };
 
   const handleKanbanDrop = async (event, targetColumnId) => {
@@ -5725,7 +5761,7 @@ export default function B2GEditais() {
                             const itemId = normalizeEntityId(item.id);
                             const isDragging = draggedOpportunityId === itemId;
                             const isMovingItem = movingOpportunityId === itemId;
-                            const canDrag = !isOutcomeColumn && (!movingOpportunityId || isMovingItem);
+                            const canDrag = !movingOpportunityId || isMovingItem;
 
                             return (
                               <div
@@ -5743,9 +5779,7 @@ export default function B2GEditais() {
                               >
                                   <div className="mb-2 flex items-start justify-between gap-2">
                                     <div className="flex min-w-0 flex-1 items-start gap-1.5">
-                                      {!isOutcomeColumn && (
-                                        <span className="mt-0.5 shrink-0 text-xs text-[var(--crm-muted)]">⋮⋮</span>
-                                      )}
+                                      <span className="mt-0.5 shrink-0 text-xs text-[var(--crm-muted)]">⋮⋮</span>
                                       <div className="min-w-0 w-full">
                                         {/* 1º — Nome do cliente/órgão */}
                                         {item.company?.name && (
@@ -5848,6 +5882,18 @@ export default function B2GEditais() {
                                         title="Marcar como Ganho"
                                       >
                                         <Check className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          moveOpportunityToKanbanColumn(item, 'NO_GO');
+                                        }}
+                                        disabled={isMovingItem}
+                                        className="flex items-center justify-center rounded-xl bg-amber-600 p-1.5 text-white transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+                                        title="Registrar NO GO"
+                                      >
+                                        <ThumbsDown className="h-3.5 w-3.5" />
                                       </button>
                                       <button
                                         type="button"
@@ -8211,6 +8257,20 @@ export default function B2GEditais() {
           setOpportunities(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
         }}
         isAdmin={isAdmin}
+      />
+
+      <CloseOpportunityModal
+        isOpen={Boolean(pendingOpportunityOutcome)}
+        onClose={() => setPendingOpportunityOutcome(null)}
+        onConfirm={handleConfirmOpportunityOutcome}
+        type={pendingOpportunityOutcome?.targetColumnId || 'GANHO'}
+        clientType="B2G"
+        opportunity={pendingOpportunityOutcome?.opportunity || null}
+        opportunityTitle={
+          pendingOpportunityOutcome?.opportunity
+            ? `${pendingOpportunityOutcome.opportunity.company?.name || 'Órgão'} - ${pendingOpportunityOutcome.opportunity.projectName || pendingOpportunityOutcome.opportunity.title || 'Oportunidade'}`
+            : ''
+        }
       />
 
       {/* Modal de Edição/Criação de Oportunidade B2G - novo componente com 6 abas */}

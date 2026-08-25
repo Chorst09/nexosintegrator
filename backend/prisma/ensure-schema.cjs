@@ -204,6 +204,7 @@ async function main() {
       ADD COLUMN IF NOT EXISTS "b2gStage" TEXT,
       ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
       ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER,
+      ADD COLUMN IF NOT EXISTS "stageDecisionDetails" JSONB,
       ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT;
   `);
 

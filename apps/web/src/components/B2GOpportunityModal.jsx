@@ -47,6 +47,17 @@ function InfoRow({ label, value }) {
   );
 }
 
+function parseStageDecisionDetails(details) {
+  if (!details) return null;
+  if (typeof details === 'object') return details;
+  try {
+    const parsed = JSON.parse(details);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function TabBtn({ active, onClick, icon: Icon, label }) {
   return (
     <button
@@ -172,6 +183,44 @@ export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit
   const currentDecision = b2g.decision || 'PENDING';
   const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
   const formatDate = (v) => { if (!v) return '-'; try { return new Date(v).toLocaleDateString('pt-BR'); } catch { return v; } };
+  const stageDecisionDetails = parseStageDecisionDetails(opportunity.stageDecisionDetails);
+  const stageDecisionRows = stageDecisionDetails ? [
+    {
+      label: 'Resultado',
+      value: stageDecisionDetails.decision === 'WON'
+        ? 'Ganho'
+        : stageDecisionDetails.decision === 'NO_GO'
+          ? 'NO GO'
+          : stageDecisionDetails.decision === 'LOST'
+            ? 'Perdido'
+            : stageDecisionDetails.decision
+    },
+    {
+      label: stageDecisionDetails.decision === 'WON' ? 'Concorrente superado' : 'Concorrente',
+      value: stageDecisionDetails.competitorName || stageDecisionDetails.wonFromCompetitor || stageDecisionDetails.lostToCompetitor
+    },
+    { label: 'Motivo', value: stageDecisionDetails.reason || stageDecisionDetails.winReason || stageDecisionDetails.lossReason || stageDecisionDetails.noGoReason },
+    {
+      label: 'Nosso preço',
+      value: stageDecisionDetails.ourPrice !== null && stageDecisionDetails.ourPrice !== undefined
+        ? formatCurrency(stageDecisionDetails.ourPrice)
+        : ''
+    },
+    {
+      label: 'Preço concorrente',
+      value: stageDecisionDetails.competitorPrice !== null && stageDecisionDetails.competitorPrice !== undefined
+        ? formatCurrency(stageDecisionDetails.competitorPrice)
+        : ''
+    },
+    {
+      label: 'Diferença',
+      value: stageDecisionDetails.priceDifference !== null && stageDecisionDetails.priceDifference !== undefined
+        ? formatCurrency(stageDecisionDetails.priceDifference)
+        : ''
+    },
+    { label: 'Desclassificação', value: stageDecisionDetails.disqualificationReason },
+    { label: 'Recurso', value: stageDecisionDetails.appealNotes }
+  ].filter((row) => row.value) : [];
 
   return (
     <Modal
@@ -454,6 +503,26 @@ export function B2GOpportunityDetailModal({ isOpen, onClose, opportunity, onEdit
                   </div>
                 )}
               </div>
+
+              {stageDecisionDetails && (
+                <div className="rounded-2xl border border-cyan-400/35 bg-cyan-500/10 p-5 space-y-4">
+                  <div>
+                    <h2 className="text-base font-bold text-white">Resultado Registrado</h2>
+                    <p className="text-xs text-cyan-100/70 mt-0.5">Dados informados no fechamento da fase.</p>
+                  </div>
+                  <div className="space-y-3">
+                    {stageDecisionRows.map((row) => (
+                      <InfoRow key={row.label} label={row.label} value={row.value} />
+                    ))}
+                  </div>
+                  {stageDecisionDetails.notes && (
+                    <div className="rounded-xl border border-cyan-300/20 bg-slate-950/35 p-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-cyan-100/60 mb-1">Acompanhamento</div>
+                      <p className="text-sm text-cyan-50/85 whitespace-pre-wrap">{stageDecisionDetails.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Estratégia */}
               <div className="rounded-2xl border border-slate-700/60 bg-slate-900/80 p-5 space-y-4">

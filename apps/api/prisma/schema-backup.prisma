@@ -102,6 +102,7 @@ model Opportunity {
   expectedCloseDate DateTime?
   actualCloseDate DateTime?
   lossReason      String?
+  stageDecisionDetails Json?
   
   // Relacionamentos
   companyId String
@@ -433,6 +434,7 @@ model Opportunity {
   expectedCloseDate DateTime?
   actualCloseDate DateTime?
   lossReason      String?
+  stageDecisionDetails Json?
   
   // Relacionamentos existentes
   companyId String

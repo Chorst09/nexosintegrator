@@ -128,6 +128,56 @@ const normalizeProjectMonths = (projectType, value) => {
   return MONTHLY_PROJECT_MONTHS.includes(parsed) ? parsed : 12;
 };
 
+const normalizeStageDecisionDetails = (value, user = {}, context = {}) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+
+  let details = value;
+  if (typeof value === 'string') {
+    try {
+      details = JSON.parse(value);
+    } catch {
+      details = { notes: value };
+    }
+  }
+
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
+
+  const cleaned = Object.entries(details).reduce((acc, [key, item]) => {
+    if (item === undefined) return acc;
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      if (trimmed) acc[key] = trimmed;
+      return acc;
+    }
+    if (item !== null) acc[key] = item;
+    return acc;
+  }, {});
+
+  const clientType = normalizeClientType(cleaned.clientType || context.clientType);
+  const decision = String(cleaned.decision || cleaned.type || context.decision || context.b2gStage || context.stage || '')
+    .trim()
+    .toUpperCase();
+
+  return {
+    ...cleaned,
+    clientType: clientType || cleaned.clientType || null,
+    decision: decision || null,
+    b2gStage: cleaned.b2gStage || context.b2gStage || null,
+    recordedAt: cleaned.recordedAt || new Date().toISOString(),
+    recordedById: cleaned.recordedById || user.userId || user.id || null,
+    recordedByName: cleaned.recordedByName || user.name || user.email || null
+  };
+};
+
+const resolveStageDecisionLossReason = (details) => {
+  if (!details || typeof details !== 'object') return undefined;
+  const decision = String(details.decision || details.type || '').toUpperCase();
+  const isLossDecision = ['LOST', 'PERDIDO', 'NO_GO', 'NO GO'].includes(decision);
+  if (!isLossDecision) return undefined;
+  return details.lossReason || details.noGoReason || details.reason || details.outcomeReason || null;
+};
+
 const resolveCommissionPercentage = (seller, projectType, projectMonths) => {
   if (!seller) return 0;
   if (projectType === 'MONTHLY') {
@@ -272,6 +322,14 @@ export default async function handler(req) {
 
     const projectType = normalizeProjectType(body.projectType);
     const projectMonths = normalizeProjectMonths(projectType, body.projectMonths);
+    const stageDecisionDetails = normalizeStageDecisionDetails(body.stageDecisionDetails, req.user, {
+      clientType,
+      stage: body.stage || 'LEAD',
+      b2gStage: clientType === 'B2G' ? (body.b2gStage || 'ANALISE') : (body.b2gStage || null)
+    });
+    const lossReason = body.lossReason !== undefined
+      ? (body.lossReason || null)
+      : resolveStageDecisionLossReason(stageDecisionDetails);
     
     const opportunity = await prisma.$transaction(async (tx) => {
       const number = body.number || await generateOpportunityNumber(tx, clientType);
@@ -290,6 +348,9 @@ export default async function handler(req) {
           b2gStage: clientType === 'B2G' ? (body.b2gStage || 'ANALISE') : (body.b2gStage || null),
           source: body.source,
           expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : null,
+          actualCloseDate: ['WON', 'LOST'].includes(body.stage) ? new Date() : null,
+          lossReason,
+          stageDecisionDetails,
           notes: body.notes,
           companyId: body.companyId,
           ownerId: resolvedOwnerId,
@@ -344,17 +405,30 @@ export default async function handler(req) {
     if (!canSeeAllOpportunities(req.user)) {
       const existing = await prisma.opportunity.findUnique({
         where: { id: opportunityId },
-        select: { ownerId: true, clientType: true }
+        select: {
+          ownerId: true,
+          number: true,
+          b2gStage: true,
+          source: true,
+          description: true,
+          projectClientType: true,
+          company: { select: { clientType: true, segment: true } }
+        }
       });
       if (!existing) return new Response('Not found', { status: 404 });
       if (existing.ownerId !== req.user.userId) {
         return new Response('Forbidden', { status: 403 });
       }
-      if (!canAccessClientType(req.user, existing.clientType)) {
+      if (!canAccessClientType(req.user, inferOpportunityClientType(existing))) {
         return new Response('Sem acesso ao módulo desta oportunidade', { status: 403 });
       }
     }
     
+    const stageDecisionDetails = normalizeStageDecisionDetails(body.stageDecisionDetails, req.user, {
+      clientType: resolveRequestedClientType(body, req.query || {}),
+      stage: body.stage,
+      b2gStage: body.b2gStage
+    });
     const updateData = {};
     if (body.stage) updateData.stage = body.stage;
     if (body.title !== undefined) updateData.title = body.title;
@@ -378,12 +452,20 @@ export default async function handler(req) {
     if (body.probability !== undefined) updateData.probability = body.probability;
     if (body.b2gStage !== undefined) updateData.b2gStage = body.b2gStage || null;
     if (body.expectedCloseDate) updateData.expectedCloseDate = new Date(body.expectedCloseDate);
-    if (body.lossReason) updateData.lossReason = body.lossReason;
+    if (body.lossReason !== undefined) {
+      updateData.lossReason = body.lossReason || null;
+    } else if (stageDecisionDetails !== undefined) {
+      const resolvedLossReason = resolveStageDecisionLossReason(stageDecisionDetails);
+      if (resolvedLossReason !== undefined) updateData.lossReason = resolvedLossReason;
+    }
+    if (stageDecisionDetails !== undefined) updateData.stageDecisionDetails = stageDecisionDetails;
     if (body.notes !== undefined) updateData.notes = body.notes;
     
     // Se mudou para WON ou LOST, definir data de fechamento
     if (body.stage === 'WON' || body.stage === 'LOST') {
       updateData.actualCloseDate = new Date();
+    } else if (body.stage && stageDecisionDetails === null) {
+      updateData.actualCloseDate = null;
     }
     
     const opportunity = await prisma.$transaction(async (tx) => {

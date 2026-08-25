@@ -237,6 +237,7 @@ model Opportunity {
   expectedCloseDate DateTime?
   actualCloseDate DateTime?
   lossReason      String?
+  stageDecisionDetails Json?
   notes           String?
   
   // Relacionamentos

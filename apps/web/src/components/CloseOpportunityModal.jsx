@@ -1,13 +1,52 @@
-import { useState } from 'react';
-import { Trophy, XCircle, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Ban, Trophy, XCircle } from 'lucide-react';
 import Modal from './Modal';
 
-const LOSS_REASONS = [
+const B2G_WIN_REASONS = [
+  'Preço mais competitivo',
+  'Melhor aderência técnica',
+  'Desclassificação do concorrente',
+  'Recurso deferido',
+  'Relacionamento e estratégia',
+  'Prazo ou condição de entrega',
+  'Outro'
+];
+
+const B2G_LOSS_REASONS = [
+  'Preço',
+  'Desclassificação técnica',
+  'Documentação ou habilitação',
+  'Recurso indeferido',
+  'Perdeu prazo',
+  'Não atendeu ao edital',
+  'Outro'
+];
+
+const B2G_NO_GO_REASONS = [
+  'Margem inviável',
+  'Risco jurídico ou técnico',
+  'Prazo inviável',
+  'Requisitos restritivos',
+  'Sem aderência técnica',
+  'Capacidade operacional',
+  'Outro'
+];
+
+const B2B_WIN_REASONS = [
+  'Preço ou condição comercial',
+  'Relacionamento com o cliente',
+  'Aderência técnica',
+  'Prazo de entrega',
+  'Atendimento e serviço',
+  'Concorrente desclassificado',
+  'Outro'
+];
+
+const B2B_LOSS_REASONS = [
   'Preço acima do esperado',
   'Concorrência venceu',
   'Prazo de entrega inviável',
   'Cliente optou por não investir',
-  'Problemas com suporte/pós-venda',
   'Produto não atende aos requisitos',
   'Orçamento insuficiente do cliente',
   'Relacionamento com concorrente',
@@ -15,227 +54,336 @@ const LOSS_REASONS = [
   'Outro'
 ];
 
+const INITIAL_FORM = {
+  competitorName: '',
+  competitorPrice: '',
+  ourPrice: '',
+  priceDifference: '',
+  outcomeReason: '',
+  customReason: '',
+  disqualificationReason: '',
+  appealNotes: '',
+  notes: ''
+};
+
+const normalizeDecision = (type) => {
+  const token = String(type || '').trim().toUpperCase().replace(/\s+/g, '_');
+  if (token === 'GANHO' || token === 'WON') return 'WON';
+  if (token === 'PERDIDO' || token === 'LOST') return 'LOST';
+  if (token === 'NO_GO' || token === 'NOGO') return 'NO_GO';
+  return token || 'WON';
+};
+
+const parseMoney = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const normalized = String(value)
+    .replace(/[R$\s]/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatMoneyForInput = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return '';
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(number);
+};
+
+const getReasonOptions = (clientType, decision) => {
+  if (clientType === 'B2G') {
+    if (decision === 'WON') return B2G_WIN_REASONS;
+    if (decision === 'NO_GO') return B2G_NO_GO_REASONS;
+    return B2G_LOSS_REASONS;
+  }
+  return decision === 'WON' ? B2B_WIN_REASONS : B2B_LOSS_REASONS;
+};
+
 const CloseOpportunityModal = ({
   isOpen,
   onClose,
   onConfirm,
   type = 'WON',
+  clientType = 'B2B',
   opportunityTitle = '',
+  opportunity = null
 }) => {
-  const isWon = type === 'WON' || type === 'GANHO';
+  const decision = normalizeDecision(type);
+  const isB2G = String(clientType).toUpperCase() === 'B2G';
+  const isWon = decision === 'WON';
+  const isNoGo = decision === 'NO_GO';
+  const isLoss = decision === 'LOST';
 
-  const [form, setForm] = useState({
-    competitorName: '',
-    competitorPrice: '',
-    ourPrice: '',
-    priceDifference: '',
-    productsInvolved: '',
-    lossReason: '',
-    customLossReason: '',
-    history: '',
-  });
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [error, setError] = useState('');
 
-  const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm({
+      ...INITIAL_FORM,
+      ourPrice: formatMoneyForInput(opportunity?.value)
+    });
+    setError('');
+  }, [isOpen, opportunity?.value, decision]);
 
-  const resetForm = () => setForm({
-    competitorName: '',
-    competitorPrice: '',
-    ourPrice: '',
-    priceDifference: '',
-    productsInvolved: '',
-    lossReason: '',
-    customLossReason: '',
-    history: '',
-  });
+  const reasonOptions = useMemo(() => getReasonOptions(isB2G ? 'B2G' : 'B2B', decision), [decision, isB2G]);
 
-  const handleClose = () => {
-    resetForm();
+  const set = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (error) setError('');
+  };
+
+  const resetAndClose = () => {
+    setForm(INITIAL_FORM);
+    setError('');
     onClose();
   };
 
+  const getReason = () =>
+    form.outcomeReason === 'Outro' ? form.customReason.trim() : form.outcomeReason;
+
   const handleConfirm = () => {
-    const result = {
+    const reason = getReason();
+    const competitorName = form.competitorName.trim();
+
+    if (!reason) {
+      setError(isNoGo ? 'Informe o motivo do NO GO.' : 'Informe o motivo da decisão.');
+      return;
+    }
+
+    if ((isWon || isLoss) && !competitorName) {
+      setError(isWon ? 'Informe de qual concorrente ganhou.' : 'Informe para qual concorrente perdeu.');
+      return;
+    }
+
+    const ourPrice = parseMoney(form.ourPrice);
+    const competitorPrice = parseMoney(form.competitorPrice);
+    const typedDifference = parseMoney(form.priceDifference);
+    const priceDifference = typedDifference ?? (
+      ourPrice !== null && competitorPrice !== null
+        ? Number(Math.abs(ourPrice - competitorPrice).toFixed(2))
+        : null
+    );
+
+    const stageDecisionDetails = {
       type,
-      competitorName: form.competitorName.trim(),
-      competitorPrice: form.competitorPrice ? parseFloat(form.competitorPrice.replace(/\./g, '').replace(',', '.')) || 0 : 0,
-      ourPrice: form.ourPrice ? parseFloat(form.ourPrice.replace(/\./g, '').replace(',', '.')) || 0 : 0,
-      priceDifference: form.priceDifference ? parseFloat(form.priceDifference.replace(/\./g, '').replace(',', '.')) || 0 : 0,
-      productsInvolved: form.productsInvolved.trim(),
-      lossReason: isWon ? '' : (form.lossReason === 'Outro' ? form.customLossReason.trim() : form.lossReason),
-      history: form.history.trim(),
-      closedAt: new Date().toISOString(),
+      decision,
+      clientType: isB2G ? 'B2G' : 'B2B',
+      b2gStage: isB2G ? (decision === 'WON' ? 'GANHO' : decision === 'NO_GO' ? 'NO_GO' : 'PERDIDO') : null,
+      competitorName: competitorName || null,
+      wonFromCompetitor: isWon ? competitorName : null,
+      lostToCompetitor: isLoss ? competitorName : null,
+      ourPrice,
+      finalPrice: ourPrice,
+      competitorPrice,
+      priceDifference,
+      reason,
+      winReason: isWon ? reason : null,
+      lossReason: isLoss ? reason : null,
+      noGoReason: isNoGo ? reason : null,
+      disqualificationReason: form.disqualificationReason.trim() || null,
+      appealNotes: form.appealNotes.trim() || null,
+      notes: form.notes.trim() || null,
+      recordedAt: new Date().toISOString()
     };
-    onConfirm(result);
-    resetForm();
+
+    onConfirm({
+      type,
+      decision,
+      stageDecisionDetails,
+      lossReason: isLoss || isNoGo ? reason : null
+    });
+    setForm(INITIAL_FORM);
+    setError('');
   };
 
-  const inputCls = 'w-full rounded-lg border border-[color:var(--crm-border)] bg-[color:var(--crm-surface)] text-[color:var(--crm-text)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-[color:var(--crm-muted)]/50';
-  const labelCls = 'text-xs font-medium text-[color:var(--crm-muted)] mb-1 block';
+  const title = isNoGo
+    ? 'Registrar NO GO'
+    : isWon
+      ? 'Registrar Ganho'
+      : 'Registrar Perda';
+  const HeaderIcon = isNoGo ? Ban : isWon ? Trophy : XCircle;
+  const tone = isNoGo ? 'amber' : isWon ? 'emerald' : 'red';
+  const heading = isNoGo
+    ? 'Informe o motivo para não seguir'
+    : isWon
+      ? 'Informe os dados do ganho'
+      : 'Informe os dados da perda';
+
+  const inputCls = 'w-full rounded-xl border border-[color:var(--crm-border)] bg-[color:var(--crm-surface)] text-[color:var(--crm-ink)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-[color:var(--crm-muted)]/50';
+  const labelCls = 'text-xs font-semibold text-[color:var(--crm-muted)] mb-1 block';
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleClose}
-      title={isWon ? 'Registrar Ganho' : 'Registrar Perda'}
-      size="default"
+      onClose={resetAndClose}
+      title={title}
+      size="large"
     >
       <div className="space-y-5 p-2">
-        {/* Header */}
-        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
-          isWon
+        <div className={`flex items-center gap-3 rounded-xl border p-4 ${
+          tone === 'emerald'
             ? 'border-emerald-400/40 bg-emerald-500/10'
-            : 'border-red-400/40 bg-red-500/10'
+            : tone === 'amber'
+              ? 'border-amber-400/45 bg-amber-500/10'
+              : 'border-red-400/40 bg-red-500/10'
         }`}>
-          {isWon ? (
-            <Trophy className="h-6 w-6 text-emerald-400 flex-shrink-0" />
-          ) : (
-            <XCircle className="h-6 w-6 text-red-400 flex-shrink-0" />
-          )}
-          <div>
-            <p className="text-sm font-semibold text-[color:var(--crm-text)]">
-              {isWon ? 'Parabéns! Oportunidade Ganha!' : 'Informe os dados da perda'}
-            </p>
+          <HeaderIcon className={`h-6 w-6 shrink-0 ${
+            tone === 'emerald' ? 'text-emerald-400' : tone === 'amber' ? 'text-amber-300' : 'text-red-400'
+          }`} />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[color:var(--crm-ink)]">{heading}</p>
             {opportunityTitle && (
-              <p className="text-xs text-[color:var(--crm-muted)] mt-0.5 truncate max-w-[300px]">{opportunityTitle}</p>
+              <p className="mt-0.5 truncate text-xs text-[color:var(--crm-muted)]">{opportunityTitle}</p>
             )}
           </div>
         </div>
 
-        {/* Competitor Name */}
-        <div>
-          <label className={labelCls}>{isWon ? 'Concorrente derrotado' : 'Concorrente que venceu'}</label>
-          <input
-            type="text"
-            className={inputCls}
-            placeholder={isWon ? 'Ex: Empresa ABC Ltda' : 'Ex: Concorrente XYZ S.A'}
-            value={form.competitorName}
-            onChange={e => set('competitorName', e.target.value)}
-          />
-        </div>
-
-        {/* Price Fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelCls}>{isWon ? 'Nosso valor (R$)' : 'Valor do concorrente (R$)'}</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              className={inputCls}
-              placeholder="0,00"
-              value={isWon ? form.ourPrice : form.competitorPrice}
-              onChange={e => set(isWon ? 'ourPrice' : 'competitorPrice', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>{isWon ? 'Valor do concorrente (R$)' : 'Nosso valor (R$)'}</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              className={inputCls}
-              placeholder="0,00"
-              value={isWon ? form.competitorPrice : form.ourPrice}
-              onChange={e => set(isWon ? 'competitorPrice' : 'ourPrice', e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Price Difference */}
-        <div>
-          <label className={labelCls}>Diferença de valor (R$)</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            className={inputCls}
-            placeholder="0,00"
-            value={form.priceDifference}
-            onChange={e => set('priceDifference', e.target.value)}
-          />
-        </div>
-
-        {/* Products */}
-        <div>
-          <label className={labelCls}>Produtos envolvidos</label>
-          <input
-            type="text"
-            className={inputCls}
-            placeholder={isWon ? 'Ex: Internet Fibra 500MB, Firewall' : 'Ex: Switch Gerenciável, Access Point'}
-            value={form.productsInvolved}
-            onChange={e => set('productsInvolved', e.target.value)}
-          />
-        </div>
-
-        {/* Loss Reason (only for LOST) */}
-        {!isWon && (
-          <div>
-            <label className={labelCls}>Motivo da perda</label>
-            <div className="space-y-2">
-              {LOSS_REASONS.map(reason => (
-                <label
-                  key={reason}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    form.lossReason === reason
-                      ? 'border-red-400/60 bg-red-500/10'
-                      : 'border-[color:var(--crm-border)] hover:border-red-300/30'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="closeLossReason"
-                    value={reason}
-                    checked={form.lossReason === reason}
-                    onChange={e => set('lossReason', e.target.value)}
-                    className="accent-red-500"
-                  />
-                  <span className="text-sm font-medium text-[color:var(--crm-ink)]">{reason}</span>
-                </label>
-              ))}
-            </div>
-            {form.lossReason === 'Outro' && (
-              <textarea
-                value={form.customLossReason}
-                onChange={e => set('customLossReason', e.target.value)}
-                placeholder="Descreva o motivo da perda..."
-                className={inputCls + ' mt-2 min-h-[60px] resize-none'}
-                rows={2}
-              />
-            )}
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            {error}
           </div>
         )}
 
-        {/* History / Notes */}
+        {!isNoGo && (
+          <div>
+            <label className={labelCls}>
+              {isWon ? 'Ganho de qual concorrente' : 'Perdido para qual concorrente'}
+            </label>
+            <input
+              type="text"
+              className={inputCls}
+              placeholder={isWon ? 'Ex: concorrente derrotado' : 'Ex: concorrente vencedor'}
+              value={form.competitorName}
+              onChange={(event) => set('competitorName', event.target.value)}
+            />
+          </div>
+        )}
+
+        {!isNoGo && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label className={labelCls}>{isWon ? 'Preço fechado (R$)' : 'Nosso preço (R$)'}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputCls}
+                placeholder="0,00"
+                value={form.ourPrice}
+                onChange={(event) => set('ourPrice', event.target.value)}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Preço do concorrente (R$)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputCls}
+                placeholder="0,00"
+                value={form.competitorPrice}
+                onChange={(event) => set('competitorPrice', event.target.value)}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Diferença de preço (R$)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className={inputCls}
+                placeholder="0,00"
+                value={form.priceDifference}
+                onChange={(event) => set('priceDifference', event.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
         <div>
           <label className={labelCls}>
-            {isWon ? 'Histórico do ganho' : 'Histórico da perda'}
+            {isNoGo ? 'Motivo do NO GO' : isWon ? 'Ganho por qual motivo' : 'Perdido por qual motivo'}
           </label>
+          <select
+            className={inputCls}
+            value={form.outcomeReason}
+            onChange={(event) => set('outcomeReason', event.target.value)}
+          >
+            <option value="">Selecione...</option>
+            {reasonOptions.map((reason) => (
+              <option key={reason} value={reason}>{reason}</option>
+            ))}
+          </select>
+          {form.outcomeReason === 'Outro' && (
+            <textarea
+              value={form.customReason}
+              onChange={(event) => set('customReason', event.target.value)}
+              placeholder="Descreva o motivo..."
+              className={`${inputCls} mt-2 min-h-[70px] resize-none`}
+              rows={2}
+            />
+          )}
+        </div>
+
+        {isB2G && !isNoGo && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelCls}>Desclassificação</label>
+              <textarea
+                className={`${inputCls} min-h-[86px] resize-none`}
+                rows={3}
+                placeholder="Ex: motivo de desclassificação nossa ou do concorrente"
+                value={form.disqualificationReason}
+                onChange={(event) => set('disqualificationReason', event.target.value)}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Recurso</label>
+              <textarea
+                className={`${inputCls} min-h-[86px] resize-none`}
+                rows={3}
+                placeholder="Ex: recurso deferido, indeferido, prazo ou observações"
+                value={form.appealNotes}
+                onChange={(event) => set('appealNotes', event.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className={labelCls}>Acompanhamento</label>
           <textarea
-            className={inputCls + ' min-h-[100px] resize-none'}
+            className={`${inputCls} min-h-[100px] resize-none`}
             rows={4}
-            placeholder={isWon
-              ? 'Descreva os detalhes: como ganhou, pontos fortes, diferenciais, histórico do processo...'
-              : 'Descreva os detalhes: por que perdeu, pontos fracos, o que poderia ter sido diferente, histórico do processo...'
-            }
-            value={form.history}
-            onChange={e => set('history', e.target.value)}
+            placeholder="Registre o contexto da decisão, próximos passos e observações relevantes."
+            value={form.notes}
+            onChange={(event) => set('notes', event.target.value)}
           />
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-[color:var(--crm-border)]">
+        <div className="flex flex-col-reverse gap-3 border-t border-[color:var(--crm-border)] pt-4 sm:flex-row sm:justify-end">
           <button
-            onClick={handleClose}
-            className="px-4 py-2 rounded-xl border border-[color:var(--crm-border)] text-sm font-semibold text-[color:var(--crm-muted)] hover:bg-[color:var(--crm-surface)] transition-colors"
+            type="button"
+            onClick={resetAndClose}
+            className="crm-btn crm-btn-secondary min-w-[130px]"
           >
             Cancelar
           </button>
           <button
+            type="button"
             onClick={handleConfirm}
-            className={`px-5 py-2 rounded-xl text-sm font-semibold text-white transition-all ${
-              isWon
-                ? 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_8px_20px_rgba(16,185,129,0.3)]'
-                : 'bg-red-600 hover:bg-red-500 shadow-[0_8px_20px_rgba(220,38,38,0.3)]'
-            }`}
+            className={`crm-btn min-w-[180px] text-white ${
+              tone === 'emerald'
+                ? 'border border-emerald-300/45 bg-[linear-gradient(135deg,#059669_0%,#10b981_100%)]'
+                : tone === 'amber'
+                  ? 'border border-amber-300/45 bg-[linear-gradient(135deg,#d97706_0%,#f59e0b_100%)]'
+                  : 'border border-red-400/45 bg-[linear-gradient(135deg,#dc2626_0%,#b91c1c_100%)]'
+            } hover:brightness-110`}
           >
-            {isWon ? 'Confirmar Ganho' : 'Confirmar Perda'}
+            Confirmar
           </button>
         </div>
       </div>
