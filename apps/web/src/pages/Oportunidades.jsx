@@ -403,7 +403,7 @@ export default function Oportunidades() {
           : (payloadFormData.description ? JSON.stringify(payloadFormData.description) : null),
         value: Number.isFinite(parsedValue) ? parsedValue : 0,
         probability: Number.isFinite(parsedProbability) ? Math.min(100, Math.max(0, parsedProbability)) : 50,
-        stage: payloadFormData.stage || 'LEAD',
+        stage: selectedOpportunity ? (selectedOpportunity.stage || payloadFormData.stage || 'LEAD') : (payloadFormData.stage || 'LEAD'),
         source: payloadFormData.source || null,
         expectedCloseDate: (() => {
           const v = payloadFormData.expectedCloseDate || '';
@@ -413,7 +413,7 @@ export default function Oportunidades() {
         })(),
         companyId: payloadFormData.companyId || '',
         ownerId: payloadFormData.ownerId || '',
-        b2gStage: payloadFormData.b2gStage || null,
+        b2gStage: selectedOpportunity ? (selectedOpportunity.b2gStage || payloadFormData.b2gStage || null) : (payloadFormData.b2gStage || null),
         lossReason: payloadFormData.lossReason || null,
         notes: payloadFormData.notes || null,
       };

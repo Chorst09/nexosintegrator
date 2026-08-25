@@ -637,6 +637,10 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
 
     try {
       let response;
+      const isCreateMode = mode === 'create';
+      const preservedPipelineStage = opportunity?.stage || 'QUALIFICATION';
+      const preservedKanbanStage = opportunity?.b2gStage || undefined;
+      const initialKanbanStage = form.currentPhase ? String(form.currentPhase).toUpperCase().replace(/ /g,'_') : undefined;
       const payload = {
         title: form.objectSummary || form.processNumber || 'Oportunidade B2G',
         projectName: form.projectName || form.objectSummary,
@@ -644,12 +648,13 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
         description: JSON.stringify(b2gData),
         value: parseFloat(form.estimatedValue) || 0,
         probability: parseFloat(form.winProbability) || 50,
-        stage: 'QUALIFICATION', source: 'MANUAL',
+        stage: isCreateMode ? 'QUALIFICATION' : preservedPipelineStage,
+        source: 'MANUAL',
         companyId, ownerId: user?.id || '', clientType: 'B2G',
-        b2gStage: form.currentPhase ? String(form.currentPhase).toUpperCase().replace(/ /g,'_') : undefined
+        b2gStage: isCreateMode ? initialKanbanStage : preservedKanbanStage
       };
       console.log('[B2GOpportunityEditModal] Salvando oportunidade:', { mode, id: opportunity?.id, clientType: 'B2G' });
-      if (mode === 'create') {
+      if (isCreateMode) {
         response = await fetch(buildApiUrl('/opportunities?clientType=B2G'), {
           method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
         });
