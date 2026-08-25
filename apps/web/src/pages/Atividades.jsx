@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCcw,
   Search,
+  Send,
   X
 } from 'lucide-react';
 
@@ -27,7 +28,8 @@ import {
   ACTIVITY_AREA_OPTIONS,
   addFlowMetadataToDescription,
   getAreaLabel,
-  hydrateActivityFlow
+  hydrateActivityFlow,
+  updateFlowMetadataInDescription
 } from '../utils/activityFlow';
 
 const TYPE_META = {
@@ -43,10 +45,11 @@ const STATUS_META = {
   PENDING: { label: 'Pendente', cls: 'bg-amber-500/10 text-amber-900 dark:text-amber-200' },
   IN_PROGRESS: { label: 'Em andamento', cls: 'bg-sky-500/10 text-sky-900 dark:text-sky-200' },
   COMPLETED: { label: 'Concluida', cls: 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200' },
+  PROPOSAL_SENT: { label: 'Proposta enviada', cls: 'bg-cyan-500/10 text-cyan-900 dark:text-cyan-200' },
   CANCELLED: { label: 'Cancelada', cls: 'bg-red-500/10 text-red-900 dark:text-red-200' }
 };
 
-const ACTIVITY_KANBAN_COLUMNS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+const ACTIVITY_KANBAN_COLUMNS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'PROPOSAL_SENT', 'CANCELLED'];
 
 const PRIORITY_META = {
   LOW: { label: 'Baixa', cls: 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200' },
@@ -64,6 +67,7 @@ const DESTINATION_OPTIONS = [
 ];
 
 const BUDGET_REQUEST_TYPE = 'SOLICITACAO_ORCAMENTO';
+const PROPOSAL_SENT_STAGE = 'PROPOSTA_ENVIADA';
 
 const getActivityDisplayType = (activity) => {
   if (activity?.type === 'TASK' && activity?.flow?.targetArea === 'PRE_VENDAS') {
@@ -71,6 +75,10 @@ const getActivityDisplayType = (activity) => {
   }
   return activity?.type;
 };
+
+const getActivityDisplayStatus = (activity) => (
+  activity?.flow?.activityStage === PROPOSAL_SENT_STAGE ? 'PROPOSAL_SENT' : activity?.status
+);
 
 const isOverdue = (dueDate, status) => {
   if (!dueDate) return false;
@@ -162,7 +170,7 @@ export default function Atividades() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (filtros.status) params.append('status', filtros.status);
+      if (filtros.status && filtros.status !== 'PROPOSAL_SENT') params.append('status', filtros.status);
       if (filtros.type) params.append('type', filtros.type);
       if (filtros.priority) params.append('priority', filtros.priority);
 
@@ -265,6 +273,31 @@ export default function Atividades() {
     }
   };
 
+  const markProposalSent = async (activity) => {
+    if (!activity?.id) return;
+
+    try {
+      const descriptionWithFlow = addFlowMetadataToDescription(activity.description, activity.flow || {});
+      await axios.put(
+        buildApiUrl('/activities-simple'),
+        {
+          id: activity.id,
+          status: 'COMPLETED',
+          description: updateFlowMetadataInDescription(descriptionWithFlow, {
+            ...(activity.flow || {}),
+            activityStage: PROPOSAL_SENT_STAGE,
+            proposalSentAt: new Date().toISOString(),
+            proposalSentByName: getCurrentUserName()
+          })
+        },
+        { headers: getAuthHeaders() }
+      );
+      loadAtividades();
+    } catch (error) {
+      console.error('Erro ao marcar proposta enviada:', error);
+    }
+  };
+
   useEffect(() => {
     const activityId = searchParams.get('activityId');
     if (!activityId) return;
@@ -313,7 +346,7 @@ export default function Atividades() {
   const filteredAtividades = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     const items = (Array.isArray(atividades) ? atividades : []).filter((activity) => {
-      if (filtros.status && activity.status !== filtros.status) return false;
+      if (filtros.status && getActivityDisplayStatus(activity) !== filtros.status) return false;
       if (filtros.type && getActivityDisplayType(activity) !== filtros.type) return false;
       if (filtros.priority && activity.priority !== filtros.priority) return false;
       if (filtros.targetArea && activity?.flow?.targetArea !== filtros.targetArea) return false;
@@ -378,7 +411,8 @@ export default function Atividades() {
       key: 'status',
       label: 'Status',
       render: (item) => {
-        const meta = STATUS_META[item.status] || { label: item.status || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
+        const displayStatus = getActivityDisplayStatus(item);
+        const meta = STATUS_META[displayStatus] || { label: item.status || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
         return (
           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold ${meta.cls}`}>
             {meta.label}
@@ -448,7 +482,7 @@ export default function Atividades() {
 
   const kanbanByStatus = useMemo(() => {
     return ACTIVITY_KANBAN_COLUMNS.reduce((acc, status) => {
-      acc[status] = filteredAtividades.filter((activity) => activity.status === status);
+      acc[status] = filteredAtividades.filter((activity) => getActivityDisplayStatus(activity) === status);
       return acc;
     }, {});
   }, [filteredAtividades]);
@@ -462,6 +496,7 @@ export default function Atividades() {
         { value: 'PENDING', label: 'Pendente' },
         { value: 'IN_PROGRESS', label: 'Em andamento' },
         { value: 'COMPLETED', label: 'Concluida' },
+        { value: 'PROPOSAL_SENT', label: 'Proposta enviada' },
         { value: 'CANCELLED', label: 'Cancelada' }
       ]
     },
@@ -499,6 +534,17 @@ export default function Atividades() {
 
   const renderActivityActions = (item) => (
     <>
+      {item.status === 'COMPLETED' && getActivityDisplayStatus(item) !== 'PROPOSAL_SENT' && (
+        <button
+          type="button"
+          onClick={() => markProposalSent(item)}
+          className="crm-btn crm-btn-primary px-3 py-1.5 text-xs"
+          title="Proposta enviada"
+        >
+          <Send className="h-4 w-4" />
+          Proposta enviada
+        </button>
+      )}
       {item.status === 'PENDING' && (
         <button
           type="button"
@@ -547,7 +593,8 @@ export default function Atividades() {
   const renderActivityCard = (item) => {
     const displayType = getActivityDisplayType(item);
     const typeMeta = TYPE_META[displayType] || { label: displayType || '-', icon: CheckSquare };
-    const statusMeta = STATUS_META[item.status] || { label: item.status || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
+    const displayStatus = getActivityDisplayStatus(item);
+    const statusMeta = STATUS_META[displayStatus] || { label: item.status || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
     const priorityMeta = PRIORITY_META[item.priority] || { label: item.priority || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
     const Icon = typeMeta.icon;
 
@@ -590,6 +637,8 @@ export default function Atividades() {
       </div>
     );
   };
+
+  const selectedDisplayStatus = selectedActivity ? getActivityDisplayStatus(selectedActivity) : '';
 
   return (
     <div>
@@ -672,7 +721,7 @@ export default function Atividades() {
       </div>
 
       {viewMode === 'KANBAN' ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 2xl:grid-cols-5">
           {ACTIVITY_KANBAN_COLUMNS.map((status) => {
             const meta = STATUS_META[status];
             const rows = kanbanByStatus[status] || [];
@@ -732,9 +781,9 @@ export default function Atividades() {
             <div className="crm-panel-muted p-4 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold ${
-                  STATUS_META[selectedActivity.status]?.cls || 'bg-slate-500/10 text-slate-700 dark:text-slate-200'
+                  STATUS_META[selectedDisplayStatus]?.cls || 'bg-slate-500/10 text-slate-700 dark:text-slate-200'
                 }`}>
-                  {STATUS_META[selectedActivity.status]?.label || selectedActivity.status}
+                  {STATUS_META[selectedDisplayStatus]?.label || selectedActivity.status}
                 </span>
                 <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold ${
                   PRIORITY_META[selectedActivity.priority]?.cls || 'bg-slate-500/10 text-slate-700 dark:text-slate-200'
@@ -797,6 +846,19 @@ export default function Atividades() {
             )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-end">
+              {selectedActivity.status === 'COMPLETED' && selectedDisplayStatus !== 'PROPOSAL_SENT' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    markProposalSent(selectedActivity);
+                    setShowDetailsModal(false);
+                  }}
+                  className="crm-btn crm-btn-primary"
+                >
+                  <Send className="h-4 w-4" />
+                  Proposta enviada
+                </button>
+              )}
               {selectedActivity.status === 'PENDING' && (
                 <button
                   type="button"

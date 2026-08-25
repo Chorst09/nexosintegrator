@@ -32,6 +32,7 @@ export const getAreaLabel = (area) => ACTIVITY_AREAS[area] || area || '-';
 export const addFlowMetadataToDescription = (description, flow) => {
   const plain = String(description || '').trim();
   const metadata = {
+    ...(flow && typeof flow === 'object' ? flow : {}),
     sourceArea: flow?.sourceArea || 'COMERCIAL',
     targetArea: flow?.targetArea || 'COMERCIAL',
     createdFrom: flow?.createdFrom || 'ATIVIDADES',
@@ -40,6 +41,15 @@ export const addFlowMetadataToDescription = (description, flow) => {
   };
 
   return `${plain}\n\n${ACTIVITY_FLOW_MARKER}${JSON.stringify(metadata)}`;
+};
+
+export const updateFlowMetadataInDescription = (description, patch) => {
+  const parsed = parseFlowFromDescription(description);
+  return addFlowMetadataToDescription(parsed.cleanDescription, {
+    ...parsed.flow,
+    ...(patch && typeof patch === 'object' ? patch : {}),
+    updatedAt: new Date().toISOString()
+  });
 };
 
 export const parseFlowFromDescription = (description) => {
@@ -63,6 +73,7 @@ export const parseFlowFromDescription = (description) => {
   return {
     cleanDescription,
     flow: {
+      ...(flow && typeof flow === 'object' ? flow : {}),
       sourceArea: flow?.sourceArea || 'COMERCIAL',
       targetArea: flow?.targetArea || 'COMERCIAL',
       createdFrom: flow?.createdFrom || 'ATIVIDADES',
