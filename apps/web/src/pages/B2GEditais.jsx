@@ -5443,6 +5443,71 @@ export default function B2GEditais() {
           )}
         />
 
+        {(opportunityOpeningAlertsLoading || opportunityOpeningAlerts.length > 0) && (
+          <section className="mt-5 px-2">
+            <div className="dashboard-card border border-[#f6b40b66] bg-[#10213f]/92 p-5 shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-black text-[#f4f7fb]">
+                    <AlertTriangle className="h-5 w-5 text-[#f6b40b]" />
+                    Alertas de abertura
+                  </h3>
+                  <p className="mt-1 text-sm text-[#9fb1c8]">
+                    Oportunidades B2G com abertura próxima.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOpportunityAlertsModal(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#f6b40b77] bg-[#2a210b] px-4 py-2 text-sm font-bold text-[#ffe9a8] transition hover:bg-[#3b2f10]"
+                >
+                  Ver todos
+                  {opportunityOpeningAlerts.length > 0 ? (
+                    <span className="rounded-full bg-[#f6b40b] px-2 py-0.5 text-xs text-[#07101f]">
+                      {opportunityOpeningAlerts.length}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+
+              {opportunityOpeningAlertsLoading ? (
+                <div className="flex items-center gap-2 rounded-xl border border-[#2b3f5f] bg-[#081326] px-4 py-3 text-sm text-[#9fb1c8]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Carregando alertas...
+                </div>
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {opportunityOpeningAlerts.slice(0, 3).map((alert) => (
+                    <button
+                      type="button"
+                      key={alert.opportunityId || alert.id}
+                      onClick={() => navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${alert.opportunityId || alert.id}&mode=view`)}
+                      className="rounded-xl border border-[#f6b40b55] bg-[#07101f]/75 p-4 text-left transition hover:border-[#f6b40b] hover:bg-[#111d34]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <strong className="block truncate text-sm font-black text-[#f4f7fb]">
+                            {alert.title || alert.projectName || 'Oportunidade sem título'}
+                          </strong>
+                          <p className="mt-1 truncate text-xs font-semibold text-[#9fb1c8]">
+                            {alert.company?.name || 'Órgão não informado'}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-[#f6b40b22] px-2 py-1 text-xs font-black text-[#f6b40b]">
+                          {alert.alertLabel || 'Abertura'}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-[#dbe7f5]">
+                        {formatDateFlexible(alert.openingDate)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         <section className="mt-5 grid gap-4 px-2 pb-6 xl:grid-cols-2">
           <DashboardAdvancedChart
             title="Valor por Modalidade"
