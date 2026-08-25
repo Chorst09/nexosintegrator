@@ -39,7 +39,9 @@ import {
   ImagePlus,
   Trash2,
   FolderOpen,
-  Clock3
+  Clock3,
+  Eye,
+  Pencil
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -85,6 +87,7 @@ const ArchNode = ({ id, data, selected }: any) => {
   const setDiagramNodes = React.useContext(DiagramSetNodesContext);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const Icon = iconMap[data.icon] || Box;
+  const readOnly = Boolean(data.readOnly);
 
   const getNormalizedName = (name: string) => {
     if (!name) return '';
@@ -99,6 +102,7 @@ const ArchNode = ({ id, data, selected }: any) => {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
+    if (readOnly) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -127,13 +131,14 @@ const ArchNode = ({ id, data, selected }: any) => {
     <div className={`bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[190px] flex items-center gap-3 text-slate-200 transition-colors`}>
       <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
       <div
-        className="w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 cursor-pointer relative group"
+        className={`w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 relative group ${readOnly ? '' : 'cursor-pointer'}`}
         onClick={(event) => {
           event.stopPropagation();
+          if (readOnly) return;
           fileInputRef.current?.click();
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        title="Clique para alterar a imagem"
+        title={readOnly ? 'Imagem do componente' : 'Clique para alterar a imagem'}
       >
         {customImage && !imgError ? (
           <img
@@ -145,9 +150,11 @@ const ArchNode = ({ id, data, selected }: any) => {
         ) : (
           <Icon className="w-6 h-6" />
         )}
-        <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center rounded-lg">
-          <Upload className="w-4 h-4 text-white" />
-        </div>
+        {!readOnly && (
+          <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center rounded-lg">
+            <Upload className="w-4 h-4 text-white" />
+          </div>
+        )}
         <input
           type="file"
           accept="image/*"
@@ -160,18 +167,20 @@ const ArchNode = ({ id, data, selected }: any) => {
       <div className="flex-1">
         <div className="font-bold text-sm leading-tight">{data.label}</div>
         {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            fileInputRef.current?.click();
-          }}
-          onMouseDown={(event) => event.stopPropagation()}
-          className="mt-2 inline-flex items-center gap-1 rounded border border-[#263345] px-2 py-0.5 text-[10px] font-semibold text-slate-400 transition-colors hover:border-[#ff7a00]/70 hover:text-[#ff7a00]"
-        >
-          <Upload className="h-3 w-3" />
-          Imagem
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="mt-2 inline-flex items-center gap-1 rounded border border-[#263345] px-2 py-0.5 text-[10px] font-semibold text-slate-400 transition-colors hover:border-[#ff7a00]/70 hover:text-[#ff7a00]"
+          >
+            <Upload className="h-3 w-3" />
+            Imagem
+          </button>
+        )}
       </div>
       <Handle type="source" position={Position.Bottom} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
     </div>
@@ -319,7 +328,9 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.38);
   const [savedDiagrams, setSavedDiagrams] = useState<SavedDiagramEntry[]>([]);
   const [activeDiagramId, setActiveDiagramId] = useState<string | null>(null);
+  const [viewingDiagramId, setViewingDiagramId] = useState<string | null>(null);
   const [activeDiagramName, setActiveDiagramName] = useState('Diagrama sem titulo');
+  const [diagramMode, setDiagramMode] = useState<'edit' | 'view'>('edit');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
@@ -348,6 +359,10 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   const flowNodes = React.useMemo(() => {
     const diagramNodes = nodes.map((node) => ({
       ...node,
+      data: {
+        ...node.data,
+        readOnly: diagramMode === 'view'
+      },
       zIndex: node.zIndex ?? 10
     }));
 
@@ -371,16 +386,18 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
       },
       ...diagramNodes
     ];
-  }, [backgroundImage, backgroundOpacity, nodes]);
+  }, [backgroundImage, backgroundOpacity, diagramMode, nodes]);
 
-  const loadSavedDiagram = (entry: SavedDiagramEntry) => {
+  const loadSavedDiagram = (entry: SavedDiagramEntry, mode: 'edit' | 'view' = 'edit') => {
     setNodes(entry.nodes || []);
     setEdges(entry.edges || []);
     setBackgroundImage(entry.backgroundImage || null);
     setBackgroundOpacity(typeof entry.backgroundOpacity === 'number' ? entry.backgroundOpacity : 0.38);
     setActiveTemplate('saved');
-    setActiveDiagramId(entry.id);
+    setActiveDiagramId(mode === 'edit' ? entry.id : null);
+    setViewingDiagramId(mode === 'view' ? entry.id : null);
     setActiveDiagramName(entry.name);
+    setDiagramMode(mode);
   };
 
   const loadTemplate = (key: keyof typeof templates | 'saved') => {
@@ -394,7 +411,9 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
       setNodes(templates[key].nodes);
       setEdges(templates[key].edges);
       setActiveDiagramId(null);
+      setViewingDiagramId(null);
       setActiveDiagramName(`Modelo ${key}`);
+      setDiagramMode('edit');
       if (key === 'blank') {
         setBackgroundImage(null);
         setBackgroundOpacity(0.38);
@@ -403,6 +422,11 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   };
 
   const saveDiagram = () => {
+    if (diagramMode === 'view') {
+      alert('Este diagrama esta em modo visualizacao. Clique em Editar para alterar e salvar.');
+      return;
+    }
+
     const now = new Date().toISOString();
     const defaultName = activeDiagramId ? activeDiagramName : `Diagrama ${savedDiagrams.length + 1}`;
     const requestedName = window.prompt('Nome do diagrama', defaultName);
@@ -453,6 +477,11 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     if (activeDiagramId === entryId) {
       setActiveDiagramId(null);
       setActiveDiagramName('Diagrama sem titulo');
+    }
+    if (viewingDiagramId === entryId) {
+      setViewingDiagramId(null);
+      setActiveDiagramName('Diagrama sem titulo');
+      setDiagramMode('edit');
     }
   };
 
@@ -630,14 +659,26 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="flex items-center gap-2 border-l border-[#263345] pl-3">
-            {activeDiagramId && (
+            {(activeDiagramId || viewingDiagramId) && (
               <span className="hidden xl:inline max-w-44 truncate text-xs text-slate-400">
-                Editando: <strong className="font-semibold text-slate-200">{activeDiagramName}</strong>
+                {diagramMode === 'view' ? 'Visualizando' : 'Editando'}: <strong className="font-semibold text-slate-200">{activeDiagramName}</strong>
               </span>
+            )}
+            {diagramMode === 'view' && viewingDiagramId && (
+              <button
+                onClick={() => {
+                  const entry = savedDiagrams.find((item) => item.id === viewingDiagramId);
+                  if (entry) loadSavedDiagram(entry, 'edit');
+                }}
+                className="flex items-center gap-2 text-sm text-white bg-[#ff7a00] hover:bg-[#f6b40b] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
+              >
+                <Pencil className="w-4 h-4" /> Editar
+              </button>
             )}
             <button
               onClick={saveDiagram}
-              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-[#111827] hover:bg-[#263345] border border-[#263345] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
+              disabled={diagramMode === 'view'}
+              className={`flex items-center gap-2 text-sm border px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm ${diagramMode === 'view' ? 'cursor-not-allowed border-[#263345] bg-[#0b1220] text-slate-600' : 'border-[#263345] bg-[#111827] text-slate-300 hover:bg-[#263345] hover:text-white'}`}
             >
               <Save className="w-4 h-4" /> Salvar
             </button>
@@ -656,11 +697,14 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           <ReactFlow
             nodes={flowNodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onNodesChange={diagramMode === 'edit' ? onNodesChange : undefined}
+            onEdgesChange={diagramMode === 'edit' ? onEdgesChange : undefined}
+            onConnect={diagramMode === 'edit' ? onConnect : undefined}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
+            nodesDraggable={diagramMode === 'edit'}
+            nodesConnectable={diagramMode === 'edit'}
+            elementsSelectable={diagramMode === 'edit'}
             colorMode="dark"
             fitView
             className="bg-[#070b16]"
@@ -690,11 +734,11 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
                   {savedDiagrams.map((entry) => (
                     <div
                       key={entry.id}
-                      className={`rounded-md border px-2 py-2 transition-colors ${activeDiagramId === entry.id ? 'border-[#ff7a00]/70 bg-[#ff7a00]/10' : 'border-[#263345] bg-[#070b16]/70 hover:border-[#3b4b63]'}`}
+                      className={`rounded-md border px-2 py-2 transition-colors ${activeDiagramId === entry.id ? 'border-[#ff7a00]/70 bg-[#ff7a00]/10' : viewingDiagramId === entry.id ? 'border-[#22d3ee]/70 bg-[#22d3ee]/10' : 'border-[#263345] bg-[#070b16]/70 hover:border-[#3b4b63]'}`}
                     >
                       <button
                         type="button"
-                        onClick={() => loadSavedDiagram(entry)}
+                        onClick={() => loadSavedDiagram(entry, 'view')}
                         className="w-full text-left"
                       >
                         <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
@@ -709,10 +753,21 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
                       <div className="mt-2 flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => loadSavedDiagram(entry)}
+                          onClick={() => loadSavedDiagram(entry, 'view')}
                           className="flex-1 rounded border border-[#263345] px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:border-[#ff7a00]/70 hover:text-white"
                         >
-                          Abrir
+                          <span className="inline-flex items-center justify-center gap-1">
+                            <Eye className="h-3 w-3" /> Visualizar
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => loadSavedDiagram(entry, 'edit')}
+                          className="flex-1 rounded border border-[#263345] px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:border-[#ff7a00]/70 hover:text-white"
+                        >
+                          <span className="inline-flex items-center justify-center gap-1">
+                            <Pencil className="h-3 w-3" /> Editar
+                          </span>
                         </button>
                         <button
                           type="button"
@@ -729,6 +784,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               )}
             </Panel>
 
+          {diagramMode === 'edit' && (
           <Panel position="top-left" className="w-56 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-1.5 max-h-[calc(100vh-120px)] overflow-y-auto">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Componentes</h3>
             <button onClick={() => addNetworkNode('fiber', 'Fibra Óptica', 'Backbone / FO / DIO', 'fiber')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
@@ -818,6 +874,7 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               </p>
             </div>
             </Panel>
+          )}
           </ReactFlow>
         </DiagramSetNodesContext.Provider>
       </div>
