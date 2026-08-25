@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId, tenantScopedWhere } from '../lib/tenantScope.js';
 
 // Simulação de integração WhatsApp Business API
 export default async function handler(req) {
@@ -8,9 +9,9 @@ export default async function handler(req) {
     try {
       switch (action) {
         case 'send_message':
-          return await sendMessage(data);
+          return await sendMessage(data, req.user);
         case 'send_template':
-          return await sendTemplate(data);
+          return await sendTemplate(data, req.user);
         case 'webhook':
           return await handleWebhook(data);
         default:
@@ -25,7 +26,7 @@ export default async function handler(req) {
   return new Response('Method not allowed', { status: 405 });
 }
 
-async function sendMessage({ phone, message, companyId, opportunityId }) {
+async function sendMessage({ phone, message, companyId, opportunityId }, user = {}) {
   // Simulação de envio via WhatsApp Business API
   const messageId = `wa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
@@ -48,6 +49,12 @@ async function sendMessage({ phone, message, companyId, opportunityId }) {
 
   // Criar atividade no CRM
   if (companyId) {
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, ...tenantScopedWhere(user) },
+      select: { id: true }
+    });
+    if (!company) return Response.json({ error: 'Empresa não pertence a este tenant' }, { status: 403 });
+
     await prisma.activity.create({
       data: {
         type: 'EMAIL', // Usando EMAIL como proxy para WhatsApp
@@ -58,7 +65,8 @@ async function sendMessage({ phone, message, companyId, opportunityId }) {
         completedAt: new Date(),
         companyId,
         opportunityId,
-        assignedToId: await getDefaultUserId()
+        assignedToId: await getDefaultUserId(user),
+        tenantCompanyId: getTenantCompanyId(user)
       }
     });
   }
@@ -71,7 +79,15 @@ async function sendMessage({ phone, message, companyId, opportunityId }) {
   });
 }
 
-async function sendTemplate({ phone, templateName, parameters, companyId }) {
+async function sendTemplate({ phone, templateName, parameters, companyId }, user = {}) {
+  if (companyId) {
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, ...tenantScopedWhere(user) },
+      select: { id: true }
+    });
+    if (!company) return Response.json({ error: 'Empresa não pertence a este tenant' }, { status: 403 });
+  }
+
   // Simulação de envio de template
   const messageId = `wa_tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
@@ -121,9 +137,9 @@ async function getWhatsAppIntegrationId() {
   return integration?.id || 'default';
 }
 
-async function getDefaultUserId() {
+async function getDefaultUserId(requestUser = {}) {
   const user = await prisma.user.findFirst({
-    where: { role: 'ADMIN' }
+    where: { role: 'ADMIN', ...tenantScopedWhere(requestUser) }
   });
-  return user?.id || 'default';
+  return user?.id || requestUser?.userId || requestUser?.id || 'default';
 }

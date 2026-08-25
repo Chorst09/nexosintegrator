@@ -128,7 +128,7 @@ export default async function handler(req) {
       where: { id },
       data: {
         status: mapSolicitacaoStatusToActivity(status),
-        completedAt: status === 'FINALIZADA' ? new Date() : null
+        completedAt: ['FINALIZADA', 'APROVADO', 'REPROVADO'].includes(status) ? new Date() : null
       },
       include: {
         company: true,
@@ -174,7 +174,11 @@ function mapSolicitacaoStatusToActivity(solicitacaoStatus) {
     'NOVA': 'PENDING',
     'EM_PRECIFICACAO': 'IN_PROGRESS',
     'AGUARDANDO_APROVACAO': 'IN_PROGRESS',
+    'ENVIADA': 'IN_PROGRESS',
+    'APROVADO': 'COMPLETED',
+    'REPROVADO': 'CANCELLED',
     'FINALIZADA': 'COMPLETED',
+    'REJEITADA': 'CANCELLED',
     'CANCELADA': 'CANCELLED'
   };
   return mapping[solicitacaoStatus] || 'PENDING';

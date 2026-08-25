@@ -16,10 +16,24 @@ async function main() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    ALTER TYPE "PreSalesStatus" ADD VALUE IF NOT EXISTS 'ENVIADA';
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TYPE "PreSalesStatus" ADD VALUE IF NOT EXISTS 'APROVADO';
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TYPE "PreSalesStatus" ADD VALUE IF NOT EXISTS 'REPROVADO';
+  `);
+
+  await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
       ADD COLUMN IF NOT EXISTS "accessB2B" BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS "accessB2G" BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessManagement" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessAutomation" BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT,
       ADD COLUMN IF NOT EXISTS "permissionOverrides" JSONB NOT NULL DEFAULT '{}'::jsonb,
       ADD COLUMN IF NOT EXISTS "isCompanyOwner" BOOLEAN NOT NULL DEFAULT false;
@@ -75,6 +89,7 @@ async function main() {
       "accessB2G" BOOLEAN NOT NULL DEFAULT false,
       "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
       "accessManagement" BOOLEAN NOT NULL DEFAULT false,
+      "accessAutomation" BOOLEAN NOT NULL DEFAULT false,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -120,6 +135,15 @@ async function main() {
   `);
 
   await prisma.$executeRawUnsafe(`
+    ALTER TABLE "TenantCompany"
+      ADD COLUMN IF NOT EXISTS "accessB2B" BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS "accessB2G" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessManagement" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessAutomation" BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "TenantCompany_status_createdAt_idx" ON "TenantCompany"("status", "createdAt");
   `);
 
@@ -148,7 +172,24 @@ async function main() {
       ADD COLUMN IF NOT EXISTS "accessB2B" BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS "accessB2G" BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
-      ADD COLUMN IF NOT EXISTS "accessManagement" BOOLEAN NOT NULL DEFAULT false;
+      ADD COLUMN IF NOT EXISTS "accessManagement" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "accessAutomation" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "Company_tenantCompanyId_idx"
+      ON "Company"("tenantCompanyId");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Product"
+      ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "Product_tenantCompanyId_idx"
+      ON "Product"("tenantCompanyId");
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -162,7 +203,8 @@ async function main() {
       ADD COLUMN IF NOT EXISTS "number" TEXT,
       ADD COLUMN IF NOT EXISTS "b2gStage" TEXT,
       ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
-      ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER;
+      ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER,
+      ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT;
   `);
 
   await prisma.$executeRawUnsafe(`
@@ -173,6 +215,21 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS "Opportunity_b2gStage_idx"
       ON "Opportunity"("b2gStage");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "Opportunity_tenantCompanyId_idx"
+      ON "Opportunity"("tenantCompanyId");
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Activity"
+      ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "Activity_tenantCompanyId_idx"
+      ON "Activity"("tenantCompanyId");
   `);
 
   await prisma.$executeRawUnsafe(`

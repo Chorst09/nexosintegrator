@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ModernTable from '../components/ModernTable';
 import Modal from '../components/Modal';
-import { API_BASE_URL, API_ENDPOINTS, getAuthHeaders } from '../config/api';
+import { API_BASE_URL, API_ENDPOINTS, buildApiUrl, getAuthHeaders } from '../config/api';
 
 const resolvePublicUrl = (maybeRelativeUrl) => {
   if (!maybeRelativeUrl) return null;
@@ -1089,49 +1089,31 @@ export default function Administracao() {
       setError(null);
       setBackupResult('');
 
-      const endpoints = [
-        ['users', API_ENDPOINTS.users],
-        ['regions', API_ENDPOINTS.regions],
-        ['companies', API_ENDPOINTS.companies],
-        ['opportunities', API_ENDPOINTS.opportunities],
-        ['activities', API_ENDPOINTS.activities],
-        ['products', API_ENDPOINTS.products]
-      ];
+      const res = await fetch(buildApiUrl('/admin/backup/export'), {
+        headers: getAuthHeaders()
+      });
 
-      const responses = await Promise.all(
-        endpoints.map(async ([name, endpoint]) => {
-          const res = await fetch(endpoint, { headers: getAuthHeaders() });
-          const data = await res.json().catch(() => null);
-          return [name, { ok: res.ok, status: res.status, data }];
-        })
-      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `Erro ao exportar backup completo: ${res.status}`);
+      }
 
-      const backupData = {
-        generatedAt: new Date().toISOString(),
-        generatedBy: {
-          id: sessionUser?.id || null,
-          name: sessionUser?.name || null,
-          email: sessionUser?.email || null,
-          role: normalizeRole(sessionUser?.role || null)
-        },
-        settings: {
-          appName: settings.appName || '',
-          logoUrl: settings.logoUrl || null
-        },
-        modules: Object.fromEntries(responses)
-      };
-
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json;charset=utf-8' });
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+      const filename =
+        filenameMatch?.[1] ||
+        `nexoscrm-backup-completo-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
       const href = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = href;
-      a.download = `crm-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(href);
 
-      setBackupResult('Backup exportado com sucesso.');
+      setBackupResult('Backup completo exportado com sucesso.');
     } catch (e2) {
       console.error(e2);
       setError(e2.message || 'Erro ao exportar backup');
@@ -1291,6 +1273,39 @@ export default function Administracao() {
 
       const fileText = await restoreFile.text();
       const backupJson = JSON.parse(fileText);
+
+      if (backupJson?.format === 'nexoscrm-full-system-backup') {
+        const confirmed = window.confirm(
+          'A restauração completa vai substituir todas as tabelas do banco pelos dados do arquivo selecionado. Deseja continuar?'
+        );
+
+        if (!confirmed) {
+          setBackupResult('Restauração completa cancelada.');
+          return;
+        }
+
+        const restoreRes = await fetch(buildApiUrl('/admin/backup/restore'), {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'X-Restore-Confirmation': 'RESTAURAR_BACKUP_COMPLETO'
+          },
+          body: fileText
+        });
+        const restoreData = await restoreRes.json().catch(() => ({}));
+
+        if (!restoreRes.ok) {
+          throw new Error(restoreData?.error || `Erro ao restaurar backup completo: ${restoreRes.status}`);
+        }
+
+        await loadAll();
+        setRestoreFile(null);
+        setBackupResult(
+          `Backup completo restaurado: ${restoreData?.database?.tableCount || 0} tabela(s), ${restoreData?.database?.totalRows || 0} registro(s), ${restoreData?.uploads?.restoredFiles || 0} arquivo(s) de upload.`
+        );
+        return;
+      }
+
       const modules = backupJson?.modules || {};
       const headers = getAuthHeaders();
       const restoreStats = {
@@ -2351,9 +2366,9 @@ export default function Administracao() {
 
       {activeTab === 'backup' && (
         <div className="crm-card rounded-2xl p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Backup</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Backup completo do sistema</h2>
           <p className="text-sm text-gray-600 dark:text-slate-200">
-            Exporte um snapshot operacional dos módulos principais para auditoria/contingência.
+            Exporte todas as tabelas do banco de dados, schema Prisma, migrations e arquivos de upload vinculados ao sistema.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -2362,7 +2377,7 @@ export default function Administracao() {
               disabled={backupLoading || restoreLoading}
               className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50"
             >
-              {backupLoading ? 'Gerando backup...' : 'Exportar backup (.json)'}
+              {backupLoading ? 'Gerando backup completo...' : 'Exportar backup completo (.json)'}
             </button>
             <input
               type="file"
@@ -2380,7 +2395,7 @@ export default function Administracao() {
             </button>
           </div>
           <p className="text-xs text-gray-500 dark:text-slate-300">
-            A restauração aplica configurações, usuários e registros dos módulos do arquivo selecionado.
+            Admin e Master podem restaurar backups completos pelo arquivo exportado. A operação substitui as tabelas do banco e exige confirmação antes de iniciar.
           </p>
           {backupResult && <div className="text-sm text-emerald-600 dark:text-emerald-300">{backupResult}</div>}
         </div>

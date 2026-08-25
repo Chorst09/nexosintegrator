@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId, tenantScopedWhere } from '../lib/tenantScope.js';
 
 // Simulação de integração com sistemas VoIP
 export default async function handler(req) {
@@ -8,9 +9,9 @@ export default async function handler(req) {
     try {
       switch (action) {
         case 'make_call':
-          return await makeCall(data);
+          return await makeCall(data, req.user);
         case 'call_webhook':
-          return await handleCallWebhook(data);
+          return await handleCallWebhook(data, req.user);
         case 'get_recordings':
           return await getRecordings(data);
         default:
@@ -39,7 +40,7 @@ export default async function handler(req) {
   return new Response('Method not allowed', { status: 405 });
 }
 
-async function makeCall({ fromNumber, toNumber, companyId, opportunityId, userId }) {
+async function makeCall({ fromNumber, toNumber, companyId, opportunityId, userId }, user = {}) {
   const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // Simular início da chamada
@@ -63,6 +64,12 @@ async function makeCall({ fromNumber, toNumber, companyId, opportunityId, userId
 
   // Criar atividade de ligação
   if (companyId) {
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, ...tenantScopedWhere(user) },
+      select: { id: true }
+    });
+    if (!company) return Response.json({ error: 'Empresa não pertence a este tenant' }, { status: 403 });
+
     await prisma.activity.create({
       data: {
         type: 'CALL',
@@ -72,7 +79,8 @@ async function makeCall({ fromNumber, toNumber, companyId, opportunityId, userId
         priority: 'MEDIUM',
         companyId,
         opportunityId,
-        assignedToId: userId
+        assignedToId: userId || user?.userId || user?.id,
+        tenantCompanyId: getTenantCompanyId(user)
       }
     });
   }
@@ -86,7 +94,7 @@ async function makeCall({ fromNumber, toNumber, companyId, opportunityId, userId
   });
 }
 
-async function handleCallWebhook(data) {
+async function handleCallWebhook(data, user = {}) {
   const { callId, status, duration, recording_url, hangup_cause } = data;
   
   // Atualizar log da integração
@@ -111,6 +119,7 @@ async function handleCallWebhook(data) {
     // Buscar atividade relacionada (simplificado)
     const recentActivity = await prisma.activity.findFirst({
       where: {
+        ...tenantScopedWhere(user),
         type: 'CALL',
         status: 'IN_PROGRESS',
         createdAt: {

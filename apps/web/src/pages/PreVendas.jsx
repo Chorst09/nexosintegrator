@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import {
   Beaker,
+  BadgeDollarSign,
   Plus,
   Search,
   Eye,
@@ -15,7 +16,9 @@ import {
   Calculator,
   FileText,
   DollarSign,
+  Network,
   Package,
+  Radar,
   CalendarCheck2,
   SendHorizontal,
   RefreshCcw,
@@ -38,7 +41,7 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 
 import { buildApiUrl, getAuthHeaders } from '../config/api';
-import AnimatedStats from '../components/AnimatedStats';
+import DashboardKPICard from '../components/DashboardKPICard';
 import Modal from '../components/Modal';
 import PresentationControls from '../components/PresentationControls';
 import {
@@ -159,6 +162,9 @@ export default function PreVendas() {
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [registroLoading, setRegistroLoading] = useState(false);
   const [registroOportunidades, setRegistroOportunidades] = useState([]);
+  const [cadastrosLoading, setCadastrosLoading] = useState(false);
+  const [distribuidores, setDistribuidores] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
   const [pocs, setPocs] = useState([]);
   const [pocsLoading, setPocsLoading] = useState(false);
   const [activitySearch, setActivitySearch] = useState('');
@@ -191,6 +197,7 @@ export default function PreVendas() {
     loadSolicitacoes();
     loadPreSalesActivities();
     loadRegistroOportunidades();
+    loadPrevendasCadastros();
     loadPocs();
   }, []);
 
@@ -273,6 +280,24 @@ export default function PreVendas() {
       setRegistroOportunidades([]);
     } finally {
       setRegistroLoading(false);
+    }
+  };
+
+  const loadPrevendasCadastros = async () => {
+    try {
+      setCadastrosLoading(true);
+      const response = await axios.get(buildApiUrl('/prevendas-cadastros'), {
+        headers: getAuthHeaders()
+      });
+      const payload = response?.data || {};
+      setDistribuidores(Array.isArray(payload.distribuidores) ? payload.distribuidores : []);
+      setFornecedores(Array.isArray(payload.fornecedores) ? payload.fornecedores : []);
+    } catch (error) {
+      console.error('Erro ao carregar cadastros de pré-vendas:', error);
+      setDistribuidores([]);
+      setFornecedores([]);
+    } finally {
+      setCadastrosLoading(false);
     }
   };
 
@@ -449,32 +474,28 @@ export default function PreVendas() {
       value: solicitacoes.filter((item) => item.status === 'NOVA').length,
       subtitle: 'Demandas recentes',
       icon: Plus,
-      color: 'from-blue-500 to-blue-600',
-      trend: '+12%'
+      colorTheme: 'orange'
     },
     {
       title: 'Em Precificação',
       value: solicitacoes.filter((item) => item.status === 'EM_PRECIFICACAO').length,
       subtitle: 'Em andamento',
       icon: Clock,
-      color: 'from-yellow-500 to-orange-500',
-      trend: '-5%'
+      colorTheme: 'cyan'
     },
     {
       title: 'Aguardando Aprovação',
       value: solicitacoes.filter((item) => item.status === 'AGUARDANDO_APROVACAO').length,
       subtitle: 'Pendentes de retorno',
       icon: AlertCircle,
-      color: 'from-purple-500 to-purple-600',
-      trend: '+8%'
+      colorTheme: 'yellow'
     },
     {
       title: 'Finalizadas',
       value: solicitacoes.filter((item) => item.status === 'FINALIZADA').length,
       subtitle: 'No mês atual',
       icon: CheckCircle,
-      color: 'from-green-500 to-green-600',
-      trend: '+12%'
+      colorTheme: 'green'
     }
   ];
 
@@ -536,6 +557,30 @@ export default function PreVendas() {
       .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime())
       .slice(0, 5)
   ), [pocs]);
+
+  const orcamentoStats = useMemo(() => {
+    const emOrcamento = solicitacoes.filter((item) => ['NOVA', 'EM_PRECIFICACAO', 'AGUARDANDO_APROVACAO'].includes(item.status)).length;
+    const comValor = solicitacoes.filter((item) => Number(item.valorSugerido || item.custoTotal || 0) > 0).length;
+    const valorTotal = solicitacoes.reduce((sum, item) => sum + Number(item.valorSugerido || item.custoTotal || 0), 0);
+    return { total: solicitacoes.length, emOrcamento, comValor, valorTotal };
+  }, [solicitacoes]);
+
+  const recentOrcamentos = useMemo(() => (
+    [...solicitacoes]
+      .sort((a, b) => new Date(b.dataCreated || 0).getTime() - new Date(a.dataCreated || 0).getTime())
+      .slice(0, 6)
+  ), [solicitacoes]);
+
+  const cadastrosStats = useMemo(() => {
+    const ativosDistribuidores = distribuidores.filter((item) => item.ativo !== false && item.status !== 'INATIVO').length;
+    const ativosFornecedores = fornecedores.filter((item) => item.ativo !== false && item.status !== 'INATIVO').length;
+    return {
+      distribuidores: distribuidores.length,
+      fornecedores: fornecedores.length,
+      ativosDistribuidores,
+      ativosFornecedores
+    };
+  }, [distribuidores, fornecedores]);
 
   const registroStatusChartData = useMemo(() => {
     const statusOrder = ['ABERTA', 'EM_ANALISE', 'EM_COTACAO', 'PRECIFICADA', 'DEVOLVIDA', 'GANHA', 'PERDIDA'];
@@ -880,68 +925,118 @@ export default function PreVendas() {
       }
     ];
 
+  const preSalesQuickFilters = [
+    {
+      key: 'solicitacoes',
+      label: 'Solicitações',
+      description: 'Controle de pedidos de Precificação/Rateio',
+      icon: FileText,
+      active: activeMenu === 'solicitacoes',
+      onClick: () => setActiveMenu('solicitacoes')
+    },
+    {
+      key: 'atividades',
+      label: 'Atividades',
+      description: 'Recebidas do Comercial e enviadas pelo Pré-Vendas',
+      icon: CalendarCheck2,
+      active: activeMenu === 'atividades',
+      onClick: () => setActiveMenu('atividades')
+    },
+    {
+      key: 'orcamentos',
+      label: 'Orçamentos',
+      description: 'Cotações registradas no fluxo',
+      icon: BadgeDollarSign,
+      active: activeMenu === 'orcamentos',
+      onClick: () => setActiveMenu('orcamentos')
+    },
+    {
+      key: 'distribuidores',
+      label: 'Distribuidores',
+      description: 'Base homologada de distribuidores',
+      icon: Network,
+      active: activeMenu === 'distribuidores',
+      onClick: () => setActiveMenu('distribuidores')
+    },
+    {
+      key: 'fornecedores',
+      label: 'Fornecedores',
+      description: 'Base homologada de fornecedores',
+      icon: Package,
+      active: activeMenu === 'fornecedores',
+      onClick: () => setActiveMenu('fornecedores')
+    },
+    {
+      key: 'registro-oportunidades',
+      label: 'Registro de Oportunidades',
+      description: 'Registro técnico do Pré-Vendas',
+      icon: Radar,
+      active: activeMenu === 'registro-oportunidades',
+      onClick: () => setActiveMenu('registro-oportunidades')
+    },
+    {
+      key: 'gestao-pocs',
+      label: 'Gestão de POCs',
+      description: 'Planejamento e validação técnica',
+      icon: Beaker,
+      active: activeMenu === 'gestao-pocs',
+      onClick: () => setActiveMenu('gestao-pocs')
+    }
+  ];
+
   return (
     <div className="space-y-6">
       <div
         ref={presentationRef}
         className={[
-          'p-6 space-y-6',
+          'p-6 space-y-4',
           presentationMode ? 'h-screen overflow-y-auto overflow-x-hidden scroll-smooth bg-[#041a38] pb-28' : ''
         ].join(' ')}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={() => setActiveMenu('solicitacoes')}
-            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-              activeMenu === 'solicitacoes'
-                ? 'border-blue-400/60 bg-blue-500/20 text-white'
-                : 'border-gray-600/50 bg-gray-800/40 text-gray-300 hover:bg-gray-700/40'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              <span className="font-semibold">Solicitações</span>
-            </div>
-            <p className="text-xs mt-1 text-gray-300">Controle de pedidos de Precificação/Rateio</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveMenu('atividades')}
-            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-              activeMenu === 'atividades'
-                ? 'border-blue-400/60 bg-blue-500/20 text-white'
-                : 'border-gray-600/50 bg-gray-800/40 text-gray-300 hover:bg-gray-700/40'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <CalendarCheck2 className="w-4 h-4" />
-              <span className="font-semibold">Atividades</span>
-            </div>
-            <p className="text-xs mt-1 text-gray-300">Recebidas do Comercial e enviadas pelo Pré-Vendas</p>
-          </button>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+          {preSalesQuickFilters.map((filter) => {
+            const Icon = filter.icon;
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={filter.onClick}
+                className={`min-h-[86px] rounded-xl border px-4 py-3 text-left transition-colors ${
+                  filter.active
+                    ? 'border-orange-400/70 bg-orange-500/16 text-white shadow-[0_0_0_1px_rgba(255,122,0,0.18),0_18px_44px_rgba(255,122,0,0.10)]'
+                    : 'border-gray-600/50 bg-gray-800/40 text-gray-300 hover:border-cyan-400/45 hover:bg-gray-700/40'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${filter.active ? 'text-orange-200' : 'text-cyan-200'}`} />
+                  <span className="text-sm font-semibold">{filter.label}</span>
+                </div>
+                <p className="mt-1 text-xs leading-snug text-gray-300">{filter.description}</p>
+              </button>
+            );
+          })}
         </div>
 
         {activeMenu === 'solicitacoes' && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {solicitacaoStats.map((stat) => (
-                <AnimatedStats key={stat.title} {...stat} />
+                <DashboardKPICard key={stat.title} {...stat} size="compact" />
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <AnimatedStats title="Registro de Oportunidades" value={registroStats.total} subtitle="Base técnica do Pré-Vendas" icon={Package} color="blue" />
-              <AnimatedStats title="Em Aberto" value={registroStats.abertas} subtitle="Aguardando execução/comercial" icon={Clock} color="orange" />
-              <AnimatedStats title="Ganhas" value={registroStats.ganhas} subtitle="Oportunidades convertidas" icon={CheckCircle} color="green" />
-              <AnimatedStats title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} color="purple" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="Registro de Oportunidades" value={registroStats.total} subtitle="Base técnica do Pré-Vendas" icon={Package} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="Em Aberto" value={registroStats.abertas} subtitle="Aguardando execução/comercial" icon={Clock} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="Ganhas" value={registroStats.ganhas} subtitle="Oportunidades convertidas" icon={CheckCircle} colorTheme="green" size="compact" />
+              <DashboardKPICard title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} colorTheme="yellow" size="compact" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <AnimatedStats title="POCs Totais" value={pocStats.total} subtitle="Provas de conceito registradas" icon={Beaker} color="blue" />
-              <AnimatedStats title="POCs em Andamento" value={pocStats.andamento} subtitle="Planejamento, execução ou validação" icon={RefreshCcw} color="purple" />
-              <AnimatedStats title="POCs Bloqueadas" value={pocStats.bloqueadas} subtitle={`${pocStats.atrasadas} atrasada(s)`} icon={AlertCircle} color="orange" />
-              <AnimatedStats title="POCs Aprovadas" value={pocStats.aprovadas} subtitle="Validadas com decisão registrada" icon={CheckCircle} color="green" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="POCs Totais" value={pocStats.total} subtitle="Provas de conceito registradas" icon={Beaker} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="POCs em Andamento" value={pocStats.andamento} subtitle="Planejamento, execução ou validação" icon={RefreshCcw} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="POCs Bloqueadas" value={pocStats.bloqueadas} subtitle={`${pocStats.atrasadas} atrasada(s)`} icon={AlertCircle} colorTheme="yellow" size="compact" />
+              <DashboardKPICard title="POCs Aprovadas" value={pocStats.aprovadas} subtitle="Validadas com decisão registrada" icon={CheckCircle} colorTheme="green" size="compact" />
             </div>
 
             <div className="crm-card rounded-lg p-5">
@@ -1281,13 +1376,223 @@ export default function PreVendas() {
           </>
         )}
 
+        {activeMenu === 'orcamentos' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="Solicitações" value={orcamentoStats.total} subtitle="Base para orçamento" icon={FileText} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="Em Orçamento" value={orcamentoStats.emOrcamento} subtitle="Aguardando cotação/precificação" icon={Clock} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="Com Valor" value={orcamentoStats.comValor} subtitle="Cotações com valor registrado" icon={BadgeDollarSign} colorTheme="green" size="compact" />
+              <DashboardKPICard title="Valor Orçado" value={`R$ ${orcamentoStats.valorTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} subtitle="Somatório estimado" icon={DollarSign} colorTheme="yellow" size="compact" />
+            </div>
+
+            <div className="crm-card rounded-lg p-6">
+              <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Fila de Orçamentos</h3>
+                  <p className="text-sm text-slate-400">Solicitações e cotações acompanhadas no fluxo de Pré-Vendas.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadSolicitacoes}
+                  className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Atualizar
+                </button>
+              </div>
+
+              {loading ? (
+                <p className="py-8 text-center text-sm text-slate-400">Carregando orçamentos...</p>
+              ) : recentOrcamentos.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-400">Nenhum orçamento registrado ainda.</p>
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {recentOrcamentos.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-slate-700/50 bg-slate-900/35 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">{item.titulo || item.numero || 'Orçamento sem título'}</p>
+                          <p className="mt-1 line-clamp-2 text-xs text-slate-400">{item.descricao || 'Sem descrição registrada.'}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${getSolicitacaoStatusColor(item.status)}`}>
+                          {getSolicitacaoStatusLabel(item.status)}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                        <span>{item.solicitadoPor || 'Usuário'}</span>
+                        <span>{item.dataCreated ? new Date(item.dataCreated).toLocaleDateString('pt-BR') : '-'}</span>
+                        <span className="text-amber-200">R$ {Number(item.valorSugerido || item.custoTotal || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeMenu === 'distribuidores' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="Distribuidores" value={cadastrosStats.distribuidores} subtitle="Cadastrados" icon={Network} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="Ativos" value={cadastrosStats.ativosDistribuidores} subtitle="Disponíveis para cotação" icon={CheckCircle} colorTheme="green" size="compact" />
+              <DashboardKPICard title="Fornecedores" value={cadastrosStats.fornecedores} subtitle="Base complementar" icon={Package} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="Oportunidades" value={registroStats.total} subtitle="Vinculadas ao Pré-Vendas" icon={Radar} colorTheme="yellow" size="compact" />
+            </div>
+
+            <div className="crm-card rounded-lg p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Distribuidores Homologados</h3>
+                  <p className="text-sm text-slate-400">Consulta rápida da base para cotações.</p>
+                </div>
+                <button type="button" onClick={loadPrevendasCadastros} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30">
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Atualizar
+                </button>
+              </div>
+              {cadastrosLoading ? (
+                <p className="py-8 text-center text-sm text-slate-400">Carregando distribuidores...</p>
+              ) : distribuidores.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-400">Nenhum distribuidor cadastrado.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {distribuidores.slice(0, 9).map((item) => (
+                    <div key={item.id || item.nome} className="rounded-lg border border-slate-700/50 bg-slate-900/35 p-4">
+                      <p className="truncate text-sm font-semibold text-white">{item.nome || item.name || 'Distribuidor'}</p>
+                      <p className="mt-1 truncate text-xs text-slate-400">{item.cidade || item.city || '-'}{item.estado || item.uf ? ` / ${item.estado || item.uf}` : ''}</p>
+                      <p className="mt-3 truncate text-xs text-slate-300">{item.email || item.telefone || item.phone || 'Contato não informado'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeMenu === 'fornecedores' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="Fornecedores" value={cadastrosStats.fornecedores} subtitle="Cadastrados" icon={Package} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="Ativos" value={cadastrosStats.ativosFornecedores} subtitle="Disponíveis" icon={CheckCircle} colorTheme="green" size="compact" />
+              <DashboardKPICard title="Distribuidores" value={cadastrosStats.distribuidores} subtitle="Base parceira" icon={Network} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="Em Aberto" value={registroStats.abertas} subtitle="Demandas técnicas" icon={Clock} colorTheme="yellow" size="compact" />
+            </div>
+
+            <div className="crm-card rounded-lg p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Fornecedores Homologados</h3>
+                  <p className="text-sm text-slate-400">Consulta rápida da base técnica e comercial.</p>
+                </div>
+                <button type="button" onClick={loadPrevendasCadastros} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30">
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Atualizar
+                </button>
+              </div>
+              {cadastrosLoading ? (
+                <p className="py-8 text-center text-sm text-slate-400">Carregando fornecedores...</p>
+              ) : fornecedores.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-400">Nenhum fornecedor cadastrado.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {fornecedores.slice(0, 9).map((item) => (
+                    <div key={item.id || item.nome} className="rounded-lg border border-slate-700/50 bg-slate-900/35 p-4">
+                      <p className="truncate text-sm font-semibold text-white">{item.nome || item.name || 'Fornecedor'}</p>
+                      <p className="mt-1 truncate text-xs text-slate-400">{item.categoria || item.segmento || item.tipo || 'Categoria não informada'}</p>
+                      <p className="mt-3 truncate text-xs text-slate-300">{item.email || item.telefone || item.phone || 'Contato não informado'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeMenu === 'registro-oportunidades' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="Registro de Oportunidades" value={registroStats.total} subtitle="Base técnica do Pré-Vendas" icon={Radar} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="Em Aberto" value={registroStats.abertas} subtitle="Aguardando execução/comercial" icon={Clock} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="Ganhas" value={registroStats.ganhas} subtitle="Oportunidades convertidas" icon={CheckCircle} colorTheme="green" size="compact" />
+              <DashboardKPICard title="Valor Potencial" value={`R$ ${registroStats.valorPotencial.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} subtitle={`${registroStats.b2g} item(ns) origem B2G`} icon={DollarSign} colorTheme="yellow" size="compact" />
+            </div>
+
+            {registroLoading ? (
+              <div className="crm-card rounded-lg p-8 text-center text-sm text-slate-400">Carregando registro de oportunidades...</div>
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="crm-card rounded-lg p-5">
+                  <h3 className="text-base font-semibold text-white mb-1">Status das Oportunidades</h3>
+                  <p className="text-xs text-slate-400 mb-4">Visão de volume por etapa operacional.</p>
+                  <div className="h-72">
+                    <Bar data={registroStatusChartData} options={{ ...CHART_OPTIONS, plugins: { ...CHART_OPTIONS.plugins, legend: { display: false } } }} />
+                  </div>
+                </div>
+                <div className="crm-card rounded-lg p-5">
+                  <h3 className="text-base font-semibold text-white mb-1">Origem das Demandas</h3>
+                  <p className="text-xs text-slate-400 mb-4">Distribuição entre B2B, B2G e demais origens.</p>
+                  <div className="h-72">
+                    <Doughnut data={registroOrigemChartData} options={DOUGHNUT_OPTIONS} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeMenu === 'gestao-pocs' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <DashboardKPICard title="POCs Totais" value={pocStats.total} subtitle="Provas de conceito registradas" icon={Beaker} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="POCs em Andamento" value={pocStats.andamento} subtitle="Planejamento, execução ou validação" icon={RefreshCcw} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="POCs Bloqueadas" value={pocStats.bloqueadas} subtitle={`${pocStats.atrasadas} atrasada(s)`} icon={AlertCircle} colorTheme="yellow" size="compact" />
+              <DashboardKPICard title="POCs Aprovadas" value={pocStats.aprovadas} subtitle="Validadas com decisão registrada" icon={CheckCircle} colorTheme="green" size="compact" />
+            </div>
+
+            <div className="crm-card rounded-lg p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Gestão de POCs</h3>
+                  <p className="text-sm text-slate-400">Acompanhamento das provas de conceito vinculadas ao fluxo de Pré-Vendas.</p>
+                </div>
+                <button type="button" onClick={loadPocs} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30">
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  Atualizar
+                </button>
+              </div>
+              {pocsLoading ? (
+                <p className="py-8 text-center text-sm text-slate-400">Carregando POCs...</p>
+              ) : recentPocs.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-400">Nenhuma POC registrada ainda.</p>
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {recentPocs.map((poc) => (
+                    <div key={poc.id} className="rounded-lg border border-slate-700/50 bg-slate-900/35 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">{poc.title}</p>
+                          <p className="mt-1 truncate text-xs text-slate-400">{poc.client} · {poc.solution}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-200">
+                          {String(poc.status || 'PLANEJAMENTO').replaceAll('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {activeMenu === 'atividades' && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <AnimatedStats title="Recebidas do Comercial" value={activityStats.received} subtitle="Destino Pré-Vendas" icon={CalendarCheck2} color="blue" />
-              <AnimatedStats title="Enviadas pelo Pré-Vendas" value={activityStats.sent} subtitle="Encaminhamentos internos" icon={SendHorizontal} color="purple" />
-              <AnimatedStats title="Pendentes" value={activityStats.pending} subtitle="Aguardando ação" icon={Clock} color="orange" />
-              <AnimatedStats title="Concluídas" value={activityStats.completed} subtitle="Execução finalizada" icon={CheckCircle} color="green" />
+              <DashboardKPICard title="Recebidas do Comercial" value={activityStats.received} subtitle="Destino Pré-Vendas" icon={CalendarCheck2} colorTheme="orange" size="compact" />
+              <DashboardKPICard title="Enviadas pelo Pré-Vendas" value={activityStats.sent} subtitle="Encaminhamentos internos" icon={SendHorizontal} colorTheme="cyan" size="compact" />
+              <DashboardKPICard title="Pendentes" value={activityStats.pending} subtitle="Aguardando ação" icon={Clock} colorTheme="yellow" size="compact" />
+              <DashboardKPICard title="Concluídas" value={activityStats.completed} subtitle="Execução finalizada" icon={CheckCircle} colorTheme="green" size="compact" />
             </div>
 
             <div className="crm-card rounded-lg p-6">

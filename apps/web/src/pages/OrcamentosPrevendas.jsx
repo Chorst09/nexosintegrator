@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Receipt, RefreshCcw, Search, DollarSign, ClipboardList, Building2,
   Eye, ArrowRight, Plus, Trash2, X, Upload, AlertCircle, CheckCircle,
-  Calculator, FileText, Loader2, Pencil, BarChart3
+  Calculator, FileText, Loader2, Pencil, BarChart3, ArrowLeft
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import PageHeader from '../components/PageHeader';
@@ -30,6 +30,9 @@ const STATUS_LABEL = {
   NOVA: 'Solicitada',
   EM_PRECIFICACAO: 'Em Precificação',
   AGUARDANDO_APROVACAO: 'Aguardando Aprovação',
+  ENVIADA: 'Enviada',
+  APROVADO: 'Aprovado',
+  REPROVADO: 'Reprovado',
   FINALIZADA: 'Finalizada',
   REJEITADA: 'Rejeitada',
   CANCELADA: 'Cancelada'
@@ -39,6 +42,9 @@ const STATUS_BADGE = {
   NOVA: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
   EM_PRECIFICACAO: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
   AGUARDANDO_APROVACAO: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  ENVIADA: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+  APROVADO: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  REPROVADO: 'bg-red-500/20 text-red-300 border-red-500/40',
   FINALIZADA: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
   REJEITADA: 'bg-red-500/20 text-red-300 border-red-500/40',
   CANCELADA: 'bg-slate-500/20 text-slate-300 border-slate-500/40'
@@ -756,6 +762,9 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
 
 export default function OrcamentosPrevendas() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromPreVendasDashboard = Boolean(location.state?.fromPreVendasDashboard);
+  const returnToPreVendasDashboard = () => navigate(location.state?.returnTo || '/pre-vendas');
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1067,6 +1076,12 @@ export default function OrcamentosPrevendas() {
         gradient="blue"
         breadcrumbs={['Home', 'Pré-Vendas', 'Orçamentos']}
         actions={[
+          ...(fromPreVendasDashboard ? [{
+            label: 'Voltar ao Dashboard',
+            onClick: returnToPreVendasDashboard,
+            icon: ArrowLeft,
+            variant: 'secondary'
+          }] : []),
           {
             label: 'Atualizar',
             onClick: loadRequests,

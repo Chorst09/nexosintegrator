@@ -6,6 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { PDFParse } = require('pdf-parse');
 const { requireRole } = require('../lib/auth');
+const { getTenantCompanyId } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
 
@@ -1637,6 +1638,7 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
     }
 
     const ownerId = req.user?.userId;
+    const tenantCompanyId = getTenantCompanyId(req.user);
     if (!ownerId) {
       return res.status(400).json({ error: 'Usuário inválido para conversão de oportunidade' });
     }
@@ -1644,7 +1646,8 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
     const organizationName = cleanText(notice.organization, 220) || `Órgão B2G ${notice.id.slice(0, 8)}`;
     const matchingCompanies = await prisma.company.findMany({
       where: {
-        name: { equals: organizationName, mode: 'insensitive' }
+        name: { equals: organizationName, mode: 'insensitive' },
+        ...(tenantCompanyId ? { tenantCompanyId } : {})
       },
       take: 10
     });
@@ -1656,7 +1659,8 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
         name: organizationName,
         segment: 'B2G GOVERNO',
         status: 'PROSPECT',
-        state: notice.stateCode || null
+        state: notice.stateCode || null,
+        tenantCompanyId
       };
       if (prismaModelHasField('Company', 'clientType')) {
         companyData.clientType = 'B2G';
@@ -1695,7 +1699,8 @@ router.post('/editais/:id/converter-oportunidade', requireRole(USER_ALLOWED_ROLE
       source: 'MANUAL',
       expectedCloseDate: notice.proposalDueDate || null,
       companyId: company.id,
-      ownerId
+      ownerId,
+      tenantCompanyId
     };
     if (prismaModelHasField('Opportunity', 'projectName')) {
       opportunityData.projectName = title;

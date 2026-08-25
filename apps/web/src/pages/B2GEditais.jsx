@@ -168,6 +168,8 @@ const ACTIVITY_STATUS_LABELS = {
   CANCELLED: 'Cancelada'
 };
 
+const ACTIVITY_KANBAN_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+
 const STATUS_STYLES = {
   MONITORANDO: 'bg-sky-500/10 text-sky-700 dark:text-sky-200 border-sky-500/30',
   ANALISE_EM_ANDAMENTO: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-200 border-indigo-500/30',
@@ -1249,6 +1251,7 @@ export default function B2GEditais() {
   const [leadSearch, setLeadSearch] = useState('');
   const [opportunitySearch, setOpportunitySearch] = useState('');
   const [opportunitiesViewMode, setOpportunitiesViewMode] = useState('kanban');
+  const [activitiesViewMode, setActivitiesViewMode] = useState('kanban');
   const [showOpportunityFilters, setShowOpportunityFilters] = useState(false);
   const [opportunitySortMode, setOpportunitySortMode] = useState('probability');
   const [analysisMode, setAnalysisMode] = useState('EDITAL');
@@ -1917,6 +1920,16 @@ export default function B2GEditais() {
       overdue,
       dueSoon
     };
+  }, [filteredActivities]);
+
+  const activitiesByStatus = useMemo(() => {
+    return ACTIVITY_KANBAN_STATUS.reduce((acc, status) => {
+      acc[status] = filteredActivities
+        .filter((item) => item.status === status)
+        .slice()
+        .sort((a, b) => toTimestamp(b.createdAt || b.dueDate) - toTimestamp(a.createdAt || a.dueDate));
+      return acc;
+    }, {});
   }, [filteredActivities]);
 
   const atasStats = useMemo(() => {
@@ -7087,7 +7100,33 @@ export default function B2GEditais() {
             />
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="inline-flex rounded-lg border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.72)] p-1">
+              <button
+                type="button"
+                onClick={() => setActivitiesViewMode('kanban')}
+                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                  activitiesViewMode === 'kanban'
+                    ? 'bg-[var(--crm-accent)] text-white'
+                    : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Kanban
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivitiesViewMode('list')}
+                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                  activitiesViewMode === 'list'
+                    ? 'bg-[var(--crm-accent)] text-white'
+                    : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+                }`}
+              >
+                <List className="h-4 w-4" />
+                Lista
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => navigate('/atividades?openForm=1&sourceArea=B2G&targetArea=PRE_VENDAS&type=SOLICITACAO_ORCAMENTO')}
@@ -7100,48 +7139,109 @@ export default function B2GEditais() {
 
           {renderAdvancedFilters({ title: 'Filtros de Atividades', showModality: false })}
 
-          <div className="space-y-3">
-          {filteredActivities
-            .slice()
-            .sort((a, b) => toTimestamp(b.createdAt || b.dueDate) - toTimestamp(a.createdAt || a.dueDate))
-            .map((item) => (
-              <div key={item.id} className="crm-card p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm font-bold text-[var(--crm-ink)]">{item.subject || 'Atividade sem título'}</div>
-                  <div className="text-xs text-[var(--crm-muted)] flex items-center gap-1">
-                    <CalendarClock className="h-3.5 w-3.5" />
-                    {formatDateTime(item.createdAt)}
+          {activitiesViewMode === 'kanban' ? (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+              {ACTIVITY_KANBAN_STATUS.map((status) => {
+                const rows = activitiesByStatus[status] || [];
+                return (
+                  <div key={status} className="crm-card p-4">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-[var(--crm-ink)]">
+                          {ACTIVITY_STATUS_LABELS[status] || status}
+                        </h3>
+                        <p className="text-sm text-[var(--crm-muted)]">Atividades B2G</p>
+                      </div>
+                      <span className="rounded-full bg-[rgb(var(--crm-surface-2-rgb)_/_0.82)] px-3 py-1 text-sm font-bold text-[var(--crm-ink)]">
+                        {rows.length}
+                      </span>
+                    </div>
+
+                    {rows.length > 0 ? (
+                      <div className="space-y-3">
+                        {rows.map((item) => (
+                          <div key={item.id} className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.7)] p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-bold text-[var(--crm-ink)]">{item.subject || 'Atividade sem título'}</div>
+                                <div className="mt-1 line-clamp-2 text-xs text-[var(--crm-muted)]">{item.description || ACTIVITY_TYPE_LABELS[item.type] || '-'}</div>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-[var(--crm-muted)]">
+                                <CalendarClock className="h-3.5 w-3.5" />
+                                {formatDate(item.dueDate || item.createdAt)}
+                              </div>
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
+                                {ACTIVITY_TYPE_LABELS[item.type] || item.type || '-'}
+                              </span>
+                              <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
+                                Prioridade: {item.priority || '-'}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 space-y-1 text-xs text-[var(--crm-muted)]">
+                              <div>Empresa: <span className="text-[var(--crm-ink)]">{item?.company?.name || '-'}</span></div>
+                              <div>Oportunidade: <span className="text-[var(--crm-ink)]">{item?.opportunity?.title || '-'}</span></div>
+                              <div>Vencimento: <span className="text-[var(--crm-ink)]">{formatDate(item.dueDate)}</span></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-[color:var(--crm-border)] px-3 py-8 text-center text-sm text-[var(--crm-muted)]">
+                        Nenhuma atividade nesta coluna.
+                      </div>
+                    )}
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredActivities
+                .slice()
+                .sort((a, b) => toTimestamp(b.createdAt || b.dueDate) - toTimestamp(a.createdAt || a.dueDate))
+                .map((item) => (
+                  <div key={item.id} className="crm-card p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-bold text-[var(--crm-ink)]">{item.subject || 'Atividade sem título'}</div>
+                      <div className="text-xs text-[var(--crm-muted)] flex items-center gap-1">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        {formatDateTime(item.createdAt)}
+                      </div>
+                    </div>
 
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
-                    {ACTIVITY_TYPE_LABELS[item.type] || item.type || '-'}
-                  </span>
-                  <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
-                    {ACTIVITY_STATUS_LABELS[item.status] || item.status || '-'}
-                  </span>
-                  <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
-                    Prioridade: {item.priority || '-'}
-                  </span>
-                </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
+                        {ACTIVITY_TYPE_LABELS[item.type] || item.type || '-'}
+                      </span>
+                      <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
+                        {ACTIVITY_STATUS_LABELS[item.status] || item.status || '-'}
+                      </span>
+                      <span className="rounded-full border border-[color:var(--crm-border)] px-2 py-1 text-[11px] font-semibold text-[var(--crm-muted)]">
+                        Prioridade: {item.priority || '-'}
+                      </span>
+                    </div>
 
-                <div className="mt-2 text-xs text-[var(--crm-muted)]">
-                  Empresa: {item?.company?.name || '-'}
-                  {' • '}
-                  Oportunidade: {item?.opportunity?.title || '-'}
-                  {' • '}
-                  Vencimento: {formatDate(item.dueDate)}
-                </div>
-              </div>
-            ))}
+                    <div className="mt-2 text-xs text-[var(--crm-muted)]">
+                      Empresa: {item?.company?.name || '-'}
+                      {' • '}
+                      Oportunidade: {item?.opportunity?.title || '-'}
+                      {' • '}
+                      Vencimento: {formatDate(item.dueDate)}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
 
           {filteredActivities.length === 0 && (
             <div className="crm-panel p-8 text-center text-[var(--crm-muted)]">
               Nenhuma atividade encontrada para os filtros aplicados.
             </div>
           )}
-          </div>
         </div>
       ) : activeTab === 'documentacao' ? (
         <div className="space-y-4">

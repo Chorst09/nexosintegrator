@@ -1,5 +1,6 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
+const { getTenantCompanyId, isTenantRecordVisible, tenantScopedWhere } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
 const ACTIVITY_FLOW_MARKER = '[CRM_ACTIVITY_FLOW]';
@@ -59,6 +60,26 @@ const parseFlowFromDescription = (description) => {
 
 const getAuthenticatedUserId = (req) => req.user?.userId || req.user?.id || null;
 
+const findTenantCompany = async (req, companyId) => {
+  const normalized = String(companyId || '').trim();
+  if (!normalized) return null;
+  const company = await prisma.company.findUnique({
+    where: { id: normalized },
+    select: { id: true, tenantCompanyId: true }
+  });
+  return company && isTenantRecordVisible(req.user, company) ? company : null;
+};
+
+const findTenantOpportunity = async (req, opportunityId) => {
+  const normalized = String(opportunityId || '').trim();
+  if (!normalized) return null;
+  const opportunity = await prisma.opportunity.findUnique({
+    where: { id: normalized },
+    select: { id: true, tenantCompanyId: true }
+  });
+  return opportunity && isTenantRecordVisible(req.user, opportunity) ? opportunity : null;
+};
+
 const generatePreSalesNumber = async () => {
   const year = new Date().getFullYear();
   const suffix = `-${year}`;
@@ -86,7 +107,9 @@ router.get('/', async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Token não fornecido' });
 
-    const where = {};
+    const where = {
+      ...tenantScopedWhere(req.user)
+    };
     if (req.query?.userId) where.assignedToId = req.query.userId;
     if (req.query?.status) where.status = req.query.status;
     if (req.query?.type) where.type = req.query.type;
@@ -163,10 +186,11 @@ router.post('/', async (req, res) => {
     } else if (requestedAssignedToId) {
       const assignedUser = await prisma.user.findUnique({
         where: { id: requestedAssignedToId },
-        select: { id: true }
+        select: { id: true, tenantCompanyId: true }
       });
 
-      if (assignedUser?.id) {
+      const tenantCompanyId = getTenantCompanyId(req.user);
+      if (assignedUser?.id && (!tenantCompanyId || assignedUser.tenantCompanyId === tenantCompanyId)) {
         assignedToId = assignedUser.id;
       } else {
         console.warn('⚠️ assignedToId inválido recebido em /activities-simple, usando usuário autenticado.', {
@@ -182,18 +206,23 @@ router.post('/', async (req, res) => {
       description: descriptionWithFlow,
       status: 'PENDING',
       priority: req.body.priority || 'MEDIUM',
-      assignedToId
+      assignedToId,
+      tenantCompanyId: getTenantCompanyId(req.user)
     };
     
     // Adicionar campos opcionais se fornecidos
     if (req.body.companyId && req.body.companyId.trim() !== '') {
       console.log('📎 Adicionando companyId:', req.body.companyId);
-      activityData.companyId = req.body.companyId;
+      const company = await findTenantCompany(req, req.body.companyId);
+      if (!company) return res.status(403).json({ error: 'Empresa não pertence a este tenant' });
+      activityData.companyId = company.id;
     }
     
     if (req.body.opportunityId && req.body.opportunityId.trim() !== '') {
       console.log('📎 Adicionando opportunityId:', req.body.opportunityId);
-      activityData.opportunityId = req.body.opportunityId;
+      const opportunity = await findTenantOpportunity(req, req.body.opportunityId);
+      if (!opportunity) return res.status(403).json({ error: 'Oportunidade não pertence a este tenant' });
+      activityData.opportunityId = opportunity.id;
     }
     
     if (req.body.dueDate) {
@@ -293,12 +322,16 @@ router.put('/', async (req, res) => {
     const { id, status } = req.body;
     const currentUserId = getAuthenticatedUserId(req);
 
+    const existing = await prisma.activity.findUnique({
+      where: { id },
+      select: { assignedToId: true, tenantCompanyId: true }
+    });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    if (!isTenantRecordVisible(req.user, existing)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
     if (req.user?.role === 'SELLER') {
-      const existing = await prisma.activity.findUnique({
-        where: { id },
-        select: { assignedToId: true }
-      });
-      if (!existing) return res.status(404).json({ error: 'Not found' });
       if (existing.assignedToId !== currentUserId) {
         return res.status(403).json({ error: 'Acesso negado' });
       }
@@ -334,10 +367,11 @@ router.put('/', async (req, res) => {
 
       const assignedUser = await prisma.user.findUnique({
         where: { id: requestedAssignedToId },
-        select: { id: true }
+        select: { id: true, tenantCompanyId: true }
       });
 
-      if (assignedUser?.id) {
+      const tenantCompanyId = getTenantCompanyId(req.user);
+      if (assignedUser?.id && (!tenantCompanyId || assignedUser.tenantCompanyId === tenantCompanyId)) {
         nextData.assignedToId = assignedUser.id;
       }
     }

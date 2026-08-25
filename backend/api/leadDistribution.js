@@ -5,6 +5,21 @@ import {
   getAvailableSellers,
   DISTRIBUTION_STRATEGIES
 } from '../lib/leadDistribution.js';
+import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId } from '../lib/tenantScope.js';
+
+const assertCompanyAccess = async (user, companyId) => {
+  const tenantCompanyId = getTenantCompanyId(user);
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, tenantCompanyId: true }
+  });
+  if (!company) return { error: 'Empresa não encontrada', status: 404 };
+  if (tenantCompanyId && String(company.tenantCompanyId || '') !== tenantCompanyId) {
+    return { error: 'Acesso negado', status: 403 };
+  }
+  return { company, tenantCompanyId: company.tenantCompanyId || null };
+};
 
 export default async function handler(req) {
   if (req.method === 'GET') {
@@ -13,7 +28,7 @@ export default async function handler(req) {
     try {
       if (action === 'sellers') {
         // Listar vendedores disponíveis
-        const sellers = await getAvailableSellers(region);
+        const sellers = await getAvailableSellers(region, getTenantCompanyId(req.user));
         return Response.json(sellers);
       }
       
@@ -47,10 +62,15 @@ export default async function handler(req) {
         if (!companyId) {
           return new Response('Company ID is required', { status: 400 });
         }
+        const accessCheck = await assertCompanyAccess(req.user, companyId);
+        if (accessCheck.error) {
+          return Response.json({ error: accessCheck.error }, { status: accessCheck.status });
+        }
         
         const assignedSeller = await distributeLeadToSeller(
           companyId, 
-          strategy || DISTRIBUTION_STRATEGIES.LOAD_BALANCE
+          strategy || DISTRIBUTION_STRATEGIES.LOAD_BALANCE,
+          accessCheck.tenantCompanyId
         );
         
         return Response.json({
@@ -66,6 +86,10 @@ export default async function handler(req) {
         if (!companyId) {
           return new Response('Company ID is required', { status: 400 });
         }
+        const accessCheck = await assertCompanyAccess(req.user, companyId);
+        if (accessCheck.error) {
+          return Response.json({ error: accessCheck.error }, { status: accessCheck.status });
+        }
         
         const result = await createOpportunityForLead(
           companyId,
@@ -76,6 +100,9 @@ export default async function handler(req) {
       }
       
       if (action === 'redistribute-unattended') {
+        if (getTenantCompanyId(req.user)) {
+          return Response.json({ error: 'Redistribuição global restrita ao administrador global' }, { status: 403 });
+        }
         // Redistribuir leads não atendidos
         const results = await redistributeUnattendedLeads(daysThreshold || 3);
         

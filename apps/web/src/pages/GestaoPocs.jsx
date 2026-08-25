@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowLeft,
   Beaker,
   CalendarClock,
   CheckCircle2,
@@ -140,6 +142,11 @@ const Field = ({ label, required, children, className = '' }) => (
 );
 
 export default function GestaoPocs() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fromPreVendasDashboard = Boolean(location.state?.fromPreVendasDashboard);
+  const returnToPreVendasDashboard = () => navigate(location.state?.returnTo || '/pre-vendas');
+
   const [pocs, setPocs] = useState([]);
   const [stats, setStats] = useState({ total: 0, andamento: 0, bloqueadas: 0, aprovadas: 0, atrasadas: 0 });
   const [opportunities, setOpportunities] = useState([]);
@@ -442,14 +449,26 @@ export default function GestaoPocs() {
           </div>
           <p className="mt-2 text-[18px] text-slate-400">Planeje, execute e valide provas de conceito com critérios objetivos e decisão registrada.</p>
         </div>
-        <button
-          type="button"
-          onClick={openNewModal}
-          className="inline-flex h-[58px] items-center justify-center gap-4 rounded-[8px] bg-sky-400 px-8 text-[17px] font-medium text-[#082036] transition hover:bg-sky-300"
-        >
-          <Plus className="h-5 w-5" />
-          Nova POC
-        </button>
+        <div className="flex flex-wrap gap-3">
+          {fromPreVendasDashboard && (
+            <button
+              type="button"
+              onClick={returnToPreVendasDashboard}
+              className="inline-flex h-[58px] items-center justify-center gap-3 rounded-[8px] border border-sky-400/40 bg-slate-800/70 px-6 text-[16px] font-medium text-sky-100 transition hover:bg-slate-700/80"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              Voltar ao Dashboard
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openNewModal}
+            className="inline-flex h-[58px] items-center justify-center gap-4 rounded-[8px] bg-sky-400 px-8 text-[17px] font-medium text-[#082036] transition hover:bg-sky-300"
+          >
+            <Plus className="h-5 w-5" />
+            Nova POC
+          </button>
+        </div>
       </div>
 
       <div className="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">

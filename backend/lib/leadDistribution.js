@@ -9,11 +9,14 @@ export const DISTRIBUTION_STRATEGIES = {
 };
 
 // Função para obter vendedores disponíveis
-export async function getAvailableSellers(region = null) {
+export async function getAvailableSellers(region = null, tenantCompanyId = null) {
   try {
     const where = {
       role: 'SELLER'
     };
+    if (tenantCompanyId) {
+      where.tenantCompanyId = tenantCompanyId;
+    }
     
     if (region) {
       where.region = region;
@@ -55,9 +58,9 @@ export async function getAvailableSellers(region = null) {
 }
 
 // Distribuição Round Robin
-export async function distributeRoundRobin(companyId, region = null) {
+export async function distributeRoundRobin(companyId, region = null, tenantCompanyId = null) {
   try {
-    const sellers = await getAvailableSellers(region);
+    const sellers = await getAvailableSellers(region, tenantCompanyId);
     
     if (sellers.length === 0) {
       throw new Error('Nenhum vendedor disponível');
@@ -68,6 +71,7 @@ export async function distributeRoundRobin(companyId, region = null) {
       where: {
         owner: {
           role: 'SELLER',
+          ...(tenantCompanyId && { tenantCompanyId }),
           ...(region && { region })
         }
       },
@@ -94,9 +98,9 @@ export async function distributeRoundRobin(companyId, region = null) {
 }
 
 // Distribuição por Balanceamento de Carga
-export async function distributeLoadBalance(companyId, region = null) {
+export async function distributeLoadBalance(companyId, region = null, tenantCompanyId = null) {
   try {
-    const sellers = await getAvailableSellers(region);
+    const sellers = await getAvailableSellers(region, tenantCompanyId);
     
     if (sellers.length === 0) {
       throw new Error('Nenhum vendedor disponível');
@@ -119,12 +123,12 @@ export async function distributeRegionBased(companyId) {
   try {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { state: true }
+      select: { state: true, tenantCompanyId: true }
     });
 
     if (!company || !company.state) {
       // Se não tem região definida, usar round robin
-      return await distributeRoundRobin(companyId);
+      return await distributeRoundRobin(companyId, null, company?.tenantCompanyId || null);
     }
 
     // Mapear estados para regiões
@@ -162,14 +166,14 @@ export async function distributeRegionBased(companyId) {
     
     if (region) {
       // Tentar distribuir para vendedor da região
-      const regionalSeller = await distributeLoadBalance(companyId, region);
+      const regionalSeller = await distributeLoadBalance(companyId, region, company.tenantCompanyId);
       if (regionalSeller) {
         return regionalSeller;
       }
     }
 
     // Se não encontrou vendedor na região, usar distribuição geral
-    return await distributeLoadBalance(companyId);
+    return await distributeLoadBalance(companyId, null, company.tenantCompanyId);
   } catch (error) {
     console.error('Erro na distribuição por região:', error);
     throw error;
@@ -181,14 +185,14 @@ export async function distributeScoreBased(companyId) {
   try {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { leadScore: true, state: true }
+      select: { leadScore: true, state: true, tenantCompanyId: true }
     });
 
     if (!company) {
       throw new Error('Empresa não encontrada');
     }
 
-    const sellers = await getAvailableSellers();
+    const sellers = await getAvailableSellers(null, company.tenantCompanyId);
     
     if (sellers.length === 0) {
       throw new Error('Nenhum vendedor disponível');
@@ -208,11 +212,11 @@ export async function distributeScoreBased(companyId) {
 
     // Para leads de score médio (40-69), usar balanceamento de carga
     if (company.leadScore >= 40) {
-      return await distributeLoadBalance(companyId, company.state);
+      return await distributeLoadBalance(companyId, company.state, company.tenantCompanyId);
     }
 
     // Para leads de baixo score (<40), usar round robin
-    return await distributeRoundRobin(companyId, company.state);
+    return await distributeRoundRobin(companyId, company.state, company.tenantCompanyId);
   } catch (error) {
     console.error('Erro na distribuição por score:', error);
     throw error;
@@ -220,17 +224,17 @@ export async function distributeScoreBased(companyId) {
 }
 
 // Função principal de distribuição
-export async function distributeLeadToSeller(companyId, strategy = DISTRIBUTION_STRATEGIES.LOAD_BALANCE) {
+export async function distributeLeadToSeller(companyId, strategy = DISTRIBUTION_STRATEGIES.LOAD_BALANCE, tenantCompanyId = null) {
   try {
     let assignedSeller;
 
     switch (strategy) {
       case DISTRIBUTION_STRATEGIES.ROUND_ROBIN:
-        assignedSeller = await distributeRoundRobin(companyId);
+        assignedSeller = await distributeRoundRobin(companyId, null, tenantCompanyId);
         break;
       
       case DISTRIBUTION_STRATEGIES.LOAD_BALANCE:
-        assignedSeller = await distributeLoadBalance(companyId);
+        assignedSeller = await distributeLoadBalance(companyId, null, tenantCompanyId);
         break;
       
       case DISTRIBUTION_STRATEGIES.REGION_BASED:
@@ -242,7 +246,7 @@ export async function distributeLeadToSeller(companyId, strategy = DISTRIBUTION_
         break;
       
       default:
-        assignedSeller = await distributeLoadBalance(companyId);
+        assignedSeller = await distributeLoadBalance(companyId, null, tenantCompanyId);
     }
 
     if (!assignedSeller) {
@@ -304,7 +308,7 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
     }
 
     // Distribuir para vendedor
-    const assignedSeller = await distributeLeadToSeller(companyId, strategy);
+    const assignedSeller = await distributeLeadToSeller(companyId, strategy, company.tenantCompanyId);
 
     // Criar oportunidade
     const opportunity = await prisma.$transaction(async (tx) => {
@@ -320,7 +324,8 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
           stage: 'LEAD',
           source: 'MANUAL', // Pode ser ajustado conforme a origem
           companyId,
-          ownerId: assignedSeller.id
+          ownerId: assignedSeller.id,
+          tenantCompanyId: company.tenantCompanyId
         },
         include: {
           company: true,
@@ -342,7 +347,8 @@ export async function createOpportunityForLead(companyId, strategy = DISTRIBUTIO
         dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 horas
         companyId,
         opportunityId: opportunity.id,
-        assignedToId: assignedSeller.id
+        assignedToId: assignedSeller.id,
+        tenantCompanyId: company.tenantCompanyId
       }
     });
 
@@ -391,7 +397,8 @@ export async function redistributeUnattendedLeads(daysThreshold = 3) {
         // Redistribuir para outro vendedor
         const newSeller = await distributeLeadToSeller(
           opportunity.companyId, 
-          DISTRIBUTION_STRATEGIES.LOAD_BALANCE
+          DISTRIBUTION_STRATEGIES.LOAD_BALANCE,
+          opportunity.tenantCompanyId
         );
 
         // Atualizar oportunidade
@@ -411,7 +418,8 @@ export async function redistributeUnattendedLeads(daysThreshold = 3) {
             dueDate: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 horas
             companyId: opportunity.companyId,
             opportunityId: opportunity.id,
-            assignedToId: newSeller.id
+            assignedToId: newSeller.id,
+            tenantCompanyId: opportunity.tenantCompanyId
           }
         });
 

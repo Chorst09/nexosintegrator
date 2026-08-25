@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../lib/auth');
+const { getTenantCompanyId, mergeRelationWhere } = require('../lib/tenantScope.cjs');
 
 // Configuração do multer para upload de arquivos
 const storage = multer.diskStorage({
@@ -42,12 +43,30 @@ const upload = multer({
 const router = express.Router();
 const prisma = new PrismaClient();
 
+const scopeContractWhere = (req, where = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  return tenantCompanyId ? mergeRelationWhere(where, 'company', { tenantCompanyId }) : where;
+};
+
+const canAccessCompany = (req, company = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  if (!tenantCompanyId) return true;
+  return String(company?.tenantCompanyId || '') === tenantCompanyId;
+};
+
+const canAccessContract = (req, contract = {}) => {
+  if (!contract) return false;
+  if (contract.company) return canAccessCompany(req, contract.company);
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  return !tenantCompanyId;
+};
+
 // Relatório resumido de contratos
 router.get('/reports/summary', authenticateToken, async (req, res) => {
   try {
     const { status, companyId, startDate, endDate } = req.query;
 
-    const where = {};
+    let where = {};
     if (status) where.status = status;
     if (companyId) where.companyId = companyId;
     if (startDate && endDate) {
@@ -56,6 +75,8 @@ router.get('/reports/summary', authenticateToken, async (req, res) => {
         lte: new Date(endDate)
       };
     }
+
+    where = scopeContractWhere(req, where);
 
     const [totalContracts, activeContracts, totalValue] = await Promise.all([
       prisma.contract.count({ where }),
@@ -83,16 +104,17 @@ router.get('/', authenticateToken, async (req, res) => {
     const { status, companyId, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    let where = {};
     if (status) where.status = status;
     if (companyId) where.companyId = companyId;
+    where = scopeContractWhere(req, where);
 
     const [contracts, total] = await Promise.all([
       prisma.contract.findMany({
         where,
         include: {
           company: {
-            select: { id: true, name: true, document: true }
+            select: { id: true, name: true, document: true, tenantCompanyId: true }
           }
         },
         orderBy: { createdAt: 'desc' },
@@ -118,7 +140,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       where: { id },
       include: {
         company: {
-          select: { id: true, name: true, document: true }
+          select: { id: true, name: true, document: true, tenantCompanyId: true }
         },
         attachments: {
           select: {
@@ -135,6 +157,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     if (!contract) {
       return res.status(404).json({ error: 'Contrato não encontrado' });
+    }
+
+    if (!canAccessContract(req, contract)) {
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
     res.json(contract);
@@ -168,6 +194,14 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, tenantCompanyId: true }
+    });
+    if (!company || !canAccessCompany(req, company)) {
+      return res.status(403).json({ error: 'Empresa não pertence a este tenant' });
+    }
+
     const contractData = {
       number,
       title,
@@ -190,7 +224,7 @@ router.post('/', authenticateToken, async (req, res) => {
       data: contractData,
       include: {
         company: {
-          select: { id: true, name: true, document: true }
+          select: { id: true, name: true, document: true, tenantCompanyId: true }
         },
         attachments: true
       }
@@ -236,12 +270,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (slaAvailability !== undefined) updateData.slaAvailability = slaAvailability ? parseFloat(slaAvailability) : null;
     if (slaDescription !== undefined) updateData.slaDescription = slaDescription;
 
+    const currentContract = await prisma.contract.findUnique({
+      where: { id },
+      include: {
+        company: {
+          select: { id: true, tenantCompanyId: true }
+        }
+      }
+    });
+
+    if (!currentContract) {
+      return res.status(404).json({ error: 'Contrato não encontrado' });
+    }
+
+    if (!canAccessContract(req, currentContract)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
     const contract = await prisma.contract.update({
       where: { id },
       data: updateData,
       include: {
         company: {
-          select: { id: true, name: true, document: true }
+          select: { id: true, name: true, document: true, tenantCompanyId: true }
         },
         attachments: true
       }
@@ -265,13 +316,23 @@ router.post('/:id/upload', authenticateToken, upload.single('file'), async (req,
 
     // Verificar se o contrato existe
     const contract = await prisma.contract.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        company: {
+          select: { id: true, tenantCompanyId: true }
+        }
+      }
     });
 
     if (!contract) {
       // Remover arquivo se contrato não existir
       fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Contrato não encontrado' });
+    }
+
+    if (!canAccessContract(req, contract)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
     // Salvar informações do arquivo no banco
@@ -303,11 +364,24 @@ router.get('/attachment/:attachmentId/download', authenticateToken, async (req, 
     const { attachmentId } = req.params;
 
     const attachment = await prisma.contractAttachment.findUnique({
-      where: { id: attachmentId }
+      where: { id: attachmentId },
+      include: {
+        contract: {
+          include: {
+            company: {
+              select: { id: true, tenantCompanyId: true }
+            }
+          }
+        }
+      }
     });
 
     if (!attachment) {
       return res.status(404).json({ error: 'Arquivo não encontrado' });
+    }
+
+    if (!canAccessContract(req, attachment.contract)) {
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
     // Verificar se o arquivo existe no sistema de arquivos
@@ -332,11 +406,24 @@ router.delete('/attachment/:attachmentId', authenticateToken, async (req, res) =
     const { attachmentId } = req.params;
 
     const attachment = await prisma.contractAttachment.findUnique({
-      where: { id: attachmentId }
+      where: { id: attachmentId },
+      include: {
+        contract: {
+          include: {
+            company: {
+              select: { id: true, tenantCompanyId: true }
+            }
+          }
+        }
+      }
     });
 
     if (!attachment) {
       return res.status(404).json({ error: 'Arquivo não encontrado' });
+    }
+
+    if (!canAccessContract(req, attachment.contract)) {
+      return res.status(403).json({ error: 'Acesso negado' });
     }
 
     // Remover arquivo do sistema de arquivos

@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { updateCompanyLeadScore } from '../lib/leadScoring.js';
 import { createOpportunityForLead, DISTRIBUTION_STRATEGIES } from '../lib/leadDistribution.js';
+import { getTenantCompanyId, isTenantRecordVisible, forbiddenTenantResponse, tenantScopedWhere } from '../lib/tenantScope.js';
 
 const parsePathIdFromUrl = (urlValue) => {
   if (!urlValue) return null;
@@ -61,7 +62,10 @@ const runOptionalCleanup = async (operation) => {
 export default async function handler(req) {
   if (req.method === 'GET') {
     const clientType = String(req.query?.clientType || '').toUpperCase();
-    const where = clientType === 'B2B' || clientType === 'B2G' ? { clientType } : {};
+    const where = {
+      ...(clientType === 'B2B' || clientType === 'B2G' ? { clientType } : {}),
+      ...tenantScopedWhere(req.user)
+    };
     const id = resolveCompanyId(req, {});
     
     if (id) {
@@ -98,6 +102,10 @@ export default async function handler(req) {
       if (!company) {
         return new Response('Empresa não encontrada', { status: 404 });
       }
+
+      if (!isTenantRecordVisible(req.user, company)) {
+        return forbiddenTenantResponse();
+      }
       
       return Response.json(company);
     }
@@ -126,6 +134,7 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     const body = await req.json();
     const autoDistribute = body.autoDistribute !== false;
+    const tenantCompanyId = getTenantCompanyId(req.user) || body.tenantCompanyId || null;
     const company = await prisma.company.create({
       data: {
         name: body.name,
@@ -138,6 +147,7 @@ export default async function handler(req) {
         address: body.address,
         city: body.city,
         state: body.state,
+        tenantCompanyId,
         status: normalizeCompanyStatus(body.status, 'LEAD'),
         leadScore: Number.isFinite(Number(body.leadScore)) ? Number(body.leadScore) : undefined,
         contacts: body.contacts ? {
@@ -192,9 +202,10 @@ export default async function handler(req) {
 
     const existingCompany = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { accessB2B: true, accessB2G: true, accessPreSales: true }
+      select: { accessB2B: true, accessB2G: true, accessPreSales: true, tenantCompanyId: true }
     });
     if (!existingCompany) return new Response('Empresa não encontrada', { status: 404 });
+    if (!isTenantRecordVisible(req.user, existingCompany)) return forbiddenTenantResponse();
 
     const company = await prisma.company.update({
       where: { id: companyId },
@@ -236,10 +247,11 @@ export default async function handler(req) {
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true }
+      select: { id: true, tenantCompanyId: true }
     });
 
     if (!company) return new Response('Empresa não encontrada', { status: 404 });
+    if (!isTenantRecordVisible(req.user, company)) return forbiddenTenantResponse();
 
     await prisma.$transaction(async (tx) => {
       const companyOpportunities = await tx.opportunity.findMany({

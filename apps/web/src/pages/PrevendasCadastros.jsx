@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  ArrowLeft,
   Building2,
   CalendarDays,
   ClipboardList,
@@ -304,6 +305,9 @@ const pdfValidityColors = {
 
 export default function PrevendasCadastros({ forcedTab = null }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromPreVendasDashboard = Boolean(location.state?.fromPreVendasDashboard);
+  const returnToPreVendasDashboard = () => navigate(location.state?.returnTo || '/pre-vendas');
   const forcedTabKey = forcedTab ? resolveTabKey(forcedTab) : null;
 
   const [loading, setLoading] = useState(true);
@@ -2126,6 +2130,12 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         gradient="blue"
         breadcrumbs={['Home', 'Pré-Vendas', pageMeta.breadcrumb]}
         actions={[
+          ...(fromPreVendasDashboard ? [{
+            label: 'Voltar ao Dashboard',
+            icon: ArrowLeft,
+            onClick: returnToPreVendasDashboard,
+            variant: 'secondary'
+          }] : []),
           {
             label: 'Atualizar',
             icon: RefreshCcw,

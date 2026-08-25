@@ -1,11 +1,13 @@
 
 import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId, tenantScopedWhere } from '../lib/tenantScope.js';
 
 // Esta API é mantida para compatibilidade, mas redireciona para companies
 export default async function handler(req) {
   if (req.method === 'GET') {
     // Retorna companies no formato de clients para compatibilidade
     const companies = await prisma.company.findMany({
+      where: tenantScopedWhere(req.user),
       include: {
         contacts: {
           where: { isPrimary: true },
@@ -34,12 +36,14 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json();
+    const tenantCompanyId = getTenantCompanyId(req.user) || body.tenantCompanyId || null;
     
     // Criar company com contact
     const company = await prisma.company.create({
       data: {
         name: body.name,
         status: body.status || 'LEAD',
+        tenantCompanyId,
         contacts: {
           create: {
             name: body.contact || 'Contato Principal',

@@ -110,7 +110,7 @@ export default function Checkout() {
     }
   };
 
-  const selectedPlan = plans[planId] || plans.starter;
+  const selectedPlan = plans[planId] || plans.completo;
   const CHECKOUT_STORAGE_KEY = 'crm_checkout_pending_v1';
 
   const unwrapPayload = (raw) => {
@@ -121,7 +121,7 @@ export default function Checkout() {
   };
 
   const resolveLicensingPlan = (checkoutPlanId) => {
-    return { planId: 'plan-mensal', planCode: 'MENSAL' };
+    return { planId: null, planCode: 'MENSAL' };
   };
 
   const resolveModuleAccess = (checkoutPlanId) => {
@@ -259,7 +259,7 @@ export default function Checkout() {
           headers: getHeaders(),
           body: JSON.stringify({
             paymentId: String(queryPaymentId),
-            planId: licensingPlanId,
+            planId: licensingPlanId || undefined,
             planCode,
             company: {
               name: pending.companyData.companyName,
@@ -411,6 +411,7 @@ export default function Checkout() {
             paymentId: 'SIMULATED',
             paymentReference: 'SIMULATED-' + Date.now(),
             paymentStatus: 'CONFIRMED',
+            planId: licensingPlanId || undefined,
             planCode, // Enviar apenas o código, a API vai buscar o plano
             company: {
               name: formData.companyName,

@@ -2,11 +2,38 @@ const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth');
 const { canAccessModule } = require('../lib/permissions');
+const { getTenantCompanyId, mergeRelationWhere } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
 
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);
+
+const scopePreSalesWhere = (req, where = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  return tenantCompanyId ? mergeRelationWhere(where, 'solicitante', { tenantCompanyId }) : where;
+};
+
+const canAccessTenantRequester = (req, solicitacao = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  if (!tenantCompanyId) return true;
+  return String(solicitacao?.solicitante?.tenantCompanyId || '') === tenantCompanyId;
+};
+
+const ensurePreSalesRequestAccess = async (req, id) => {
+  const solicitacao = await prisma.preSalesRequest.findUnique({
+    where: { id },
+    include: {
+      solicitante: {
+        select: { id: true, tenantCompanyId: true }
+      }
+    }
+  });
+
+  if (!solicitacao) return { error: 'Solicitação não encontrada', status: 404 };
+  if (!canAccessTenantRequester(req, solicitacao)) return { error: 'Acesso negado', status: 403 };
+  return { solicitacao };
+};
 
 const generateBudgetNumber = async () => {
   const year = new Date().getFullYear();
@@ -35,27 +62,31 @@ const normalizeOptionalId = (value) => {
   return normalized || null;
 };
 
-const resolveExistingCompanyId = async (companyId) => {
+const resolveExistingCompanyId = async (companyId, user = {}) => {
   const normalized = normalizeOptionalId(companyId);
   if (!normalized) return null;
 
   const company = await prisma.company.findUnique({
     where: { id: normalized },
-    select: { id: true }
+    select: { id: true, tenantCompanyId: true }
   });
 
+  const tenantCompanyId = getTenantCompanyId(user);
+  if (tenantCompanyId && String(company?.tenantCompanyId || '') !== tenantCompanyId) return null;
   return company?.id || null;
 };
 
-const resolveExistingOpportunityId = async (opportunityId) => {
+const resolveExistingOpportunityId = async (opportunityId, user = {}) => {
   const normalized = normalizeOptionalId(opportunityId);
   if (!normalized) return null;
 
   const opportunity = await prisma.opportunity.findUnique({
     where: { id: normalized },
-    select: { id: true }
+    select: { id: true, tenantCompanyId: true }
   });
 
+  const tenantCompanyId = getTenantCompanyId(user);
+  if (tenantCompanyId && String(opportunity?.tenantCompanyId || '') !== tenantCompanyId) return null;
   return opportunity?.id || null;
 };
 
@@ -89,7 +120,7 @@ router.get('/', async (req, res) => {
   try {
     const { status, prioridade, page = 1, limit = 10, search } = req.query;
     
-    const where = {};
+    let where = {};
     
     if (status && status !== 'all') {
       where.status = status;
@@ -106,6 +137,8 @@ router.get('/', async (req, res) => {
         { descricao: { contains: search, mode: 'insensitive' } }
       ];
     }
+
+    where = scopePreSalesWhere(req, where);
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -162,32 +195,39 @@ router.get('/', async (req, res) => {
 // GET /api/pre-vendas/stats - Estatísticas do dashboard
 router.get('/stats', async (req, res) => {
   try {
+    const scoped = (where = {}) => scopePreSalesWhere(req, where);
     const [
       novas,
       emPrecificacao,
       aguardandoAprovacao,
+      enviadas,
+      aprovadas,
+      reprovadas,
       finalizadas,
       totalMes,
       valorTotalMes
     ] = await Promise.all([
-      prisma.preSalesRequest.count({ where: { status: 'NOVA' } }),
-      prisma.preSalesRequest.count({ where: { status: 'EM_PRECIFICACAO' } }),
-      prisma.preSalesRequest.count({ where: { status: 'AGUARDANDO_APROVACAO' } }),
-      prisma.preSalesRequest.count({ where: { status: 'FINALIZADA' } }),
+      prisma.preSalesRequest.count({ where: scoped({ status: 'NOVA' }) }),
+      prisma.preSalesRequest.count({ where: scoped({ status: 'EM_PRECIFICACAO' }) }),
+      prisma.preSalesRequest.count({ where: scoped({ status: 'AGUARDANDO_APROVACAO' }) }),
+      prisma.preSalesRequest.count({ where: scoped({ status: 'ENVIADA' }) }),
+      prisma.preSalesRequest.count({ where: scoped({ status: 'APROVADO' }) }),
+      prisma.preSalesRequest.count({ where: scoped({ status: 'REPROVADO' }) }),
+      prisma.preSalesRequest.count({ where: scoped({ status: { in: ['FINALIZADA', 'APROVADO'] } }) }),
       prisma.preSalesRequest.count({
-        where: {
+        where: scoped({
           createdAt: {
             gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
           }
-        }
+        })
       }),
       prisma.preSalesRequest.aggregate({
-        where: {
-          status: 'FINALIZADA',
+        where: scoped({
+          status: { in: ['FINALIZADA', 'APROVADO'] },
           createdAt: {
             gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
           }
-        },
+        }),
         _sum: { valorSugerido: true }
       })
     ]);
@@ -198,6 +238,9 @@ router.get('/stats', async (req, res) => {
         novas,
         emPrecificacao,
         aguardandoAprovacao,
+        enviadas,
+        aprovadas,
+        reprovadas,
         finalizadas,
         totalMes,
         valorTotalMes: valorTotalMes._sum.valorSugerido || 0
@@ -222,7 +265,7 @@ router.get('/:id', async (req, res) => {
       where: { id },
       include: {
         solicitante: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true, email: true, tenantCompanyId: true }
         },
         lead: {
           select: { id: true, name: true }
@@ -252,6 +295,13 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Solicitação não encontrada'
+      });
+    }
+
+    if (!canAccessTenantRequester(req, solicitacao)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Acesso negado'
       });
     }
 
@@ -302,8 +352,8 @@ router.post('/', async (req, res) => {
     }
 
     const numeroFormatado = await generateBudgetNumber();
-    const validLeadId = await resolveExistingCompanyId(leadId);
-    const validOpportunityId = await resolveExistingOpportunityId(opportunityId);
+    const validLeadId = await resolveExistingCompanyId(leadId, req.user);
+    const validOpportunityId = await resolveExistingOpportunityId(opportunityId, req.user);
     const requestItems = sanitizePreSalesItems(items);
 
     // Criar solicitação
@@ -367,17 +417,14 @@ router.put('/:id', async (req, res) => {
       items
     } = req.body;
 
-    // Verificar se a solicitação existe
-    const solicitacaoExistente = await prisma.preSalesRequest.findUnique({
-      where: { id }
-    });
-
-    if (!solicitacaoExistente) {
-      return res.status(404).json({
+    const accessCheck = await ensurePreSalesRequestAccess(req, id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({
         success: false,
-        message: 'Solicitação não encontrada'
+        message: accessCheck.error
       });
     }
+    const solicitacaoExistente = accessCheck.solicitacao;
 
     // Verificar permissões (apenas o solicitante ou admin pode editar)
     const userCanOperatePreSales = canAccessModule(req.user, 'PRE_SALES');
@@ -395,10 +442,10 @@ router.put('/:id', async (req, res) => {
     const shouldReplaceItems = Object.prototype.hasOwnProperty.call(req.body, 'items');
     const requestItems = shouldReplaceItems ? sanitizePreSalesItems(items) : [];
     const validLeadId = Object.prototype.hasOwnProperty.call(req.body, 'leadId')
-      ? await resolveExistingCompanyId(leadId)
+      ? await resolveExistingCompanyId(leadId, req.user)
       : undefined;
     const validOpportunityId = Object.prototype.hasOwnProperty.call(req.body, 'opportunityId')
-      ? await resolveExistingOpportunityId(opportunityId)
+      ? await resolveExistingOpportunityId(opportunityId, req.user)
       : undefined;
 
     // Atualizar solicitação
@@ -425,6 +472,10 @@ router.put('/:id', async (req, res) => {
           margemLucro: margemLucro === '' || margemLucro === undefined || margemLucro === null ? undefined : parseFloat(margemLucro),
           calculoDetalhes: calculoDetalhes === undefined ? undefined : calculoDetalhes,
           observacoes,
+          dataAprovacao: status === 'APROVADO' ? new Date() : undefined,
+          dataRejeicao: status === 'REPROVADO' ? new Date() : undefined,
+          aprovadoPorId: status === 'APROVADO' ? req.user.userId : undefined,
+          rejeitadoPorId: status === 'REPROVADO' ? req.user.userId : undefined,
           updatedAt: new Date(),
           ...(shouldReplaceItems && requestItems.length > 0 ? { items: { create: requestItems } } : {})
         },
@@ -481,6 +532,14 @@ router.post('/:id/calcular', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Custo unitário é obrigatório e deve ser maior que zero'
+      });
+    }
+
+    const accessCheck = await ensurePreSalesRequestAccess(req, id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({
+        success: false,
+        message: accessCheck.error
       });
     }
 
@@ -579,14 +638,11 @@ router.post('/:id/aprovar', async (req, res) => {
       });
     }
 
-    const solicitacao = await prisma.preSalesRequest.findUnique({
-      where: { id }
-    });
-
-    if (!solicitacao) {
-      return res.status(404).json({
+    const accessCheck = await ensurePreSalesRequestAccess(req, id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({
         success: false,
-        message: 'Solicitação não encontrada'
+        message: accessCheck.error
       });
     }
 
@@ -595,7 +651,7 @@ router.post('/:id/aprovar', async (req, res) => {
       prisma.preSalesRequest.update({
         where: { id },
         data: {
-          status: 'FINALIZADA',
+          status: 'APROVADO',
           dataAprovacao: new Date(),
           aprovadoPorId: req.user.userId
         },
@@ -644,14 +700,11 @@ router.post('/:id/rejeitar', async (req, res) => {
       });
     }
 
-    const solicitacao = await prisma.preSalesRequest.findUnique({
-      where: { id }
-    });
-
-    if (!solicitacao) {
-      return res.status(404).json({
+    const accessCheck = await ensurePreSalesRequestAccess(req, id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({
         success: false,
-        message: 'Solicitação não encontrada'
+        message: accessCheck.error
       });
     }
 
@@ -660,7 +713,7 @@ router.post('/:id/rejeitar', async (req, res) => {
       prisma.preSalesRequest.update({
         where: { id },
         data: {
-          status: 'REJEITADA',
+          status: 'REPROVADO',
           dataRejeicao: new Date(),
           rejeitadoPorId: req.user.userId
         },
@@ -700,16 +753,14 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const solicitacao = await prisma.preSalesRequest.findUnique({
-      where: { id }
-    });
-
-    if (!solicitacao) {
-      return res.status(404).json({
+    const accessCheck = await ensurePreSalesRequestAccess(req, id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({
         success: false,
-        message: 'Solicitação não encontrada'
+        message: accessCheck.error
       });
     }
+    const solicitacao = accessCheck.solicitacao;
 
     // Verificar permissões
     if (solicitacao.solicitanteId !== req.user.userId && req.user.role !== 'ADMIN') {

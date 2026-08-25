@@ -1,9 +1,25 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../lib/auth');
+const { getTenantCompanyId, mergeRelationWhere, tenantScopedWhere } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+const scopeCompanyRelationWhere = (req, where = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  return tenantCompanyId ? mergeRelationWhere(where, 'company', { tenantCompanyId }) : where;
+};
+
+const canAccessCompanyId = async (req, companyId) => {
+  const normalized = String(companyId || '').trim();
+  if (!normalized) return false;
+  const company = await prisma.company.findFirst({
+    where: { id: normalized, ...tenantScopedWhere(req.user) },
+    select: { id: true }
+  });
+  return Boolean(company);
+};
 
 // ===== ONBOARDING =====
 
@@ -13,7 +29,7 @@ router.get('/onboarding', authenticateToken, async (req, res) => {
     const { status, companyId, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    let where = {};
     if (status) where.status = status;
     if (companyId) where.companyId = companyId;
 
@@ -21,6 +37,7 @@ router.get('/onboarding', authenticateToken, async (req, res) => {
     if (req.user.role === 'SELLER') {
       where.assignedToId = req.user.userId;
     }
+    where = scopeCompanyRelationWhere(req, where);
 
     const [onboardings, total] = await Promise.all([
       prisma.customerOnboarding.findMany({
@@ -72,6 +89,9 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
     if (!companyId || !assignedToId) {
       return res.status(400).json({ error: 'Empresa e responsável são obrigatórios' });
     }
+    if (!(await canAccessCompanyId(req, companyId))) {
+      return res.status(403).json({ error: 'Empresa não pertence a este tenant' });
+    }
 
     const onboarding = await prisma.customerOnboarding.create({
       data: {
@@ -119,7 +139,9 @@ router.put('/onboarding/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { status, assignedToId, expectedEndDate, description } = req.body;
 
-    const current = await prisma.customerOnboarding.findUnique({ where: { id } });
+    const current = await prisma.customerOnboarding.findFirst({
+      where: scopeCompanyRelationWhere(req, { id })
+    });
     if (!current) {
       return res.status(404).json({ error: 'Onboarding não encontrado' });
     }
@@ -164,8 +186,8 @@ router.put('/onboarding/:id/steps/:stepId', authenticateToken, async (req, res) 
     const { status, completedAt } = req.body;
 
     // Verificar permissão
-    const onboarding = await prisma.customerOnboarding.findUnique({
-      where: { id }
+    const onboarding = await prisma.customerOnboarding.findFirst({
+      where: scopeCompanyRelationWhere(req, { id })
     });
 
     if (!onboarding) {
@@ -224,7 +246,7 @@ router.get('/support', authenticateToken, async (req, res) => {
     const { status, priority, companyId, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    let where = {};
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (companyId) where.companyId = companyId;
@@ -233,6 +255,7 @@ router.get('/support', authenticateToken, async (req, res) => {
     if (req.user.role === 'SELLER') {
       where.assignedToId = req.user.userId;
     }
+    where = scopeCompanyRelationWhere(req, where);
 
     const [tickets, total] = await Promise.all([
       prisma.supportTicket.findMany({
@@ -279,6 +302,9 @@ router.post('/support', authenticateToken, async (req, res) => {
       return res.status(400).json({ 
         error: 'Título, descrição e empresa são obrigatórios' 
       });
+    }
+    if (!(await canAccessCompanyId(req, companyId))) {
+      return res.status(403).json({ error: 'Empresa não pertence a este tenant' });
     }
 
     // Gerar número do ticket
@@ -338,7 +364,9 @@ router.put('/support/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { title, description, priority, category, status, assignedToId } = req.body;
 
-    const current = await prisma.supportTicket.findUnique({ where: { id } });
+    const current = await prisma.supportTicket.findFirst({
+      where: scopeCompanyRelationWhere(req, { id })
+    });
     if (!current) {
       return res.status(404).json({ error: 'Ticket não encontrado' });
     }
@@ -386,6 +414,16 @@ router.post('/support/:id/responses', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Mensagem é obrigatória' });
     }
 
+    const ticket = await prisma.supportTicket.findFirst({
+      where: scopeCompanyRelationWhere(req, { id })
+    });
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket não encontrado' });
+    }
+    if (req.user.role === 'SELLER' && ticket.assignedToId !== req.user.userId) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
     const response = await prisma.ticketResponse.create({
       data: {
         message,
@@ -420,9 +458,10 @@ router.get('/nps', authenticateToken, async (req, res) => {
     const { status, companyId, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    let where = {};
     if (status) where.status = status;
     if (companyId) where.companyId = companyId;
+    where = scopeCompanyRelationWhere(req, where);
 
     const [surveys, total] = await Promise.all([
       prisma.nPSSurvey.findMany({
@@ -464,6 +503,9 @@ router.post('/nps', authenticateToken, async (req, res) => {
 
     if (!companyId) {
       return res.status(400).json({ error: 'Empresa é obrigatória' });
+    }
+    if (!(await canAccessCompanyId(req, companyId))) {
+      return res.status(403).json({ error: 'Empresa não pertence a este tenant' });
     }
 
     const survey = await prisma.nPSSurvey.create({
@@ -526,7 +568,9 @@ router.get('/support/:id/responses', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const ticket = await prisma.supportTicket.findUnique({ where: { id } });
+    const ticket = await prisma.supportTicket.findFirst({
+      where: scopeCompanyRelationWhere(req, { id })
+    });
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket não encontrado' });
     }
@@ -559,7 +603,9 @@ router.put('/churn-alerts/:id/resolve', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const alert = await prisma.churnAlert.findUnique({ where: { id } });
+    const alert = await prisma.churnAlert.findFirst({
+      where: scopeCompanyRelationWhere(req, { id })
+    });
     if (!alert) {
       return res.status(404).json({ error: 'Alerta não encontrado' });
     }
@@ -598,7 +644,7 @@ router.get('/churn-alerts', authenticateToken, async (req, res) => {
     const { riskLevel, status, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    let where = {};
     if (riskLevel) where.riskLevel = riskLevel;
     if (status) where.status = status;
 
@@ -606,6 +652,7 @@ router.get('/churn-alerts', authenticateToken, async (req, res) => {
     if (req.user.role === 'SELLER') {
       where.assignedToId = req.user.userId;
     }
+    where = scopeCompanyRelationWhere(req, where);
 
     const [alerts, total] = await Promise.all([
       prisma.churnAlert.findMany({
@@ -649,7 +696,7 @@ router.post('/churn-alerts/detect', authenticateToken, async (req, res) => {
 
     // Buscar empresas ativas para análise
     const companies = await prisma.company.findMany({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', ...tenantScopedWhere(req.user) },
       include: {
         contracts: {
           where: { status: 'ACTIVE' }
@@ -802,28 +849,28 @@ router.get('/reports/summary', authenticateToken, async (req, res) => {
       // Onboarding
       prisma.customerOnboarding.groupBy({
         by: ['status'],
-        where,
+        where: scopeCompanyRelationWhere(req, where),
         _count: { status: true }
       }),
       // Suporte
       prisma.supportTicket.groupBy({
         by: ['status'],
-        where,
+        where: scopeCompanyRelationWhere(req, where),
         _count: { status: true }
       }),
       // NPS
       prisma.nPSSurvey.aggregate({
-        where: {
+        where: scopeCompanyRelationWhere(req, {
           ...where,
           status: 'RESPONDED'
-        },
+        }),
         _avg: { score: true },
         _count: { score: true }
       }),
       // Churn
       prisma.churnAlert.groupBy({
         by: ['riskLevel'],
-        where: { status: 'ACTIVE' },
+        where: scopeCompanyRelationWhere(req, { status: 'ACTIVE' }),
         _count: { riskLevel: true }
       })
     ]);

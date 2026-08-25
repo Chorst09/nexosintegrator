@@ -1,9 +1,31 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../lib/auth');
+const { getTenantCompanyId, mergeRelationWhere } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+const scopeProposalWhere = (req, where = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  let scoped = { ...where };
+
+  if (tenantCompanyId) {
+    scoped = mergeRelationWhere(scoped, 'opportunity', { tenantCompanyId });
+  } else if (req.user.role === 'SELLER') {
+    scoped = mergeRelationWhere(scoped, 'opportunity', { ownerId: req.user.userId });
+  }
+
+  return scoped;
+};
+
+const canAccessOpportunity = (req, opportunity = {}) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  if (tenantCompanyId) {
+    return String(opportunity.tenantCompanyId || '') === tenantCompanyId;
+  }
+  return req.user.role !== 'SELLER' || opportunity.ownerId === req.user.userId;
+};
 
 router.get('/types', authenticateToken, async (req, res) => {
   res.json({
@@ -27,16 +49,11 @@ router.get('/', authenticateToken, async (req, res) => {
     const { opportunityId, status, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
     
-    const where = {};
+    let where = {};
     if (opportunityId) where.opportunityId = opportunityId;
     if (status) where.status = status;
 
-    // Filtrar por permissão
-    if (req.user.role === 'SELLER') {
-      where.opportunity = {
-        ownerId: req.user.userId
-      };
-    }
+    where = scopeProposalWhere(req, where);
 
     const [proposals, total] = await Promise.all([
       prisma.proposal.findMany({
@@ -120,8 +137,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
 
-    // Verificar permissão
-    if (req.user.role === 'SELLER' && proposal.opportunity.ownerId !== req.user.userId) {
+    if (!canAccessOpportunity(req, proposal.opportunity)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -162,7 +178,7 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Oportunidade não encontrada' });
     }
 
-    if (req.user.role === 'SELLER' && opportunity.ownerId !== req.user.userId) {
+    if (!canAccessOpportunity(req, opportunity)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -271,8 +287,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
 
-    // Verificar permissão
-    if (req.user.role === 'SELLER' && currentProposal.opportunity.ownerId !== req.user.userId) {
+    if (!canAccessOpportunity(req, currentProposal.opportunity)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -395,8 +410,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
 
-    // Verificar permissão
-    if (req.user.role === 'SELLER' && proposal.opportunity.ownerId !== req.user.userId) {
+    if (!canAccessOpportunity(req, proposal.opportunity)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
@@ -433,8 +447,7 @@ router.post('/:id/send', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
 
-    // Verificar permissão
-    if (req.user.role === 'SELLER' && proposal.opportunity.ownerId !== req.user.userId) {
+    if (!canAccessOpportunity(req, proposal.opportunity)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 

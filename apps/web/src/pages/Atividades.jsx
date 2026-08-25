@@ -6,11 +6,15 @@ import {
   Calendar,
   Check,
   CheckSquare,
+  Eye,
   Handshake,
+  LayoutGrid,
+  List,
   Mail,
   PhoneCall,
   Plus,
   RefreshCcw,
+  Search,
   X
 } from 'lucide-react';
 
@@ -41,6 +45,8 @@ const STATUS_META = {
   COMPLETED: { label: 'Concluida', cls: 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200' },
   CANCELLED: { label: 'Cancelada', cls: 'bg-red-500/10 text-red-900 dark:text-red-200' }
 };
+
+const ACTIVITY_KANBAN_COLUMNS = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
 const PRIORITY_META = {
   LOW: { label: 'Baixa', cls: 'bg-emerald-500/10 text-emerald-900 dark:text-emerald-200' },
@@ -101,6 +107,7 @@ export default function Atividades() {
   const lastAppliedPresetKey = useRef('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [viewMode, setViewMode] = useState('KANBAN');
 
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -439,6 +446,151 @@ export default function Atividades() {
     }
   ]), []);
 
+  const kanbanByStatus = useMemo(() => {
+    return ACTIVITY_KANBAN_COLUMNS.reduce((acc, status) => {
+      acc[status] = filteredAtividades.filter((activity) => activity.status === status);
+      return acc;
+    }, {});
+  }, [filteredAtividades]);
+
+  const filterControls = [
+    {
+      label: 'Status',
+      value: filtros.status,
+      onChange: (value) => setFiltros((prev) => ({ ...prev, status: value })),
+      options: [
+        { value: 'PENDING', label: 'Pendente' },
+        { value: 'IN_PROGRESS', label: 'Em andamento' },
+        { value: 'COMPLETED', label: 'Concluida' },
+        { value: 'CANCELLED', label: 'Cancelada' }
+      ]
+    },
+    {
+      label: 'Tipo',
+      value: filtros.type,
+      onChange: (value) => setFiltros((prev) => ({ ...prev, type: value })),
+      options: [
+        { value: 'CALL', label: 'Ligacao' },
+        { value: 'MEETING', label: 'Reuniao' },
+        { value: 'EMAIL', label: 'E-mail' },
+        { value: 'TASK', label: 'Tarefa' },
+        { value: 'FOLLOW_UP', label: 'Follow-up' },
+        { value: 'SOLICITACAO_ORCAMENTO', label: 'Solicitacao de Orcamento' }
+      ]
+    },
+    {
+      label: 'Prioridade',
+      value: filtros.priority,
+      onChange: (value) => setFiltros((prev) => ({ ...prev, priority: value })),
+      options: [
+        { value: 'LOW', label: 'Baixa' },
+        { value: 'MEDIUM', label: 'Media' },
+        { value: 'HIGH', label: 'Alta' },
+        { value: 'URGENT', label: 'Urgente' }
+      ]
+    },
+    {
+      label: 'Destino',
+      value: filtros.targetArea,
+      onChange: (value) => setFiltros((prev) => ({ ...prev, targetArea: value })),
+      options: ACTIVITY_AREA_OPTIONS
+    }
+  ];
+
+  const renderActivityActions = (item) => (
+    <>
+      {item.status === 'PENDING' && (
+        <button
+          type="button"
+          onClick={() => updateStatus(item.id, 'IN_PROGRESS')}
+          className="crm-btn crm-btn-secondary px-3 py-1.5 text-xs"
+          title="Iniciar"
+        >
+          <RefreshCcw className="h-4 w-4" />
+          Iniciar
+        </button>
+      )}
+      {item.status === 'IN_PROGRESS' && (
+        <button
+          type="button"
+          onClick={() => updateStatus(item.id, 'COMPLETED')}
+          className="crm-btn crm-btn-primary px-3 py-1.5 text-xs"
+          title="Concluir"
+        >
+          <Check className="h-4 w-4" />
+          Concluir
+        </button>
+      )}
+      {item.status !== 'COMPLETED' && item.status !== 'CANCELLED' && (
+        <button
+          type="button"
+          onClick={() => updateStatus(item.id, 'CANCELLED')}
+          className="crm-btn crm-btn-danger px-3 py-1.5 text-xs"
+          title="Cancelar"
+        >
+          <X className="h-4 w-4" />
+          Cancelar
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => openActivityDetails(item)}
+        className="crm-btn crm-btn-secondary px-3 py-1.5 text-xs"
+        title="Detalhes"
+      >
+        <Eye className="h-4 w-4" />
+        Detalhes
+      </button>
+    </>
+  );
+
+  const renderActivityCard = (item) => {
+    const displayType = getActivityDisplayType(item);
+    const typeMeta = TYPE_META[displayType] || { label: displayType || '-', icon: CheckSquare };
+    const statusMeta = STATUS_META[item.status] || { label: item.status || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
+    const priorityMeta = PRIORITY_META[item.priority] || { label: item.priority || '-', cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-200' };
+    const Icon = typeMeta.icon;
+
+    return (
+      <div key={item.id} className="rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.72)] p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)]">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.65)]">
+            <Icon className="h-4 w-4 text-[var(--crm-ink)]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-extrabold text-[var(--crm-ink)]">{item.subject || 'Atividade sem titulo'}</div>
+            <div className="mt-1 line-clamp-2 text-xs text-[var(--crm-muted)]">{item.description || typeMeta.label}</div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${statusMeta.cls}`}>
+            {statusMeta.label}
+          </span>
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${priorityMeta.cls}`}>
+            {priorityMeta.label}
+          </span>
+        </div>
+
+        <div className="mt-3 space-y-1 text-xs text-[var(--crm-muted)]">
+          <div>Empresa: <span className="text-[var(--crm-ink)]">{item.company?.name || '-'}</span></div>
+          <div>Responsavel: <span className="text-[var(--crm-ink)]">{item.assignedTo?.name || '-'}</span></div>
+          <div>Destino: <span className="text-[var(--crm-ink)]">{getAreaLabel(item?.flow?.targetArea)}</span></div>
+          <div>
+            Vencimento:{' '}
+            <span className={isOverdue(item.dueDate, item.status) ? 'font-bold text-red-400' : 'text-[var(--crm-ink)]'}>
+              {item.dueDate ? new Date(item.dueDate).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {renderActivityActions(item)}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <PageHeader
@@ -465,95 +617,98 @@ export default function Atividades() {
         <AnimatedStats title="Atrasadas" value={kpis.overdue} subtitle="Requer atencao" icon={X} color="red" />
       </div>
 
-      <ModernTable
-        title="Lista de Atividades"
-        data={filteredAtividades}
-        columns={columns}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        filters={[
-          {
-            label: 'Status',
-            value: filtros.status,
-            onChange: (value) => setFiltros((prev) => ({ ...prev, status: value })),
-            options: [
-              { value: 'PENDING', label: 'Pendente' },
-              { value: 'IN_PROGRESS', label: 'Em andamento' },
-              { value: 'COMPLETED', label: 'Concluida' },
-              { value: 'CANCELLED', label: 'Cancelada' }
-            ]
-          },
-          {
-            label: 'Tipo',
-            value: filtros.type,
-            onChange: (value) => setFiltros((prev) => ({ ...prev, type: value })),
-            options: [
-              { value: 'CALL', label: 'Ligacao' },
-              { value: 'MEETING', label: 'Reuniao' },
-              { value: 'EMAIL', label: 'E-mail' },
-              { value: 'TASK', label: 'Tarefa' },
-              { value: 'FOLLOW_UP', label: 'Follow-up' },
-              { value: 'SOLICITACAO_ORCAMENTO', label: 'Solicitacao de Orcamento' }
-            ]
-          },
-          {
-            label: 'Prioridade',
-            value: filtros.priority,
-            onChange: (value) => setFiltros((prev) => ({ ...prev, priority: value })),
-            options: [
-              { value: 'LOW', label: 'Baixa' },
-              { value: 'MEDIUM', label: 'Media' },
-              { value: 'HIGH', label: 'Alta' },
-              { value: 'URGENT', label: 'Urgente' }
-            ]
-          },
-          {
-            label: 'Destino',
-            value: filtros.targetArea,
-            onChange: (value) => setFiltros((prev) => ({ ...prev, targetArea: value })),
-            options: ACTIVITY_AREA_OPTIONS
-          }
-        ]}
-        loading={loading}
-        rowClassName={(item) => (isOverdue(item.dueDate, item.status) ? 'bg-red-500/5' : '')}
-        renderActions={(item) => (
-          <>
-            {item.status === 'PENDING' && (
-              <button
-                type="button"
-                onClick={() => updateStatus(item.id, 'IN_PROGRESS')}
-                className="crm-btn crm-btn-secondary px-3 py-1.5 text-xs"
-                title="Iniciar"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Iniciar
-              </button>
-            )}
-            {item.status === 'IN_PROGRESS' && (
-              <button
-                type="button"
-                onClick={() => updateStatus(item.id, 'COMPLETED')}
-                className="crm-btn crm-btn-primary px-3 py-1.5 text-xs"
-                title="Concluir"
-              >
-                <Check className="h-4 w-4" />
-                Concluir
-              </button>
-            )}
-            {item.status !== 'COMPLETED' && item.status !== 'CANCELLED' && (
-              <button
-                type="button"
-                onClick={() => updateStatus(item.id, 'CANCELLED')}
-                className="crm-btn crm-btn-danger px-3 py-1.5 text-xs"
-                title="Cancelar"
-              >
-                <X className="h-4 w-4" />
-                Cancelar
-              </button>
-            )}
-          </>
-        )}
-        emptyState={(
+      <div className="crm-panel mb-6 p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="relative md:col-span-2 xl:col-span-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--crm-muted)]" />
+              <input
+                type="text"
+                placeholder="Buscar atividade..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="crm-input pl-10"
+              />
+            </div>
+            {filterControls.map((filter) => (
+              <label key={filter.label} className="block">
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--crm-muted)]">{filter.label}</span>
+                <select
+                  value={filter.value}
+                  onChange={(event) => filter.onChange(event.target.value)}
+                  className="crm-input"
+                >
+                  <option value="">Todos</option>
+                  {filter.options.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          <div className="inline-flex shrink-0 rounded-lg border border-[color:var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.62)] p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('KANBAN')}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                viewMode === 'KANBAN' ? 'bg-[var(--crm-accent)] text-white' : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Kanban
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('LIST')}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                viewMode === 'LIST' ? 'bg-[var(--crm-accent)] text-white' : 'text-[var(--crm-muted)] hover:text-[var(--crm-ink)]'
+              }`}
+            >
+              <List className="h-4 w-4" />
+              Lista
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {viewMode === 'KANBAN' ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+          {ACTIVITY_KANBAN_COLUMNS.map((status) => {
+            const meta = STATUS_META[status];
+            const rows = kanbanByStatus[status] || [];
+            return (
+              <div key={status} className="crm-panel p-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-[var(--crm-ink)]">{meta.label}</h3>
+                    <p className="text-sm text-[var(--crm-muted)]">Atividades {meta.label.toLowerCase()}</p>
+                  </div>
+                  <span className="rounded-full bg-[rgb(var(--crm-surface-2-rgb)_/_0.75)] px-3 py-1 text-sm font-bold text-[var(--crm-ink)]">
+                    {rows.length}
+                  </span>
+                </div>
+                {rows.length > 0 ? (
+                  <div className="space-y-3">
+                    {rows.map(renderActivityCard)}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[color:var(--crm-border)] px-3 py-8 text-center text-sm text-[var(--crm-muted)]">
+                    Nenhuma atividade nesta coluna.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <ModernTable
+          title="Lista de Atividades"
+          data={filteredAtividades}
+          columns={columns}
+          loading={loading}
+          rowClassName={(item) => (isOverdue(item.dueDate, item.status) ? 'bg-red-500/5' : '')}
+          renderActions={renderActivityActions}
+          emptyState={(
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
               <Calendar className="w-8 h-8 text-[var(--crm-muted)]" />
@@ -563,8 +718,9 @@ export default function Atividades() {
               Ajuste os filtros ou crie uma nova atividade.
             </p>
           </div>
-        )}
-      />
+          )}
+        />
+      )}
 
       {showDetailsModal && selectedActivity && (
         <Modal

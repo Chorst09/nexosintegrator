@@ -38,6 +38,9 @@ const ACTIVITY_STATUS_FROM_REQUEST = {
   NOVA: 'PENDING',
   EM_PRECIFICACAO: 'IN_PROGRESS',
   AGUARDANDO_APROVACAO: 'IN_PROGRESS',
+  ENVIADA: 'IN_PROGRESS',
+  APROVADO: 'COMPLETED',
+  REPROVADO: 'CANCELLED',
   FINALIZADA: 'COMPLETED',
   REJEITADA: 'CANCELLED',
   CANCELADA: 'CANCELLED'
@@ -48,6 +51,9 @@ const STAGE_OPTIONS = [
   { value: 'COTACAO', label: 'Cotação' },
   { value: 'PRECIFICACAO', label: 'Precificação' },
   { value: 'REVISAO', label: 'Revisão' },
+  { value: 'ENVIADA', label: 'Enviada' },
+  { value: 'APROVADO', label: 'Aprovado' },
+  { value: 'REPROVADO', label: 'Reprovado' },
   { value: 'DEVOLVIDA', label: 'Devolvida' }
 ];
 
@@ -72,6 +78,21 @@ const STAGE_META = {
     subtitle: 'Pronta para Revisão',
     badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
   },
+  ENVIADA: {
+    title: 'Enviada',
+    subtitle: 'Enviada para decisão',
+    badge: 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+  },
+  APROVADO: {
+    title: 'Aprovado',
+    subtitle: 'Decisão aprovada',
+    badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+  },
+  REPROVADO: {
+    title: 'Reprovado',
+    subtitle: 'Decisão reprovada',
+    badge: 'bg-red-500/20 text-red-300 border-red-500/40'
+  },
   DEVOLVIDA: {
     title: 'Devolvida',
     subtitle: 'Retornada para Comercial/B2B/B2G',
@@ -79,7 +100,16 @@ const STAGE_META = {
   }
 };
 
-const KANBAN_COLUMNS = ['ENTRADA', 'COTACAO', 'PRECIFICACAO', 'REVISAO'];
+const KANBAN_COLUMNS = ['ENTRADA', 'COTACAO', 'PRECIFICACAO', 'REVISAO', 'ENVIADA', 'APROVADO', 'REPROVADO'];
+const STATUS_BY_STAGE = {
+  ENTRADA: 'NOVA',
+  COTACAO: 'EM_PRECIFICACAO',
+  PRECIFICACAO: 'EM_PRECIFICACAO',
+  REVISAO: 'AGUARDANDO_APROVACAO',
+  ENVIADA: 'ENVIADA',
+  APROVADO: 'APROVADO',
+  REPROVADO: 'REPROVADO'
+};
 const FLOW_ACTIVITY_ID_RE = /\[FLOW_ACTIVITY_ID:([^\]]+)\]/;
 const FLOW_STAGE_RE = /\[FLOW_STAGE:([A-Z_]+)\]/g;
 
@@ -167,12 +197,16 @@ const appendInternalNote = (base, message) => {
 };
 
 const isClosedStatus = (status) => ['FINALIZADA', 'REJEITADA', 'CANCELADA'].includes(String(status || '').toUpperCase());
+const isDecisionStatus = (status) => ['APROVADO', 'REPROVADO'].includes(String(status || '').toUpperCase());
 
 const defaultStageFromStatus = (status) => {
   const normalized = String(status || '').toUpperCase();
   if (normalized === 'NOVA') return 'ENTRADA';
   if (normalized === 'EM_PRECIFICACAO') return 'PRECIFICACAO';
   if (normalized === 'AGUARDANDO_APROVACAO') return 'REVISAO';
+  if (normalized === 'ENVIADA') return 'ENVIADA';
+  if (normalized === 'APROVADO') return 'APROVADO';
+  if (normalized === 'REPROVADO') return 'REPROVADO';
   if (isClosedStatus(normalized)) return 'DEVOLVIDA';
   return 'ENTRADA';
 };
@@ -182,6 +216,10 @@ const resolveStage = (status, explicitStage) => {
   if (normalized && STAGE_META[normalized]) return normalized;
   return defaultStageFromStatus(status);
 };
+
+const statusFromStage = (stage, fallbackStatus = 'EM_PRECIFICACAO') => (
+  STATUS_BY_STAGE[String(stage || '').toUpperCase()] || fallbackStatus
+);
 
 const toPriorityLabel = (priority) => {
   const p = String(priority || '').toUpperCase();
@@ -205,6 +243,9 @@ const getStatusLabel = (status) => {
     NOVA: 'Nova',
     EM_PRECIFICACAO: 'Em Precificação',
     AGUARDANDO_APROVACAO: 'Aguardando Aprovação',
+    ENVIADA: 'Enviada',
+    APROVADO: 'Aprovado',
+    REPROVADO: 'Reprovado',
     FINALIZADA: 'Finalizada',
     REJEITADA: 'Rejeitada',
     CANCELADA: 'Cancelada'
@@ -249,6 +290,9 @@ const mapRequestRow = (row) => {
 
 const mapActivityRow = (activity) => {
   const explicitStage = extractStage(activity.description);
+  const stage = resolveStage(REQUEST_STATUS_FROM_ACTIVITY[activity.status] || 'NOVA', explicitStage);
+  const status = explicitStage ? statusFromStage(stage, REQUEST_STATUS_FROM_ACTIVITY[activity.status] || 'NOVA') : REQUEST_STATUS_FROM_ACTIVITY[activity.status] || 'NOVA';
+
   return {
     id: `activity:${activity.id}`,
     rawActivityId: activity.id,
@@ -256,7 +300,7 @@ const mapActivityRow = (activity) => {
     numero: `ATV-${String(activity.id || '').slice(0, 8).toUpperCase()}`,
     titulo: activity.subject || 'Solicitação recebida via atividade',
     descricao: stripStageMarkers(activity.description) || 'Sem descrição',
-    status: REQUEST_STATUS_FROM_ACTIVITY[activity.status] || 'NOVA',
+    status,
     prioridade: activity.priority || 'MEDIUM',
     solicitante: {
       id: null,
@@ -273,7 +317,7 @@ const mapActivityRow = (activity) => {
     margemLucro: 0,
     company: activity.company ? { id: activity.company.id, name: activity.company.name } : null,
     opportunity: activity.opportunity ? { id: activity.opportunity.id, title: activity.opportunity.title } : null,
-    stage: resolveStage(REQUEST_STATUS_FROM_ACTIVITY[activity.status] || 'NOVA', explicitStage),
+    stage,
     flow: activity.flow || { sourceArea: 'COMERCIAL', targetArea: 'PRE_VENDAS' }
   };
 };
@@ -348,6 +392,8 @@ export default function Solicitacoes() {
   const [viewMode, setViewMode] = useState('KANBAN');
   const [onlyMine, setOnlyMine] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [draggedItemId, setDraggedItemId] = useState('');
+  const [dragOverStage, setDragOverStage] = useState('');
 
   const [respostaData, setRespostaData] = useState({
     mensagem: '',
@@ -448,7 +494,7 @@ export default function Solicitacoes() {
 
   const updateItem = async (item, { nextStatus, nextStage, message, pricingPayload, flowOverride } = {}) => {
     if (!item) return;
-    const shouldReturnToOrigin = nextStage === 'DEVOLVIDA' || nextStatus === 'FINALIZADA' || nextStatus === 'REJEITADA' || nextStatus === 'CANCELADA';
+    const shouldReturnToOrigin = nextStage === 'DEVOLVIDA' || ['FINALIZADA', 'REJEITADA', 'CANCELADA'].includes(nextStatus);
     const effectiveFlowOverride = flowOverride || (
       shouldReturnToOrigin
         ? {
@@ -542,16 +588,18 @@ export default function Solicitacoes() {
       return;
     }
 
-    setSelectedSolicitacao(item);
-    setRespostaData({
-      mensagem: '',
-      nextStatus: 'FINALIZADA',
-      nextStage: 'DEVOLVIDA',
-      valorSugerido: item.valorSugerido ? String(item.valorSugerido) : '',
-      custoTotal: item.custoTotal ? String(item.custoTotal) : '',
-      margemLucro: item.margemLucro ? String(item.margemLucro) : ''
-    });
-    setShowRespostaModal(true);
+    if (stage === 'REVISAO') {
+      setSelectedSolicitacao(item);
+      setRespostaData({
+        mensagem: '',
+        nextStatus: 'ENVIADA',
+        nextStage: 'ENVIADA',
+        valorSugerido: item.valorSugerido ? String(item.valorSugerido) : '',
+        custoTotal: item.custoTotal ? String(item.custoTotal) : '',
+        margemLucro: item.margemLucro ? String(item.margemLucro) : ''
+      });
+      setShowRespostaModal(true);
+    }
   };
 
   const handleCancelar = async (item) => {
@@ -573,6 +621,28 @@ export default function Solicitacoes() {
     }
   };
 
+  const handleDecisao = async (item, approved) => {
+    const nextStatus = approved ? 'APROVADO' : 'REPROVADO';
+    const nextStage = approved ? 'APROVADO' : 'REPROVADO';
+
+    try {
+      setSaving(true);
+      await updateItem(item, {
+        nextStatus,
+        nextStage,
+        message: approved
+          ? 'Solicitação aprovada após envio.'
+          : 'Solicitação reprovada após envio.'
+      });
+      await loadSolicitacoes();
+    } catch (error) {
+      console.error('Erro ao aplicar decisão:', error);
+      alert(error.message || 'Erro ao aplicar decisão');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openResponderModal = (item) => {
     const stage = resolveStage(item.status, item.stage);
 
@@ -586,8 +656,11 @@ export default function Solicitacoes() {
       nextStatus = 'EM_PRECIFICACAO';
       nextStage = 'PRECIFICACAO';
     } else if (stage === 'REVISAO') {
-      nextStatus = 'FINALIZADA';
-      nextStage = 'DEVOLVIDA';
+      nextStatus = 'ENVIADA';
+      nextStage = 'ENVIADA';
+    } else if (stage === 'ENVIADA') {
+      nextStatus = 'APROVADO';
+      nextStage = 'APROVADO';
     }
 
     setSelectedSolicitacao(item);
@@ -646,6 +719,43 @@ export default function Solicitacoes() {
     } catch (error) {
       console.error('Erro ao responder solicitação:', error);
       alert(error.message || 'Erro ao enviar resposta');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateRespostaStatus = (nextStatus) => {
+    setRespostaData((prev) => ({
+      ...prev,
+      nextStatus,
+      nextStage: defaultStageFromStatus(nextStatus)
+    }));
+  };
+
+  const handleStageDrop = async (targetStage) => {
+    const nextStage = String(targetStage || '').toUpperCase();
+    const item = activeItems.find((entry) => entry.id === draggedItemId);
+    setDraggedItemId('');
+    setDragOverStage('');
+
+    if (!item || !STATUS_BY_STAGE[nextStage]) return;
+
+    const currentStage = resolveStage(item.status, item.stage);
+    if (currentStage === nextStage) return;
+
+    const nextStatus = statusFromStage(nextStage, item.status);
+
+    try {
+      setSaving(true);
+      await updateItem(item, {
+        nextStatus,
+        nextStage,
+        message: `Card movido de ${stageLabel(currentStage)} para ${stageLabel(nextStage)}.`
+      });
+      await loadSolicitacoes();
+    } catch (error) {
+      console.error('Erro ao mover card:', error);
+      alert(error.message || 'Erro ao mover card');
     } finally {
       setSaving(false);
     }
@@ -1123,20 +1233,19 @@ export default function Solicitacoes() {
   );
 
   const kanbanByStage = useMemo(() => {
-    const grouped = {
-      ENTRADA: [],
-      COTACAO: [],
-      PRECIFICACAO: [],
-      REVISAO: []
-    };
+    const grouped = KANBAN_COLUMNS.reduce((acc, stage) => {
+      acc[stage] = [];
+      return acc;
+    }, {});
 
     activeItems.forEach((item) => {
       const stage = resolveStage(item.status, item.stage);
-      if (grouped[stage]) grouped[stage].push(item);
+      const targetStage = grouped[stage] ? stage : 'ENTRADA';
+      grouped[targetStage].push(item);
     });
 
     KANBAN_COLUMNS.forEach((stage) => {
-      grouped[stage].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      grouped[stage] = (grouped[stage] || []).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     });
 
     return grouped;
@@ -1187,7 +1296,7 @@ export default function Solicitacoes() {
   const renderCardActions = (item) => {
     const stage = resolveStage(item.status, item.stage);
 
-    if (isClosedStatus(item.status)) {
+    if (isClosedStatus(item.status) || isDecisionStatus(item.status)) {
       return (
         <button
           type="button"
@@ -1241,6 +1350,60 @@ export default function Solicitacoes() {
       );
     }
 
+    if (stage === 'REVISAO') {
+      return (
+        <>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleAvancarEtapa(item)}
+            className="inline-flex items-center gap-1 rounded-lg border border-sky-500/40 bg-sky-500/20 px-3 py-2 text-xs text-sky-200 hover:bg-sky-500/30 disabled:opacity-60"
+          >
+            <Send className="h-3.5 w-3.5" /> Enviar
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleDecisao(item, true)}
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
+          >
+            <CheckCircle className="h-3.5 w-3.5" /> Aprovar
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleDecisao(item, false)}
+            className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/20 px-3 py-2 text-xs text-red-200 hover:bg-red-500/30 disabled:opacity-60"
+          >
+            <AlertCircle className="h-3.5 w-3.5" /> Reprovar
+          </button>
+        </>
+      );
+    }
+
+    if (stage === 'ENVIADA') {
+      return (
+        <>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleDecisao(item, true)}
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
+          >
+            <CheckCircle className="h-3.5 w-3.5" /> Aprovar
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => handleDecisao(item, false)}
+            className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-500/20 px-3 py-2 text-xs text-red-200 hover:bg-red-500/30 disabled:opacity-60"
+          >
+            <AlertCircle className="h-3.5 w-3.5" /> Reprovar
+          </button>
+        </>
+      );
+    }
+
     return (
       <button
         type="button"
@@ -1260,7 +1423,19 @@ export default function Solicitacoes() {
     return (
       <div
         key={item.id}
-        className="rounded-xl border border-slate-600/40 bg-[#102540] p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)]"
+        draggable={!saving}
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', item.id);
+          setDraggedItemId(item.id);
+        }}
+        onDragEnd={() => {
+          setDraggedItemId('');
+          setDragOverStage('');
+        }}
+        className={`cursor-grab rounded-xl border border-slate-600/40 bg-[#102540] p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)] active:cursor-grabbing ${
+          draggedItemId === item.id ? 'opacity-50 ring-2 ring-sky-400/50' : ''
+        }`}
       >
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -1294,7 +1469,7 @@ export default function Solicitacoes() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {renderCardActions(item)}
 
-          {!isClosedStatus(item.status) && (
+          {!isClosedStatus(item.status) && !isDecisionStatus(item.status) && (
             <button
               type="button"
               onClick={() => openCotacaoModal(item)}
@@ -1315,7 +1490,7 @@ export default function Solicitacoes() {
             <Eye className="h-3.5 w-3.5" /> Detalhes
           </button>
 
-          {!isClosedStatus(item.status) && (
+          {!isClosedStatus(item.status) && !isDecisionStatus(item.status) && (
             <button
               type="button"
               disabled={saving}
@@ -1457,13 +1632,32 @@ export default function Solicitacoes() {
           <p className="mt-3 text-sm text-slate-400">Nenhuma demanda encontrada para os filtros atuais.</p>
         </div>
       ) : viewMode === 'KANBAN' ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4 2xl:grid-cols-7">
           {KANBAN_COLUMNS.map((column) => {
             const meta = STAGE_META[column];
             const rows = kanbanByStage[column] || [];
 
             return (
-              <div key={column} className="crm-card rounded-xl p-4">
+              <div
+                key={column}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  if (dragOverStage !== column) setDragOverStage(column);
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                    setDragOverStage('');
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  handleStageDrop(column);
+                }}
+                className={`crm-card rounded-xl p-4 transition ${
+                  dragOverStage === column ? 'border-sky-400/70 bg-sky-500/10 ring-2 ring-sky-400/30' : ''
+                }`}
+              >
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-xl font-semibold text-white">{meta.title}</h3>
@@ -1518,7 +1712,7 @@ export default function Solicitacoes() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     {renderCardActions(item)}
-                    {!isClosedStatus(item.status) && (
+                    {!isClosedStatus(item.status) && !isDecisionStatus(item.status) && (
                       <button
                         type="button"
                         onClick={() => openCotacaoModal(item)}
@@ -1527,13 +1721,15 @@ export default function Solicitacoes() {
                         <FolderOpen className="h-3.5 w-3.5" /> Abrir Cotação
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => openResponderModal(item)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/30"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" /> Responder
-                    </button>
+                    {!isClosedStatus(item.status) && !isDecisionStatus(item.status) && (
+                      <button
+                        type="button"
+                        onClick={() => openResponderModal(item)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/30"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" /> Responder
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -2486,11 +2682,14 @@ export default function Solicitacoes() {
               <label className="block text-sm font-medium text-gray-300 mb-2">Próximo status</label>
               <select
                 value={respostaData.nextStatus}
-                onChange={(e) => setRespostaData((prev) => ({ ...prev, nextStatus: e.target.value }))}
+                onChange={(e) => updateRespostaStatus(e.target.value)}
                 className="w-full rounded-lg border border-gray-600/60 bg-gray-900/60 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 <option value="EM_PRECIFICACAO">Em Precificação</option>
                 <option value="AGUARDANDO_APROVACAO">Aguardando Aprovação</option>
+                <option value="ENVIADA">Enviada</option>
+                <option value="APROVADO">Aprovado</option>
+                <option value="REPROVADO">Reprovado</option>
                 <option value="FINALIZADA">Finalizada</option>
                 <option value="REJEITADA">Rejeitada</option>
                 <option value="CANCELADA">Cancelada</option>

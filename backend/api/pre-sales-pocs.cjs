@@ -2,12 +2,42 @@ const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth');
 const { canAccessModule, normalizeRole } = require('../lib/permissions');
+const { getTenantCompanyId } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
 
 const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 const VALID_STATUSES = new Set(['PLANEJAMENTO', 'EM_ANDAMENTO', 'VALIDACAO', 'BLOQUEADA', 'APROVADA', 'DESCARTADA']);
 const FINAL_STATUSES = ['APROVADA', 'DESCARTADA'];
+
+const getTenantUserIds = async (req) => {
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  if (!tenantCompanyId) return null;
+  const users = await prisma.user.findMany({
+    where: { tenantCompanyId },
+    select: { id: true }
+  });
+  return users.map((user) => user.id);
+};
+
+const scopePocWhere = async (req, where = {}) => {
+  const tenantUserIds = await getTenantUserIds(req);
+  if (!tenantUserIds) return where;
+  return {
+    ...where,
+    createdById: { in: tenantUserIds }
+  };
+};
+
+const ensurePocAccess = async (req, id) => {
+  const where = await scopePocWhere(req, { id });
+  const poc = await prisma.preSalesPoc.findFirst({
+    where,
+    select: { id: true }
+  });
+  if (!poc) return { error: 'POC não encontrada', status: 404 };
+  return { poc };
+};
 
 router.use(authenticateToken);
 router.use((req, res, next) => {
@@ -118,20 +148,21 @@ const buildWhere = (query = {}) => {
   return where;
 };
 
-const getStats = async () => {
+const getStats = async (req) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const scoped = async (where = {}) => scopePocWhere(req, where);
 
   const [total, andamento, bloqueadas, aprovadas, atrasadas] = await Promise.all([
-    prisma.preSalesPoc.count(),
-    prisma.preSalesPoc.count({ where: { status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'VALIDACAO'] } } }),
-    prisma.preSalesPoc.count({ where: { status: 'BLOQUEADA' } }),
-    prisma.preSalesPoc.count({ where: { status: 'APROVADA' } }),
+    prisma.preSalesPoc.count({ where: await scoped() }),
+    prisma.preSalesPoc.count({ where: await scoped({ status: { in: ['PLANEJAMENTO', 'EM_ANDAMENTO', 'VALIDACAO'] } }) }),
+    prisma.preSalesPoc.count({ where: await scoped({ status: 'BLOQUEADA' }) }),
+    prisma.preSalesPoc.count({ where: await scoped({ status: 'APROVADA' }) }),
     prisma.preSalesPoc.count({
-      where: {
+      where: await scoped({
         dueDate: { lt: today },
         status: { notIn: FINAL_STATUSES }
-      }
+      })
     })
   ]);
 
@@ -140,14 +171,14 @@ const getStats = async () => {
 
 router.get('/', async (req, res) => {
   try {
-    const where = buildWhere(req.query);
+    const where = await scopePocWhere(req, buildWhere(req.query));
     const [pocs, stats] = await Promise.all([
       prisma.preSalesPoc.findMany({
         where,
         include: getPocInclude(),
         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
       }),
-      getStats()
+      getStats(req)
     ]);
 
     res.json({ success: true, data: pocs, pocs, stats });
@@ -183,6 +214,11 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   try {
+    const accessCheck = await ensurePocAccess(req, req.params.id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({ success: false, message: accessCheck.error });
+    }
+
     const payload = buildPayload(req.body);
     const missing = validatePayload(payload);
     if (missing.length) {
@@ -207,6 +243,11 @@ router.put('/:id', async (req, res) => {
 
 router.post('/:id/approve', async (req, res) => {
   try {
+    const accessCheck = await ensurePocAccess(req, req.params.id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({ success: false, message: accessCheck.error });
+    }
+
     const poc = await prisma.preSalesPoc.update({
       where: { id: req.params.id },
       data: { status: 'APROVADA', progress: 100, approvedAt: new Date(), discardedAt: null },
@@ -224,6 +265,11 @@ router.post('/:id/approve', async (req, res) => {
 
 router.post('/:id/discard', async (req, res) => {
   try {
+    const accessCheck = await ensurePocAccess(req, req.params.id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({ success: false, message: accessCheck.error });
+    }
+
     const poc = await prisma.preSalesPoc.update({
       where: { id: req.params.id },
       data: { status: 'DESCARTADA', discardedAt: new Date() },
@@ -246,13 +292,9 @@ router.post('/:id/follow-ups', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Acompanhamento é obrigatório' });
     }
 
-    const existing = await prisma.preSalesPoc.findUnique({
-      where: { id: req.params.id },
-      select: { id: true }
-    });
-
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'POC não encontrada' });
+    const accessCheck = await ensurePocAccess(req, req.params.id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({ success: false, message: accessCheck.error });
     }
 
     const followUp = await prisma.preSalesPocFollowUp.create({
@@ -283,6 +325,11 @@ router.post('/:id/follow-ups', async (req, res) => {
 
 router.delete('/:id/follow-ups/:followUpId', async (req, res) => {
   try {
+    const accessCheck = await ensurePocAccess(req, req.params.id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({ success: false, message: accessCheck.error });
+    }
+
     const existing = await prisma.preSalesPocFollowUp.findFirst({
       where: {
         id: req.params.followUpId,
@@ -310,6 +357,11 @@ router.delete('/:id/follow-ups/:followUpId', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    const accessCheck = await ensurePocAccess(req, req.params.id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({ success: false, message: accessCheck.error });
+    }
+
     await prisma.preSalesPoc.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (error) {

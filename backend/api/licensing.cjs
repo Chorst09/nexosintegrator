@@ -352,9 +352,13 @@ router.post('/public/checkout/confirm', async (req, res) => {
       return res.status(400).json({ error: 'company.name, adminUser.name e adminUser.email são obrigatórios' });
     }
 
-    const plan = planId
-      ? await prisma.licensePlan.findUnique({ where: { id: planId } })
-      : await prisma.licensePlan.findFirst({ where: { code: planCode || 'MENSAL', isActive: true } });
+    let plan = null;
+    if (planId) {
+      plan = await prisma.licensePlan.findUnique({ where: { id: planId } });
+    }
+    if (!plan) {
+      plan = await prisma.licensePlan.findFirst({ where: { code: planCode || 'MENSAL', isActive: true } });
+    }
 
     if (!plan) {
       return res.status(404).json({ error: 'Plano não encontrado' });

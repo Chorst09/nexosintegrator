@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { updateCompanyLeadScore } from '../lib/leadScoring.js';
+import { getTenantCompanyId, isTenantRecordVisible, forbiddenTenantResponse, tenantScopedWhere } from '../lib/tenantScope.js';
 
 const parsePathIdFromUrl = (urlValue) => {
   if (!urlValue) return null;
@@ -200,7 +201,9 @@ export default async function handler(req) {
   if (req.method === "GET") {
     const { stage, ownerId, clientType } = req.query || {};
     
-    const where = {};
+    const where = {
+      ...tenantScopedWhere(req.user)
+    };
     if (stage) where.stage = stage;
     if (canSeeAllOpportunities(req.user)) {
       if (ownerId) where.ownerId = ownerId;
@@ -264,8 +267,19 @@ export default async function handler(req) {
     }
 
     const resolvedOwnerId = canSeeAllOpportunities(req.user) ? body.ownerId : req.user.userId;
+    const tenantCompanyId = getTenantCompanyId(req.user) || body.tenantCompanyId || null;
     if (!resolvedOwnerId) {
       return new Response('ownerId é obrigatório', { status: 400 });
+    }
+
+    if (tenantCompanyId && body.companyId) {
+      const company = await prisma.company.findUnique({
+        where: { id: body.companyId },
+        select: { tenantCompanyId: true }
+      });
+      if (!company || String(company.tenantCompanyId || '') !== tenantCompanyId) {
+        return new Response('Empresa não pertence a este tenant', { status: 403 });
+      }
     }
 
     const projectType = normalizeProjectType(body.projectType);
@@ -289,6 +303,7 @@ export default async function handler(req) {
           notes: body.notes,
           companyId: body.companyId,
           ownerId: resolvedOwnerId,
+          tenantCompanyId,
           products: body.products ? {
             create: body.products.map(p => ({
               productId: p.productId,
@@ -336,19 +351,23 @@ export default async function handler(req) {
       return new Response('id é obrigatório', { status: 400 });
     }
 
+    const existing = await prisma.opportunity.findUnique({
+      where: { id: opportunityId },
+      select: {
+        ownerId: true,
+        tenantCompanyId: true,
+        number: true,
+        b2gStage: true,
+        source: true,
+        description: true,
+        company: { select: { clientType: true, segment: true } }
+      }
+    });
+    if (!existing) return new Response('Not found', { status: 404 });
+    if (!isTenantRecordVisible(req.user, existing)) {
+      return forbiddenTenantResponse();
+    }
     if (!canSeeAllOpportunities(req.user)) {
-      const existing = await prisma.opportunity.findUnique({
-        where: { id: opportunityId },
-        select: {
-          ownerId: true,
-          number: true,
-          b2gStage: true,
-          source: true,
-          description: true,
-          company: { select: { clientType: true, segment: true } }
-        }
-      });
-      if (!existing) return new Response('Not found', { status: 404 });
       if (existing.ownerId !== req.user.userId) {
         return new Response('Forbidden', { status: 403 });
       }
@@ -428,12 +447,17 @@ export default async function handler(req) {
       select: {
         id: true,
         ownerId: true,
-        companyId: true
+        companyId: true,
+        tenantCompanyId: true
       }
     });
 
     if (!existing) {
       return new Response('Oportunidade não encontrada', { status: 404 });
+    }
+
+    if (!isTenantRecordVisible(req.user, existing)) {
+      return forbiddenTenantResponse();
     }
 
     if (!canSeeAllOpportunities(req.user) && existing.ownerId !== req.user.userId) {

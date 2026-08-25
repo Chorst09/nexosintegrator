@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId, tenantScopedWhere } from '../lib/tenantScope.js';
 
 // Simulação de integração com plataformas de e-mail marketing
 export default async function handler(req) {
@@ -8,13 +9,13 @@ export default async function handler(req) {
     try {
       switch (action) {
         case 'send_campaign':
-          return await sendCampaign(data);
+          return await sendCampaign(data, req.user);
         case 'create_contact':
           return await createContact(data);
         case 'add_to_list':
           return await addToList(data);
         case 'send_transactional':
-          return await sendTransactional(data);
+          return await sendTransactional(data, req.user);
         default:
           return Response.json({ error: 'Invalid action' }, { status: 400 });
       }
@@ -41,7 +42,7 @@ export default async function handler(req) {
   return new Response('Method not allowed', { status: 405 });
 }
 
-async function sendCampaign({ campaignName, subject, content, listId, companyIds }) {
+async function sendCampaign({ campaignName, subject, content, listId, companyIds }, user = {}) {
   const campaignId = `camp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // Simular envio para empresas específicas ou lista
@@ -49,7 +50,7 @@ async function sendCampaign({ campaignName, subject, content, listId, companyIds
   
   if (companyIds && companyIds.length > 0) {
     const companies = await prisma.company.findMany({
-      where: { id: { in: companyIds } },
+      where: { id: { in: companyIds }, ...tenantScopedWhere(user) },
       include: {
         contacts: {
           where: { isPrimary: true }
@@ -85,7 +86,7 @@ async function sendCampaign({ campaignName, subject, content, listId, companyIds
   for (const recipient of recipients) {
     if (recipient.company) {
       const company = await prisma.company.findFirst({
-        where: { name: recipient.company }
+        where: { name: recipient.company, ...tenantScopedWhere(user) }
       });
       
       if (company) {
@@ -98,7 +99,8 @@ async function sendCampaign({ campaignName, subject, content, listId, companyIds
             priority: 'MEDIUM',
             completedAt: new Date(),
             companyId: company.id,
-            assignedToId: await getDefaultUserId()
+            assignedToId: await getDefaultUserId(user),
+            tenantCompanyId: getTenantCompanyId(user)
           }
         });
       }
@@ -163,7 +165,7 @@ async function addToList({ email, listId, listName }) {
   });
 }
 
-async function sendTransactional({ to, subject, template, data: templateData, companyId }) {
+async function sendTransactional({ to, subject, template, data: templateData, companyId }, user = {}) {
   const messageId = `trans_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   await prisma.integrationLog.create({
@@ -184,6 +186,12 @@ async function sendTransactional({ to, subject, template, data: templateData, co
 
   // Criar atividade se vinculado a uma empresa
   if (companyId) {
+    const company = await prisma.company.findFirst({
+      where: { id: companyId, ...tenantScopedWhere(user) },
+      select: { id: true }
+    });
+    if (!company) return Response.json({ error: 'Empresa não pertence a este tenant' }, { status: 403 });
+
     await prisma.activity.create({
       data: {
         type: 'EMAIL',
@@ -193,7 +201,8 @@ async function sendTransactional({ to, subject, template, data: templateData, co
         priority: 'MEDIUM',
         completedAt: new Date(),
         companyId,
-        assignedToId: await getDefaultUserId()
+        assignedToId: await getDefaultUserId(user),
+        tenantCompanyId: getTenantCompanyId(user)
       }
     });
   }
@@ -264,9 +273,9 @@ async function getEmailIntegrationId() {
   return integration?.id || 'default';
 }
 
-async function getDefaultUserId() {
-  const user = await prisma.user.findFirst({
-    where: { role: 'ADMIN' }
+async function getDefaultUserId(requestUser = {}) {
+  const defaultUser = await prisma.user.findFirst({
+    where: { role: 'ADMIN', ...tenantScopedWhere(requestUser) }
   });
-  return user?.id || 'default';
+  return defaultUser?.id || requestUser?.userId || requestUser?.id || 'default';
 }

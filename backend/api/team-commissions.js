@@ -1,8 +1,10 @@
 import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId } from '../lib/tenantScope.js';
 
 export default async function handler(req) {
   if (req.method === 'GET') {
     const { regionId, period, type } = req.query || {};
+    const tenantCompanyId = getTenantCompanyId(req.user);
     
     // Filtro por período
     let dateFilter = {};
@@ -31,7 +33,10 @@ export default async function handler(req) {
     const commissionWhere = {
       ...dateFilter,
       status: { not: 'CANCELLED' },
-      opportunity: { stage: 'WON' }
+      opportunity: {
+        stage: 'WON',
+        ...(tenantCompanyId ? { tenantCompanyId } : {})
+      }
     };
 
     if (type === 'by_region') {
@@ -40,6 +45,7 @@ export default async function handler(req) {
         where: regionId ? { id: regionId } : { isActive: true },
         include: {
           users: {
+            where: tenantCompanyId ? { tenantCompanyId } : undefined,
             include: {
               commissions: {
                 where: commissionWhere,
@@ -105,6 +111,7 @@ export default async function handler(req) {
       const sellers = await prisma.user.findMany({
         where: {
           role: 'SELLER',
+          ...(tenantCompanyId ? { tenantCompanyId } : {}),
           ...(regionId ? { regionId } : {})
         },
         select: {
@@ -168,6 +175,9 @@ export default async function handler(req) {
     }
 
     if (type === 'team_bonuses') {
+      if (tenantCompanyId) {
+        return Response.json([]);
+      }
       // Bonificações por equipe baseadas em metas coletivas
       const teamBonuses = await prisma.teamBonus.findMany({
         where: {
@@ -197,7 +207,10 @@ export default async function handler(req) {
       by: ['sellerId'],
       where: {
         ...commissionWhere,
-        seller: regionId ? { regionId } : undefined
+        seller: {
+          ...(regionId ? { regionId } : {}),
+          ...(tenantCompanyId ? { tenantCompanyId } : {})
+        }
       },
       _sum: {
         amount: true
@@ -235,6 +248,9 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json();
+    if (getTenantCompanyId(req.user)) {
+      return Response.json({ error: 'Bonificação de equipe restrita ao administrador global' }, { status: 403 });
+    }
     
     if (body.type === 'team_bonus') {
       // Criar bonificação por equipe

@@ -92,6 +92,8 @@ model Company {
   accessPreSales Boolean @default(false)
   accessManagement Boolean @default(false)
   accessAutomation Boolean @default(false)
+  tenantCompanyId String?
+  tenantCompany TenantCompany? @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -108,6 +110,8 @@ model Company {
   preSalesLeads PreSalesRequest[] @relation("PreSalesLead")
   integrationOrders IntegrationOrder[]
   projects          Project[]
+
+  @@index([tenantCompanyId])
 }
 
 model Contact {
@@ -130,6 +134,8 @@ model Product {
   price       Float
   margin      Float?
   active      Boolean  @default(true)
+  tenantCompanyId String?
+  tenantCompany TenantCompany? @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   
   // Relacionamentos
@@ -141,6 +147,8 @@ model Product {
   suggestedBy   CrossSellRule[] @relation("SuggestedProduct")
   upSellTarget  UpSellRule[]    @relation("TargetProduct")
   preSalesItems PreSalesItem[]  @relation("PreSalesProduct")
+
+  @@index([tenantCompanyId])
 }
 
 // === FUNIL DE VENDAS ===
@@ -168,6 +176,8 @@ model Opportunity {
   company   Company @relation(fields: [companyId], references: [id])
   ownerId   String
   owner     User    @relation(fields: [ownerId], references: [id])
+  tenantCompanyId String?
+  tenantCompany TenantCompany? @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
   
   products    OpportunityProduct[]
   activities  Activity[]
@@ -183,6 +193,7 @@ model Opportunity {
   updatedAt DateTime @updatedAt
 
   @@index([b2gStage])
+  @@index([tenantCompanyId])
 }
 
 model OpportunityFollowUp {
@@ -235,9 +246,13 @@ model Activity {
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
   assignedToId  String
   assignedTo    User @relation(fields: [assignedToId], references: [id])
+  tenantCompanyId String?
+  tenantCompany TenantCompany? @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantCompanyId])
 }
 
 // === PROPOSTAS ===
@@ -593,6 +608,10 @@ model TenantCompany {
 
   users       User[]
   licenses    CompanyLicense[]
+  companies   Company[]
+  products    Product[]
+  opportunities Opportunity[]
+  activities  Activity[]
 
   @@index([status, createdAt])
 }
@@ -1645,6 +1664,9 @@ enum PreSalesStatus {
   NOVA
   EM_PRECIFICACAO
   AGUARDANDO_APROVACAO
+  ENVIADA
+  APROVADO
+  REPROVADO
   FINALIZADA
   REJEITADA
   CANCELADA

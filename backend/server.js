@@ -62,7 +62,7 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5173'],
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '150mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Timeout global para requests - evita que requisições lentas
@@ -137,6 +137,8 @@ app.use('/api/proposal-templates', require('./api/proposal-templates'));
 app.use('/api/products', productsRoutes);
 app.use('/api/settings', require('./api/settings'));
 app.use('/api/projetos', require('./api/projetos.cjs'));
+app.use('/api/checkout', require('./api/checkout.cjs'));
+app.use('/api/admin/backup', authenticateToken, require('./api/admin-backup.cjs'));
 
 // Handler para APIs antigas (ES modules) - conversão dinâmica
 const handleLegacyAPI = (apiPath) => {
@@ -187,39 +189,39 @@ const handleLegacyAPI = (apiPath) => {
 };
 
 // Rotas das APIs antigas (ES modules)
-app.use('/api/clients', handleLegacyAPI('./api/clients.js'));
-app.use('/api/companies', handleLegacyAPI('./api/companies.js'));
+app.use('/api/clients', authenticateToken, handleLegacyAPI('./api/clients.js'));
+app.use('/api/companies', authenticateToken, handleLegacyAPI('./api/companies.js'));
 app.use('/api/opportunities', authenticateToken, handleLegacyAPI('./api/opportunities.js'));
-app.use('/api/activities', handleLegacyAPI('./api/activities.js'));
+app.use('/api/activities', authenticateToken, handleLegacyAPI('./api/activities.js'));
 app.use('/api/activities-simple', authenticateToken, require('./api/activities-simple.cjs'));
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
 // app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
-app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));
+app.use('/api/commissions', authenticateToken, handleLegacyAPI('./api/commissions.js'));
 app.use('/api/users', authenticateToken, handleLegacyAPI('./api/users.js'));
-app.use('/api/dashboard', handleLegacyAPI('./api/dashboard.js'));
-app.use('/api/leadScoring', handleLegacyAPI('./api/leadScoring.js'));
-app.use('/api/leadDistribution', handleLegacyAPI('./api/leadDistribution.js'));
+app.use('/api/dashboard', authenticateToken, handleLegacyAPI('./api/dashboard.js'));
+app.use('/api/leadScoring', authenticateToken, handleLegacyAPI('./api/leadScoring.js'));
+app.use('/api/leadDistribution', authenticateToken, handleLegacyAPI('./api/leadDistribution.js'));
 
 // Novas APIs - Integrações
-app.use('/api/integrations', handleLegacyAPI('./api/integrations.js'));
-app.use('/api/whatsapp', handleLegacyAPI('./api/whatsapp.js'));
-app.use('/api/email-marketing', handleLegacyAPI('./api/email-marketing.js'));
-app.use('/api/voip', handleLegacyAPI('./api/voip.js'));
+app.use('/api/integrations', authenticateToken, handleLegacyAPI('./api/integrations.js'));
+app.use('/api/whatsapp', authenticateToken, handleLegacyAPI('./api/whatsapp.js'));
+app.use('/api/email-marketing', authenticateToken, handleLegacyAPI('./api/email-marketing.js'));
+app.use('/api/voip', authenticateToken, handleLegacyAPI('./api/voip.js'));
 
 // Novas APIs - Funcionalidades Avançadas
-app.use('/api/price-tables', handleLegacyAPI('./api/price-tables.js'));
-app.use('/api/competitors', handleLegacyAPI('./api/competitors.js'));
-app.use('/api/regions', handleLegacyAPI('./api/regions.js'));
-app.use('/api/cross-sell', handleLegacyAPI('./api/cross-sell.js'));
-app.use('/api/upsell', handleLegacyAPI('./api/upsell.js'));
-app.use('/api/approvals', handleLegacyAPI('./api/approvals.js'));
+app.use('/api/price-tables', authenticateToken, handleLegacyAPI('./api/price-tables.js'));
+app.use('/api/competitors', authenticateToken, handleLegacyAPI('./api/competitors.js'));
+app.use('/api/regions', authenticateToken, handleLegacyAPI('./api/regions.js'));
+app.use('/api/cross-sell', authenticateToken, handleLegacyAPI('./api/cross-sell.js'));
+app.use('/api/upsell', authenticateToken, handleLegacyAPI('./api/upsell.js'));
+app.use('/api/approvals', authenticateToken, handleLegacyAPI('./api/approvals.js'));
 
 // Novas APIs - Comissionamento Avançado
-app.use('/api/sales-targets', handleLegacyAPI('./api/sales-targets.js'));
-app.use('/api/team-commissions', handleLegacyAPI('./api/team-commissions.js'));
+app.use('/api/sales-targets', authenticateToken, handleLegacyAPI('./api/sales-targets.js'));
+app.use('/api/team-commissions', authenticateToken, handleLegacyAPI('./api/team-commissions.js'));
 
 // Novas APIs - Workflows Avançados
-app.use('/api/advanced-workflows', handleLegacyAPI('./api/advanced-workflows.js'));
+app.use('/api/advanced-workflows', authenticateToken, handleLegacyAPI('./api/advanced-workflows.js'));
 
 // Novas APIs - Licensing
 app.use('/api/licensing', require('./api/licensing.cjs'));
