@@ -549,39 +549,39 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               className="bg-[#111827] border border-[#263345] rounded-md"
             />
 
-          <Panel position="top-left" className="bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-3 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Componentes</h3>
-            <button onClick={() => addNetworkNode('fiber', 'Fibra Óptica', 'Backbone / FO / DIO', 'fiber')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Cable className="w-4 h-4 text-[#22d3ee]" /> Fibra / DIO
+          <Panel position="top-left" className="w-56 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-1.5 max-h-[calc(100vh-120px)] overflow-y-auto">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Componentes</h3>
+            <button onClick={() => addNetworkNode('fiber', 'Fibra Óptica', 'Backbone / FO / DIO', 'fiber')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Cable className="w-3.5 h-3.5 text-[#22d3ee]" /> Fibra / DIO
             </button>
-            <button onClick={() => addNetworkNode('radio', 'Rádio Enlace', 'PTP / Backhaul', 'radio')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <RadioTower className="w-4 h-4 text-[#f6b40b]" /> Rádio Enlace
+            <button onClick={() => addNetworkNode('radio', 'Rádio Enlace', 'PTP / Backhaul', 'radio')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <RadioTower className="w-3.5 h-3.5 text-[#f6b40b]" /> Rádio Enlace
             </button>
-            <button onClick={() => addNetworkNode('switch', 'Switch', 'Core / Acesso / PoE', 'switch')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Network className="w-4 h-4 text-[#34d399]" /> Switch
+            <button onClick={() => addNetworkNode('switch', 'Switch', 'Core / Acesso / PoE', 'switch')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Network className="w-3.5 h-3.5 text-[#34d399]" /> Switch
             </button>
-            <button onClick={() => addNetworkNode('accessPoint', 'Access Point', 'Wi-Fi / SSID / PoE', 'wifi')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Wifi className="w-4 h-4 text-[#38bdf8]" /> Access Point
+            <button onClick={() => addNetworkNode('accessPoint', 'Access Point', 'Wi-Fi / SSID / PoE', 'wifi')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Wifi className="w-3.5 h-3.5 text-[#38bdf8]" /> Access Point
             </button>
-            <button onClick={() => addNetworkNode('router', 'Roteador', 'Gateway / WAN', 'router')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Router className="w-4 h-4 text-[#ff7a00]" /> Roteador
+            <button onClick={() => addNetworkNode('router', 'Roteador', 'Gateway / WAN', 'router')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Router className="w-3.5 h-3.5 text-[#ff7a00]" /> Roteador
             </button>
-            <button onClick={() => addNetworkNode('firewall', 'Firewall', 'Segurança / VPN', 'fortinet')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Shield className="w-4 h-4 text-[#ff7a00]" /> Firewall
+            <button onClick={() => addNetworkNode('firewall', 'Firewall', 'Segurança / VPN', 'fortinet')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Shield className="w-3.5 h-3.5 text-[#ff7a00]" /> Firewall
             </button>
-            <button onClick={() => addNetworkNode('server', 'Servidor', 'Servidor local / VM', 'server')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Server className="w-4 h-4 text-[#ff7a00]" /> Servidor
+            <button onClick={() => addNetworkNode('server', 'Servidor', 'Servidor local / VM', 'server')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Server className="w-3.5 h-3.5 text-[#ff7a00]" /> Servidor
             </button>
-            <button onClick={() => addNetworkNode('cloud', 'Cloud Service', 'Cloud / SaaS / DC', 'cloud')} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white hover:bg-[#263345] p-2 rounded-lg transition-colors text-left">
-              <Cloud className="w-4 h-4 text-[#ff7a00]" /> Cloud
+            <button onClick={() => addNetworkNode('cloud', 'Cloud Service', 'Cloud / SaaS / DC', 'cloud')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <Cloud className="w-3.5 h-3.5 text-[#ff7a00]" /> Cloud
             </button>
 
-            <div className="mt-2 pt-3 border-t border-[#263345] flex flex-col gap-2">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tecnologia Específica</h3>
+            <div className="mt-1.5 pt-2 border-t border-[#263345] flex flex-col gap-1.5">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Tecnologia Específica</h3>
               <input
                 type="text"
                 placeholder="Ex: React, Docker, AWS"
-                className="bg-[#070b16] border border-[#263345] rounded-md px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-[#ff7a00]"
+                className="bg-[#070b16] border border-[#263345] rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff7a00]"
                 value={customNodeName}
                 onChange={(e) => setCustomNodeName(e.target.value)}
                 onKeyDown={(e) => {
@@ -590,14 +590,14 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               />
               <button
                 onClick={addCustomNode}
-                className="bg-[#ff7a00] hover:bg-[#f6b40b] text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
+                className="bg-[#ff7a00] hover:bg-[#f6b40b] text-white px-2 py-1.5 rounded-md text-xs font-semibold transition-colors w-full"
               >
                 Adicionar ao Diagrama
               </button>
             </div>
 
-            <div className="mt-2 pt-3 border-t border-[#263345] flex flex-col gap-2">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Imagem de Fundo</h3>
+            <div className="mt-1.5 pt-2 border-t border-[#263345] flex flex-col gap-1.5">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Imagem de Fundo</h3>
               <input
                 type="file"
                 accept="image/*"
@@ -607,9 +607,9 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               />
               <button
                 onClick={() => backgroundInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 bg-[#111827] hover:bg-[#263345] border border-[#263345] text-slate-300 hover:text-white px-2 py-1.5 rounded-md text-sm font-medium transition-colors w-full"
+                className="flex items-center justify-center gap-2 bg-[#111827] hover:bg-[#263345] border border-[#263345] text-slate-300 hover:text-white px-2 py-1.5 rounded-md text-xs font-semibold transition-colors w-full"
               >
-                <ImagePlus className="w-4 h-4" /> Adicionar fundo
+                <ImagePlus className="w-3.5 h-3.5" /> Adicionar fundo
               </button>
               {backgroundImage && (
                 <>
@@ -627,13 +627,13 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
                   </label>
                   <button
                     onClick={() => setBackgroundImage(null)}
-                    className="flex items-center justify-center gap-2 border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/20 rounded-md"
+                    className="flex items-center justify-center gap-2 border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/20 rounded-md"
                   >
-                    <Trash2 className="w-4 h-4" /> Remover fundo
+                    <Trash2 className="w-3.5 h-3.5" /> Remover fundo
                   </button>
                 </>
               )}
-              <p className="text-[10px] leading-4 text-slate-500">
+              <p className="text-[9px] leading-3 text-slate-500">
                 Para imagem de um componente, clique no ícone do próprio componente e envie a foto ou símbolo dele.
               </p>
             </div>
