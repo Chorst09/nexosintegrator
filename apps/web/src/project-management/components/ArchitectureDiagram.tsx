@@ -264,7 +264,12 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   const onConnect = useCallback((params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
   const flowNodes = React.useMemo(() => {
-    if (!backgroundImage) return nodes;
+    const diagramNodes = nodes.map((node) => ({
+      ...node,
+      zIndex: node.zIndex ?? 10
+    }));
+
+    if (!backgroundImage) return diagramNodes;
     return [
       {
         id: 'diagram-background-image',
@@ -280,9 +285,9 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
         draggable: false,
         connectable: false,
         deletable: false,
-        zIndex: -10,
+        zIndex: 0,
       },
-      ...nodes
+      ...diagramNodes
     ];
   }, [backgroundImage, backgroundOpacity, nodes]);
 
