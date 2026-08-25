@@ -62,9 +62,9 @@ const PRIORITY_OPTIONS = [
 const statusLabel = (value) => STATUS_OPTIONS.find((item) => item.value === value)?.label || 'Planejamento';
 const priorityLabel = (value) => PRIORITY_OPTIONS.find((item) => item.value === value)?.label || 'Média';
 
-const inputClass = 'w-full rounded-[8px] border border-[#2a4260] bg-[#09182a] px-4 py-3 text-[15px] text-slate-100 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/60 placeholder:text-slate-500';
+const inputClass = 'crm-input w-full rounded-[8px] px-4 py-3 text-[15px] outline-none transition';
 const selectClass = `${inputClass} appearance-none pr-10`;
-const labelClass = 'mb-2 block text-[15px] font-medium text-slate-100';
+const labelClass = 'mb-2 block text-[15px] font-medium text-[var(--crm-ink)]';
 const REQUIRED_FIELDS = [
   ['title', 'Título da POC'],
   ['client', 'Cliente'],
@@ -118,10 +118,10 @@ const normalizeClient = (item, fallbackType = 'B2B') => ({
 });
 
 const StatCard = ({ label, value, icon: Icon, color }) => (
-  <div className="flex min-h-[118px] items-center justify-between rounded-[8px] border border-[#294764] bg-[#16263a] px-6 py-5">
+  <div className="crm-card flex min-h-[118px] items-center justify-between rounded-[8px] px-6 py-5">
     <div>
-      <p className="text-[15px] text-slate-400">{label}</p>
-      <p className="mt-2 text-[34px] font-semibold leading-none text-slate-50">{value}</p>
+      <p className="text-[15px] text-[var(--crm-muted)]">{label}</p>
+      <p className="mt-2 text-[34px] font-semibold leading-none text-[var(--crm-ink)]">{value}</p>
     </div>
     <Icon className={`h-8 w-8 ${color}`} strokeWidth={2.4} />
   </div>
@@ -130,7 +130,7 @@ const StatCard = ({ label, value, icon: Icon, color }) => (
 const SelectShell = ({ children }) => (
   <div className="relative">
     {children}
-    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+    <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--crm-muted)]" />
   </div>
 );
 
@@ -440,21 +440,21 @@ export default function GestaoPocs() {
   };
 
   return (
-    <div className="min-h-screen bg-[#07182b] px-6 py-8 text-slate-100">
+    <div className="gestao-pocs-module min-h-screen bg-transparent px-6 py-8 text-[var(--crm-ink)]">
       <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex items-center gap-4">
-            <Beaker className="h-10 w-10 text-sky-400" strokeWidth={2.2} />
-            <h1 className="text-[34px] font-semibold leading-tight text-slate-50">Gestão de POCs</h1>
+            <Beaker className="h-10 w-10 text-[var(--crm-accent)]" strokeWidth={2.2} />
+            <h1 className="text-[34px] font-semibold leading-tight text-[var(--crm-ink)]">Gestão de POCs</h1>
           </div>
-          <p className="mt-2 text-[18px] text-slate-400">Planeje, execute e valide provas de conceito com critérios objetivos e decisão registrada.</p>
+          <p className="mt-2 text-[18px] text-[var(--crm-muted)]">Planeje, execute e valide provas de conceito com critérios objetivos e decisão registrada.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           {fromPreVendasDashboard && (
             <button
               type="button"
               onClick={returnToPreVendasDashboard}
-              className="inline-flex h-[58px] items-center justify-center gap-3 rounded-[8px] border border-sky-400/40 bg-slate-800/70 px-6 text-[16px] font-medium text-sky-100 transition hover:bg-slate-700/80"
+              className="crm-btn crm-btn-secondary inline-flex h-[58px] items-center justify-center gap-3 rounded-[8px] px-6 text-[16px] font-medium"
             >
               <ArrowLeft className="h-5 w-5" />
               Voltar ao Dashboard
@@ -463,7 +463,7 @@ export default function GestaoPocs() {
           <button
             type="button"
             onClick={openNewModal}
-            className="inline-flex h-[58px] items-center justify-center gap-4 rounded-[8px] bg-sky-400 px-8 text-[17px] font-medium text-[#082036] transition hover:bg-sky-300"
+            className="crm-btn crm-btn-primary inline-flex h-[58px] items-center justify-center gap-4 rounded-[8px] px-8 text-[17px] font-medium"
           >
             <Plus className="h-5 w-5" />
             Nova POC
@@ -479,12 +479,12 @@ export default function GestaoPocs() {
         <StatCard label="Atrasadas" value={stats.atrasadas} icon={XCircle} color="text-rose-400" />
       </div>
 
-      <section className="rounded-[8px] border border-[#294764] bg-[#16263a] p-6">
-        <h2 className="mb-7 text-[28px] font-semibold text-slate-50">Portfólio de POCs</h2>
+      <section className="crm-panel rounded-[8px] p-6">
+        <h2 className="mb-7 text-[28px] font-semibold text-[var(--crm-ink)]">Portfólio de POCs</h2>
 
         <div className="mb-6 grid gap-4 xl:grid-cols-[1fr_300px_250px]">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--crm-muted)]" />
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
@@ -508,9 +508,9 @@ export default function GestaoPocs() {
 
         {error && <div className="mb-4 rounded-[8px] border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
 
-        <div className="overflow-x-auto rounded-[8px] border border-[#294764]">
+        <div className="overflow-x-auto rounded-[8px] border border-[var(--crm-border)]">
           <table className="min-w-[1100px] w-full text-left">
-            <thead className="bg-[#17263a] text-[15px] text-slate-400">
+            <thead className="bg-[rgb(var(--crm-surface-2-rgb)_/_0.78)] text-[15px] text-[var(--crm-muted)]">
               <tr>
                 <th className="px-5 py-5 font-medium">POC / Cliente</th>
                 <th className="px-5 py-5 font-medium">Responsáveis</th>
@@ -520,7 +520,7 @@ export default function GestaoPocs() {
                 <th className="px-5 py-5 text-right font-medium">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#294764] bg-[#16263a]">
+            <tbody className="divide-y divide-[var(--crm-border)] bg-[rgb(var(--crm-surface-rgb)_/_0.68)]">
               {loading ? (
                 <tr><td colSpan="6" className="px-5 py-10 text-center text-slate-400">Carregando POCs...</td></tr>
               ) : pocs.length === 0 ? (
@@ -534,47 +534,47 @@ export default function GestaoPocs() {
                   <Fragment key={poc.id}>
                     <tr className="align-middle">
                       <td className="max-w-[430px] px-5 py-6">
-                        <p className="font-semibold text-slate-50">{poc.title}</p>
-                        <p className="mt-1 text-sm text-slate-400">{poc.client}</p>
-                        <p className="text-sm text-slate-400">{poc.solution}</p>
+                        <p className="font-semibold text-[var(--crm-ink)]">{poc.title}</p>
+                        <p className="mt-1 text-sm text-[var(--crm-muted)]">{poc.client}</p>
+                        <p className="text-sm text-[var(--crm-muted)]">{poc.solution}</p>
                         <button
                           type="button"
                           onClick={() => setExpandedPocId(isExpanded ? null : poc.id)}
-                          className="mt-3 inline-flex items-center gap-2 rounded-[8px] border border-[#38506b] px-3 py-1 text-xs font-medium text-sky-200 hover:border-sky-400 hover:text-sky-100"
+                          className="mt-3 inline-flex items-center gap-2 rounded-[8px] border border-[var(--crm-border)] px-3 py-1 text-xs font-medium text-[var(--crm-accent)] hover:border-[rgb(var(--crm-accent-rgb)_/_0.52)]"
                         >
                           <MessageSquare className="h-4 w-4" />
                           {followUps.length} acompanhamento{followUps.length === 1 ? '' : 's'}
                         </button>
-                        {poc.relatedOpportunityNumber && <p className="mt-2 text-sm font-medium text-sky-400">{poc.relatedOpportunityNumber}</p>}
+                        {poc.relatedOpportunityNumber && <p className="mt-2 text-sm font-medium text-[var(--crm-accent)]">{poc.relatedOpportunityNumber}</p>}
                       </td>
-                      <td className="px-5 py-6 text-sm text-slate-300">
+                      <td className="px-5 py-6 text-sm text-[var(--crm-ink)]">
                         <p>{poc.technicalOwner}</p>
-                        <p className="text-slate-400">Comercial:</p>
+                        <p className="text-[var(--crm-muted)]">Comercial:</p>
                         <p>{poc.commercialOwner}</p>
                       </td>
                       <td className="px-5 py-6">
-                        <p className="text-sm text-slate-100">{formatDate(poc.dueDate)}</p>
-                        <span className="mt-2 inline-flex rounded-full border border-[#38506b] px-3 py-1 text-xs font-medium text-slate-100">{priorityLabel(poc.priority)}</span>
+                        <p className="text-sm text-[var(--crm-ink)]">{formatDate(poc.dueDate)}</p>
+                        <span className="mt-2 inline-flex rounded-full border border-[var(--crm-border)] px-3 py-1 text-xs font-medium text-[var(--crm-ink)]">{priorityLabel(poc.priority)}</span>
                       </td>
                       <td className="px-5 py-6">
                         <div className="flex items-center gap-3">
-                          <div className="h-2 w-28 overflow-hidden rounded-full bg-[#2a4260]">
-                            <div className="h-full rounded-full bg-sky-400" style={{ width: `${Number(poc.progress || 0)}%` }} />
+                          <div className="h-2 w-28 overflow-hidden rounded-full bg-[rgb(var(--crm-surface-2-rgb)_/_0.9)]">
+                            <div className="h-full rounded-full bg-[var(--crm-accent)]" style={{ width: `${Number(poc.progress || 0)}%` }} />
                           </div>
-                          <span className="text-sm text-slate-200">{Number(poc.progress || 0)}%</span>
+                          <span className="text-sm text-[var(--crm-ink)]">{Number(poc.progress || 0)}%</span>
                         </div>
                       </td>
                       <td className="px-5 py-6">
-                        <span className="inline-flex rounded-full border border-[#38506b] bg-slate-400/10 px-4 py-1 text-sm text-slate-200">{statusLabel(poc.status)}</span>
+                        <span className="inline-flex rounded-full border border-[var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.76)] px-4 py-1 text-sm text-[var(--crm-ink)]">{statusLabel(poc.status)}</span>
                       </td>
                       <td className="px-5 py-6">
                         <div className="flex flex-wrap items-center justify-end gap-4">
-                          <button type="button" onClick={() => setExpandedPocId(isExpanded ? null : poc.id)} className="text-sm font-medium text-sky-300 hover:text-sky-200">
+                          <button type="button" onClick={() => setExpandedPocId(isExpanded ? null : poc.id)} className="text-sm font-medium text-[var(--crm-accent)] hover:opacity-80">
                             {isExpanded ? 'Ocultar' : 'Acompanhar'}
                           </button>
                           <button type="button" onClick={() => actionPoc(poc, 'approve')} className="text-sm font-medium text-emerald-400 hover:text-emerald-300">Aprovar</button>
                           <button type="button" onClick={() => actionPoc(poc, 'discard')} className="text-sm font-medium text-rose-400 hover:text-rose-300">Descartar</button>
-                          <button type="button" onClick={() => openEditModal(poc)} className="text-slate-100 hover:text-sky-300" aria-label="Editar POC">
+                          <button type="button" onClick={() => openEditModal(poc)} className="text-[var(--crm-ink)] hover:text-[var(--crm-accent)]" aria-label="Editar POC">
                             <Edit3 className="h-5 w-5" />
                           </button>
                           <button type="button" onClick={() => deletePoc(poc)} className="text-rose-400 hover:text-rose-300" aria-label="Excluir POC">
@@ -585,31 +585,31 @@ export default function GestaoPocs() {
                     </tr>
                     {isExpanded && (
                       <tr>
-                        <td colSpan="6" className="bg-[#102137] px-5 py-6">
+                        <td colSpan="6" className="bg-[rgb(var(--crm-surface-2-rgb)_/_0.68)] px-5 py-6">
                           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
                             <div>
                               <div className="mb-4 flex items-center justify-between gap-4">
-                                <h3 className="text-lg font-semibold text-slate-50">Acompanhamentos</h3>
-                                <span className="text-sm text-slate-400">{followUps.length} registro{followUps.length === 1 ? '' : 's'}</span>
+                                <h3 className="text-lg font-semibold text-[var(--crm-ink)]">Acompanhamentos</h3>
+                                <span className="text-sm text-[var(--crm-muted)]">{followUps.length} registro{followUps.length === 1 ? '' : 's'}</span>
                               </div>
                               {followUps.length === 0 ? (
-                                <p className="rounded-[8px] border border-dashed border-[#38506b] px-4 py-6 text-sm text-slate-400">Nenhum acompanhamento registrado para esta POC.</p>
+                                <p className="rounded-[8px] border border-dashed border-[var(--crm-border)] px-4 py-6 text-sm text-[var(--crm-muted)]">Nenhum acompanhamento registrado para esta POC.</p>
                               ) : (
                                 <div className="grid gap-3">
                                   {followUps.map((item) => (
-                                    <div key={item.id} className="rounded-[8px] border border-[#294764] bg-[#09182a] p-4">
+                                    <div key={item.id} className="crm-card rounded-[8px] p-4">
                                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                          <p className="text-sm font-medium text-slate-100">{item.createdByName || 'Usuário'}</p>
-                                          <p className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</p>
+                                          <p className="text-sm font-medium text-[var(--crm-ink)]">{item.createdByName || 'Usuário'}</p>
+                                          <p className="text-xs text-[var(--crm-muted)]">{formatDateTime(item.createdAt)}</p>
                                         </div>
                                         <button type="button" onClick={() => deleteFollowUp(poc, item)} className="text-xs font-medium text-rose-300 hover:text-rose-200">Excluir</button>
                                       </div>
-                                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{item.note}</p>
-                                      {item.nextStep && <p className="mt-3 text-sm text-sky-200"><span className="font-medium">Próximo passo:</span> {item.nextStep}</p>}
-                                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-                                        {item.status && <span className="rounded-full border border-[#38506b] px-3 py-1">{statusLabel(item.status)}</span>}
-                                        {item.progress !== null && item.progress !== undefined && <span className="rounded-full border border-[#38506b] px-3 py-1">{Number(item.progress)}%</span>}
+                                      <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--crm-ink)]">{item.note}</p>
+                                      {item.nextStep && <p className="mt-3 text-sm text-[var(--crm-accent)]"><span className="font-medium">Próximo passo:</span> {item.nextStep}</p>}
+                                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--crm-muted)]">
+                                        {item.status && <span className="rounded-full border border-[var(--crm-border)] px-3 py-1">{statusLabel(item.status)}</span>}
+                                        {item.progress !== null && item.progress !== undefined && <span className="rounded-full border border-[var(--crm-border)] px-3 py-1">{Number(item.progress)}%</span>}
                                       </div>
                                     </div>
                                   ))}
@@ -617,8 +617,8 @@ export default function GestaoPocs() {
                               )}
                             </div>
 
-                            <div className="rounded-[8px] border border-[#294764] bg-[#09182a] p-4">
-                              <h4 className="mb-4 text-base font-semibold text-slate-50">Novo acompanhamento</h4>
+                            <div className="crm-card rounded-[8px] p-4">
+                              <h4 className="mb-4 text-base font-semibold text-[var(--crm-ink)]">Novo acompanhamento</h4>
                               <textarea
                                 value={followUpForm.note}
                                 onChange={(event) => updateFollowUpForm(poc.id, 'note', event.target.value)}
@@ -635,7 +635,7 @@ export default function GestaoPocs() {
                                 type="button"
                                 onClick={() => saveFollowUp(poc)}
                                 disabled={Boolean(followUpSaving[poc.id])}
-                                className="mt-4 inline-flex h-11 items-center justify-center gap-3 rounded-[8px] bg-sky-400 px-5 text-sm font-medium text-[#082036] hover:bg-sky-300 disabled:cursor-wait disabled:opacity-70"
+                                className="crm-btn crm-btn-primary mt-4 inline-flex h-11 items-center justify-center gap-3 rounded-[8px] px-5 text-sm font-medium disabled:cursor-wait disabled:opacity-70"
                               >
                                 <Send className="h-4 w-4" />
                                 {followUpSaving[poc.id] ? 'Salvando...' : 'Salvar acompanhamento'}
@@ -655,13 +655,13 @@ export default function GestaoPocs() {
 
       {modalOpen && (
         <div className="fixed inset-y-0 left-0 right-0 z-50 overflow-y-auto bg-black/70 p-4 lg:left-[312px]">
-          <form onSubmit={savePoc} className="mx-auto my-2 w-full max-w-[1320px] rounded-[8px] border border-[#294764] bg-[#09182a] p-6 shadow-2xl sm:p-8">
+          <form onSubmit={savePoc} className="crm-panel mx-auto my-2 w-full max-w-[1320px] rounded-[8px] p-6 shadow-2xl sm:p-8">
             <div className="mb-8 flex items-start justify-between gap-6">
               <div>
-                <h2 className="text-[26px] font-semibold text-slate-50">{editingPoc ? 'Editar POC' : 'Nova POC'}</h2>
-                <p className="mt-2 text-[17px] text-slate-400">Registre escopo, critérios mensuráveis, responsáveis, prazo e resultado esperado.</p>
+                <h2 className="text-[26px] font-semibold text-[var(--crm-ink)]">{editingPoc ? 'Editar POC' : 'Nova POC'}</h2>
+                <p className="mt-2 text-[17px] text-[var(--crm-muted)]">Registre escopo, critérios mensuráveis, responsáveis, prazo e resultado esperado.</p>
               </div>
-              <button type="button" onClick={closeModal} className="text-slate-400 hover:text-slate-100" aria-label="Fechar">
+              <button type="button" onClick={closeModal} className="text-[var(--crm-muted)] hover:text-[var(--crm-ink)]" aria-label="Fechar">
                 <X className="h-7 w-7" />
               </button>
             </div>
@@ -784,10 +784,10 @@ export default function GestaoPocs() {
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
-              <button type="button" onClick={closeModal} className="rounded-[8px] border border-[#294764] px-7 py-3 text-[16px] text-slate-100 hover:bg-white/5">
+              <button type="button" onClick={closeModal} className="crm-btn crm-btn-secondary rounded-[8px] px-7 py-3 text-[16px]">
                 Cancelar
               </button>
-              <button type="submit" disabled={saving} className="rounded-[8px] bg-sky-400 px-7 py-3 text-[16px] font-medium text-[#082036] hover:bg-sky-300 disabled:cursor-wait disabled:opacity-70">
+              <button type="submit" disabled={saving} className="crm-btn crm-btn-primary rounded-[8px] px-7 py-3 text-[16px] font-medium disabled:cursor-wait disabled:opacity-70">
                 {saving ? 'Salvando...' : 'Salvar POC'}
               </button>
             </div>

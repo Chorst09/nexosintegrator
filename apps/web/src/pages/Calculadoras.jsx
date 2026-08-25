@@ -3169,7 +3169,7 @@ export default function Calculadoras({
       ];
 
   return (
-    <div className="space-y-6">
+    <div className="precificacao-module space-y-6 text-[var(--crm-ink)]">
       <div>
         <PageHeader
           title={pageTitle}
@@ -3195,37 +3195,37 @@ export default function Calculadoras({
           </div>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-700/60 bg-slate-950/70 p-4 md:p-5 shadow-xl shadow-black/10">
+        <section className="crm-panel p-4 md:p-5">
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">Controle da proposta</h2>
-              <p className="text-sm text-slate-400">Crie, localize e salve simulações de venda, locação e serviços.</p>
+              <h2 className="text-base font-semibold text-[var(--crm-ink)]">Controle da proposta</h2>
+              <p className="text-sm text-[var(--crm-muted)]">Crie, localize e salve simulações de venda, locação e serviços.</p>
             </div>
-            <span className="inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-sm font-semibold text-cyan-100">
-              Regime ativo: <span className="ml-1 text-cyan-300">{regimeAtivoHeader?.nome || 'Não definido'}</span>
+            <span className="inline-flex w-fit items-center rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.32)] bg-[rgb(var(--crm-accent-rgb)_/_0.12)] px-3 py-1.5 text-sm font-semibold text-[var(--crm-ink)]">
+              Regime ativo: <span className="ml-1 text-[var(--crm-accent)]">{regimeAtivoHeader?.nome || 'Não definido'}</span>
             </span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1fr_auto] 2xl:items-end">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(180px,260px)_minmax(260px,1fr)]">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Nº Proposta</label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)] mb-1">Nº Proposta</label>
                 <input
                   type="text"
                   value={draftProposalNumber}
                   readOnly
-                  className="h-12 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 text-base font-semibold text-white outline-none"
+                  className="crm-input h-12 px-4 text-base font-semibold"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Propostas Salvas</label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)] mb-1">Propostas Salvas</label>
                 <select
                   value=""
                   onChange={(event) => {
                     const proposal = savedProposals.find((item) => item.id === event.target.value);
                     if (proposal) openProposal(proposal, { keepModalOpen: true });
                   }}
-                  className="h-12 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 text-base text-slate-100 outline-none transition focus:border-cyan-400"
+                  className="crm-input h-12 px-4 text-base"
                 >
                   <option value="">Selecione uma proposta salva</option>
                   {savedProposals.map((proposal) => (
@@ -3244,7 +3244,7 @@ export default function Calculadoras({
                   createBlankProposal(currentTab);
                   setHomeFeedback(null);
                 }}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+                className="crm-btn crm-btn-secondary h-12"
               >
                 <FilePlus2 className="w-4 h-4" />
                 Nova
@@ -3255,7 +3255,7 @@ export default function Calculadoras({
                   setShowModal(true);
                   searchProposalByNumber();
                 }}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+                className="crm-btn crm-btn-secondary h-12"
               >
                 <Search className="w-4 h-4" />
                 Buscar
@@ -3263,7 +3263,7 @@ export default function Calculadoras({
               <button
                 type="button"
                 onClick={handleSaveAndReturnHome}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-blue-400/60 bg-blue-500/85 px-4 font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
+                className="crm-btn crm-btn-primary h-12"
               >
                 <Save className="w-4 h-4" />
                 Salvar Simulação
@@ -3278,7 +3278,7 @@ export default function Calculadoras({
               <button
                 key={calc.id}
                 type="button"
-                className="group min-h-[150px] rounded-xl border border-slate-700/70 bg-slate-900/70 p-5 text-left shadow-xl shadow-black/10 transition-all hover:-translate-y-0.5 hover:border-cyan-400/50 hover:bg-slate-900"
+                className="crm-card group min-h-[150px] p-5 text-left transition-all hover:-translate-y-0.5"
                 onClick={() => abrirCalculadora(calc.id)}
               >
                 <div className="flex h-full items-start gap-4">
@@ -3286,8 +3286,8 @@ export default function Calculadoras({
                     <calc.icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base font-semibold text-white">{calc.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-300">{calc.description}</p>
+                    <h3 className="text-base font-semibold text-[var(--crm-ink)]">{calc.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--crm-muted)]">{calc.description}</p>
                   </div>
                 </div>
               </button>
@@ -3295,11 +3295,11 @@ export default function Calculadoras({
           </div>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-700/60 bg-slate-950/60 p-4 md:p-5 space-y-4 shadow-xl shadow-black/10">
+        <section className="crm-panel p-4 md:p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg md:text-xl font-bold text-white">Propostas Salvas</h3>
-              <p className="text-sm text-slate-400">
+              <h3 className="text-lg md:text-xl font-bold text-[var(--crm-ink)]">Propostas Salvas</h3>
+              <p className="text-sm text-[var(--crm-muted)]">
                 {savedProposals.length > 0
                   ? `${savedProposals.length} proposta(s) registrada(s) pelas calculadoras`
                   : 'Nenhuma proposta salva ainda'}
@@ -3308,7 +3308,7 @@ export default function Calculadoras({
           </div>
 
           {savedProposals.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-600 p-6 text-center text-slate-300">
+            <div className="rounded-xl border border-dashed border-[var(--crm-border)] p-6 text-center text-[var(--crm-muted)]">
               Salve uma proposta em Venda, Locação ou Serviços para ela aparecer aqui.
             </div>
           ) : (
@@ -3316,27 +3316,27 @@ export default function Calculadoras({
               {savedProposals.map((proposal) => (
                 <div
                   key={proposal.id}
-                  className="grid gap-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4 lg:grid-cols-[minmax(220px,1fr)_180px_minmax(360px,auto)] lg:items-center"
+                  className="crm-card grid gap-4 p-4 lg:grid-cols-[minmax(220px,1fr)_180px_minmax(360px,auto)] lg:items-center"
                 >
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-lg font-semibold text-cyan-300">{proposal.number}</span>
-                      <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-100 border border-blue-400/30">
+                      <span className="text-lg font-semibold text-[var(--crm-accent)]">{proposal.number}</span>
+                      <span className="text-xs px-2 py-1 rounded bg-[rgb(var(--crm-accent-rgb)_/_0.14)] text-[var(--crm-ink)] border border-[rgb(var(--crm-accent-rgb)_/_0.28)]">
                         {proposal.calculatorLabel || '-'}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-200">
+                    <p className="text-sm text-[var(--crm-ink)]">
                       {proposal?.client?.companyName || 'Sem empresa'} · {proposal?.client?.contactName || 'Sem contato'}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-[var(--crm-muted)]">
                       Atualizada em {formatDateTime(proposal.updatedAt)}
                     </p>
                   </div>
 
-                  <div className="rounded-lg border border-slate-700/70 bg-slate-900/70 px-4 py-3 lg:text-right">
+                  <div className="crm-panel-muted px-4 py-3 lg:text-right">
                     <div>
-                      <p className="text-xs text-slate-400 uppercase">Preço Final</p>
-                      <p className="text-lg font-semibold text-white">
+                      <p className="text-xs text-[var(--crm-muted)] uppercase">Preço Final</p>
+                      <p className="text-lg font-semibold text-[var(--crm-ink)]">
                         {formatCurrency(toNumber(proposal?.result?.finalPrice, 0))}
                       </p>
                     </div>
@@ -3654,14 +3654,14 @@ export default function Calculadoras({
         closeOnOverlayClick={false}
         backgroundColor="dark"
         contentClassName="p-0"
-        panelClassName="bg-slate-950"
+        panelClassName="bg-[var(--crm-bg-base-2)]"
       >
-        <div className="min-h-full bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_30%),linear-gradient(135deg,#020617,#0f172a_45%,#111827)] text-slate-100">
+        <div className="precificacao-module min-h-full bg-transparent text-[var(--crm-ink)]">
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-          <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 p-4 shadow-xl shadow-black/20">
+          <div className="crm-panel p-4">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(190px,260px)_minmax(190px,260px)_1fr] xl:items-end">
               <div className="min-w-0">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Nº Proposta</label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)] mb-1">Nº Proposta</label>
                 <input
                   type="text"
                   value={proposalForm.number}
@@ -3670,23 +3670,23 @@ export default function Calculadoras({
                     setProposalForm((prev) => ({ ...prev, number: nextNumber }));
                     setProposalSearchNumber(nextNumber);
                   }}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-base font-semibold text-white outline-none transition focus:border-cyan-400"
+                  className="crm-input px-4 py-3 text-base font-semibold"
                 />
               </div>
               <div className="min-w-0">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Buscar Nº</label>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)] mb-1">Buscar Nº</label>
                 <input
                   type="text"
                   value={proposalSearchNumber}
                   onChange={(event) => setProposalSearchNumber(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-base font-semibold text-white outline-none transition focus:border-cyan-400"
+                  className="crm-input px-4 py-3 text-base font-semibold"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end">
                 <button
                   type="button"
                   onClick={() => createBlankProposal(currentTab)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 py-3 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+                  className="crm-btn crm-btn-secondary px-4 py-3"
                 >
                   <FilePlus2 className="w-4 h-4" />
                   Nova
@@ -3694,7 +3694,7 @@ export default function Calculadoras({
                 <button
                   type="button"
                   onClick={searchProposalByNumber}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-4 py-3 font-semibold text-cyan-100 transition hover:bg-cyan-500/25"
+                  className="crm-btn crm-btn-secondary px-4 py-3"
                 >
                   <Search className="w-4 h-4" />
                   Buscar
@@ -3702,7 +3702,7 @@ export default function Calculadoras({
                 <button
                   type="button"
                   onClick={handleSaveAndReturnHome}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-400/60 bg-blue-500/85 px-4 py-3 font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500"
+                  className="crm-btn crm-btn-primary px-4 py-3"
                 >
                   <Save className="w-4 h-4" />
                   Salvar Simulação
@@ -3710,7 +3710,7 @@ export default function Calculadoras({
                 <button
                   type="button"
                   onClick={generateProposalSummary}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 font-semibold text-emerald-100 transition hover:bg-emerald-500/25"
+                  className="crm-btn crm-btn-secondary px-4 py-3"
                 >
                   <FileText className="w-4 h-4" />
                   Gerar
@@ -3730,14 +3730,14 @@ export default function Calculadoras({
           ) : null}
 
           {calculatorStep === 'proposal' && (
-            <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
-              <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
-                <h4 className="text-xl font-bold text-white">Dados da Proposta</h4>
+            <div className="crm-panel overflow-hidden">
+              <div className="border-b border-[var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.74)] px-5 py-4">
+                <h4 className="text-xl font-bold text-[var(--crm-ink)]">Dados da Proposta</h4>
               </div>
               <div className="p-5 space-y-6">
-                <div className="rounded-lg border border-slate-700/80 bg-slate-900/80 overflow-hidden">
-                  <div className="bg-slate-800/60 border-b border-slate-700/50 px-5 py-4">
-                    <h3 className="text-xl font-bold text-white">Custos (Orçamentos de Distribuidores)</h3>
+                <div className="crm-card overflow-hidden">
+                  <div className="border-b border-[var(--crm-border)] bg-[rgb(var(--crm-surface-2-rgb)_/_0.74)] px-5 py-4">
+                    <h3 className="text-xl font-bold text-[var(--crm-ink)]">Custos (Orçamentos de Distribuidores)</h3>
                   </div>
                   <div className="p-5 space-y-4">
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(260px,1fr)_220px] md:items-end">

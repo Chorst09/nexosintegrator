@@ -605,3 +605,140 @@ h4 {
 .dark .precificacao-module .text-white {
   color: #f8fafc;
 }
+
+.precificacao-module select {
+  background: rgb(var(--crm-surface-rgb) / 0.82);
+  color: var(--crm-ink);
+  border-color: var(--crm-border);
+}
+
+.precificacao-module .bg-slate-950,
+.precificacao-module .bg-slate-950\/70,
+.precificacao-module .bg-slate-950\/60,
+.precificacao-module .bg-slate-950\/40,
+.precificacao-module .bg-slate-900\/95,
+.precificacao-module .bg-slate-900\/80,
+.precificacao-module .bg-slate-900\/70,
+.precificacao-module .bg-slate-900\/60,
+.precificacao-module .bg-slate-900\/40,
+.precificacao-module .bg-slate-800\/80,
+.precificacao-module .bg-slate-800\/70,
+.precificacao-module .bg-slate-800\/60,
+.precificacao-module .bg-slate-800\/40 {
+  background: rgb(var(--crm-surface-rgb) / 0.86);
+}
+
+.precificacao-module .border-slate-800,
+.precificacao-module .border-slate-800\/40,
+.precificacao-module .border-slate-700,
+.precificacao-module .border-slate-700\/80,
+.precificacao-module .border-slate-700\/70,
+.precificacao-module .border-slate-700\/60,
+.precificacao-module .border-slate-700\/50,
+.precificacao-module .border-slate-700\/40,
+.precificacao-module .border-slate-700\/30,
+.precificacao-module .border-slate-600,
+.precificacao-module .border-slate-600\/30 {
+  border-color: var(--crm-border);
+}
+
+.precificacao-module .divide-slate-700\/30 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--crm-border);
+}
+
+.precificacao-module .text-cyan-300,
+.precificacao-module .text-cyan-200,
+.precificacao-module .text-sky-300,
+.precificacao-module .text-sky-400,
+.precificacao-module .text-blue-300,
+.precificacao-module .text-blue-100 {
+  color: var(--crm-accent);
+}
+
+.precificacao-module .text-cyan-100,
+.precificacao-module .text-sky-100 {
+  color: var(--crm-ink);
+}
+
+.precificacao-module .bg-cyan-500\/15,
+.precificacao-module .bg-cyan-500\/10,
+.precificacao-module .bg-blue-500\/20,
+.precificacao-module .bg-blue-500\/15,
+.precificacao-module .bg-blue-500\/10,
+.precificacao-module .bg-sky-500 {
+  background: rgb(var(--crm-accent-rgb) / 0.14);
+}
+
+.precificacao-module .bg-blue-500\/85,
+.precificacao-module .bg-blue-500\/80,
+.precificacao-module .bg-blue-500\/70,
+.precificacao-module .from-blue-600 {
+  --tw-gradient-from: rgb(var(--crm-accent-rgb) / 0.98) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(var(--crm-accent-rgb) / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  background-color: rgb(var(--crm-accent-rgb) / 0.88);
+}
+
+.precificacao-module .to-blue-700 {
+  --tw-gradient-to: rgb(34 211 238 / 0.76) var(--tw-gradient-to-position);
+}
+
+.precificacao-module .border-cyan-400\/40,
+.precificacao-module .border-cyan-400\/30,
+.precificacao-module .border-blue-400\/60,
+.precificacao-module .border-blue-400\/40,
+.precificacao-module .border-blue-400\/30,
+.precificacao-module .border-sky-500\/50 {
+  border-color: rgb(var(--crm-accent-rgb) / 0.42);
+}
+
+.precificacao-module .hover\:bg-blue-500:hover,
+.precificacao-module .hover\:bg-sky-400:hover,
+.precificacao-module .hover\:bg-cyan-500\/25:hover,
+.precificacao-module .hover\:bg-blue-500\/25:hover,
+.precificacao-module .hover\:bg-slate-800:hover,
+.precificacao-module .hover\:bg-slate-800\/40:hover,
+.precificacao-module .hover\:bg-slate-800\/70:hover,
+.precificacao-module .hover\:bg-slate-800\/80:hover,
+.precificacao-module .hover\:bg-slate-700\/50:hover {
+  background: rgb(var(--crm-accent-rgb) / 0.18);
+}
+
+.gestao-pocs-module {
+  color: var(--crm-ink);
+}
+
+.gestao-pocs-module .text-slate-50,
+.gestao-pocs-module .text-slate-100,
+.gestao-pocs-module .text-slate-200,
+.gestao-pocs-module .text-slate-300 {
+  color: var(--crm-ink);
+}
+
+.gestao-pocs-module .text-slate-400,
+.gestao-pocs-module .text-slate-500 {
+  color: var(--crm-muted);
+}
+
+.gestao-pocs-module .text-sky-400,
+.gestao-pocs-module .text-sky-300,
+.gestao-pocs-module .text-sky-200 {
+  color: var(--crm-accent);
+}
+
+.gestao-pocs-module .border-\[\#294764\],
+.gestao-pocs-module .border-\[\#38506b\],
+.gestao-pocs-module .border-\[\#2a4260\] {
+  border-color: var(--crm-border);
+}
+
+.gestao-pocs-module .bg-\[\#16263a\],
+.gestao-pocs-module .bg-\[\#17263a\],
+.gestao-pocs-module .bg-\[\#102137\],
+.gestao-pocs-module .bg-\[\#09182a\] {
+  background: rgb(var(--crm-surface-rgb) / 0.78);
+}
+
+.gestao-pocs-module .accent-sky-500 {
+  accent-color: var(--crm-accent);
+}
