@@ -140,10 +140,10 @@ export default function Sidebar({
       items: [
         { path: '/dashboard', label: 'Dashboard B2B', icon: Gauge, accent: 'from-cyan-300/95 via-sky-400/85 to-blue-500/90 text-white shadow-cyan-500/35', description: 'Visao geral do negocio' },
         { path: '/empresas', label: 'Empresas', icon: Building2, accent: 'from-sky-300/95 via-cyan-400/85 to-teal-300/90 text-slate-950 shadow-cyan-500/30', description: 'Clientes e prospects' },
+        { path: '/leads', label: 'Lead', icon: ContactRound, accent: 'from-lime-300/95 via-emerald-400/85 to-cyan-400/85 text-slate-950 shadow-emerald-500/30', description: 'Gestao de leads' },
         { path: '/oportunidades', label: 'Oportunidades', icon: Radar, accent: 'from-orange-300/95 via-amber-400/90 to-cyan-400/85 text-slate-950 shadow-orange-500/30', description: 'Funil e negociacoes' },
         { path: '/atividades', label: 'Atividades', icon: CalendarCheck2, accent: 'from-emerald-300/95 via-teal-400/85 to-cyan-400/85 text-slate-950 shadow-emerald-500/30', description: 'Tarefas e agenda' },
         { path: '/simuladores', label: 'Simuladores', icon: Calculator, accent: 'from-violet-300/95 via-fuchsia-400/80 to-cyan-400/85 text-white shadow-fuchsia-500/25', description: 'Dashboard, Precificação e Propostas' },
-        { path: '/leads', label: 'Lead', icon: ContactRound, accent: 'from-lime-300/95 via-emerald-400/85 to-cyan-400/85 text-slate-950 shadow-emerald-500/30', description: 'Gestao de leads' },
         { path: '/propostas', label: 'Propostas', icon: FileSignature, accent: 'from-amber-200/95 via-orange-400/90 to-rose-400/85 text-slate-950 shadow-orange-500/30', description: 'Cotas e propostas' },
         { path: '/templates-propostas', label: 'Templates', icon: Palette, accent: 'from-fuchsia-300/95 via-rose-400/85 to-orange-300/90 text-white shadow-rose-500/25', description: 'Templates de proposta' },
         { path: '/contratos', label: 'Contratos', icon: ShieldCheck, accent: 'from-blue-300/95 via-indigo-400/85 to-cyan-400/85 text-white shadow-blue-500/30', description: 'Contratos e SLA' }
