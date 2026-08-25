@@ -20,6 +20,7 @@ const canManageFullBackup = (user = {}) => {
 };
 
 const escapeIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
+const escapeLiteral = (value) => `'${String(value).replace(/'/g, "''")}'`;
 
 const jsonReplacer = (_key, value) => {
   if (typeof value === 'bigint') return value.toString();
@@ -267,26 +268,140 @@ const orderTablesForInsert = async (tableNames) => {
   return ordered;
 };
 
-const normalizeRestoreValue = (value) => {
+const readColumnTypes = async (tableNames) => {
+  if (!Array.isArray(tableNames) || tableNames.length === 0) return new Map();
+
+  const tableListSql = tableNames.map(escapeLiteral).join(', ');
+  const rows = await prisma.$queryRawUnsafe(`
+    SELECT
+      table_name AS "tableName",
+      column_name AS "columnName",
+      data_type AS "dataType",
+      udt_schema AS "udtSchema",
+      udt_name AS "udtName",
+      pg_catalog.format_type(a.atttypid, a.atttypmod) AS "formattedType"
+    FROM information_schema.columns
+    JOIN pg_catalog.pg_namespace n
+      ON n.nspname = table_schema
+    JOIN pg_catalog.pg_class t
+      ON t.relnamespace = n.oid
+      AND t.relname = table_name
+    JOIN pg_catalog.pg_attribute a
+      ON a.attrelid = t.oid
+      AND a.attname = column_name
+      AND a.attnum > 0
+    WHERE table_schema = 'public'
+      AND table_name IN (${tableListSql})
+  `);
+
+  const result = new Map();
+  for (const row of rows) {
+    if (!row.tableName || !row.columnName) continue;
+    if (!result.has(row.tableName)) result.set(row.tableName, new Map());
+    result.get(row.tableName).set(row.columnName, {
+      dataType: String(row.dataType || '').toLowerCase(),
+      udtSchema: row.udtSchema || null,
+      udtName: row.udtName || null,
+      formattedType: row.formattedType || null
+    });
+  }
+
+  return result;
+};
+
+const formatPostgresTypeName = (columnType) => {
+  if (columnType?.formattedType) return columnType.formattedType;
+  if (!columnType?.udtName) return null;
+  const typeName = escapeIdentifier(columnType.udtName);
+  if (!columnType.udtSchema || columnType.udtSchema === 'public') return typeName;
+  return `${escapeIdentifier(columnType.udtSchema)}.${typeName}`;
+};
+
+const buildRestorePlaceholder = (index, columnType) => {
+  const placeholder = `$${index}`;
+  const dataType = columnType?.dataType;
+
+  switch (dataType) {
+    case 'timestamp without time zone':
+      return `${placeholder}::timestamp`;
+    case 'timestamp with time zone':
+      return `${placeholder}::timestamptz`;
+    case 'date':
+      return `${placeholder}::date`;
+    case 'time without time zone':
+      return `${placeholder}::time`;
+    case 'time with time zone':
+      return `${placeholder}::timetz`;
+    case 'json':
+      return `${placeholder}::json`;
+    case 'jsonb':
+      return `${placeholder}::jsonb`;
+    case 'uuid':
+      return `${placeholder}::uuid`;
+    case 'bytea':
+      return `${placeholder}::bytea`;
+    case 'bigint':
+      return `${placeholder}::bigint`;
+    case 'integer':
+      return `${placeholder}::integer`;
+    case 'smallint':
+      return `${placeholder}::smallint`;
+    case 'double precision':
+      return `${placeholder}::double precision`;
+    case 'real':
+      return `${placeholder}::real`;
+    case 'numeric':
+      return `${placeholder}::numeric`;
+    case 'boolean':
+      return `${placeholder}::boolean`;
+    case 'array': {
+      const typeName = formatPostgresTypeName(columnType);
+      return typeName ? `${placeholder}::${typeName}` : placeholder;
+    }
+    case 'user-defined': {
+      const typeName = formatPostgresTypeName(columnType);
+      return typeName ? `${placeholder}::${typeName}` : placeholder;
+    }
+    default:
+      return placeholder;
+  }
+};
+
+const normalizeRestoreValue = (value, columnType) => {
+  if (value === undefined) return null;
+  if (value === null) return null;
+
   if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
     return Buffer.from(value.data);
   }
-  if (value === undefined) return null;
+
+  const dataType = columnType?.dataType;
+  if (dataType === 'json' || dataType === 'jsonb') {
+    return JSON.stringify(value);
+  }
+
+  if (dataType === 'bytea' && typeof value === 'string') {
+    return Buffer.from(value, 'base64');
+  }
+
   return value;
 };
 
-const insertRows = async (tx, tableName, rows) => {
+const insertRows = async (tx, tableName, rows, columnTypes = new Map()) => {
   let inserted = 0;
 
   for (const row of rows) {
     if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
 
-    const columns = Object.keys(row);
+    const rawColumns = Object.keys(row);
+    const columns = columnTypes.size > 0 ? rawColumns.filter((column) => columnTypes.has(column)) : rawColumns;
     if (columns.length === 0) continue;
 
-    const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
+    const placeholders = columns
+      .map((column, index) => buildRestorePlaceholder(index + 1, columnTypes.get(column)))
+      .join(', ');
     const columnSql = columns.map(escapeIdentifier).join(', ');
-    const values = columns.map((column) => normalizeRestoreValue(row[column]));
+    const values = columns.map((column) => normalizeRestoreValue(row[column], columnTypes.get(column)));
 
     await tx.$executeRawUnsafe(
       `INSERT INTO ${escapeIdentifier(tableName)} (${columnSql}) VALUES (${placeholders})`,
@@ -309,6 +424,7 @@ const restoreDatabase = async (backupTables) => {
 
   const tableByName = new Map(backupTables.map((table) => [table.tableName, table]));
   const orderedTableNames = await orderTablesForInsert(tableNames);
+  const columnTypesByTable = await readColumnTypes(tableNames);
   const truncateSql = tableNames.map(escapeIdentifier).join(', ');
 
   return prisma.$transaction(
@@ -320,7 +436,7 @@ const restoreDatabase = async (backupTables) => {
 
       for (const tableName of orderedTableNames) {
         const rows = tableByName.get(tableName)?.rows || [];
-        const insertedRows = await insertRows(tx, tableName, rows);
+        const insertedRows = await insertRows(tx, tableName, rows, columnTypesByTable.get(tableName));
         restoredRows += insertedRows;
         tables.push({ tableName, restoredRows: insertedRows });
       }
