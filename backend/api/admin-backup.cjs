@@ -18,6 +18,7 @@ const canManageFullBackup = (user = {}) => {
   const role = normalizeRole(user);
   return role === 'MASTER' || role === 'ADMIN';
 };
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 
 const escapeIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
 const escapeLiteral = (value) => `'${String(value).replace(/'/g, "''")}'`;
@@ -450,6 +451,175 @@ const restoreDatabase = async (backupTables) => {
   );
 };
 
+const readRestoreSessionAnchor = async (requestUser = {}) => {
+  const userId = requestUser.id || requestUser.userId;
+  if (!userId) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      password: true,
+      role: true,
+      regionId: true,
+      quota: true,
+      commissionSalePercentage: true,
+      commissionProject12: true,
+      commissionProject24: true,
+      commissionProject36: true,
+      commissionProject48: true,
+      commissionProject60: true,
+      tenantCompanyId: true,
+      accessB2B: true,
+      accessB2G: true,
+      accessPreSales: true,
+      accessManagement: true,
+      accessAutomation: true,
+      permissionOverrides: true,
+      isCompanyOwner: true,
+      createdAt: true,
+      tenantCompany: {
+        select: {
+          id: true,
+          name: true,
+          legalName: true,
+          cnpj: true,
+          email: true,
+          phone: true,
+          status: true,
+          notes: true,
+          accessB2B: true,
+          accessB2G: true,
+          accessPreSales: true,
+          accessManagement: true,
+          accessAutomation: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
+    }
+  });
+
+  return user ? { user, tenantCompany: user.tenantCompany || null } : null;
+};
+
+const ensureRestoreSessionAnchor = async (anchor) => {
+  if (!anchor?.user?.email) return { preserved: false, reason: 'empty_anchor' };
+
+  const existingUser = await prisma.user.findFirst({
+    where: { email: { equals: normalizeEmail(anchor.user.email), mode: 'insensitive' } },
+    select: { id: true }
+  });
+
+  if (existingUser) {
+    return { preserved: false, reason: 'user_exists' };
+  }
+
+  let tenantCompanyId = null;
+  const preservedTenant = anchor.tenantCompany;
+
+  if (anchor.user.tenantCompanyId && preservedTenant?.id) {
+    const existingTenantById = await prisma.tenantCompany.findUnique({
+      where: { id: preservedTenant.id },
+      select: { id: true }
+    });
+
+    if (existingTenantById) {
+      tenantCompanyId = existingTenantById.id;
+    } else {
+      let cnpj = preservedTenant.cnpj || null;
+      if (cnpj) {
+        const existingTenantByCnpj = await prisma.tenantCompany.findUnique({
+          where: { cnpj },
+          select: { id: true }
+        });
+        if (existingTenantByCnpj) cnpj = null;
+      }
+
+      const createdTenant = await prisma.tenantCompany.create({
+        data: {
+          id: preservedTenant.id,
+          name: preservedTenant.name,
+          legalName: preservedTenant.legalName || null,
+          cnpj,
+          email: preservedTenant.email || null,
+          phone: preservedTenant.phone || null,
+          status: preservedTenant.status || 'ACTIVE',
+          notes: preservedTenant.notes || null,
+          accessB2B: Boolean(preservedTenant.accessB2B),
+          accessB2G: Boolean(preservedTenant.accessB2G),
+          accessPreSales: Boolean(preservedTenant.accessPreSales),
+          accessManagement: Boolean(preservedTenant.accessManagement),
+          accessAutomation: Boolean(preservedTenant.accessAutomation),
+          createdAt: preservedTenant.createdAt || undefined,
+          updatedAt: preservedTenant.updatedAt || undefined
+        },
+        select: { id: true }
+      });
+      tenantCompanyId = createdTenant.id;
+    }
+  }
+
+  let regionId = null;
+  if (anchor.user.regionId) {
+    const existingRegion = await prisma.region.findUnique({
+      where: { id: anchor.user.regionId },
+      select: { id: true }
+    });
+    if (existingRegion) regionId = existingRegion.id;
+  }
+
+  const existingUserId = await prisma.user.findUnique({
+    where: { id: anchor.user.id },
+    select: { id: true }
+  });
+
+  const role = normalizeRole(anchor.user);
+  if (role !== 'MASTER' && anchor.user.tenantCompanyId && !tenantCompanyId) {
+    return { preserved: false, reason: 'tenant_missing' };
+  }
+
+  const preservedUser = await prisma.user.create({
+    data: {
+      id: existingUserId ? undefined : anchor.user.id,
+      name: anchor.user.name,
+      email: normalizeEmail(anchor.user.email),
+      password: anchor.user.password,
+      role,
+      regionId,
+      quota: anchor.user.quota,
+      commissionSalePercentage: anchor.user.commissionSalePercentage,
+      commissionProject12: anchor.user.commissionProject12,
+      commissionProject24: anchor.user.commissionProject24,
+      commissionProject36: anchor.user.commissionProject36,
+      commissionProject48: anchor.user.commissionProject48,
+      commissionProject60: anchor.user.commissionProject60,
+      tenantCompanyId,
+      accessB2B: Boolean(anchor.user.accessB2B),
+      accessB2G: Boolean(anchor.user.accessB2G),
+      accessPreSales: Boolean(anchor.user.accessPreSales),
+      accessManagement: Boolean(anchor.user.accessManagement),
+      accessAutomation: Boolean(anchor.user.accessAutomation),
+      permissionOverrides: anchor.user.permissionOverrides || {},
+      isCompanyOwner: Boolean(anchor.user.isCompanyOwner),
+      createdAt: anchor.user.createdAt || undefined
+    },
+    select: { id: true, email: true, role: true, tenantCompanyId: true }
+  });
+
+  return {
+    preserved: true,
+    user: {
+      id: preservedUser.id,
+      email: preservedUser.email,
+      role: preservedUser.role,
+      tenantCompanyId: preservedUser.tenantCompanyId
+    }
+  };
+};
+
 const resolveSafeUploadPath = (relativePath) => {
   const cleanRelativePath = String(relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '');
   const absolutePath = path.resolve(uploadsRoot, cleanRelativePath);
@@ -591,8 +761,10 @@ router.post('/restore', async (req, res) => {
       return res.status(400).json({ error: 'Arquivo não é um backup completo do NexosCRM' });
     }
 
+    const restoreSessionAnchor = await readRestoreSessionAnchor(req.user);
     const backupTables = normalizeBackupTables(backup);
     const database = await restoreDatabase(backupTables);
+    const sessionAccess = await ensureRestoreSessionAnchor(restoreSessionAnchor);
     const uploads = await restoreUploads(backup.uploads);
 
     res.json({
@@ -605,7 +777,8 @@ router.post('/restore', async (req, res) => {
         role: req.user?.actualRole || req.user?.role || null
       },
       database,
-      uploads
+      uploads,
+      sessionAccess
     });
   } catch (error) {
     console.error('Erro ao restaurar backup completo:', error);
