@@ -448,6 +448,85 @@ const formatCurrency = (value) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 };
 
+const parseStageDecisionDetails = (details) => {
+  if (!details) return null;
+  if (typeof details === 'object' && !Array.isArray(details)) return details;
+  try {
+    const parsed = JSON.parse(details);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const getStageDecisionSummary = (opportunity) => {
+  const data = parseStageDecisionDetails(opportunity?.stageDecisionDetails);
+  if (!data) return null;
+
+  const columnId = resolveKanbanColumnId(data.b2gStage || opportunity?.b2gStage || opportunity?.stage || data.decision);
+  const decisionLabel =
+    data.decision === 'WON' || columnId === 'GANHO' ? 'Ganho' :
+    data.decision === 'NO_GO' || columnId === 'NO_GO' ? 'NO GO' :
+    data.decision === 'LOST' || columnId === 'PERDIDO' ? 'Perdido' :
+    data.decision || columnId || 'Decisão';
+  const reason = data.reason || data.winReason || data.lossReason || data.noGoReason || opportunity?.lossReason || '';
+  const competitor = data.competitorName || data.wonFromCompetitor || data.lostToCompetitor || '';
+  const description = data.notes || '';
+  const priceDifference = data.priceDifference !== null && data.priceDifference !== undefined
+    ? formatCurrency(data.priceDifference)
+    : '';
+
+  return {
+    decisionLabel,
+    reason,
+    competitor,
+    description,
+    priceDifference,
+    disqualificationReason: data.disqualificationReason || '',
+    appealNotes: data.appealNotes || ''
+  };
+};
+
+const renderStageDecisionSummary = (opportunity, { compact = false } = {}) => {
+  const summary = getStageDecisionSummary(opportunity);
+  if (!summary) return null;
+
+  const detailLines = [
+    summary.reason ? `Motivo: ${summary.reason}` : '',
+    !compact && summary.competitor ? `Concorrente: ${summary.competitor}` : '',
+    !compact && summary.priceDifference ? `Diferença: ${summary.priceDifference}` : '',
+    !compact && summary.disqualificationReason ? `Desclassificação: ${summary.disqualificationReason}` : '',
+    !compact && summary.appealNotes ? `Recurso: ${summary.appealNotes}` : ''
+  ].filter(Boolean);
+
+  return (
+    <div className={[
+      'rounded-xl border bg-cyan-500/10 text-cyan-50',
+      compact ? 'mb-3 border-cyan-400/25 p-3' : 'border-cyan-400/35 p-4'
+    ].join(' ')}>
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-cyan-200">
+        <MessageSquare className="h-3.5 w-3.5" />
+        Decisão: {summary.decisionLabel}
+      </div>
+      {summary.description && (
+        <p className={[
+          'mt-2 leading-relaxed text-cyan-50/90 whitespace-pre-wrap',
+          compact ? 'line-clamp-3 text-xs' : 'text-sm'
+        ].join(' ')}>
+          {summary.description}
+        </p>
+      )}
+      {detailLines.length > 0 && (
+        <div className={compact ? 'mt-2 space-y-1 text-xs text-cyan-100/80' : 'mt-3 grid gap-2 text-sm text-cyan-100/85 sm:grid-cols-2'}>
+          {detailLines.map((line) => (
+            <div key={line} className="line-clamp-2">{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const formatCurrencyNoCents = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return 'R$ 0';
@@ -5816,6 +5895,8 @@ export default function B2GEditais() {
                                     {formatCurrency(item.value)}
                                   </p>
 
+                                  {isOutcomeColumn && renderStageDecisionSummary(item, { compact: true })}
+
                                   <div className="mb-3 space-y-1.5 text-xs text-[var(--crm-muted)]">
                                     {item.projectClientType && (
                                       <div className="flex items-center gap-1.5">
@@ -7732,6 +7813,8 @@ export default function B2GEditais() {
                       {item.description}
                     </p>
                   )}
+
+                  {renderStageDecisionSummary(item)}
 
                   <div className="mt-4 border-t border-[color:var(--crm-border)] pt-4 flex justify-end">
                     <button
