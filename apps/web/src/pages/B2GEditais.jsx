@@ -1381,6 +1381,8 @@ export default function B2GEditais() {
   const [dashboardPresentationMode, setDashboardPresentationMode] = useState(false);
   const [dashboardPresentationProgress, setDashboardPresentationProgress] = useState({ current: 1, total: 1 });
   const [showOpportunityAlertsModal, setShowOpportunityAlertsModal] = useState(false);
+  const [opportunityOpeningAlerts, setOpportunityOpeningAlerts] = useState([]);
+  const [opportunityOpeningAlertsLoading, setOpportunityOpeningAlertsLoading] = useState(false);
   const analysisFileInputRef = useRef(null);
   const repositoryFileInputRef = useRef(null);
   const dashboardPresentationRef = useRef(null);
@@ -2495,6 +2497,25 @@ export default function B2GEditais() {
     }
   };
 
+  const loadOpportunityOpeningAlerts = async () => {
+    try {
+      setOpportunityOpeningAlertsLoading(true);
+      const response = await fetch(buildApiUrl('/b2g/oportunidades/alertas/abertura'), {
+        headers: getAuthHeaders()
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Falha ao carregar alertas de abertura.');
+      }
+      setOpportunityOpeningAlerts(Array.isArray(data?.alerts) ? data.alerts : []);
+    } catch (error) {
+      console.error('Erro ao carregar alertas de abertura B2G:', error);
+      setOpportunityOpeningAlerts([]);
+    } finally {
+      setOpportunityOpeningAlertsLoading(false);
+    }
+  };
+
   const loadRepositoryDocuments = async () => {
     try {
       setRepositoryDocumentsLoading(true);
@@ -2813,6 +2834,16 @@ export default function B2GEditais() {
       window.removeEventListener('focus', refreshB2GOpportunities);
       document.removeEventListener('visibilitychange', syncWhenVisible);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'dashboard' && activeTab !== 'oportunidades') return undefined;
+
+    loadOpportunityOpeningAlerts();
+    const intervalId = window.setInterval(loadOpportunityOpeningAlerts, 60000);
+
+    return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -5234,6 +5265,12 @@ export default function B2GEditais() {
       detail: `${item.organization || item.agency || 'Orgão não informado'} • prazo ${formatDateFlexible(item.proposalDueDate)}`,
       tone: index === 0 ? 'red' : 'yellow'
     }));
+    const openingAlerts = opportunityOpeningAlerts.slice(0, 4).map((item) => ({
+      id: item.opportunityId || item.id,
+      title: item.title || item.projectName || 'Oportunidade com abertura próxima',
+      detail: `${item.company?.name || 'Órgão não informado'} • abertura ${formatDateFlexible(item.openingDate)}`,
+      tone: item.alertType === 'TODAY' ? 'red' : item.alertType === 'TOMORROW' ? 'yellow' : 'blue'
+    }));
     const activityAlert = dashboardCriticalActivity ? [{
       id: dashboardCriticalActivity.id || 'critical-activity',
       title: dashboardCriticalActivity.subject || 'Atividade com SLA crítico',
@@ -5331,6 +5368,10 @@ export default function B2GEditais() {
               <select value={dashboardTemperatureFilter} onChange={(event) => setDashboardTemperatureFilter(event.target.value)} aria-label="Temperatura">
                 {DASHBOARD_TEMPERATURE_FILTERS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
+              <button type="button" onClick={() => setShowOpportunityAlertsModal(true)} title="Alertas de abertura" aria-label="Abrir alertas de abertura">
+                <AlertTriangle className="h-4 w-4" />
+                {opportunityOpeningAlerts.length > 0 ? opportunityOpeningAlerts.length : ''}
+              </button>
               <button type="button" onClick={() => { loadNotices({ preserveSelection: true }); loadSupportData(); }} title="Atualizar dados" aria-label="Atualizar dados"><RefreshCcw className="h-4 w-4" /></button>
               <button type="button" onClick={handleDashboardFullscreen} title="Apresentação" aria-label="Abrir apresentação"><Maximize2 className="h-4 w-4" /></button>
             </>
@@ -5380,7 +5421,7 @@ export default function B2GEditais() {
           alerts={{
             title: 'Alertas do Pipeline',
             subtitle: 'Prazos e atividades prioritárias',
-            items: [...deadlineAlerts, ...activityAlert].slice(0, 4)
+            items: [...openingAlerts, ...deadlineAlerts, ...activityAlert].slice(0, 4)
           }}
           teamChart={{
             title: 'Performance por Etapa',
@@ -5741,6 +5782,11 @@ export default function B2GEditais() {
               >
                 <AlertTriangle className="h-4 w-4" />
                 Alertas
+                {opportunityOpeningAlerts.length > 0 && (
+                  <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 py-0.5 text-[11px] font-black text-white">
+                    {opportunityOpeningAlerts.length}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -5752,6 +5798,58 @@ export default function B2GEditais() {
               </button>
             </div>
           </div>
+
+          {(opportunityOpeningAlertsLoading || opportunityOpeningAlerts.length > 0) && (
+            <div className="crm-panel p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-base font-black text-[var(--crm-ink)]">
+                    <AlertTriangle className="h-4 w-4 text-orange-400" />
+                    Alertas de abertura
+                  </h3>
+                  <p className="text-xs text-[var(--crm-muted)]">Oportunidades em proposta com abertura nos próximos 5 dias.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOpportunityAlertsModal(true)}
+                  className="crm-btn crm-btn-secondary h-9 px-3 text-xs"
+                >
+                  Ver todos
+                </button>
+              </div>
+
+              {opportunityOpeningAlertsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-[var(--crm-muted)]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Carregando alertas...
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {opportunityOpeningAlerts.slice(0, 3).map((alert) => (
+                    <button
+                      key={alert.opportunityId}
+                      type="button"
+                      onClick={() => navigate(`/b2g-oportunidades?clientType=B2G&opportunityId=${encodeURIComponent(alert.opportunityId)}&mode=view`)}
+                      className="rounded-2xl border border-orange-400/30 bg-orange-500/10 p-3 text-left transition-all hover:border-orange-300/60 hover:bg-orange-500/15"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-black text-[var(--crm-ink)]">{alert.title || 'Oportunidade B2G'}</div>
+                          <div className="mt-1 truncate text-xs text-[var(--crm-muted)]">{alert.company?.name || 'Órgão não informado'}</div>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-orange-500/20 px-2 py-1 text-[11px] font-black text-orange-200">
+                          {alert.daysUntilOpening === 0 ? 'Hoje' : `${alert.daysUntilOpening}d`}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-xs text-[var(--crm-muted)]">
+                        Abertura: <span className="font-semibold text-[var(--crm-ink)]">{formatDateFlexible(alert.openingDate)}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="crm-panel p-4">
             <div className="flex flex-col gap-3 lg:flex-row">
