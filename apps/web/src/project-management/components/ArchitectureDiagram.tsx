@@ -75,9 +75,12 @@ const BackgroundImageNode = ({ data }: any) => (
   </div>
 );
 
+const DiagramSetNodesContext = React.createContext<any>(null);
+
 const ArchNode = ({ id, data, selected }: any) => {
   const [imgError, setImgError] = useState(false);
-  const { setNodes } = useReactFlow();
+  const { setNodes: setFlowNodes } = useReactFlow();
+  const setDiagramNodes = React.useContext(DiagramSetNodesContext);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const Icon = iconMap[data.icon] || Box;
 
@@ -93,13 +96,15 @@ const ArchNode = ({ id, data, selected }: any) => {
   const customImage = data.uploadedImage || (normalized ? `https://cdn.simpleicons.org/${normalized}/0ea5e9` : null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      setNodes((nds) => nds.map((n) => {
+      const updateNodes = setDiagramNodes || setFlowNodes;
+      updateNodes((nds: any[]) => nds.map((n) => {
         if (n.id === id) {
           return { ...n, data: { ...n.data, uploadedImage: dataUrl } };
         }
@@ -112,12 +117,20 @@ const ArchNode = ({ id, data, selected }: any) => {
     }
   };
 
+  useEffect(() => {
+    setImgError(false);
+  }, [customImage]);
+
   return (
     <div className={`bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[190px] flex items-center gap-3 text-slate-200 transition-colors`}>
       <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
       <div
         className="w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 cursor-pointer relative group"
-        onClick={() => fileInputRef.current?.click()}
+        onClick={(event) => {
+          event.stopPropagation();
+          fileInputRef.current?.click();
+        }}
+        onMouseDown={(event) => event.stopPropagation()}
         title="Clique para alterar a imagem"
       >
         {customImage && !imgError ? (
@@ -139,6 +152,7 @@ const ArchNode = ({ id, data, selected }: any) => {
           className="hidden"
           ref={fileInputRef}
           onChange={handleImageUpload}
+          onClick={(event) => event.stopPropagation()}
         />
       </div>
       <div className="flex-1">
@@ -146,7 +160,11 @@ const ArchNode = ({ id, data, selected }: any) => {
         {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={(event) => {
+            event.stopPropagation();
+            fileInputRef.current?.click();
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
           className="mt-2 inline-flex items-center gap-1 rounded border border-[#263345] px-2 py-0.5 text-[10px] font-semibold text-slate-400 transition-colors hover:border-[#ff7a00]/70 hover:text-[#ff7a00]"
         >
           <Upload className="h-3 w-3" />
@@ -510,25 +528,26 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="flex-1 relative">
-        <ReactFlow
-          nodes={flowNodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={defaultEdgeOptions}
-          colorMode="dark"
-          fitView
-          className="bg-[#070b16]"
-        >
-          <Background color="#263345" gap={24} size={2} />
-          <Controls className="bg-[#111827] border-[#263345] fill-slate-300" />
-          <MiniMap
-            nodeColor={(n) => '#ff7a00'}
-            maskColor="rgba(15, 23, 42, 0.7)"
-            className="bg-[#111827] border border-[#263345] rounded-md"
-          />
+        <DiagramSetNodesContext.Provider value={setNodes}>
+          <ReactFlow
+            nodes={flowNodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            colorMode="dark"
+            fitView
+            className="bg-[#070b16]"
+          >
+            <Background color="#263345" gap={24} size={2} />
+            <Controls className="bg-[#111827] border-[#263345] fill-slate-300" />
+            <MiniMap
+              nodeColor={(n) => '#ff7a00'}
+              maskColor="rgba(15, 23, 42, 0.7)"
+              className="bg-[#111827] border border-[#263345] rounded-md"
+            />
 
           <Panel position="top-left" className="bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-3 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-100px)] overflow-y-auto">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Componentes</h3>
@@ -618,8 +637,9 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
                 Para imagem de um componente, clique no ícone do próprio componente e envie a foto ou símbolo dele.
               </p>
             </div>
-          </Panel>
-        </ReactFlow>
+            </Panel>
+          </ReactFlow>
+        </DiagramSetNodesContext.Provider>
       </div>
     </div>
   );
