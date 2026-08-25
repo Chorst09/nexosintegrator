@@ -37,7 +37,9 @@ import {
   Shield,
   Building2,
   ImagePlus,
-  Trash2
+  Trash2,
+  FolderOpen,
+  Clock3
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -178,6 +180,53 @@ const ArchNode = ({ id, data, selected }: any) => {
 
 const nodeTypes = { arch: ArchNode, backgroundImage: BackgroundImageNode };
 
+const DIAGRAMS_STORAGE_KEY = 'architecture_diagrams_v1';
+const LEGACY_DIAGRAM_STORAGE_KEY = 'saved_diagram';
+
+type SavedDiagramEntry = {
+  id: string;
+  name: string;
+  nodes: any[];
+  edges: any[];
+  backgroundImage: string | null;
+  backgroundOpacity: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const readSavedDiagrams = (): SavedDiagramEntry[] => {
+  try {
+    const saved = localStorage.getItem(DIAGRAMS_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('Nao foi possivel carregar diagramas salvos.', error);
+    return [];
+  }
+};
+
+const buildLegacyDiagramEntry = (): SavedDiagramEntry | null => {
+  try {
+    const legacy = localStorage.getItem(LEGACY_DIAGRAM_STORAGE_KEY);
+    if (!legacy) return null;
+    const parsed = JSON.parse(legacy);
+    const now = new Date().toISOString();
+    return {
+      id: 'legacy-diagram',
+      name: 'Meu Diagrama',
+      nodes: parsed.nodes || [],
+      edges: parsed.edges || [],
+      backgroundImage: parsed.backgroundImage || null,
+      backgroundOpacity: typeof parsed.backgroundOpacity === 'number' ? parsed.backgroundOpacity : 0.38,
+      createdAt: parsed.createdAt || now,
+      updatedAt: parsed.updatedAt || now,
+    };
+  } catch (error) {
+    console.warn('Nao foi possivel migrar o diagrama antigo.', error);
+    return null;
+  }
+};
+
 const defaultEdgeOptions = {
   style: { stroke: '#374151', strokeWidth: 2 },
   type: 'smoothstep',
@@ -268,15 +317,30 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   const [customNodeName, setCustomNodeName] = useState('');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.38);
-  const [hasSaved, setHasSaved] = useState(false);
+  const [savedDiagrams, setSavedDiagrams] = useState<SavedDiagramEntry[]>([]);
+  const [activeDiagramId, setActiveDiagramId] = useState<string | null>(null);
+  const [activeDiagramName, setActiveDiagramName] = useState('Diagrama sem titulo');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
   const { getNodes } = useReactFlow();
 
   useEffect(() => {
-    const saved = localStorage.getItem('saved_diagram');
-    if (saved) setHasSaved(true);
+    const saved = readSavedDiagrams();
+    const legacy = buildLegacyDiagramEntry();
+    const entries = legacy && !saved.some((entry) => entry.id === legacy.id)
+      ? [legacy, ...saved]
+      : saved;
+    setSavedDiagrams(entries);
+    if (entries.length > 0) {
+      localStorage.setItem(DIAGRAMS_STORAGE_KEY, JSON.stringify(entries));
+    }
+  }, []);
+
+  const persistSavedDiagrams = useCallback((entries: SavedDiagramEntry[]) => {
+    const ordered = [...entries].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    localStorage.setItem(DIAGRAMS_STORAGE_KEY, JSON.stringify(ordered));
+    setSavedDiagrams(ordered);
   }, []);
 
   const onConnect = useCallback((params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
@@ -309,20 +373,28 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     ];
   }, [backgroundImage, backgroundOpacity, nodes]);
 
+  const loadSavedDiagram = (entry: SavedDiagramEntry) => {
+    setNodes(entry.nodes || []);
+    setEdges(entry.edges || []);
+    setBackgroundImage(entry.backgroundImage || null);
+    setBackgroundOpacity(typeof entry.backgroundOpacity === 'number' ? entry.backgroundOpacity : 0.38);
+    setActiveTemplate('saved');
+    setActiveDiagramId(entry.id);
+    setActiveDiagramName(entry.name);
+  };
+
   const loadTemplate = (key: keyof typeof templates | 'saved') => {
     setActiveTemplate(key);
     if (key === 'saved') {
-      const savedStr = localStorage.getItem('saved_diagram');
-      if (savedStr) {
-        const data = JSON.parse(savedStr);
-        setNodes(data.nodes || []);
-        setEdges(data.edges || []);
-        setBackgroundImage(data.backgroundImage || null);
-        setBackgroundOpacity(typeof data.backgroundOpacity === 'number' ? data.backgroundOpacity : 0.38);
+      const latest = savedDiagrams[0];
+      if (latest) {
+        loadSavedDiagram(latest);
       }
     } else {
       setNodes(templates[key].nodes);
       setEdges(templates[key].edges);
+      setActiveDiagramId(null);
+      setActiveDiagramName(`Modelo ${key}`);
       if (key === 'blank') {
         setBackgroundImage(null);
         setBackgroundOpacity(0.38);
@@ -331,10 +403,57 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   };
 
   const saveDiagram = () => {
-    const data = { nodes, edges, backgroundImage, backgroundOpacity };
-    localStorage.setItem('saved_diagram', JSON.stringify(data));
-    setHasSaved(true);
-    alert('Diagrama salvo com sucesso no navegador!');
+    const now = new Date().toISOString();
+    const defaultName = activeDiagramId ? activeDiagramName : `Diagrama ${savedDiagrams.length + 1}`;
+    const requestedName = window.prompt('Nome do diagrama', defaultName);
+    if (requestedName === null) return;
+
+    const name = requestedName.trim() || 'Diagrama sem titulo';
+    const payload = {
+      nodes,
+      edges,
+      backgroundImage,
+      backgroundOpacity,
+      updatedAt: now,
+    };
+
+    if (activeDiagramId) {
+      const updated = savedDiagrams.map((entry) => (
+        entry.id === activeDiagramId
+          ? { ...entry, ...payload, name }
+          : entry
+      ));
+      persistSavedDiagrams(updated);
+      setActiveDiagramName(name);
+      alert('Diagrama atualizado com sucesso!');
+      return;
+    }
+
+    const id = `diagram-${Date.now()}`;
+    const created: SavedDiagramEntry = {
+      id,
+      name,
+      ...payload,
+      createdAt: now,
+    };
+    persistSavedDiagrams([created, ...savedDiagrams]);
+    setActiveTemplate('saved');
+    setActiveDiagramId(id);
+    setActiveDiagramName(name);
+    alert('Diagrama salvo com sucesso!');
+  };
+
+  const deleteSavedDiagram = (entryId: string) => {
+    const entry = savedDiagrams.find((item) => item.id === entryId);
+    if (!entry) return;
+    if (!window.confirm(`Excluir o diagrama "${entry.name}"?`)) return;
+
+    const updated = savedDiagrams.filter((item) => item.id !== entryId);
+    persistSavedDiagrams(updated);
+    if (activeDiagramId === entryId) {
+      setActiveDiagramId(null);
+      setActiveDiagramName('Diagrama sem titulo');
+    }
   };
 
   const downloadPDF = () => {
@@ -481,11 +600,11 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-[#070b16] p-1 rounded-lg border border-[#263345]">
-            {hasSaved && (
+            {savedDiagrams.length > 0 && (
               <button
                 onClick={() => loadTemplate('saved')}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${activeTemplate === 'saved' ? 'bg-[#ff7a00] text-white' : 'text-[#ff7a00] hover:bg-[#ff7a00]/10'}`}
-              >Meu Diagrama</button>
+              >Salvos ({savedDiagrams.length})</button>
             )}
             <div className="w-px h-4 bg-[#263345] mx-1"></div>
             <button
@@ -511,6 +630,11 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           </div>
 
           <div className="flex items-center gap-2 border-l border-[#263345] pl-3">
+            {activeDiagramId && (
+              <span className="hidden xl:inline max-w-44 truncate text-xs text-slate-400">
+                Editando: <strong className="font-semibold text-slate-200">{activeDiagramName}</strong>
+              </span>
+            )}
             <button
               onClick={saveDiagram}
               className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-[#111827] hover:bg-[#263345] border border-[#263345] px-3 py-1.5 rounded-md transition-colors font-medium shadow-sm"
@@ -548,6 +672,62 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
               maskColor="rgba(15, 23, 42, 0.7)"
               className="bg-[#111827] border border-[#263345] rounded-md"
             />
+
+            <Panel position="top-right" className="w-64 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-120px)]">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Diagramas Salvos</h3>
+                <span className="rounded bg-[#070b16] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                  {savedDiagrams.length}
+                </span>
+              </div>
+
+              {savedDiagrams.length === 0 ? (
+                <div className="rounded-md border border-dashed border-[#263345] bg-[#070b16]/70 px-2 py-3 text-[11px] leading-4 text-slate-500">
+                  Salve o primeiro diagrama para ele aparecer aqui.
+                </div>
+              ) : (
+                <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
+                  {savedDiagrams.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`rounded-md border px-2 py-2 transition-colors ${activeDiagramId === entry.id ? 'border-[#ff7a00]/70 bg-[#ff7a00]/10' : 'border-[#263345] bg-[#070b16]/70 hover:border-[#3b4b63]'}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => loadSavedDiagram(entry)}
+                        className="w-full text-left"
+                      >
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#ff7a00]" />
+                          <span className="truncate">{entry.name}</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500">
+                          <Clock3 className="h-3 w-3" />
+                          <span>{new Date(entry.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                        </div>
+                      </button>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => loadSavedDiagram(entry)}
+                          className="flex-1 rounded border border-[#263345] px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:border-[#ff7a00]/70 hover:text-white"
+                        >
+                          Abrir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteSavedDiagram(entry.id)}
+                          className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-200 transition-colors hover:bg-red-500/20"
+                          title="Excluir diagrama"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Panel>
 
           <Panel position="top-left" className="w-56 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-1.5 max-h-[calc(100vh-120px)] overflow-y-auto">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Componentes</h3>
