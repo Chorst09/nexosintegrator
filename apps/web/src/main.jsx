@@ -12,6 +12,20 @@ import { ThemeProvider } from './theme/ThemeProvider';
 window.addEventListener('unhandledrejection', (event) => {
   const msg = String(event.reason?.message || event.reason || '');
   if (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('error loading dynamically imported module')
+  ) {
+    event.preventDefault();
+    const alreadyReloaded = sessionStorage.getItem('crm-chunk-reload');
+    if (!alreadyReloaded) {
+      sessionStorage.setItem('crm-chunk-reload', '1');
+      window.location.reload();
+    }
+    return;
+  }
+
+  if (
     msg.includes('listener indicated an asynchronous response') ||
     msg.includes('message channel closed') ||
     msg.includes('Extension context invalidated') ||
@@ -20,6 +34,10 @@ window.addEventListener('unhandledrejection', (event) => {
     event.preventDefault();
   }
 });
+
+window.addEventListener('load', () => {
+  sessionStorage.removeItem('crm-chunk-reload');
+}, { once: true });
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
