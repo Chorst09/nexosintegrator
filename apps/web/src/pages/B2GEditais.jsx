@@ -317,6 +317,74 @@ const getB2GOpportunityFinancials = (item = {}) => {
   };
 };
 
+const getB2GResourceSummary = (item = {}) => {
+  const b2g = parseB2GData(item?.description);
+  const resourceData = b2g.recursoData && typeof b2g.recursoData === 'object' ? b2g.recursoData : {};
+  const description =
+    resourceData.recursoDescription ||
+    b2g.recursoDescricao ||
+    b2g.resourceDescription ||
+    b2g.appealDescription ||
+    '';
+  const mainPoints =
+    resourceData.mainPoints ||
+    b2g.recursoPontosPrincipais ||
+    b2g.resourceMainPoints ||
+    b2g.appealMainPoints ||
+    '';
+  const deadline =
+    resourceData.deadline ||
+    b2g.recursoPrazo ||
+    b2g.resourceDeadline ||
+    b2g.appealDeadline ||
+    '';
+  const responsible =
+    resourceData.responsibleParty ||
+    b2g.recursoResponsavel ||
+    b2g.resourceResponsible ||
+    b2g.appealResponsible ||
+    '';
+  const type =
+    resourceData.recursoType ||
+    b2g.recursoTipo ||
+    b2g.resourceType ||
+    'Recurso';
+
+  if (!description && !mainPoints && !deadline && !responsible) return null;
+
+  return { type, description, mainPoints, deadline, responsible };
+};
+
+const renderB2GResourceSummary = (item) => {
+  const summary = getB2GResourceSummary(item);
+  if (!summary) return null;
+
+  return (
+    <div className="mb-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-xs text-red-50">
+      <div className="flex items-center gap-2 font-black uppercase tracking-[0.08em] text-red-200">
+        <MessageSquare className="h-3.5 w-3.5" />
+        {summary.type}
+      </div>
+      {summary.description && (
+        <p className="mt-2 line-clamp-3 whitespace-pre-wrap leading-relaxed text-red-50/90">
+          {summary.description}
+        </p>
+      )}
+      {summary.mainPoints && (
+        <p className="mt-2 line-clamp-3 whitespace-pre-wrap leading-relaxed text-red-100/85">
+          Pontos: {summary.mainPoints}
+        </p>
+      )}
+      {(summary.deadline || summary.responsible) && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-red-100/80">
+          {summary.deadline && <span>Prazo: {formatDateFlexible(summary.deadline)}</span>}
+          {summary.responsible && <span>Responsavel: {summary.responsible}</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const KANBAN_TONE_STYLES = {
   default: {
     title: 'text-[var(--crm-ink)]',
@@ -6150,6 +6218,8 @@ export default function B2GEditais() {
                                   <p className="mb-3 text-base font-extrabold text-emerald-400">
                                     {formatCurrency(item.value)}
                                   </p>
+
+                                  {column.id === 'RECURSO' && renderB2GResourceSummary(item)}
 
                                   {isOutcomeColumn && renderStageDecisionSummary(item, { compact: true })}
 
