@@ -117,6 +117,13 @@ const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).
 const monthLabel = (date) => `${monthLabels[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
 const OPEN_STAGES = new Set(['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION']);
 const MONTHLY_PROJECT_TYPE = 'MONTHLY';
+const B2G_STAGE_SUMMARY = [
+  { key: 'ANALISE', label: 'Análise', tone: 'text-cyan-200', bar: 'bg-cyan-400' },
+  { key: 'PROPOSTA_ENVIADA', label: 'Proposta enviada', tone: 'text-amber-200', bar: 'bg-amber-400' },
+  { key: 'HABILITACAO', label: 'Habilitação', tone: 'text-indigo-200', bar: 'bg-indigo-400' },
+  { key: 'RECURSO', label: 'Recurso', tone: 'text-orange-200', bar: 'bg-orange-400' },
+  { key: 'GANHO', label: 'Ganho', tone: 'text-emerald-200', bar: 'bg-emerald-400' }
+];
 
 const createMonthBuckets = (count = 6) => {
   const now = new Date();
@@ -233,7 +240,41 @@ const mergeRevenueBreakdowns = (...items) =>
     singleCount: acc.singleCount + toNumber(item?.singleCount)
   }), { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
 
-function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue }) {
+const resolveB2GSummaryStage = (item = {}) => {
+  const b2gStage = String(item?.b2gStage || '').trim().toUpperCase();
+  if (b2gStage) return b2gStage;
+
+  const stage = String(item?.stage || '').trim().toUpperCase();
+  if (stage === 'WON') return 'GANHO';
+  if (stage === 'LOST') return 'PERDIDO';
+  if (stage === 'PROPOSAL') return 'PROPOSTA_ENVIADA';
+  if (stage === 'NEGOTIATION') return 'HABILITACAO';
+  return 'ANALISE';
+};
+
+const buildB2GStageBreakdown = (rows = []) => {
+  const base = Object.fromEntries(
+    B2G_STAGE_SUMMARY.map((stage) => [
+      stage.key,
+      { ...stage, total: 0, monthly: 0, contract: 0, single: 0, count: 0 }
+    ])
+  );
+
+  toArray(rows).forEach((item) => {
+    const stage = resolveB2GSummaryStage(item);
+    if (!base[stage]) return;
+    const revenue = revenueBreakdownFromOpportunities([item]);
+    base[stage].total += revenue.total;
+    base[stage].monthly += revenue.monthly;
+    base[stage].contract += revenue.contract;
+    base[stage].single += revenue.single;
+    base[stage].count += 1;
+  });
+
+  return B2G_STAGE_SUMMARY.map((stage) => base[stage.key]);
+};
+
+function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStageBreakdown = [] }) {
   const safeTotal = Math.max(toNumber(consolidatedRevenue.total), 1);
   const channels = [
     {
@@ -303,6 +344,9 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue }) {
         <div className="grid grid-cols-1 divide-y divide-[#263345] md:grid-cols-2 md:divide-x md:divide-y-0">
           {channels.map((channel) => {
             const Icon = channel.icon;
+            const isB2G = channel.id === 'b2g';
+            const b2gRows = isB2G ? b2gStageBreakdown : [];
+            const b2gRowsMax = Math.max(...b2gRows.map((row) => toNumber(row.total)), 1);
             return (
               <div key={channel.id} className="p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -352,6 +396,43 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue }) {
                     </p>
                   </div>
                 </div>
+
+                {isB2G && b2gRows.length > 0 ? (
+                  <div className="mt-5 border-t border-[#263345] pt-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">Valores por fase</p>
+                      <p className="text-[10px] font-bold text-[#8f9caf]">Mensal / Total</p>
+                    </div>
+                    <div className="space-y-3">
+                      {b2gRows.map((row) => {
+                        const width = Math.max(row.total > 0 ? 6 : 0, Math.round((toNumber(row.total) / b2gRowsMax) * 100));
+                        return (
+                          <div key={row.key} className="min-w-0">
+                            <div className="mb-1 flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className={`block truncate text-[11px] font-black uppercase tracking-wide ${row.tone}`}>
+                                  {row.label}
+                                </span>
+                                <span className="text-[10px] font-semibold text-[#8f9caf]">{formatNumber(row.count)} oportunidade(s)</span>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <div className="text-xs font-black text-white" title={formatCurrency(row.monthly)}>
+                                  {formatCompactCurrency(row.monthly)}
+                                </div>
+                                <div className="text-[10px] font-bold text-[#8f9caf]" title={formatCurrency(row.total)}>
+                                  {formatCompactCurrency(row.total)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-[#0d1423]">
+                              <div className={`h-full rounded-full ${row.bar}`} style={{ width: `${width}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -764,6 +845,7 @@ export default function DashboardGeral() {
     const b2bRevenue = revenueBreakdownFromOpportunities(openB2B);
     const b2gOpportunityRevenue = revenueBreakdownFromOpportunities(openB2GOpps);
     const b2gNoticeRevenue = revenueBreakdownFromNotices(activeB2GNotices);
+    const b2gStageBreakdown = buildB2GStageBreakdown(opportunitiesB2GRange);
     const b2gRevenue = b2gOpportunityRevenue;
     const consolidatedRevenue = mergeRevenueBreakdowns(b2bRevenue, b2gRevenue);
     const b2bWonRevenue = revenueBreakdownFromOpportunities(wonB2B);
@@ -933,6 +1015,7 @@ export default function DashboardGeral() {
       overduePreSalesPocs,
       b2bRevenue,
       b2gRevenue,
+      b2gStageBreakdown,
       consolidatedRevenue,
       b2bWonRevenue,
       b2gWonRevenue,
@@ -1333,6 +1416,7 @@ export default function DashboardGeral() {
     overduePreSalesPocs,
     b2bRevenue,
     b2gRevenue,
+    b2gStageBreakdown,
     consolidatedRevenue,
     b2bWonRevenue,
     b2gWonRevenue,
@@ -1506,6 +1590,7 @@ export default function DashboardGeral() {
         <RevenueOverview
           b2bRevenue={b2bRevenue}
           b2gRevenue={b2gRevenue}
+          b2gStageBreakdown={b2gStageBreakdown}
           consolidatedRevenue={consolidatedRevenue}
         />
       </div>
