@@ -50,6 +50,7 @@ const parseFlowFromDescription = (description) => {
     hasMarker: true,
     cleanDescription,
     flow: {
+      ...(flow && typeof flow === 'object' ? flow : {}),
       sourceArea: flow?.sourceArea || 'COMERCIAL',
       targetArea: flow?.targetArea || 'COMERCIAL',
       createdFrom: flow?.createdFrom || 'ATIVIDADES',

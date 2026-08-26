@@ -7,6 +7,7 @@ import {
   Check,
   CheckSquare,
   Eye,
+  FileText,
   Handshake,
   LayoutGrid,
   List,
@@ -31,6 +32,7 @@ import {
   hydrateActivityFlow,
   updateFlowMetadataInDescription
 } from '../utils/activityFlow';
+import { openPreSalesBudgetPdf } from '../utils/preSalesBudgetPrint';
 
 const TYPE_META = {
   CALL: { label: 'Ligacao', icon: PhoneCall },
@@ -298,6 +300,25 @@ export default function Atividades() {
     }
   };
 
+  const openReturnedPreSalesBudget = async (activity) => {
+    const preSalesRequestId = activity?.flow?.preSalesRequestId;
+    const preSalesNumber = activity?.flow?.preSalesNumber;
+    if (!preSalesRequestId && !preSalesNumber) return;
+
+    try {
+      const path = preSalesRequestId
+        ? `/pre-vendas/${encodeURIComponent(preSalesRequestId)}`
+        : `/pre-vendas/by-number/${encodeURIComponent(preSalesNumber)}`;
+      const response = await axios.get(buildApiUrl(path), { headers: getAuthHeaders() });
+      const budget = response.data?.data || response.data;
+      if (!budget?.id) throw new Error('Orçamento não encontrado');
+      openPreSalesBudgetPdf(budget);
+    } catch (error) {
+      console.error('Erro ao abrir orçamento devolvido:', error);
+      alert('Não foi possível abrir o orçamento devolvido.');
+    }
+  };
+
   useEffect(() => {
     const activityId = searchParams.get('activityId');
     if (!activityId) return;
@@ -534,6 +555,17 @@ export default function Atividades() {
 
   const renderActivityActions = (item) => (
     <>
+      {(item?.flow?.preSalesRequestId || item?.flow?.preSalesNumber) && (
+        <button
+          type="button"
+          onClick={() => openReturnedPreSalesBudget(item)}
+          className="crm-btn crm-btn-primary px-3 py-1.5 text-xs"
+          title="Visualizar orçamento em PDF"
+        >
+          <FileText className="h-4 w-4" />
+          PDF
+        </button>
+      )}
       {item.status === 'COMPLETED' && getActivityDisplayStatus(item) !== 'PROPOSAL_SENT' && (
         <button
           type="button"

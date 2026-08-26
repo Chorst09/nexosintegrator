@@ -5,6 +5,8 @@ const { canAccessModule } = require('../lib/permissions');
 const { getTenantCompanyId, mergeRelationWhere } = require('../lib/tenantScope.cjs');
 
 const router = express.Router();
+const ACTIVITY_FLOW_MARKER = '[CRM_ACTIVITY_FLOW]';
+const PROPOSAL_SENT_STAGE = 'PROPOSTA_ENVIADA';
 
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);
@@ -145,6 +147,95 @@ const matchesBudgetNumber = (solicitacao = {}, normalizedNumber = '') => {
   return cotacoes.some((cotacao) => (
     String(cotacao?.numeroOrcamento || '').trim().toUpperCase() === normalizedNumber
   ));
+};
+
+const extractSourceActivityId = (observacoes = '') => {
+  const match = String(observacoes || '').match(/\[FLOW_ACTIVITY_ID:([^\]]+)\]/);
+  return match?.[1] || null;
+};
+
+const parseFlowFromDescription = (description) => {
+  const value = String(description || '');
+  const markerIdx = value.indexOf(ACTIVITY_FLOW_MARKER);
+  if (markerIdx < 0) {
+    return {
+      cleanDescription: value.trim(),
+      flow: {
+        sourceArea: 'COMERCIAL',
+        targetArea: 'COMERCIAL',
+        createdFrom: 'LEGACY'
+      }
+    };
+  }
+
+  const cleanDescription = value.slice(0, markerIdx).trim();
+  const raw = value.slice(markerIdx + ACTIVITY_FLOW_MARKER.length).trim();
+  let flow = {};
+  try {
+    flow = JSON.parse(raw);
+  } catch {
+    flow = {};
+  }
+
+  return {
+    cleanDescription,
+    flow: {
+      ...(flow && typeof flow === 'object' ? flow : {}),
+      sourceArea: flow?.sourceArea || 'COMERCIAL',
+      targetArea: flow?.targetArea || 'COMERCIAL',
+      createdFrom: flow?.createdFrom || 'ATIVIDADES',
+      createdByName: flow?.createdByName || ''
+    }
+  };
+};
+
+const buildDescriptionWithFlow = (cleanDescription, flow = {}) => (
+  `${String(cleanDescription || '').trim()}\n\n${ACTIVITY_FLOW_MARKER}${JSON.stringify({
+    ...(flow && typeof flow === 'object' ? flow : {}),
+    updatedAt: new Date().toISOString()
+  })}`
+);
+
+const syncPreSalesReturnToCommercial = async (tx, req, solicitacao = {}, status = 'ENVIADA') => {
+  const activityId = extractSourceActivityId(solicitacao?.observacoes);
+  if (!activityId) return null;
+
+  const activity = await tx.activity.findUnique({
+    where: { id: activityId },
+    select: {
+      id: true,
+      description: true,
+      tenantCompanyId: true
+    }
+  });
+  if (!activity) return null;
+
+  const tenantCompanyId = getTenantCompanyId(req.user);
+  if (tenantCompanyId && String(activity.tenantCompanyId || '') !== tenantCompanyId) return null;
+
+  const parsed = parseFlowFromDescription(activity.description);
+  const sourceArea = parsed.flow?.sourceArea && parsed.flow.sourceArea !== 'PRE_VENDAS'
+    ? parsed.flow.sourceArea
+    : 'COMERCIAL';
+
+  return tx.activity.update({
+    where: { id: activityId },
+    data: {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      description: buildDescriptionWithFlow(parsed.cleanDescription, {
+        ...parsed.flow,
+        targetArea: sourceArea,
+        returnedFromPreSales: true,
+        activityStage: PROPOSAL_SENT_STAGE,
+        preSalesStatus: status,
+        preSalesRequestId: solicitacao.id,
+        preSalesNumber: solicitacao.numero,
+        preSalesReturnedAt: new Date().toISOString()
+      })
+    },
+    select: { id: true }
+  });
 };
 
 // GET /api/pre-vendas - Listar todas as solicitações de precificação
@@ -515,12 +606,12 @@ router.put('/:id', async (req, res) => {
       : undefined;
 
     // Atualizar solicitação
-    const solicitacao = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       if (shouldReplaceItems) {
         await tx.preSalesItem.deleteMany({ where: { preSalesRequestId: id } });
       }
 
-      return tx.preSalesRequest.update({
+      const updated = await tx.preSalesRequest.update({
         where: { id },
         data: {
           titulo,
@@ -564,15 +655,79 @@ router.put('/:id', async (req, res) => {
           }
         }
       });
+
+      let returnedActivity = null;
+      if (['ENVIADA', 'APROVADO', 'FINALIZADA'].includes(String(status || '').toUpperCase())) {
+        returnedActivity = await syncPreSalesReturnToCommercial(tx, req, updated, String(status).toUpperCase());
+      }
+
+      return { solicitacao: updated, returnedActivity };
     });
 
     res.json({
       success: true,
       message: 'Solicitação atualizada com sucesso',
-      data: solicitacao
+      data: result.solicitacao,
+      returnedActivityId: result.returnedActivity?.id || null
     });
   } catch (error) {
     console.error('Erro ao atualizar solicitação:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/pre-vendas/:id/devolver-comercial - Finalizar orçamento e devolver ao Comercial
+router.post('/:id/devolver-comercial', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const accessCheck = await ensurePreSalesRequestAccess(req, id);
+    if (accessCheck.error) {
+      return res.status(accessCheck.status).json({
+        success: false,
+        message: accessCheck.error
+      });
+    }
+
+    const userCanOperatePreSales = canAccessModule(req.user, 'PRE_SALES');
+    if (
+      accessCheck.solicitacao.solicitanteId !== req.user.userId &&
+      req.user.role !== 'ADMIN' &&
+      !userCanOperatePreSales
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Sem permissão para devolver esta solicitação'
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const solicitacao = await tx.preSalesRequest.update({
+        where: { id },
+        data: {
+          status: 'ENVIADA',
+          updatedAt: new Date()
+        },
+        include: preSalesRequestInclude
+      });
+      const returnedActivity = await syncPreSalesReturnToCommercial(tx, req, solicitacao, 'ENVIADA');
+      return { solicitacao, returnedActivity };
+    });
+
+    res.json({
+      success: true,
+      message: result.returnedActivity
+        ? 'Orçamento devolvido ao Comercial com sucesso'
+        : 'Orçamento marcado como enviado; atividade original não encontrada',
+      data: result.solicitacao,
+      returnedActivityId: result.returnedActivity?.id || null
+    });
+  } catch (error) {
+    console.error('Erro ao devolver orçamento ao Comercial:', error);
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',

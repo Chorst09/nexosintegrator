@@ -9,6 +9,7 @@ import { buildApiUrl, getAuthHeaders } from '../config/api';
 import PageHeader from '../components/PageHeader';
 import AnimatedStats from '../components/AnimatedStats';
 import Modal from '../components/Modal';
+import { openPreSalesBudgetPdf } from '../utils/preSalesBudgetPrint';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -913,6 +914,9 @@ export default function OrcamentosPrevendas() {
   };
 
   const handleViewPdf = (item) => {
+    openPreSalesBudgetPdf(item);
+    return;
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       alert('Não foi possível abrir a janela do PDF. Libere pop-ups e tente novamente.');
@@ -1140,6 +1144,22 @@ export default function OrcamentosPrevendas() {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
   };
 
+  const handleReturnToCommercial = async (item) => {
+    if (!item?.id) return;
+    try {
+      const res = await fetch(buildApiUrl(`/pre-vendas/${encodeURIComponent(item.id)}/devolver-comercial`), {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || data?.error || 'Erro ao devolver orçamento ao Comercial');
+      loadRequests();
+      alert(data?.message || 'Orçamento devolvido ao Comercial com sucesso.');
+    } catch (error) {
+      alert(error?.message || 'Erro ao devolver orçamento ao Comercial.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -1297,6 +1317,14 @@ export default function OrcamentosPrevendas() {
                       title="Visualizar orçamento em PDF"
                     >
                       <FileText className="h-3.5 w-3.5" /> PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReturnToCommercial(item)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/25 whitespace-nowrap"
+                      title="Devolver orçamento ao Comercial"
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" /> Devolver
                     </button>
                     <button
                       type="button"
