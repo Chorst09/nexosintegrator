@@ -753,7 +753,7 @@ export default function Dashboard() {
             { label: 'Vendas Fechadas', value: kpis.wonOpportunities, percent: (kpis.wonOpportunities / opportunityBase) * 100, color: '#22c55e' },
             { label: 'Taxa de Conversão', value: formatPercent(kpis.conversionRate), percent: kpis.conversionRate, color: '#ff7a00', secondaryColor: '#f6b40b' }
           ]}
-          funnel={<SalesFunnel data={charts.funnel} />}
+          funnel={<SalesFunnel data={charts.funnel} selectedTemperature={selectedTemperature} />}
           funnelTitle="Funil Comercial B2B"
           funnelSubtitle="Volume de oportunidades por etapa"
           temperature={pipelineTemperature}
@@ -1162,7 +1162,7 @@ export default function Dashboard() {
             <Target className="h-4 w-4 text-[#8fd1ff]" />
           </div>
           <div className="h-[340px]">
-            <SalesFunnel data={charts.funnel} />
+            <SalesFunnel data={charts.funnel} selectedTemperature={selectedTemperature} />
           </div>
         </div>
 
