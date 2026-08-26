@@ -158,6 +158,7 @@ const formFromRequest = (request, currentUser = {}) => {
     solicitanteId: request?.solicitanteId || request?.solicitante?.id || currentUser.id || '',
     encaminhadoParaId: request?.assignedToId || '',
     opportunityId: request?.opportunityId || request?.opportunity?.id || '',
+    opportunitySearch: request?.opportunity ? formatOpportunityLabel(request.opportunity) : (request?.opportunityId || ''),
     clientId: request?.leadId || request?.lead?.id || '',
     prioridade: request?.prioridade || 'MEDIUM',
     prazo: proposalDetails.prazo || request?.prazo || '',
@@ -187,6 +188,7 @@ const buildEmptyForm = (currentUser = {}, existingRequests = []) => ({
   solicitanteId: currentUser.id || '',
   encaminhadoParaId: '',
   opportunityId: '',
+  opportunitySearch: '',
   clientId: '',
   prioridade: 'MEDIUM',
   prazo: '',
@@ -296,6 +298,185 @@ const openPrecificacaoFromRequest = (solicitacao, destination = '/precificacao')
   window.location.href = `${destination}?cotacaoKey=${encodeURIComponent(cotacaoKey)}`;
 };
 
+const normalizeSearchText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim();
+
+const getPrimaryContact = (company) => (
+  Array.isArray(company?.contacts)
+    ? company.contacts.find((contact) => contact?.isPrimary) || company.contacts[0] || {}
+    : {}
+);
+
+const formatCompanyLabel = (company) => company?.name || company?.nome || '';
+
+const formatCompanySubtitle = (company) => {
+  const contact = getPrimaryContact(company);
+  return [
+    company?.document,
+    company?.clientType,
+    contact?.name,
+    contact?.email
+  ].filter(Boolean).join(' • ');
+};
+
+const formatOpportunityLabel = (opportunity) => {
+  if (!opportunity) return '';
+  const number = opportunity.number || opportunity.numeroOportunidade || opportunity.id;
+  return [number, opportunity.title || opportunity.titulo].filter(Boolean).join(' - ');
+};
+
+const formatOpportunitySubtitle = (opportunity) => {
+  const company = opportunity?.company || {};
+  return [
+    company?.name,
+    opportunity?.stage || opportunity?.b2gStage,
+    opportunity?.value ? toCurrency(opportunity.value) : ''
+  ].filter(Boolean).join(' • ');
+};
+
+const inferCompanyClientType = (name = '', opportunity = null) => {
+  const opportunityType = String(opportunity?.clientType || opportunity?.company?.clientType || '').toUpperCase();
+  if (opportunityType === 'B2G' || opportunityType === 'B2B') return opportunityType;
+
+  const normalizedName = normalizeSearchText(name);
+  return /(prefeitura|municipio|municipal|governo|estado|estadual|federal|secretaria|tribunal|ministerio|detran|camara|assembleia|autarquia|fundacao|universidade|orgao|licitacao)/i
+    .test(normalizedName)
+    ? 'B2G'
+    : 'B2B';
+};
+
+function SearchableCreatableField({
+  label,
+  value,
+  options = [],
+  onInputChange,
+  onSelect,
+  onCreate,
+  onError,
+  getOptionLabel,
+  getOptionSubtitle,
+  placeholder = '',
+  emptyMessage = 'Nenhum cadastro encontrado.',
+  createPrefix = 'Cadastrar',
+  disabled = false
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const term = normalizeSearchText(value);
+
+  const filteredOptions = useMemo(() => (
+    options
+      .filter((option) => {
+        if (!term) return true;
+        const labelText = getOptionLabel(option);
+        const subtitleText = getOptionSubtitle?.(option) || '';
+        const idText = option?.id || option?.number || option?.numero || option?.numeroOportunidade || '';
+        return normalizeSearchText([labelText, subtitleText, idText].join(' ')).includes(term);
+      })
+      .slice(0, 8)
+  ), [options, term, getOptionLabel, getOptionSubtitle]);
+
+  const hasExactMatch = useMemo(() => (
+    Boolean(term) && options.some((option) => (
+      normalizeSearchText(getOptionLabel(option)) === term
+    ))
+  ), [options, term, getOptionLabel]);
+
+  const canCreate = Boolean(onCreate && value.trim() && !hasExactMatch);
+
+  const handleCreate = async () => {
+    if (!canCreate || creating) return;
+    try {
+      setCreating(true);
+      const created = await onCreate(value.trim());
+      if (created) {
+        onSelect(created);
+        setIsOpen(false);
+      }
+    } catch (error) {
+      onError?.(error.message || 'Erro ao cadastrar.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="relative" onBlur={() => setTimeout(() => setIsOpen(false), 120)}>
+      <label className="block text-sm font-medium text-slate-300 mb-1.5">{label}</label>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+        <input
+          type="text"
+          value={value}
+          disabled={disabled}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            onInputChange(e.target.value);
+            setIsOpen(true);
+          }}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 py-2.5 pl-10 pr-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 disabled:opacity-60"
+        />
+        {value && !disabled && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onInputChange('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 hover:bg-slate-800 hover:text-white"
+            aria-label={`Limpar ${label}`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && !disabled && (
+        <div className="absolute left-0 right-0 top-full z-[1010] mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-600/60 bg-slate-950/95 p-2 shadow-2xl backdrop-blur">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => (
+              <button
+                key={option.id || getOptionLabel(option)}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSelect(option);
+                  setIsOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-sky-500/15"
+              >
+                <div className="truncate text-sm font-semibold text-white">{getOptionLabel(option)}</div>
+                {getOptionSubtitle?.(option) && (
+                  <div className="mt-0.5 truncate text-xs text-slate-400">{getOptionSubtitle(option)}</div>
+                )}
+              </button>
+            ))
+          ) : (
+            <div className="rounded-lg border border-dashed border-slate-700/70 px-3 py-4 text-center text-sm text-slate-500">
+              {emptyMessage}
+            </div>
+          )}
+
+          {canCreate && (
+            <button
+              type="button"
+              disabled={creating}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleCreate}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-60"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {createPrefix} "{value.trim()}"
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── sub-component: NovoOrcamentoModal ──────────────────────────────────────
 
 function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null, existingRequests = [] }) {
@@ -303,6 +484,8 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
   const [form, setForm] = useState(() => buildEmptyForm(currentUser, existingRequests));
   const [users, setUsers] = useState([]);
   const [registry, setRegistry] = useState({ distribuidores: [], fornecedores: [] });
+  const [companies, setCompanies] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
   const isEditing = Boolean(editingRequest?.id);
@@ -331,33 +514,145 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
     }
   }, []);
 
+  const loadCompanies = useCallback(async () => {
+    try {
+      const res = await fetch(buildApiUrl('/companies'), { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      setCompanies(Array.isArray(data) ? data : []);
+    } catch {
+      setCompanies([]);
+    }
+  }, []);
+
+  const loadOpportunities = useCallback(async () => {
+    try {
+      const res = await fetch(buildApiUrl('/opportunities'), { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      setOpportunities(Array.isArray(data) ? data : []);
+    } catch {
+      setOpportunities([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setForm(isEditing ? formFromRequest(editingRequest, currentUser) : buildEmptyForm(currentUser, existingRequests));
       setFeedback('');
       loadUsers();
       loadRegistry();
+      loadCompanies();
+      loadOpportunities();
     }
-  }, [isOpen, isEditing, editingRequest?.id, existingRequests.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, isEditing, editingRequest?.id, existingRequests.length, loadCompanies, loadOpportunities, loadRegistry, loadUsers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
 
-  const handleDistributorChange = (distribuidorId) => {
-    const selected = registry.distribuidores.find((item) => item.id === distribuidorId);
+  const selectDistributor = (selected) => {
     setForm((p) => ({
       ...p,
-      distribuidorId,
+      distribuidorId: selected?.id || '',
       distribuidor: selected?.nome || ''
     }));
   };
 
-  const handleSupplierChange = (fornecedorId) => {
-    const selected = registry.fornecedores.find((item) => item.id === fornecedorId);
+  const selectSupplier = (selected) => {
     setForm((p) => ({
       ...p,
-      fornecedorId,
+      fornecedorId: selected?.id || '',
       fornecedor: selected?.nome || ''
     }));
+  };
+
+  const selectCompany = (company) => {
+    const contact = getPrimaryContact(company);
+    setForm((p) => ({
+      ...p,
+      clientId: company?.id || '',
+      nomeCliente: formatCompanyLabel(company),
+      cnpjDocumento: company?.document || p.cnpjDocumento,
+      contatoCliente: contact?.name || p.contatoCliente,
+      emailCliente: contact?.email || p.emailCliente
+    }));
+  };
+
+  const selectOpportunity = (opportunity) => {
+    const company = opportunity?.company || companies.find((item) => item.id === opportunity?.companyId) || {};
+    const contact = getPrimaryContact(company);
+    setForm((p) => ({
+      ...p,
+      opportunityId: opportunity?.id || '',
+      opportunitySearch: formatOpportunityLabel(opportunity),
+      titulo: p.titulo || opportunity?.title || opportunity?.titulo || '',
+      clientId: company?.id || p.clientId,
+      nomeCliente: company?.name || p.nomeCliente,
+      cnpjDocumento: company?.document || p.cnpjDocumento,
+      contatoCliente: contact?.name || p.contatoCliente,
+      emailCliente: contact?.email || p.emailCliente,
+      modalidade: normalizeModalidadeKey(opportunity?.modalidade || p.modalidade || 'VENDA')
+    }));
+  };
+
+  const createRegistryEntry = async (entity, name) => {
+    const res = await fetch(buildApiUrl(`/prevendas-cadastros/${entity}`), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ nome: name, razaoSocial: name, status: 'ATIVO' })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || 'Erro ao cadastrar.');
+    }
+    const created = await res.json();
+    setRegistry((prev) => ({
+      ...prev,
+      [entity]: [created, ...(prev[entity] || []).filter((item) => item.id !== created.id)]
+    }));
+    return created;
+  };
+
+  const createCompany = async (name) => {
+    const selectedOpportunity = opportunities.find((item) => item.id === form.opportunityId);
+    const contactPayload = form.contatoCliente.trim() || form.emailCliente.trim()
+      ? [{
+        name: form.contatoCliente.trim() || name,
+        email: form.emailCliente.trim() || undefined,
+        phone: undefined,
+        isPrimary: true
+      }]
+      : undefined;
+    const res = await fetch(buildApiUrl('/companies'), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        name,
+        document: form.cnpjDocumento.trim() || undefined,
+        clientType: inferCompanyClientType(name, selectedOpportunity),
+        status: 'PROSPECT',
+        autoDistribute: false,
+        contacts: contactPayload
+      })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || data?.message || 'Erro ao cadastrar cliente/órgão.');
+    }
+    const created = await res.json();
+    setCompanies((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+    return created;
+  };
+
+  const resolveOpportunityIdForSubmit = () => {
+    const typed = form.opportunitySearch.trim();
+    const selected = opportunities.find((item) => (
+      item.id === form.opportunityId ||
+      item.id === typed ||
+      normalizeSearchText(item.number || item.numeroOportunidade) === normalizeSearchText(typed) ||
+      normalizeSearchText(item.title || item.titulo) === normalizeSearchText(typed) ||
+      normalizeSearchText(formatOpportunityLabel(item)) === normalizeSearchText(typed)
+    ));
+    return form.opportunityId || selected?.id || typed;
   };
 
   const addItem = () => setForm((p) => ({ ...p, itens: [...p.itens, nextItemRow()] }));
@@ -441,7 +736,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
         prioridade: form.prioridade,
         tiposPrecificacao: [normalizeTipoPrecificacaoKey(form.modalidade)],
         leadId: form.clientId.trim() || null,
-        opportunityId: form.opportunityId.trim() || null,
+        opportunityId: resolveOpportunityIdForSubmit() || null,
         assignedToId: form.encaminhadoParaId || null,
         prazo: form.prazo || null,
         calculoDetalhes: {
@@ -538,45 +833,53 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
             <p className="mt-1 text-sm text-slate-400">Dados do distribuidor/fornecedor e itens que serão enviados para a calculadora.</p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Distribuidor</label>
-                <select
-                  value={form.distribuidorId}
-                  onChange={(e) => handleDistributorChange(e.target.value)}
-                  className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
-                >
-                  <option value="">Selecione um distribuidor cadastrado</option>
-                  {registry.distribuidores.map((item) => (
-                    <option key={item.id} value={item.id}>{item.nome}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">Fornecedor</label>
-                <select
-                  value={form.fornecedorId}
-                  onChange={(e) => handleSupplierChange(e.target.value)}
-                  className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
-                >
-                  <option value="">Selecione um fornecedor cadastrado</option>
-                  {registry.fornecedores.map((item) => (
-                    <option key={item.id} value={item.id}>{item.nome}</option>
-                  ))}
-                </select>
-              </div>
+              <SearchableCreatableField
+                label="Distribuidor"
+                value={form.distribuidor}
+                options={registry.distribuidores}
+                placeholder="Buscar distribuidor cadastrado"
+                emptyMessage="Nenhum distribuidor encontrado."
+                createPrefix="Cadastrar distribuidor"
+                getOptionLabel={(item) => item.nome || ''}
+                getOptionSubtitle={(item) => [item.cnpj, item.cidade, item.estado].filter(Boolean).join(' • ')}
+                onInputChange={(value) => setForm((p) => ({ ...p, distribuidor: value, distribuidorId: '' }))}
+                onSelect={selectDistributor}
+                onCreate={(name) => createRegistryEntry('distribuidores', name)}
+                onError={setFeedback}
+              />
+              <SearchableCreatableField
+                label="Fornecedor"
+                value={form.fornecedor}
+                options={registry.fornecedores}
+                placeholder="Buscar fornecedor cadastrado"
+                emptyMessage="Nenhum fornecedor encontrado."
+                createPrefix="Cadastrar fornecedor"
+                getOptionLabel={(item) => item.nome || ''}
+                getOptionSubtitle={(item) => [item.cnpj, item.cidade, item.estado].filter(Boolean).join(' • ')}
+                onInputChange={(value) => setForm((p) => ({ ...p, fornecedor: value, fornecedorId: '' }))}
+                onSelect={selectSupplier}
+                onCreate={(name) => createRegistryEntry('fornecedores', name)}
+                onError={setFeedback}
+              />
             </div>
           </div>
 
           {/* Nome do Cliente e Modalidade */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Cliente / Órgão</label>
-              <input
-                type="text"
+              <SearchableCreatableField
+                label="Cliente / Órgão"
                 value={form.nomeCliente}
-                onChange={(e) => setField('nomeCliente', e.target.value)}
-                placeholder="Nome do cliente ou órgão"
-                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                options={companies}
+                placeholder="Buscar cliente ou órgão cadastrado"
+                emptyMessage="Nenhum cliente ou órgão encontrado."
+                createPrefix="Cadastrar cliente/órgão"
+                getOptionLabel={formatCompanyLabel}
+                getOptionSubtitle={formatCompanySubtitle}
+                onInputChange={(value) => setForm((p) => ({ ...p, nomeCliente: value, clientId: '' }))}
+                onSelect={selectCompany}
+                onCreate={createCompany}
+                onError={setFeedback}
               />
             </div>
             <div>
@@ -660,32 +963,20 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
             </div>
           </div>
 
-          {/* Oportunidade ID / Cliente ID */}
+          {/* Oportunidade / Prioridade / Prazo */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Oportunidade ID</label>
-              <input
-                type="text"
-                value={form.opportunityId}
-                onChange={(e) => setField('opportunityId', e.target.value)}
-                placeholder="ID da oportunidade"
-                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Cliente ID</label>
-              <input
-                type="text"
-                value={form.clientId}
-                onChange={(e) => setField('clientId', e.target.value)}
-                placeholder="ID do cliente"
-                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
-              />
-            </div>
-          </div>
-
-          {/* Prioridade / Prazo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SearchableCreatableField
+              label="Oportunidade ID"
+              value={form.opportunitySearch}
+              options={opportunities}
+              placeholder="Buscar oportunidade existente"
+              emptyMessage="Nenhuma oportunidade encontrada."
+              getOptionLabel={formatOpportunityLabel}
+              getOptionSubtitle={formatOpportunitySubtitle}
+              onInputChange={(value) => setForm((p) => ({ ...p, opportunitySearch: value, opportunityId: '' }))}
+              onSelect={selectOpportunity}
+              onError={setFeedback}
+            />
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Prioridade</label>
               <select
@@ -699,15 +990,16 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
                 <option value="URGENT">Urgente</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Prazo</label>
-              <input
-                type="date"
-                value={form.prazo}
-                onChange={(e) => setField('prazo', e.target.value)}
-                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
-              />
-            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Prazo</label>
+            <input
+              type="date"
+              value={form.prazo}
+              onChange={(e) => setField('prazo', e.target.value)}
+              className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
