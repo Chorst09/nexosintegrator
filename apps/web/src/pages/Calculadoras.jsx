@@ -327,6 +327,55 @@ const normalizeModalidadeKey = (modalidade) => {
   return normalized || 'VENDA';
 };
 
+const normalizeLookupText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+
+const getProposalDetailsFromRequest = (solicitacao = {}) => {
+  const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+    ? solicitacao.calculoDetalhes
+    : {};
+  return details.dadosProposta && typeof details.dadosProposta === 'object'
+    ? details.dadosProposta
+    : {};
+};
+
+const pickCotacaoPartner = (cotacao = {}, fallback = {}) => {
+  const items = Array.isArray(cotacao?.itens) ? cotacao.itens : [];
+  const firstItemWithDistributor = items.find((item) => item?.distribuidor || item?.distribuidorId) || {};
+  const firstItemWithSupplier = items.find((item) => item?.fornecedor || item?.fornecedorId) || {};
+
+  return {
+    distribuidorId: cotacao?.distribuidorId || firstItemWithDistributor?.distribuidorId || fallback?.distribuidorId || '',
+    distribuidor: cotacao?.distribuidor || firstItemWithDistributor?.distribuidor || fallback?.distribuidor || '',
+    fornecedorId: cotacao?.fornecedorId || firstItemWithSupplier?.fornecedorId || fallback?.fornecedorId || '',
+    fornecedor: cotacao?.fornecedor || firstItemWithSupplier?.fornecedor || fallback?.fornecedor || ''
+  };
+};
+
+const findPartnerByName = (items = [], name = '') => {
+  const normalizedName = normalizeLookupText(name);
+  if (!normalizedName) return null;
+  return items.find((item) => normalizeLookupText(item?.nome) === normalizedName) || null;
+};
+
+const resolvePartnerSelection = (items = [], id = '', name = '') => {
+  if (id) {
+    const byId = items.find((item) => item.id === id);
+    return {
+      id,
+      name: byId?.nome || name || ''
+    };
+  }
+  const byName = findPartnerByName(items, name);
+  return {
+    id: byName?.id || '',
+    name: name || byName?.nome || ''
+  };
+};
+
 const normalizeCalculatorTypeFromModalidade = (modalidade) => {
   const normalized = normalizeModalidadeKey(modalidade);
   const tabMap = {
@@ -399,18 +448,20 @@ const buildCotacaoItems = (cotacoes = []) => {
 };
 
 const buildDistributorCostsFromCotacoes = (cotacoes = [], solicitacao = {}) => {
+  const proposalDetails = getProposalDetailsFromRequest(solicitacao);
   const costs = [];
   cotacoes.forEach((cotacao, cotacaoIndex) => {
+    const partner = pickCotacaoPartner(cotacao, proposalDetails);
     if (!Array.isArray(cotacao.itens)) return;
     cotacao.itens.forEach((item, itemIndex) => {
       const normalizedItem = normalizeQuotedItem(item);
       costs.push({
         id: `cost_${Date.now()}_${cotacaoIndex}_${itemIndex}`,
         modalidade: cotacao.modalidade || solicitacao.modalidade || 'VENDA',
-        distribuidorId: cotacao.distribuidorId || item.distribuidorId || '',
-        distribuidor: cotacao.distribuidor || item.distribuidor || '',
-        fornecedorId: cotacao.fornecedorId || item.fornecedorId || '',
-        fornecedor: cotacao.fornecedor || item.fornecedor || '',
+        distribuidorId: partner.distribuidorId,
+        distribuidor: partner.distribuidor,
+        fornecedorId: partner.fornecedorId,
+        fornecedor: partner.fornecedor,
         numeroOrcamento: cotacao.numeroOrcamento || solicitacao.numero || '',
         item: normalizedItem.descricao,
         quantidade: normalizedItem.quantidade,
@@ -423,21 +474,24 @@ const buildDistributorCostsFromCotacoes = (cotacoes = [], solicitacao = {}) => {
   return costs;
 };
 
-const buildDistributorCostsFromSolicitacaoItems = (solicitacao = {}) => (
-  getItemsFromSolicitacao(solicitacao).map((item, index) => ({
+const buildDistributorCostsFromSolicitacaoItems = (solicitacao = {}) => {
+  const proposalDetails = getProposalDetailsFromRequest(solicitacao);
+  const partner = pickCotacaoPartner({}, proposalDetails);
+  return getItemsFromSolicitacao(solicitacao).map((item, index) => ({
     id: `cost_req_${Date.now()}_${index}`,
     modalidade: item.modalidade || solicitacao.modalidade || 'VENDA',
-      distribuidor: 'Solicitação',
-      fornecedorId: '',
-      fornecedor: '',
-      numeroOrcamento: solicitacao.__matchedBudgetNumber || solicitacao.numero || '',
+    distribuidorId: partner.distribuidorId,
+    distribuidor: partner.distribuidor || 'Solicitação',
+    fornecedorId: partner.fornecedorId,
+    fornecedor: partner.fornecedor,
+    numeroOrcamento: solicitacao.__matchedBudgetNumber || solicitacao.numero || '',
     item: item.descricao,
     quantidade: item.quantidade,
     custoUnitario: item.custoUnitario,
     observacoes: '',
     data: new Date().toISOString()
-  }))
-);
+  }));
+};
 
 const buildDistributorCostsFromCotacaoPayload = (cotacaoData = {}) => {
   const modalidade = normalizeModalidadeKey(cotacaoData.modalidade || 'VENDA');
@@ -448,7 +502,8 @@ const buildDistributorCostsFromCotacaoPayload = (cotacaoData = {}) => {
     : [];
   const fromCotacoes = buildDistributorCostsFromCotacoes(matchingCotacoes, {
     numero: cotacaoData.numeroOrcamento,
-    modalidade
+    modalidade,
+    calculoDetalhes: { dadosProposta: cotacaoData }
   });
   if (fromCotacoes.length > 0) return fromCotacoes;
 
@@ -1424,6 +1479,17 @@ export default function Calculadoras({
       observacoes: ''
     });
 
+    const distributorSelection = resolvePartnerSelection(
+      preSalesDistributors,
+      cotacaoData?.distribuidorId || '',
+      cotacaoData?.distribuidor || ''
+    );
+    const supplierSelection = resolvePartnerSelection(
+      preSalesSuppliers,
+      cotacaoData?.fornecedorId || '',
+      cotacaoData?.fornecedor || ''
+    );
+
     // Pré-preencher itens da cotação
     if (cotacaoData?.itens && Array.isArray(cotacaoData.itens) && cotacaoData.itens.length > 0) {
       const itemsDaModalidade = cotacaoData.itens.filter((item) => (
@@ -1440,10 +1506,10 @@ export default function Calculadoras({
 
       setDistributorCosts(cotacaoCosts);
       setCurrentBudget({
-        distribuidorId: cotacaoCosts[0]?.distribuidorId || cotacaoData?.distribuidorId || '',
-        distribuidor: cotacaoCosts[0]?.distribuidor || cotacaoData?.distribuidor || '',
-        fornecedorId: cotacaoCosts[0]?.fornecedorId || cotacaoData?.fornecedorId || '',
-        fornecedor: cotacaoCosts[0]?.fornecedor || cotacaoData?.fornecedor || '',
+        distribuidorId: cotacaoCosts[0]?.distribuidorId || distributorSelection.id,
+        distribuidor: cotacaoCosts[0]?.distribuidor || distributorSelection.name,
+        fornecedorId: cotacaoCosts[0]?.fornecedorId || supplierSelection.id,
+        fornecedor: cotacaoCosts[0]?.fornecedor || supplierSelection.name,
         numeroOrcamento: cotacaoCosts[0]?.numeroOrcamento || cotacaoData.numeroOrcamento || ''
       });
       setCurrentCost((prev) => ({
@@ -1464,16 +1530,33 @@ export default function Calculadoras({
       // Limpar localStorage após uso
       if (cotacaoKey) localStorage.removeItem(cotacaoKey);
     } else if (tipoNorm === 'VENDA' || targetTab === 'vendas') {
+      setCurrentBudget({
+        distribuidorId: distributorSelection.id,
+        distribuidor: distributorSelection.name,
+        fornecedorId: supplierSelection.id,
+        fornecedor: supplierSelection.name,
+        numeroOrcamento: cotacaoData?.numeroOrcamento || ''
+      });
       setSaleItems((prev) => {
         const base = prev.length > 0 ? [...prev] : [{ ...DEFAULT_SALE_ITEM, id: `sale_${Date.now()}` }];
         base[0] = { ...base[0], unitCost: custoUnitario, quantity: Math.max(1, quantidade) };
         return base;
       });
+      if (cotacaoKey) localStorage.removeItem(cotacaoKey);
+    } else if (cotacaoData) {
+      setCurrentBudget({
+        distribuidorId: distributorSelection.id,
+        distribuidor: distributorSelection.name,
+        fornecedorId: supplierSelection.id,
+        fornecedor: supplierSelection.name,
+        numeroOrcamento: cotacaoData?.numeroOrcamento || ''
+      });
+      if (cotacaoKey) localStorage.removeItem(cotacaoKey);
     }
 
     setShowModal(true);
     window.history.replaceState({}, document.title, window.location.pathname);
-  }, [regimeAtivoId, savedProposals]);
+  }, [preSalesDistributors, preSalesSuppliers, regimeAtivoId, savedProposals]);
 
   const operationType = currentTab === 'vendas'
     ? 'venda'
@@ -1976,6 +2059,18 @@ export default function Calculadoras({
     const proposalDetails = requestDetails.dadosProposta && typeof requestDetails.dadosProposta === 'object'
       ? requestDetails.dadosProposta
       : {};
+    const primaryCotacao = todosCustos[0] || {};
+    const primaryPartner = pickCotacaoPartner(primaryCotacao, proposalDetails);
+    const distributorSelection = resolvePartnerSelection(
+      preSalesDistributors,
+      custosDistribuidores[0]?.distribuidorId || primaryPartner.distribuidorId,
+      custosDistribuidores[0]?.distribuidor || primaryPartner.distribuidor
+    );
+    const supplierSelection = resolvePartnerSelection(
+      preSalesSuppliers,
+      custosDistribuidores[0]?.fornecedorId || primaryPartner.fornecedorId,
+      custosDistribuidores[0]?.fornecedor || primaryPartner.fornecedor
+    );
     const clientName = proposalDetails.clienteOrgao || solicitacao.nomeCliente || solicitacao.lead?.name || '';
     setProposalForm({
       ...buildProposalForm(proposalNumber, managerDefaults),
@@ -2002,10 +2097,10 @@ export default function Calculadoras({
     clearProposalCart();
     setDistributorCosts(custosDistribuidores);
     setCurrentBudget({
-      distribuidorId: custosDistribuidores[0]?.distribuidorId || '',
-      distribuidor: custosDistribuidores[0]?.distribuidor || '',
-      fornecedorId: custosDistribuidores[0]?.fornecedorId || '',
-      fornecedor: custosDistribuidores[0]?.fornecedor || '',
+      distribuidorId: distributorSelection.id,
+      distribuidor: distributorSelection.name,
+      fornecedorId: supplierSelection.id,
+      fornecedor: supplierSelection.name,
       numeroOrcamento: solicitacao.__matchedBudgetNumber || custosDistribuidores[0]?.numeroOrcamento || solicitacao.numero || ''
     });
     setCurrentCost((prev) => ({
@@ -2063,6 +2158,15 @@ export default function Calculadoras({
   };
 
   const handleBudgetDistributorChange = (distribuidorId) => {
+    if (distribuidorId === '__loaded_distributor') return;
+    if (!distribuidorId) {
+      setCurrentBudget((prev) => ({
+        ...prev,
+        distribuidorId: '',
+        distribuidor: ''
+      }));
+      return;
+    }
     const selected = preSalesDistributors.find((item) => item.id === distribuidorId);
     setCurrentBudget((prev) => ({
       ...prev,
@@ -2072,6 +2176,15 @@ export default function Calculadoras({
   };
 
   const handleBudgetSupplierChange = (fornecedorId) => {
+    if (fornecedorId === '__loaded_supplier') return;
+    if (!fornecedorId) {
+      setCurrentBudget((prev) => ({
+        ...prev,
+        fornecedorId: '',
+        fornecedor: ''
+      }));
+      return;
+    }
     const selected = preSalesSuppliers.find((item) => item.id === fornecedorId);
     setCurrentBudget((prev) => ({
       ...prev,
@@ -3815,11 +3928,14 @@ export default function Calculadoras({
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">Distribuidor</label>
                         <select
-                          value={currentBudget.distribuidorId}
+                          value={currentBudget.distribuidorId || (currentBudget.distribuidor ? '__loaded_distributor' : '')}
                           onChange={(e) => handleBudgetDistributorChange(e.target.value)}
                           className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                         >
                           <option value="">Selecione um distribuidor cadastrado</option>
+                          {currentBudget.distribuidor && !currentBudget.distribuidorId ? (
+                            <option value="__loaded_distributor">{currentBudget.distribuidor}</option>
+                          ) : null}
                           {preSalesDistributors.map((distributor) => (
                             <option key={distributor.id} value={distributor.id}>
                               {distributor.nome}
@@ -3830,11 +3946,14 @@ export default function Calculadoras({
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">Fornecedor</label>
                         <select
-                          value={currentBudget.fornecedorId}
+                          value={currentBudget.fornecedorId || (currentBudget.fornecedor ? '__loaded_supplier' : '')}
                           onChange={(e) => handleBudgetSupplierChange(e.target.value)}
                           className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                         >
                           <option value="">Selecione um fornecedor cadastrado</option>
+                          {currentBudget.fornecedor && !currentBudget.fornecedorId ? (
+                            <option value="__loaded_supplier">{currentBudget.fornecedor}</option>
+                          ) : null}
                           {preSalesSuppliers.map((supplier) => (
                             <option key={supplier.id} value={supplier.id}>
                               {supplier.nome}

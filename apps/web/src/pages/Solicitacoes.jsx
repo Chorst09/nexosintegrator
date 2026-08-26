@@ -395,10 +395,10 @@ const buildInitialCotacaoForm = (item, sources = []) => {
 
   return {
     modalidade: inferModalidade(item),
-    distribuidorId: '',
-    distribuidor: '',
-    fornecedorId: '',
-    fornecedor: '',
+    distribuidorId: proposalDetails.distribuidorId || '',
+    distribuidor: proposalDetails.distribuidor || '',
+    fornecedorId: proposalDetails.fornecedorId || '',
+    fornecedor: proposalDetails.fornecedor || '',
     numeroOrcamento: resolveBudgetNumber(item, sources),
     clienteOrgao,
     cnpjDocumento: proposalDetails.cnpjDocumento || '',
@@ -433,8 +433,22 @@ const readProposalDetails = (item) => {
     : {};
 };
 
+const pickCotacaoPartner = (row = {}, fallback = {}) => {
+  const items = Array.isArray(row?.itens) ? row.itens : [];
+  const firstItemWithDistributor = items.find((item) => item?.distribuidor || item?.distribuidorId) || {};
+  const firstItemWithSupplier = items.find((item) => item?.fornecedor || item?.fornecedorId) || {};
+
+  return {
+    distribuidorId: row?.distribuidorId || firstItemWithDistributor?.distribuidorId || fallback?.distribuidorId || '',
+    distribuidor: row?.distribuidor || firstItemWithDistributor?.distribuidor || fallback?.distribuidor || '',
+    fornecedorId: row?.fornecedorId || firstItemWithSupplier?.fornecedorId || fallback?.fornecedorId || '',
+    fornecedor: row?.fornecedor || firstItemWithSupplier?.fornecedor || fallback?.fornecedor || ''
+  };
+};
+
 const buildCotacaoPricingPayload = (context, cotacao, allCotacoes = []) => {
   const proposalDetails = readProposalDetails(context);
+  const partner = pickCotacaoPartner(cotacao, proposalDetails);
   const modalidade = String(cotacao?.modalidade || inferModalidade(context) || 'VENDA').toUpperCase();
   const itens = Array.isArray(cotacao?.itens) && cotacao.itens.length > 0
     ? cotacao.itens
@@ -447,10 +461,10 @@ const buildCotacaoPricingPayload = (context, cotacao, allCotacoes = []) => {
     subtotal: Number(cotacao?.subtotal || 0),
     modalidade,
     numeroOrcamento: cotacao?.numeroOrcamento || context?.numero || '',
-    distribuidorId: cotacao?.distribuidorId || '',
-    distribuidor: cotacao?.distribuidor || '',
-    fornecedorId: cotacao?.fornecedorId || '',
-    fornecedor: cotacao?.fornecedor || '',
+    distribuidorId: partner.distribuidorId,
+    distribuidor: partner.distribuidor,
+    fornecedorId: partner.fornecedorId,
+    fornecedor: partner.fornecedor,
     solicitacaoId: context?.id || '',
     titulo: context?.titulo || '',
     descricao: context?.descricao || '',
@@ -1438,27 +1452,33 @@ export default function Solicitacoes() {
 
   const cotacaoOptions = useMemo(() => {
     const term = cotacaoSearchTerm.trim().toLowerCase();
-    const quoteOptions = cotacaoRecords.map((row) => ({
-      source: 'QUOTE',
-      id: row?.id || row?.numeroOrcamento,
-      numeroOrcamento: row?.numeroOrcamento || '',
-      distribuidorId: row?.distribuidorId || '',
-      distribuidor: row?.distribuidor || '',
-      fornecedorId: row?.fornecedorId || '',
-      fornecedor: row?.fornecedor || '',
-      modalidade: row?.modalidade || '',
-      itens: Array.isArray(row?.itens) ? row.itens : [],
-      subtotal: Number(row?.subtotal) || 0,
-      arquivoNome: row?.arquivoNome || '',
-      observacoesCotacao: row?.observacoesCotacao || '',
-      observacoesUpload: row?.observacoesUpload || '',
-      createdAt: row?.createdAt || '',
-      label: 'Cotação registrada'
-    }));
+    const proposalDetails = readProposalDetails(cotacaoContext);
+    const quoteOptions = cotacaoRecords.map((row) => {
+      const partner = pickCotacaoPartner(row, proposalDetails);
+      return {
+        source: 'QUOTE',
+        id: row?.id || row?.numeroOrcamento,
+        numeroOrcamento: row?.numeroOrcamento || '',
+        distribuidorId: partner.distribuidorId,
+        distribuidor: partner.distribuidor,
+        fornecedorId: partner.fornecedorId,
+        fornecedor: partner.fornecedor,
+        modalidade: row?.modalidade || '',
+        itens: Array.isArray(row?.itens) ? row.itens : [],
+        subtotal: Number(row?.subtotal) || 0,
+        arquivoNome: row?.arquivoNome || '',
+        observacoesCotacao: row?.observacoesCotacao || '',
+        observacoesUpload: row?.observacoesUpload || '',
+        createdAt: row?.createdAt || '',
+        label: 'Cotação registrada'
+      };
+    });
 
     const requestOptions = budgetRequests.map((request) => {
       const { cotacoes } = readCotacaoDetails(request);
+      const requestProposalDetails = readProposalDetails(request);
       const firstQuote = cotacoes[0] || null;
+      const partner = pickCotacaoPartner(firstQuote || {}, requestProposalDetails);
       const requestItems = Array.isArray(request?.items)
         ? request.items.map((item) => ({
           id: item.id || nextQuoteItem().id,
@@ -1479,10 +1499,10 @@ export default function Solicitacoes() {
         source: 'REQUEST',
         id: request?.id,
         numeroOrcamento: firstQuote?.numeroOrcamento || request?.numero || '',
-        distribuidorId: firstQuote?.distribuidorId || '',
-        distribuidor: firstQuote?.distribuidor || '',
-        fornecedorId: firstQuote?.fornecedorId || '',
-        fornecedor: firstQuote?.fornecedor || '',
+        distribuidorId: partner.distribuidorId,
+        distribuidor: partner.distribuidor,
+        fornecedorId: partner.fornecedorId,
+        fornecedor: partner.fornecedor,
         modalidade: firstQuote?.modalidade || inferModalidade(request),
         itens,
         subtotal,

@@ -337,6 +337,12 @@ const formatOpportunitySubtitle = (opportunity) => {
   ].filter(Boolean).join(' • ');
 };
 
+const findRegistryPartnerByName = (items = [], name = '') => {
+  const normalizedName = normalizeSearchText(name);
+  if (!normalizedName) return null;
+  return items.find((item) => normalizeSearchText(item?.nome) === normalizedName) || null;
+};
+
 const inferCompanyClientType = (name = '', opportunity = null) => {
   const opportunityType = String(opportunity?.clientType || opportunity?.company?.clientType || '').toUpperCase();
   if (opportunityType === 'B2G' || opportunityType === 'B2B') return opportunityType;
@@ -687,16 +693,28 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
         }));
       const previousDetails = isEditing ? getRequestDetails(editingRequest) : {};
       const previousCotacoes = Array.isArray(previousDetails.cotacoes) ? previousDetails.cotacoes : [];
-      const shouldCreateInitialQuote = cleanItems.length > 0 && (form.distribuidor.trim() || form.fornecedor.trim());
+      const shouldCreateInitialQuote = Boolean(
+        form.distribuidor.trim() ||
+        form.fornecedor.trim() ||
+        form.distribuidorId ||
+        form.fornecedorId ||
+        cleanItems.length > 0
+      );
+      const matchedDistributor = form.distribuidorId
+        ? null
+        : findRegistryPartnerByName(registry.distribuidores, form.distribuidor);
+      const matchedSupplier = form.fornecedorId
+        ? null
+        : findRegistryPartnerByName(registry.fornecedores, form.fornecedor);
       const nowIso = new Date().toISOString();
       const initialQuote = shouldCreateInitialQuote
         ? {
           id: form.cotacaoId || `COT-${Date.now()}`,
           modalidade: form.modalidade,
-          distribuidorId: form.distribuidorId || '',
-          distribuidor: form.distribuidor.trim(),
-          fornecedorId: form.fornecedorId || '',
-          fornecedor: form.fornecedor.trim(),
+          distribuidorId: form.distribuidorId || matchedDistributor?.id || '',
+          distribuidor: form.distribuidor.trim() || matchedDistributor?.nome || '',
+          fornecedorId: form.fornecedorId || matchedSupplier?.id || '',
+          fornecedor: form.fornecedor.trim() || matchedSupplier?.nome || '',
           numeroOrcamento: form.numeroOrcamento || fallbackBudgetNumber(existingRequests),
           itens: cleanItems,
           subtotal: cleanItems.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0),
@@ -724,7 +742,11 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null,
         emailGerente: form.emailGerente.trim(),
         telefoneGerente: form.telefoneGerente.trim(),
         premissasProposta: form.premissasProposta.trim(),
-        prazo: form.prazo || ''
+        prazo: form.prazo || '',
+        distribuidorId: form.distribuidorId || matchedDistributor?.id || '',
+        distribuidor: form.distribuidor.trim() || matchedDistributor?.nome || '',
+        fornecedorId: form.fornecedorId || matchedSupplier?.id || '',
+        fornecedor: form.fornecedor.trim() || matchedSupplier?.nome || ''
       };
       const descriptionText = form.descricao.trim() || form.premissasProposta.trim() || form.titulo.trim();
       const payload = {
