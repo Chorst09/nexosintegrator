@@ -16,7 +16,8 @@ import {
   Image,
   Type,
   Download,
-  Upload
+  Upload,
+  Check
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -223,8 +224,262 @@ const renderTextParagraphs = (text) => {
   ));
 };
 
+const isSimulatorCommercialTemplate = (template) => {
+  const sections = normalizeTemplateSections(template?.sections, template?.type);
+  const sectionIds = new Set(sections.map((section) => section.id));
+  return (
+    template?.name === SIMULADORES_PROPOSAL_TEMPLATE.name ||
+    String(template?.description || '').includes('Simuladores') ||
+    String(template?.coverBackground || '').includes('depositphotos_271460380') ||
+    (sectionIds.has('client_project') && sectionIds.has('investment') && sectionIds.has('commercial_terms'))
+  );
+};
+
+const SimulatorCommercialTemplatePreview = ({ template }) => {
+  const pageStyle = {
+    width: '210mm',
+    height: '297mm',
+    margin: '0 auto',
+    pageBreakAfter: 'always',
+    pageBreakInside: 'avoid'
+  };
+
+  return (
+    <div className="space-y-10">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--crm-muted)]">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center px-3 py-1 rounded-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
+            A4 • Retrato
+          </span>
+          <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-200 border border-blue-500/20">
+            Modelo Simuladores
+          </span>
+        </div>
+        <div className="text-xs">
+          Preview visual igual ao modelo comercial dos Simuladores
+        </div>
+      </div>
+
+      <div
+        className="proposal-page bg-white border rounded-lg shadow-lg print:shadow-none print:border-none overflow-hidden"
+        style={pageStyle}
+      >
+        <div
+          className="relative h-full w-full"
+          style={{
+            backgroundImage: "url('https://st4.depositphotos.com/1025323/27146/i/450/depositphotos_271460380-stock-photo-perspectives-of-virtual-world.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-900/80 to-blue-800/80" />
+          <div className="absolute inset-0 opacity-10">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `
+                  linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)
+                `,
+                backgroundSize: '20px 20px'
+              }}
+            />
+          </div>
+
+          <div className="absolute top-8 right-8">
+            <div className="bg-blue-900 border-2 border-white rounded-lg p-4 w-40 h-40 flex flex-col items-center justify-center overflow-hidden">
+              {!isBlank(template.coverLogo) ? (
+                <img
+                  src={template.coverLogo}
+                  alt="Logo da Empresa"
+                  className="max-w-full max-h-full object-contain"
+                />
+              ) : (
+                <>
+                  <div className="flex items-center justify-center mb-1">
+                    <div className="w-4 h-4 border-2 border-white rounded-full mr-1" />
+                    <div className="w-4 h-4 border-2 border-white rounded-full" />
+                  </div>
+                  <div className="text-white font-bold text-lg">double</div>
+                  <div className="text-white text-xs">ti + telecom</div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="p-12 text-white">
+            <div className="mb-8">
+              <h1 className="text-6xl font-bold text-blue-200 leading-tight">
+                Proposta<br />Comercial
+              </h1>
+            </div>
+
+            <div className="mb-8">
+              <div className="text-xl mb-2">Nome do Cliente</div>
+              <div className="text-lg opacity-90">{new Date().toLocaleDateString('pt-BR')}</div>
+              <div className="text-md opacity-80 mt-1">Projeto: Nome do Projeto</div>
+            </div>
+
+            <div className="border-t border-white opacity-30 mb-8" />
+
+            <div className="space-y-4">
+              <div className="text-xl font-semibold mb-4">Produto:</div>
+              <div className="flex items-center space-x-3">
+                <div className="w-6 h-6 bg-blue-200 rounded-full flex items-center justify-center">
+                  <Check className="w-4 h-4 text-blue-900" />
+                </div>
+                <span className="text-lg font-semibold">Internet</span>
+              </div>
+            </div>
+
+            <div className="border-t border-white opacity-30 mt-8" />
+          </div>
+
+          <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2">
+            <div className="w-[500px] h-[375px] bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg border-2 border-white overflow-hidden">
+              <div className="h-full bg-gradient-to-b from-blue-500 to-blue-700 flex items-center justify-center relative">
+                <div className="absolute inset-0 bg-gradient-to-b from-blue-600 to-blue-800">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <React.Fragment key={index}>
+                      <div className="absolute top-2 w-1 h-44 bg-blue-300 opacity-80" style={{ left: `${8 + index * 8}px` }} />
+                      <div className="absolute top-2 w-1 h-44 bg-blue-300 opacity-80" style={{ right: `${8 + index * 8}px` }} />
+                    </React.Fragment>
+                  ))}
+                </div>
+                <div className="text-center text-white relative z-10">
+                  <div className="text-2xl font-bold mb-2">Internet</div>
+                  <div className="text-sm opacity-80">Infraestrutura de Alta Tecnologia</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="absolute bottom-8 left-8">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-gray-800 rounded grid grid-cols-8 grid-rows-8 gap-0.5 p-1">
+                  {Array.from({ length: 64 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className={(index + Math.floor(index / 8)) % 3 === 0 ? 'bg-white' : 'bg-gray-800'}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="text-white">
+                <div className="font-semibold text-lg">Visite Nosso Site</div>
+                <div className="text-sm opacity-90">www.doubletelecom.com.br</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="proposal-page bg-white border rounded-lg shadow-lg print:shadow-none print:border-none overflow-hidden"
+        style={pageStyle}
+      >
+        <div className="p-12 h-full relative text-gray-900">
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Proposta Comercial</h1>
+              <p className="text-gray-600">Internet</p>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-gray-600">Data: {new Date().toLocaleDateString('pt-BR')}</div>
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Dados do Cliente</h3>
+            <div className="space-y-2 text-sm">
+              <p><strong>Nome:</strong> Nome do Cliente</p>
+              <p><strong>Projeto:</strong> Nome do Projeto</p>
+              <p><strong>Email:</strong> email@cliente.com.br</p>
+              <p><strong>Telefone:</strong> (00) 00000-0000</p>
+              <p><strong>Contato:</strong> Nome do contato</p>
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Gerente de Contas</h3>
+            <div className="space-y-2 text-sm">
+              <p><strong>Nome:</strong> Gerente de Conta</p>
+              <p><strong>Email:</strong> comercial@empresa.com.br</p>
+              <p><strong>Telefone:</strong> (00) 00000-0000</p>
+            </div>
+          </div>
+
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Produtos e Serviços</h3>
+            <table className="w-full border-collapse border border-gray-300 text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border border-gray-300 px-4 py-2 text-left">Descrição</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Setup</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Mensal</th>
+                  <th className="border border-gray-300 px-4 py-2 text-left">Descontos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-gray-300 px-4 py-2">Produto / Serviço</td>
+                  <td className="border border-gray-300 px-4 py-2">R$ 0,00</td>
+                  <td className="border border-gray-300 px-4 py-2">R$ 0,00</td>
+                  <td className="border border-gray-300 px-4 py-2">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Resumo Financeiro Detalhado</h3>
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg p-5">
+              <table className="w-full">
+                <tbody>
+                  <tr className="border-b-2 border-gray-300">
+                    <td className="py-3 text-sm font-bold text-gray-800">Total Setup (Instalação):</td>
+                    <td className="py-3 text-sm text-right font-bold text-gray-900">R$ 0,00</td>
+                  </tr>
+                  <tr className="bg-blue-50 border-b-2 border-blue-300">
+                    <td className="py-3 text-base font-bold text-blue-900">Valor Mensal Final:</td>
+                    <td className="py-3 text-base text-right font-bold text-blue-900">R$ 0,00</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 text-sm font-medium text-gray-700">Prazo Contratual:</td>
+                    <td className="py-2 text-sm text-right font-semibold text-gray-900">12 meses</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="absolute bottom-12 left-12 right-12">
+            <div className="border-t border-gray-300 pt-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-gray-600">Double TI + Telecom</p>
+                  <p className="text-sm text-gray-600">www.doubletelecom.com.br</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Página 2 de 2</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ProposalTemplatePreview = ({ template }) => {
   if (!template) return null;
+
+  if (isSimulatorCommercialTemplate(template)) {
+    return <SimulatorCommercialTemplatePreview template={normalizeTemplate(template)} />;
+  }
 
   const sections = safeArray(template.sections);
   const enabledSections = sections
