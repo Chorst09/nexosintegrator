@@ -328,6 +328,19 @@ export default function OpportunityForm({
             </select>
           </div>
 
+          {shouldSelectExistingCompany && (
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Cliente</label>
+              <select className={inputCls} value={formData.companyId || ''} onChange={e => setFormData(p => ({ ...p, companyId: e.target.value }))} required>
+                <option value="">Selecione um cliente cadastrado...</option>
+                {(companies || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {(companies || []).length === 0 && (
+                  <option value="" disabled>Nenhuma empresa cadastrada encontrada</option>
+                )}
+              </select>
+            </div>
+          )}
+
           {shouldCreateCompanyFirst && (
             <div className="sm:col-span-2 rounded-xl border border-amber-400/35 bg-amber-400/10 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -406,16 +419,6 @@ export default function OpportunityForm({
             <label className={labelCls}>Data de Fechamento Esperada</label>
             <input type="date" className={inputCls} value={formData.expectedCloseDate || ''} onChange={e => setFormData(p => ({ ...p, expectedCloseDate: e.target.value }))} />
           </div>
-
-          {shouldSelectExistingCompany && (
-          <div>
-            <label className={labelCls}>Empresa</label>
-            <select className={inputCls} value={formData.companyId || ''} onChange={e => setFormData(p => ({ ...p, companyId: e.target.value }))} required>
-              <option value="">Selecione...</option>
-              {(companies || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          )}
 
           <div>
             <label className={labelCls}>Responsável</label>

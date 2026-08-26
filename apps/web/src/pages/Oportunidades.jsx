@@ -132,7 +132,9 @@ export default function Oportunidades() {
   const scopedOpportunitiesUrl = buildApiUrl(`/opportunities?${scopedClientTypeQuery}`);
   const buildScopedOpportunityByIdUrl = (id) =>
     buildApiUrl(`/opportunities/${encodeURIComponent(id)}?${scopedClientTypeQuery}`);
-  const scopedCompaniesUrl = buildApiUrl(`/companies?${scopedClientTypeQuery}`);
+  const scopedCompaniesUrl = pipelineClientType === 'B2B'
+    ? buildApiUrl('/companies')
+    : buildApiUrl(`/companies?${scopedClientTypeQuery}`);
 
   const handleDragStart = (e, opportunity) => {
     setDraggedItem(opportunity);
