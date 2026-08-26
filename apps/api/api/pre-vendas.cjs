@@ -8,6 +8,131 @@ const router = express.Router();
 // Middleware de autenticação para todas as rotas
 router.use(authenticateToken);
 
+const ACTIVITY_FLOW_MARKER = '[CRM_ACTIVITY_FLOW]';
+const PROPOSAL_SENT_STAGE = 'PROPOSTA_ENVIADA';
+
+const generateBudgetNumber = async () => {
+  const year = new Date().getFullYear();
+  const suffix = `-${year}`;
+  const currentYearRequests = await prisma.preSalesRequest.findMany({
+    where: {
+      numero: {
+        startsWith: 'ORC-',
+        endsWith: suffix
+      }
+    },
+    select: { numero: true }
+  });
+
+  const current = currentYearRequests.reduce((max, request) => {
+    const match = String(request?.numero || '').match(/^ORC-(\d{4})-\d{4}$/);
+    const parsed = match ? parseInt(match[1], 10) : 0;
+    return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+  }, 0);
+  return `ORC-${String(current + 1).padStart(4, '0')}-${year}`;
+};
+
+const extractSourceActivityId = (observacoes = '') => {
+  const match = String(observacoes || '').match(/\[FLOW_ACTIVITY_ID:([^\]]+)\]/);
+  return match?.[1] || null;
+};
+
+const parseFlowFromDescription = (description) => {
+  const value = String(description || '');
+  const markerIdx = value.indexOf(ACTIVITY_FLOW_MARKER);
+  if (markerIdx < 0) {
+    return {
+      cleanDescription: value.trim(),
+      flow: {
+        sourceArea: 'COMERCIAL',
+        targetArea: 'COMERCIAL',
+        createdFrom: 'LEGACY'
+      }
+    };
+  }
+
+  const cleanDescription = value.slice(0, markerIdx).trim();
+  const raw = value.slice(markerIdx + ACTIVITY_FLOW_MARKER.length).trim();
+  let flow = {};
+  try {
+    flow = JSON.parse(raw);
+  } catch {
+    flow = {};
+  }
+
+  return {
+    cleanDescription,
+    flow: {
+      ...(flow && typeof flow === 'object' ? flow : {}),
+      sourceArea: flow?.sourceArea || 'COMERCIAL',
+      targetArea: flow?.targetArea || 'COMERCIAL',
+      createdFrom: flow?.createdFrom || 'ATIVIDADES',
+      createdByName: flow?.createdByName || ''
+    }
+  };
+};
+
+const buildDescriptionWithFlow = (cleanDescription, flow = {}) => (
+  `${String(cleanDescription || '').trim()}\n\n${ACTIVITY_FLOW_MARKER}${JSON.stringify({
+    ...(flow && typeof flow === 'object' ? flow : {}),
+    updatedAt: new Date().toISOString()
+  })}`
+);
+
+const preSalesRequestInclude = {
+  solicitante: {
+    select: { id: true, name: true, email: true }
+  },
+  lead: {
+    select: { id: true, name: true }
+  },
+  opportunity: {
+    select: { id: true, title: true, value: true, stage: true }
+  },
+  items: {
+    include: {
+      product: {
+        select: { id: true, name: true, price: true, category: true }
+      }
+    }
+  }
+};
+
+const syncPreSalesReturnToCommercial = async (tx, solicitacao = {}, status = 'ENVIADA') => {
+  const activityId = extractSourceActivityId(solicitacao?.observacoes);
+  if (!activityId) return null;
+
+  const activity = await tx.activity.findUnique({
+    where: { id: activityId },
+    select: { id: true, description: true }
+  });
+  if (!activity) return null;
+
+  const parsed = parseFlowFromDescription(activity.description);
+  const sourceArea = parsed.flow?.sourceArea && parsed.flow.sourceArea !== 'PRE_VENDAS'
+    ? parsed.flow.sourceArea
+    : 'COMERCIAL';
+
+  return tx.activity.update({
+    where: { id: activityId },
+    data: {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      description: buildDescriptionWithFlow(parsed.cleanDescription, {
+        ...parsed.flow,
+        targetArea: sourceArea,
+        returnedFromPreSales: true,
+        activityStage: PROPOSAL_SENT_STAGE,
+        preSalesStatus: status,
+        preSalesRequestId: solicitacao.id,
+        preSalesNumber: solicitacao.numero,
+        preSalesReturnedAt: new Date().toISOString()
+      })
+    },
+    select: { id: true }
+  });
+};
+
 const sanitizePreSalesItems = (items = []) => (
   Array.isArray(items)
     ? items
@@ -222,6 +347,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
+      numero,
       titulo,
       descricao,
       nomeCliente,
@@ -232,6 +358,7 @@ router.post('/', async (req, res) => {
       tiposPrecificacao,
       regimeTributario,
       items = [],
+      calculoDetalhes,
       observacoes
     } = req.body;
 
@@ -250,28 +377,20 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Gerar número sequencial
-    const ultimaSolicitacao = await prisma.preSalesRequest.findFirst({
-      orderBy: { numero: 'desc' }
+    const requestedNumber = String(numero || '').trim().toUpperCase();
+    let numeroFormatado = /^ORC-\d{4}-\d{4}$/.test(requestedNumber)
+      ? requestedNumber
+      : await generateBudgetNumber();
+    const existingNumber = await prisma.preSalesRequest.findUnique({
+      where: { numero: numeroFormatado },
+      select: { id: true }
     });
-
-    let proximoNumero = 1;
-    if (ultimaSolicitacao && ultimaSolicitacao.numero) {
-      const match = ultimaSolicitacao.numero.match(/PRE-(\d{4})-(\d{3})/);
-      if (match) {
-        const ano = parseInt(match[1]);
-        const numero = parseInt(match[2]);
-        const anoAtual = new Date().getFullYear();
-        
-        if (ano === anoAtual) {
-          proximoNumero = numero + 1;
-        }
-      }
+    if (existingNumber) {
+      numeroFormatado = await generateBudgetNumber();
     }
+    const requestItems = sanitizePreSalesItems(items);
 
-    const numeroFormatado = `PRE-${new Date().getFullYear()}-${String(proximoNumero).padStart(3, '0')}`;
-
-    // Criar solicitação
+    // Criar orçamento
     const solicitacao = await prisma.preSalesRequest.create({
       data: {
         numero: numeroFormatado,
@@ -283,13 +402,12 @@ router.post('/', async (req, res) => {
         status: 'NOVA',
         tiposPrecificacao,
         regimeTributario,
+        calculoDetalhes: calculoDetalhes && typeof calculoDetalhes === 'object' ? calculoDetalhes : undefined,
         observacoes,
         solicitanteId: req.user.userId, // Usar req.user.userId em vez de req.user.id
         leadId: leadId || null,
         opportunityId: opportunityId || null,
-        items: {
-          create: sanitizePreSalesItems(items)
-        }
+        ...(requestItems.length > 0 ? { items: { create: requestItems } } : {})
       },
       include: {
         solicitante: {
@@ -313,7 +431,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Solicitação criada com sucesso',
+      message: 'Orçamento criado com sucesso',
       data: solicitacao
     });
   } catch (error) {
@@ -431,6 +549,66 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao atualizar solicitação:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/pre-vendas/:id/devolver-comercial - Finalizar orçamento e devolver ao Comercial
+router.post('/:id/devolver-comercial', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const solicitacaoExistente = await prisma.preSalesRequest.findUnique({
+      where: { id },
+      select: { id: true, solicitanteId: true }
+    });
+
+    if (!solicitacaoExistente) {
+      return res.status(404).json({
+        success: false,
+        message: 'Solicitação não encontrada'
+      });
+    }
+
+    const userCanOperatePreSales = canAccessModule(req.user, 'PRE_SALES');
+    if (
+      solicitacaoExistente.solicitanteId !== req.user.userId &&
+      req.user.role !== 'ADMIN' &&
+      !userCanOperatePreSales
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Sem permissão para devolver esta solicitação'
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const solicitacao = await tx.preSalesRequest.update({
+        where: { id },
+        data: {
+          status: 'ENVIADA',
+          updatedAt: new Date()
+        },
+        include: preSalesRequestInclude
+      });
+      const returnedActivity = await syncPreSalesReturnToCommercial(tx, solicitacao, 'ENVIADA');
+      return { solicitacao, returnedActivity };
+    });
+
+    res.json({
+      success: true,
+      message: result.returnedActivity
+        ? 'Orçamento devolvido ao Comercial com sucesso'
+        : 'Orçamento marcado como enviado; atividade original não encontrada',
+      data: result.solicitacao,
+      returnedActivityId: result.returnedActivity?.id || null
+    });
+  } catch (error) {
+    console.error('Erro ao devolver orçamento ao Comercial:', error);
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',

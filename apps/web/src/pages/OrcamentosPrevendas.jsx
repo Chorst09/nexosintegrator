@@ -16,13 +16,6 @@ import { openPreSalesBudgetPdf } from '../utils/preSalesBudgetPrint';
 const toCurrency = (v) =>
   `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
-const escapeHtml = (value) => String(value ?? '')
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#039;');
-
 const getCurrentUser = () => {
   try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
 };
@@ -61,7 +54,51 @@ const nextItemRow = () => ({
   icmsCompra: ''
 });
 
-const fallbackBudgetNumber = () => `ORC-0001-${new Date().getFullYear()}`;
+const BUDGET_NUMBER_RE = /^ORC-(\d{4})-(\d{4})$/;
+
+const getRequestDetails = (request) => (
+  request?.calculoDetalhes && typeof request.calculoDetalhes === 'object'
+    ? request.calculoDetalhes
+    : {}
+);
+
+const collectBudgetNumbers = (source) => {
+  const requests = Array.isArray(source) ? source : [source];
+  return requests.flatMap((request) => {
+    const details = getRequestDetails(request);
+    const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+    return [
+      request?.numero,
+      ...cotacoes.map((cotacao) => cotacao?.numeroOrcamento)
+    ].filter(Boolean);
+  });
+};
+
+const generateNextBudgetNumber = (sources = []) => {
+  const year = new Date().getFullYear();
+  const maxSequence = collectBudgetNumbers(sources).reduce((max, number) => {
+    const match = String(number || '').trim().toUpperCase().match(BUDGET_NUMBER_RE);
+    if (!match || Number(match[2]) !== year) return max;
+    const sequence = parseInt(match[1], 10);
+    return Number.isFinite(sequence) ? Math.max(max, sequence) : max;
+  }, 0);
+  return `ORC-${String(maxSequence + 1).padStart(4, '0')}-${year}`;
+};
+
+const fallbackBudgetNumber = (sources = []) => generateNextBudgetNumber(sources);
+
+const getProposalDetails = (request) => {
+  const details = getRequestDetails(request);
+  return details.dadosProposta && typeof details.dadosProposta === 'object'
+    ? details.dadosProposta
+    : {};
+};
+
+const getFirstCotacao = (request) => {
+  const details = getRequestDetails(request);
+  const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+  return cotacoes[0] || null;
+};
 
 const parseItemIcmsCompra = (item) => {
   if (!item?.observacoes) return '';
@@ -84,33 +121,69 @@ const normalizeTipoPrecificacaoKey = (modalidade) => (
   normalizeModalidadeKey(modalidade) === 'SERVICO' ? 'SERVICOS' : normalizeModalidadeKey(modalidade)
 );
 
-const formFromRequest = (request, currentUser = {}) => ({
-  titulo: request?.titulo || '',
-  descricao: request?.descricao || '',
-  nomeCliente: request?.nomeCliente || request?.lead?.name || '',
-  modalidade: request?.modalidade || 'VENDA',
-  solicitanteId: request?.solicitanteId || request?.solicitante?.id || currentUser.id || '',
-  encaminhadoParaId: request?.assignedToId || '',
-  opportunityId: request?.opportunityId || request?.opportunity?.id || '',
-  clientId: request?.leadId || request?.lead?.id || '',
-  prioridade: request?.prioridade || 'MEDIUM',
-  prazo: request?.prazo || '',
-  itens: Array.isArray(request?.items) && request.items.length > 0
-    ? request.items.map((item) => ({
-        id: item.id || nextItemRow().id,
-        descricao: item.descricao || item.product?.name || '',
-        quantidade: item.quantidade || 1,
-        custoUnitario: item.custoUnitario ?? '',
-        icmsCompra: parseItemIcmsCompra(item)
-      }))
-    : [nextItemRow()]
+const mapFormItem = (item) => ({
+  id: item.id || nextItemRow().id,
+  descricao: item.descricao || item.product?.name || '',
+  quantidade: item.quantidade || 1,
+  custoUnitario: item.custoUnitario ?? '',
+  icmsCompra: item.icmsCompra ?? parseItemIcmsCompra(item)
 });
 
-const buildEmptyForm = (currentUser = {}) => ({
+const formFromRequest = (request, currentUser = {}) => {
+  const proposalDetails = getProposalDetails(request);
+  const firstCotacao = getFirstCotacao(request);
+  const cotacaoItems = Array.isArray(firstCotacao?.itens) ? firstCotacao.itens.map(mapFormItem) : [];
+  const requestItems = Array.isArray(request?.items) ? request.items.map(mapFormItem) : [];
+  const nomeCliente = proposalDetails.clienteOrgao || request?.nomeCliente || request?.lead?.name || '';
+
+  return {
+    numeroOrcamento: firstCotacao?.numeroOrcamento || request?.numero || fallbackBudgetNumber(),
+    cotacaoId: firstCotacao?.id || '',
+    titulo: request?.titulo || '',
+    descricao: request?.descricao || '',
+    nomeCliente,
+    cnpjDocumento: proposalDetails.cnpjDocumento || '',
+    contatoCliente: proposalDetails.contatoCliente || nomeCliente,
+    emailCliente: proposalDetails.emailCliente || '',
+    gerenteConta: proposalDetails.gerenteConta || request?.solicitante?.name || currentUser.name || '',
+    emailGerente: proposalDetails.emailGerente || request?.solicitante?.email || currentUser.email || '',
+    telefoneGerente: proposalDetails.telefoneGerente || currentUser.phone || '',
+    premissasProposta: proposalDetails.premissasProposta || '',
+    modalidade: normalizeModalidadeKey(firstCotacao?.modalidade || request?.modalidade || 'VENDA'),
+    distribuidorId: firstCotacao?.distribuidorId || '',
+    distribuidor: firstCotacao?.distribuidor || '',
+    fornecedorId: firstCotacao?.fornecedorId || '',
+    fornecedor: firstCotacao?.fornecedor || '',
+    observacoesCotacao: firstCotacao?.observacoesCotacao || '',
+    solicitanteId: request?.solicitanteId || request?.solicitante?.id || currentUser.id || '',
+    encaminhadoParaId: request?.assignedToId || '',
+    opportunityId: request?.opportunityId || request?.opportunity?.id || '',
+    clientId: request?.leadId || request?.lead?.id || '',
+    prioridade: request?.prioridade || 'MEDIUM',
+    prazo: proposalDetails.prazo || request?.prazo || '',
+    itens: cotacaoItems.length > 0 ? cotacaoItems : (requestItems.length > 0 ? requestItems : [nextItemRow()])
+  };
+};
+
+const buildEmptyForm = (currentUser = {}, existingRequests = []) => ({
+  numeroOrcamento: fallbackBudgetNumber(existingRequests),
+  cotacaoId: '',
   titulo: '',
   descricao: '',
   nomeCliente: '',
+  cnpjDocumento: '',
+  contatoCliente: '',
+  emailCliente: '',
+  gerenteConta: currentUser.name || '',
+  emailGerente: currentUser.email || '',
+  telefoneGerente: currentUser.phone || '',
+  premissasProposta: '',
   modalidade: 'VENDA',
+  distribuidorId: '',
+  distribuidor: '',
+  fornecedorId: '',
+  fornecedor: '',
+  observacoesCotacao: '',
   solicitanteId: currentUser.id || '',
   encaminhadoParaId: '',
   opportunityId: '',
@@ -121,9 +194,7 @@ const buildEmptyForm = (currentUser = {}) => ({
 });
 
 const normalizeCotacoesFromRequest = (solicitacao) => {
-  const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
-    ? solicitacao.calculoDetalhes
-    : {};
+  const details = getRequestDetails(solicitacao);
   return Array.isArray(details.cotacoes) ? details.cotacoes : [];
 };
 
@@ -178,23 +249,42 @@ const buildPrecificacaoPayload = (solicitacao) => {
     });
   }
 
-  const numeroOrcamento = custosParaCalculo[0]?.numeroOrcamento || solicitacao?.numero || '';
-  const nomeCliente = solicitacao?.nomeCliente || solicitacao?.lead?.name || solicitacao?.cliente?.nome || '';
+  const cotacaoPrincipal = custosParaCalculo[0] || {};
+  const proposalDetails = getProposalDetails(solicitacao);
+  const numeroOrcamento = cotacaoPrincipal?.numeroOrcamento || solicitacao?.numero || '';
+  const nomeCliente = proposalDetails.clienteOrgao || solicitacao?.nomeCliente || solicitacao?.lead?.name || solicitacao?.cliente?.nome || '';
+  const gerenteNome = proposalDetails.gerenteConta || solicitacao?.solicitante?.name || '';
+  const gerenteEmail = proposalDetails.emailGerente || solicitacao?.solicitante?.email || '';
 
   return {
     itens: itens.length > 0 ? itens : [{ descricao: '', quantidade: 1, custoUnitario: 0 }],
     subtotal: itens.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0),
     modalidade,
     numeroOrcamento,
+    distribuidorId: cotacaoPrincipal?.distribuidorId || '',
+    distribuidor: cotacaoPrincipal?.distribuidor || '',
+    fornecedorId: cotacaoPrincipal?.fornecedorId || '',
+    fornecedor: cotacaoPrincipal?.fornecedor || '',
     solicitacaoId: solicitacao?.id || '',
     titulo: solicitacao?.titulo || '',
+    descricao: solicitacao?.descricao || '',
     nomeCliente,
+    oportunidadeId: solicitacao?.opportunityId || solicitacao?.opportunity?.id || '',
+    oportunidadeTitulo: solicitacao?.opportunity?.title || '',
     cliente: {
       nome: nomeCliente,
-      contato: solicitacao?.contatoCliente || nomeCliente,
-      telefone: solicitacao?.telefoneCliente || '',
-      email: solicitacao?.emailCliente || ''
+      documento: proposalDetails.cnpjDocumento || '',
+      contato: proposalDetails.contatoCliente || solicitacao?.contatoCliente || nomeCliente,
+      telefone: proposalDetails.telefoneCliente || solicitacao?.telefoneCliente || '',
+      email: proposalDetails.emailCliente || solicitacao?.emailCliente || ''
     },
+    gerente: {
+      nome: gerenteNome,
+      email: gerenteEmail,
+      telefone: proposalDetails.telefoneGerente || ''
+    },
+    premissas: proposalDetails.premissasProposta || solicitacao?.observacoes || solicitacao?.descricao || '',
+    dadosProposta: proposalDetails,
     todosCustos: custosParaCalculo
   };
 };
@@ -208,10 +298,11 @@ const openPrecificacaoFromRequest = (solicitacao, destination = '/precificacao')
 
 // ─── sub-component: NovoOrcamentoModal ──────────────────────────────────────
 
-function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null }) {
+function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null, existingRequests = [] }) {
   const currentUser = getCurrentUser();
-  const [form, setForm] = useState(() => buildEmptyForm(currentUser));
+  const [form, setForm] = useState(() => buildEmptyForm(currentUser, existingRequests));
   const [users, setUsers] = useState([]);
+  const [registry, setRegistry] = useState({ distribuidores: [], fornecedores: [] });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
   const isEditing = Boolean(editingRequest?.id);
@@ -226,15 +317,48 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
     } catch { /* silently ignore */ }
   }, []);
 
+  const loadRegistry = useCallback(async () => {
+    try {
+      const res = await fetch(buildApiUrl('/prevendas-cadastros'), { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      const payload = await res.json();
+      setRegistry({
+        distribuidores: Array.isArray(payload?.distribuidores) ? payload.distribuidores : [],
+        fornecedores: Array.isArray(payload?.fornecedores) ? payload.fornecedores : []
+      });
+    } catch {
+      setRegistry({ distribuidores: [], fornecedores: [] });
+    }
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
-      setForm(isEditing ? formFromRequest(editingRequest, currentUser) : buildEmptyForm(currentUser));
+      setForm(isEditing ? formFromRequest(editingRequest, currentUser) : buildEmptyForm(currentUser, existingRequests));
       setFeedback('');
       loadUsers();
+      loadRegistry();
     }
-  }, [isOpen, isEditing, editingRequest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, isEditing, editingRequest?.id, existingRequests.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setField = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+
+  const handleDistributorChange = (distribuidorId) => {
+    const selected = registry.distribuidores.find((item) => item.id === distribuidorId);
+    setForm((p) => ({
+      ...p,
+      distribuidorId,
+      distribuidor: selected?.nome || ''
+    }));
+  };
+
+  const handleSupplierChange = (fornecedorId) => {
+    const selected = registry.fornecedores.find((item) => item.id === fornecedorId);
+    setForm((p) => ({
+      ...p,
+      fornecedorId,
+      fornecedor: selected?.nome || ''
+    }));
+  };
 
   const addItem = () => setForm((p) => ({ ...p, itens: [...p.itens, nextItemRow()] }));
 
@@ -256,9 +380,62 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
     try {
       setSaving(true);
       setFeedback('');
+      const cleanItems = form.itens
+        .filter((i) => i.descricao.trim())
+        .map((i) => ({
+          descricao: i.descricao.trim(),
+          quantidade: Number(i.quantidade) || 1,
+          custoUnitario: Number(i.custoUnitario) || 0,
+          icmsCompra: i.icmsCompra === '' ? null : Number(i.icmsCompra) || 0,
+          precoSugerido: 0,
+          margemLucro: 0
+        }));
+      const previousDetails = isEditing ? getRequestDetails(editingRequest) : {};
+      const previousCotacoes = Array.isArray(previousDetails.cotacoes) ? previousDetails.cotacoes : [];
+      const shouldCreateInitialQuote = cleanItems.length > 0 && (form.distribuidor.trim() || form.fornecedor.trim());
+      const nowIso = new Date().toISOString();
+      const initialQuote = shouldCreateInitialQuote
+        ? {
+          id: form.cotacaoId || `COT-${Date.now()}`,
+          modalidade: form.modalidade,
+          distribuidorId: form.distribuidorId || '',
+          distribuidor: form.distribuidor.trim(),
+          fornecedorId: form.fornecedorId || '',
+          fornecedor: form.fornecedor.trim(),
+          numeroOrcamento: form.numeroOrcamento || fallbackBudgetNumber(existingRequests),
+          itens: cleanItems,
+          subtotal: cleanItems.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0),
+          observacoesCotacao: form.observacoesCotacao.trim(),
+          createdAt: previousCotacoes.find((item) => item.id === form.cotacaoId)?.createdAt || nowIso,
+          updatedAt: nowIso,
+          createdByName: currentUser.name || ''
+        }
+        : null;
+      const nextCotacoes = initialQuote
+        ? [
+          initialQuote,
+          ...previousCotacoes.filter((item) => (
+            item.id !== initialQuote.id &&
+            String(item.numeroOrcamento || '').toUpperCase() !== String(initialQuote.numeroOrcamento || '').toUpperCase()
+          ))
+        ]
+        : previousCotacoes;
+      const dadosProposta = {
+        clienteOrgao: form.nomeCliente.trim(),
+        cnpjDocumento: form.cnpjDocumento.trim(),
+        contatoCliente: form.contatoCliente.trim(),
+        emailCliente: form.emailCliente.trim(),
+        gerenteConta: form.gerenteConta.trim(),
+        emailGerente: form.emailGerente.trim(),
+        telefoneGerente: form.telefoneGerente.trim(),
+        premissasProposta: form.premissasProposta.trim(),
+        prazo: form.prazo || ''
+      };
+      const descriptionText = form.descricao.trim() || form.premissasProposta.trim() || form.titulo.trim();
       const payload = {
+        numero: form.numeroOrcamento || undefined,
         titulo: form.titulo.trim(),
-        descricao: form.descricao.trim(),
+        descricao: descriptionText,
         nomeCliente: form.nomeCliente.trim() || null,
         modalidade: form.modalidade || null,
         prioridade: form.prioridade,
@@ -267,16 +444,12 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
         opportunityId: form.opportunityId.trim() || null,
         assignedToId: form.encaminhadoParaId || null,
         prazo: form.prazo || null,
-        items: form.itens
-          .filter((i) => i.descricao.trim())
-          .map((i) => ({
-            descricao: i.descricao.trim(),
-            quantidade: Number(i.quantidade) || 1,
-            custoUnitario: Number(i.custoUnitario) || 0,
-            icmsCompra: i.icmsCompra === '' ? null : Number(i.icmsCompra) || 0,
-            precoSugerido: 0,
-            margemLucro: 0
-          }))
+        calculoDetalhes: {
+          ...previousDetails,
+          dadosProposta,
+          cotacoes: nextCotacoes
+        },
+        items: cleanItems
       };
       const res = await fetch(buildApiUrl(isEditing ? `/pre-vendas/${encodeURIComponent(editingRequest.id)}` : '/pre-vendas'), {
         method: isEditing ? 'PUT' : 'POST',
@@ -301,17 +474,17 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-600/50 bg-[#0a1628] shadow-2xl">
+      <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-600/50 bg-[#0a1628] shadow-2xl">
         {/* header */}
         <div className="flex items-start justify-between p-6 border-b border-slate-700/50">
           <div>
             <h2 className="text-xl font-bold text-white">
-              {isEditing ? 'Editar orçamento de Pré-vendas' : 'Criar solicitação para Pré-vendas'}
+              {isEditing ? 'Editar orçamento de Pré-vendas' : 'Criar orçamento de Pré-vendas'}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
               {isEditing
-                ? 'Atualize os dados e itens solicitados do orçamento.'
-                : 'Registre a demanda de proposta/orçamento e direcione para o fluxo de cotação e precificação.'}
+                ? 'Atualize dados comerciais, custos e premissas antes da precificação.'
+                : 'Registre o orçamento completo para cotação, precificação, PDF e devolução ao comercial.'}
             </p>
           </div>
           <button
@@ -324,6 +497,17 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-4">
+            <label className="block text-sm font-medium text-sky-100 mb-1.5">Nº Orçamento</label>
+            <input
+              type="text"
+              value={form.numeroOrcamento}
+              readOnly
+              className="w-full rounded-lg border border-sky-400/40 bg-slate-950/70 px-4 py-2.5 font-mono text-white focus:outline-none"
+            />
+            <p className="mt-2 text-xs text-sky-200/80">Número gerado automaticamente no padrão da fila de orçamentos.</p>
+          </div>
+
           {/* Título */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1.5">Título</label>
@@ -344,20 +528,54 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
               rows={3}
               value={form.descricao}
               onChange={(e) => setField('descricao', e.target.value)}
-              placeholder="Contexto técnico e comercial da solicitação"
+              placeholder="Contexto técnico e comercial do orçamento"
               className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"
             />
+          </div>
+
+          <div className="rounded-xl border border-slate-700/60 bg-slate-900/25 p-4">
+            <h3 className="text-lg font-semibold text-white">Custos do orçamento</h3>
+            <p className="mt-1 text-sm text-slate-400">Dados do distribuidor/fornecedor e itens que serão enviados para a calculadora.</p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Distribuidor</label>
+                <select
+                  value={form.distribuidorId}
+                  onChange={(e) => handleDistributorChange(e.target.value)}
+                  className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                >
+                  <option value="">Selecione um distribuidor cadastrado</option>
+                  {registry.distribuidores.map((item) => (
+                    <option key={item.id} value={item.id}>{item.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Fornecedor</label>
+                <select
+                  value={form.fornecedorId}
+                  onChange={(e) => handleSupplierChange(e.target.value)}
+                  className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                >
+                  <option value="">Selecione um fornecedor cadastrado</option>
+                  {registry.fornecedores.map((item) => (
+                    <option key={item.id} value={item.id}>{item.nome}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Nome do Cliente e Modalidade */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Nome do Cliente</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Cliente / Órgão</label>
               <input
                 type="text"
                 value={form.nomeCliente}
                 onChange={(e) => setField('nomeCliente', e.target.value)}
-                placeholder="Nome da empresa ou cliente"
+                placeholder="Nome do cliente ou órgão"
                 className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
               />
             </div>
@@ -372,6 +590,39 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
                 <option value="LOCACAO">Locação</option>
                 <option value="SERVICO">Serviço</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">CNPJ / Documento</label>
+              <input
+                type="text"
+                value={form.cnpjDocumento}
+                onChange={(e) => setField('cnpjDocumento', e.target.value)}
+                placeholder="00.000.000/0000-00"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Contato do Cliente</label>
+              <input
+                type="text"
+                value={form.contatoCliente}
+                onChange={(e) => setField('contatoCliente', e.target.value)}
+                placeholder="Nome do contato"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email do Cliente</label>
+              <input
+                type="email"
+                value={form.emailCliente}
+                onChange={(e) => setField('emailCliente', e.target.value)}
+                placeholder="email@cliente.com.br"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
             </div>
           </div>
 
@@ -459,10 +710,54 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
             </div>
           </div>
 
-          {/* Itens solicitados */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Gerente de Conta</label>
+              <input
+                type="text"
+                value={form.gerenteConta}
+                onChange={(e) => setField('gerenteConta', e.target.value)}
+                placeholder="Nome do gerente"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email do Gerente</label>
+              <input
+                type="email"
+                value={form.emailGerente}
+                onChange={(e) => setField('emailGerente', e.target.value)}
+                placeholder="gerente@empresa.com.br"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Telefone do Gerente</label>
+              <input
+                type="text"
+                value={form.telefoneGerente}
+                onChange={(e) => setField('telefoneGerente', e.target.value)}
+                placeholder="(00) 00000-0000"
+                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Premissas da Proposta</label>
+            <textarea
+              rows={4}
+              value={form.premissasProposta}
+              onChange={(e) => setField('premissasProposta', e.target.value)}
+              placeholder="Escopo, validade da proposta, SLA, condições comerciais, exclusões e demais premissas."
+              className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"
+            />
+          </div>
+
+          {/* Itens do orçamento */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-slate-300">Itens solicitados</label>
+              <label className="text-sm font-medium text-slate-300">Itens do orçamento</label>
               <button
                 type="button"
                 onClick={addItem}
@@ -538,6 +833,17 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Observações do orçamento</label>
+            <input
+              type="text"
+              value={form.observacoesCotacao}
+              onChange={(e) => setField('observacoesCotacao', e.target.value)}
+              placeholder="Condições comerciais, prazo, impostos inclusos..."
+              className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+            />
+          </div>
+
           {feedback && (
             <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-300">
               {feedback}
@@ -559,7 +865,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
               className="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-60"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              {isEditing ? 'Salvar alterações' : 'Criar solicitação'}
+              {isEditing ? 'Salvar alterações' : 'Criar orçamento'}
             </button>
           </div>
         </form>
@@ -570,7 +876,7 @@ function NovoOrcamentoModal({ isOpen, onClose, onCreated, editingRequest = null 
 
 // ─── sub-component: CustosModal (Orçamentos de Distribuidores) ──────────────
 
-function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
+function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar, allRequests = [] }) {
   const [form, setForm] = useState({
     modalidade: 'VENDA',
     distribuidorId: '',
@@ -609,11 +915,11 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
       const details = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
         ? solicitacao.calculoDetalhes : {};
       setCustos(Array.isArray(details.cotacoes) ? details.cotacoes : []);
-      setForm((p) => ({ ...p, numeroOrcamento: solicitacao.numero || fallbackBudgetNumber() }));
+      setForm((p) => ({ ...p, numeroOrcamento: solicitacao.numero || fallbackBudgetNumber(allRequests) }));
       setFeedback('');
       loadRegistry();
     }
-  }, [isOpen, solicitacao, loadRegistry]);
+  }, [isOpen, solicitacao, loadRegistry, allRequests.length]);
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -677,20 +983,21 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
   };
 
   const startNewBudget = () => {
+    const nextNumber = solicitacao?.numero || fallbackBudgetNumber(allRequests);
     setForm((p) => ({
       ...p,
       distribuidorId: '',
       distribuidor: '',
       fornecedorId: '',
       fornecedor: '',
-      numeroOrcamento: '',
+      numeroOrcamento: nextNumber,
       descricaoItem: '',
       quantidade: 1,
       custoUnitario: 0,
       observacoes: ''
     }));
     setBudgetPickerOpen(false);
-    setFeedback('Novo orçamento iniciado. Informe o número recebido do distribuidor ou use o número da solicitação.');
+    setFeedback(`Novo orçamento iniciado com o número ${nextNumber}.`);
   };
 
   const handleDistributorChange = (distribuidorId) => {
@@ -751,7 +1058,7 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
         quantidade: 1,
         custoUnitario: 0,
         observacoes: '',
-        numeroOrcamento: solicitacao.numero || fallbackBudgetNumber()
+        numeroOrcamento: solicitacao.numero || fallbackBudgetNumber(allRequests)
       }));
       onSaved?.();
     } catch (err) {
@@ -1037,7 +1344,7 @@ export default function OrcamentosPrevendas() {
       uploads += Array.isArray(d.uploadsCotacao) ? d.uploadsCotacao.length : 0;
     });
     return [
-      { title: 'Solicitações', value: total, subtitle: 'Total de orçamentos', icon: ClipboardList, color: 'blue' },
+      { title: 'Orçamentos', value: total, subtitle: 'Total na fila', icon: ClipboardList, color: 'blue' },
       { title: 'Uploads', value: uploads, subtitle: 'Arquivos anexados', icon: Upload, color: 'purple' },
       { title: 'Pendentes IA', value: 0, subtitle: 'Aguardando análise', icon: AlertCircle, color: 'amber' },
       { title: 'Falhas IA', value: 0, subtitle: 'Erros de processamento', icon: AlertCircle, color: 'red' }
@@ -1069,233 +1376,6 @@ export default function OrcamentosPrevendas() {
 
   const handleViewPdf = (item) => {
     openPreSalesBudgetPdf(item);
-    return;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Não foi possível abrir a janela do PDF. Libere pop-ups e tente novamente.');
-      return;
-    }
-
-    const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object' ? item.calculoDetalhes : {};
-    const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
-    const itensSolicitados = Array.isArray(item?.items) ? item.items : [];
-    const createdAt = item?.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : '-';
-    const updatedAt = item?.updatedAt ? new Date(item.updatedAt).toLocaleString('pt-BR') : '-';
-    const statusKey = String(item?.status || 'NOVA').toUpperCase();
-    const statusText = STATUS_LABEL[statusKey] || statusKey;
-    const modalidadeLabel = {
-      VENDA: 'Venda',
-      LOCACAO: 'Locação',
-      SERVICO: 'Serviço',
-      SERVICOS: 'Serviços'
-    }[item?.modalidade] || item?.modalidade || '-';
-
-    const requestedRows = itensSolicitados.length > 0
-      ? itensSolicitados.map((requestedItem) => {
-          const icmsCompra = parseItemIcmsCompra(requestedItem);
-          const quantidade = Number(requestedItem?.quantidade) || 0;
-          const custoUnitario = Number(requestedItem?.custoUnitario) || 0;
-          return `<tr>
-            <td>${escapeHtml(requestedItem?.descricao || requestedItem?.product?.name || '-')}</td>
-            <td style="text-align:center">${escapeHtml(quantidade)}</td>
-            <td style="text-align:right">${escapeHtml(toCurrency(custoUnitario))}</td>
-            <td style="text-align:right">${escapeHtml(icmsCompra === '' ? '-' : `${icmsCompra}%`)}</td>
-            <td style="text-align:right">${escapeHtml(toCurrency(quantidade * custoUnitario))}</td>
-          </tr>`;
-        }).join('')
-      : '<tr><td colspan="5" class="empty">Sem itens solicitados.</td></tr>';
-
-    const quotationRows = cotacoes.length > 0
-      ? cotacoes.flatMap((cotacao) => {
-          const itens = Array.isArray(cotacao?.itens) && cotacao.itens.length > 0
-            ? cotacao.itens
-            : [{ descricao: '-', quantidade: 0, custoUnitario: 0 }];
-          return itens.map((quotedItem) => {
-            const quantidade = Number(quotedItem?.quantidade) || 0;
-            const custoUnitario = Number(quotedItem?.custoUnitario) || 0;
-            return `<tr>
-              <td>${escapeHtml(cotacao?.modalidade || '-')}</td>
-              <td>${escapeHtml(cotacao?.distribuidor || '-')}</td>
-              <td>${escapeHtml(cotacao?.fornecedor || '-')}</td>
-              <td>${escapeHtml(cotacao?.numeroOrcamento || item?.numero || '-')}</td>
-              <td>${escapeHtml(quotedItem?.descricao || '-')}</td>
-              <td style="text-align:center">${escapeHtml(quantidade)}</td>
-              <td style="text-align:right">${escapeHtml(toCurrency(custoUnitario))}</td>
-              <td style="text-align:right">${escapeHtml(toCurrency(quantidade * custoUnitario))}</td>
-            </tr>`;
-          });
-        }).join('')
-      : '<tr><td colspan="8" class="empty">Sem cotações de distribuidores registradas.</td></tr>';
-
-    const html = `
-      <!doctype html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Orçamento ${escapeHtml(item?.numero || '')}</title>
-        <style>
-          * { box-sizing: border-box; }
-          body {
-            margin: 24px;
-            color: #0f172a;
-            background: #fff;
-            font-family: Arial, Helvetica, sans-serif;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            gap: 18px;
-            border-bottom: 3px solid #0ea5e9;
-            padding-bottom: 16px;
-            margin-bottom: 20px;
-          }
-          h1 { margin: 0; color: #0369a1; font-size: 28px; }
-          h2 { margin: 22px 0 10px; color: #075985; font-size: 17px; }
-          .muted { color: #64748b; font-size: 13px; margin-top: 6px; }
-          .badge {
-            display: inline-block;
-            border: 1px solid #bae6fd;
-            border-radius: 999px;
-            background: #e0f2fe;
-            color: #075985;
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 700;
-            white-space: nowrap;
-          }
-          .grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 14px;
-          }
-          .card {
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            padding: 12px;
-          }
-          .row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 4px 0;
-            font-size: 13px;
-          }
-          .label { color: #475569; }
-          .value { color: #0f172a; font-weight: 700; text-align: right; }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12.5px;
-          }
-          th {
-            background: #0f172a;
-            color: #fff;
-            padding: 8px;
-            text-align: left;
-          }
-          td {
-            border-bottom: 1px solid #e2e8f0;
-            padding: 8px;
-            vertical-align: top;
-          }
-          tr:nth-child(even) td { background: #f8fafc; }
-          .empty { color: #64748b; text-align: center; padding: 18px; }
-          .description {
-            white-space: pre-wrap;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 12px;
-            color: #334155;
-            background: #f8fafc;
-          }
-          .footer {
-            margin-top: 24px;
-            padding-top: 10px;
-            border-top: 1px solid #e2e8f0;
-            color: #64748b;
-            font-size: 11px;
-          }
-          @media print { body { margin: 12mm; } }
-        </style>
-        <script>
-          window.addEventListener('load', function () {
-            setTimeout(function () {
-              window.focus();
-              window.print();
-            }, 400);
-          }, { once: true });
-        </script>
-      </head>
-      <body>
-        <section class="header">
-          <div>
-            <h1>Orçamento de Pré-vendas</h1>
-            <div class="muted">Nº ${escapeHtml(item?.numero || '-')} · Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</div>
-          </div>
-          <span class="badge">${escapeHtml(statusText)}</span>
-        </section>
-
-        <section class="grid">
-          <article class="card">
-            <div class="row"><span class="label">Título</span><span class="value">${escapeHtml(item?.titulo || '-')}</span></div>
-            <div class="row"><span class="label">Cliente</span><span class="value">${escapeHtml(item?.nomeCliente || item?.lead?.name || '-')}</span></div>
-            <div class="row"><span class="label">Modalidade</span><span class="value">${escapeHtml(modalidadeLabel)}</span></div>
-            <div class="row"><span class="label">Prioridade</span><span class="value">${escapeHtml(PRIORITY_LABEL[item?.prioridade] || item?.prioridade || '-')}</span></div>
-          </article>
-          <article class="card">
-            <div class="row"><span class="label">Solicitante</span><span class="value">${escapeHtml(item?.solicitante?.name || '-')}</span></div>
-            <div class="row"><span class="label">Oportunidade</span><span class="value">${escapeHtml(item?.opportunity?.title || '-')}</span></div>
-            <div class="row"><span class="label">Criado em</span><span class="value">${escapeHtml(createdAt)}</span></div>
-            <div class="row"><span class="label">Atualizado em</span><span class="value">${escapeHtml(updatedAt)}</span></div>
-          </article>
-        </section>
-
-        <h2>Descrição</h2>
-        <section class="description">${escapeHtml(item?.descricao || 'Sem descrição.')}</section>
-
-        <h2>Itens Solicitados</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Descrição</th>
-              <th style="text-align:center">Qtde</th>
-              <th style="text-align:right">Custo Unit.</th>
-              <th style="text-align:right">ICMS Compra</th>
-              <th style="text-align:right">Total</th>
-            </tr>
-          </thead>
-          <tbody>${requestedRows}</tbody>
-        </table>
-
-        <h2>Cotações de Distribuidores</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Modalidade</th>
-              <th>Distribuidor</th>
-              <th>Fornecedor</th>
-              <th>Orçamento</th>
-              <th>Item</th>
-              <th style="text-align:center">Qtde</th>
-              <th style="text-align:right">Custo Unit.</th>
-              <th style="text-align:right">Total</th>
-            </tr>
-          </thead>
-          <tbody>${quotationRows}</tbody>
-        </table>
-
-        <section class="footer">Documento gerado pelo módulo de Orçamentos de Pré-vendas.</section>
-      </body>
-      </html>
-    `;
-
-    const htmlBlob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const blobUrl = URL.createObjectURL(htmlBlob);
-    printWindow.location.href = blobUrl;
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
   };
 
   const handleReturnToCommercial = async (item) => {
@@ -1535,6 +1615,7 @@ export default function OrcamentosPrevendas() {
         }}
         onCreated={() => { loadRequests(); }}
         editingRequest={editingItem}
+        existingRequests={requests}
       />
 
       <CustosModal
@@ -1543,6 +1624,7 @@ export default function OrcamentosPrevendas() {
         solicitacao={costosItem}
         onSaved={() => loadRequests()}
         onPrecificar={requestPrecificacaoChoice}
+        allRequests={requests}
       />
 
       {/* escolha de destino da precificação */}

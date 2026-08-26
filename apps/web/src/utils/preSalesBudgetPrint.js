@@ -42,12 +42,15 @@ const modalidadeLabel = (value) => ({
 
 export const buildPreSalesBudgetPrintHtml = (item) => {
   const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object' ? item.calculoDetalhes : {};
+  const proposalDetails = details.dadosProposta && typeof details.dadosProposta === 'object' ? details.dadosProposta : {};
   const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
   const itensSolicitados = Array.isArray(item?.items) ? item.items : [];
   const createdAt = item?.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : '-';
   const updatedAt = item?.updatedAt ? new Date(item.updatedAt).toLocaleString('pt-BR') : '-';
   const statusKey = String(item?.status || 'NOVA').toUpperCase();
   const statusText = STATUS_LABEL[statusKey] || statusKey;
+  const clientName = proposalDetails.clienteOrgao || item?.nomeCliente || item?.lead?.name || '-';
+  const premissas = proposalDetails.premissasProposta || '';
 
   const requestedRows = itensSolicitados.length > 0
     ? itensSolicitados.map((requestedItem) => {
@@ -132,12 +135,19 @@ export const buildPreSalesBudgetPrintHtml = (item) => {
       <section class="grid">
         <article class="card">
           <div class="row"><span class="label">Título</span><span class="value">${escapeHtml(item?.titulo || '-')}</span></div>
-          <div class="row"><span class="label">Cliente</span><span class="value">${escapeHtml(item?.nomeCliente || item?.lead?.name || '-')}</span></div>
+          <div class="row"><span class="label">Cliente</span><span class="value">${escapeHtml(clientName)}</span></div>
+          <div class="row"><span class="label">CNPJ / Documento</span><span class="value">${escapeHtml(proposalDetails.cnpjDocumento || '-')}</span></div>
           <div class="row"><span class="label">Modalidade</span><span class="value">${escapeHtml(modalidadeLabel(item?.modalidade))}</span></div>
           <div class="row"><span class="label">Prioridade</span><span class="value">${escapeHtml(PRIORITY_LABEL[item?.prioridade] || item?.prioridade || '-')}</span></div>
         </article>
         <article class="card">
           <div class="row"><span class="label">Solicitante</span><span class="value">${escapeHtml(item?.solicitante?.name || '-')}</span></div>
+          <div class="row"><span class="label">Contato do Cliente</span><span class="value">${escapeHtml(proposalDetails.contatoCliente || '-')}</span></div>
+          <div class="row"><span class="label">Email do Cliente</span><span class="value">${escapeHtml(proposalDetails.emailCliente || '-')}</span></div>
+          <div class="row"><span class="label">Telefone do Cliente</span><span class="value">${escapeHtml(proposalDetails.telefoneCliente || '-')}</span></div>
+          <div class="row"><span class="label">Gerente</span><span class="value">${escapeHtml(proposalDetails.gerenteConta || item?.solicitante?.name || '-')}</span></div>
+          <div class="row"><span class="label">Email Gerente</span><span class="value">${escapeHtml(proposalDetails.emailGerente || item?.solicitante?.email || '-')}</span></div>
+          <div class="row"><span class="label">Telefone Gerente</span><span class="value">${escapeHtml(proposalDetails.telefoneGerente || '-')}</span></div>
           <div class="row"><span class="label">Oportunidade</span><span class="value">${escapeHtml(item?.opportunity?.title || '-')}</span></div>
           <div class="row"><span class="label">Criado em</span><span class="value">${escapeHtml(createdAt)}</span></div>
           <div class="row"><span class="label">Atualizado em</span><span class="value">${escapeHtml(updatedAt)}</span></div>
@@ -145,6 +155,10 @@ export const buildPreSalesBudgetPrintHtml = (item) => {
       </section>
       <h2>Descrição</h2>
       <section class="description">${escapeHtml(item?.descricao || 'Sem descrição.')}</section>
+      ${premissas ? `
+        <h2>Premissas da Proposta</h2>
+        <section class="description">${escapeHtml(premissas)}</section>
+      ` : ''}
       <h2>Itens Solicitados</h2>
       <table>
         <thead><tr><th>Descrição</th><th style="text-align:center">Qtde</th><th style="text-align:right">Custo Unit.</th><th style="text-align:right">ICMS Compra</th><th style="text-align:right">Total</th></tr></thead>

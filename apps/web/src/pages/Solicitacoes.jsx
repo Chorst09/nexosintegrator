@@ -269,6 +269,7 @@ const mapRequestRow = (row) => {
     numero: row.numero,
     titulo: row.titulo,
     descricao: stripStageMarkers(row.descricao),
+    nomeCliente: row.nomeCliente || row.lead?.name || '',
     status: row.status,
     prioridade: row.prioridade,
     solicitante: row.solicitante || null,
@@ -327,6 +328,41 @@ const mapActivityRow = (activity) => {
 const stageLabel = (stage) => STAGE_META[stage]?.title || stage;
 const COTACAO_TABS = ['ITENS', 'HISTORICO', 'COTACOES', 'PRECIFICACAO', 'PROPOSTAS', 'ACOES'];
 const toCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+const BUDGET_NUMBER_RE = /^ORC-(\d{4})-(\d{4})$/;
+
+const getRequestDetails = (item) => (
+  item?.calculoDetalhes && typeof item.calculoDetalhes === 'object'
+    ? item.calculoDetalhes
+    : {}
+);
+
+const collectBudgetNumbers = (source) => {
+  const requests = Array.isArray(source) ? source : [source];
+  return requests.flatMap((request) => {
+    const details = getRequestDetails(request);
+    const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+    return [
+      request?.numero,
+      ...cotacoes.map((cotacao) => cotacao?.numeroOrcamento)
+    ].filter(Boolean);
+  });
+};
+
+const generateNextBudgetNumber = (sources = []) => {
+  const year = new Date().getFullYear();
+  const maxSequence = collectBudgetNumbers(sources).reduce((max, number) => {
+    const match = String(number || '').trim().toUpperCase().match(BUDGET_NUMBER_RE);
+    if (!match || Number(match[2]) !== year) return max;
+    const sequence = parseInt(match[1], 10);
+    return Number.isFinite(sequence) ? Math.max(max, sequence) : max;
+  }, 0);
+  return `ORC-${String(maxSequence + 1).padStart(4, '0')}-${year}`;
+};
+
+const resolveBudgetNumber = (item, sources = []) => {
+  const ownNumber = String(item?.numero || '').trim().toUpperCase();
+  return BUDGET_NUMBER_RE.test(ownNumber) ? ownNumber : generateNextBudgetNumber(sources);
+};
 
 const nextQuoteItem = () => ({
   id: `q-item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -342,25 +378,100 @@ const inferModalidade = (item) => {
   return 'VENDA';
 };
 
-const buildInitialCotacaoForm = (item) => ({
-  modalidade: inferModalidade(item),
-  distribuidor: '',
-  numeroOrcamento: `ORC-${String(Date.now()).slice(-4)}`,
-  itens: [nextQuoteItem()],
-  arquivo: null,
-  arquivoNome: '',
-  observacoesCotacao: '',
-  observacoesUpload: ''
-});
+const buildInitialCotacaoForm = (item, sources = []) => {
+  const proposalDetails = readProposalDetails(item);
+  const currentUser = getCurrentUser();
+  const clienteOrgao = proposalDetails.clienteOrgao || item?.nomeCliente || item?.company?.name || '';
+  const requestItems = Array.isArray(item?.items)
+    ? item.items
+        .filter((entry) => String(entry?.descricao || entry?.product?.name || '').trim())
+        .map((entry) => ({
+          id: nextQuoteItem().id,
+          descricao: entry.descricao || entry?.product?.name || '',
+          quantidade: entry.quantidade || 1,
+          custoUnitario: entry.custoUnitario ?? ''
+        }))
+    : [];
+
+  return {
+    modalidade: inferModalidade(item),
+    distribuidorId: '',
+    distribuidor: '',
+    fornecedorId: '',
+    fornecedor: '',
+    numeroOrcamento: resolveBudgetNumber(item, sources),
+    clienteOrgao,
+    cnpjDocumento: proposalDetails.cnpjDocumento || '',
+    contatoCliente: proposalDetails.contatoCliente || clienteOrgao,
+    emailCliente: proposalDetails.emailCliente || '',
+    telefoneCliente: proposalDetails.telefoneCliente || '',
+    gerenteConta: proposalDetails.gerenteConta || item?.solicitante?.name || currentUser?.name || '',
+    emailGerente: proposalDetails.emailGerente || item?.solicitante?.email || currentUser?.email || '',
+    telefoneGerente: proposalDetails.telefoneGerente || currentUser?.phone || '',
+    premissasProposta: proposalDetails.premissasProposta || item?.descricao || '',
+    itens: requestItems.length > 0 ? requestItems : [nextQuoteItem()],
+    arquivo: null,
+    arquivoNome: '',
+    observacoesCotacao: '',
+    observacoesUpload: ''
+  };
+};
 
 const readCotacaoDetails = (item) => {
-  const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object'
-    ? item.calculoDetalhes
-    : {};
+  const details = getRequestDetails(item);
 
   return {
     cotacoes: Array.isArray(details.cotacoes) ? details.cotacoes : [],
     uploads: Array.isArray(details.uploadsCotacao) ? details.uploadsCotacao : []
+  };
+};
+
+const readProposalDetails = (item) => {
+  const details = getRequestDetails(item);
+  return details.dadosProposta && typeof details.dadosProposta === 'object'
+    ? details.dadosProposta
+    : {};
+};
+
+const buildCotacaoPricingPayload = (context, cotacao, allCotacoes = []) => {
+  const proposalDetails = readProposalDetails(context);
+  const modalidade = String(cotacao?.modalidade || inferModalidade(context) || 'VENDA').toUpperCase();
+  const itens = Array.isArray(cotacao?.itens) && cotacao.itens.length > 0
+    ? cotacao.itens
+    : [nextQuoteItem()];
+  const nomeCliente = proposalDetails.clienteOrgao || context?.nomeCliente || context?.company?.name || '';
+  const custos = Array.isArray(allCotacoes) && allCotacoes.length > 0 ? allCotacoes : [cotacao].filter(Boolean);
+
+  return {
+    itens,
+    subtotal: Number(cotacao?.subtotal || 0),
+    modalidade,
+    numeroOrcamento: cotacao?.numeroOrcamento || context?.numero || '',
+    distribuidorId: cotacao?.distribuidorId || '',
+    distribuidor: cotacao?.distribuidor || '',
+    fornecedorId: cotacao?.fornecedorId || '',
+    fornecedor: cotacao?.fornecedor || '',
+    solicitacaoId: context?.id || '',
+    titulo: context?.titulo || '',
+    descricao: context?.descricao || '',
+    nomeCliente,
+    oportunidadeId: context?.opportunity?.id || '',
+    oportunidadeTitulo: context?.opportunity?.title || '',
+    cliente: {
+      nome: nomeCliente,
+      documento: proposalDetails.cnpjDocumento || '',
+      contato: proposalDetails.contatoCliente || nomeCliente,
+      telefone: proposalDetails.telefoneCliente || '',
+      email: proposalDetails.emailCliente || ''
+    },
+    gerente: {
+      nome: proposalDetails.gerenteConta || context?.solicitante?.name || '',
+      email: proposalDetails.emailGerente || context?.solicitante?.email || '',
+      telefone: proposalDetails.telefoneGerente || ''
+    },
+    premissas: proposalDetails.premissasProposta || context?.observacoes || context?.descricao || '',
+    dadosProposta: proposalDetails,
+    todosCustos: custos
   };
 };
 
@@ -492,11 +603,23 @@ export default function Solicitacoes() {
   const buildActivityDescription = (item, message, nextStage, flowOverride) => {
     const base = appendInternalNote(item.descricao, message);
     const withStage = withStageMarker(base, nextStage);
+    const stage = String(nextStage || '').toUpperCase();
+    const attachPreSalesReference = item?.sourceType === 'REQUEST' && (
+      flowOverride?.sourceArea === 'PRE_VENDAS' ||
+      ['DEVOLVIDA', 'ENVIADA', 'APROVADO', 'REPROVADO'].includes(stage)
+    );
+
     return addFlowMetadataToDescription(withStage, {
       sourceArea: flowOverride?.sourceArea || item?.flow?.sourceArea || 'COMERCIAL',
       targetArea: flowOverride?.targetArea || item?.flow?.targetArea || 'PRE_VENDAS',
       createdFrom: item?.flow?.createdFrom || 'ATIVIDADES',
-      createdByName: item?.flow?.createdByName || getCurrentUserName()
+      createdByName: item?.flow?.createdByName || getCurrentUserName(),
+      ...(attachPreSalesReference ? {
+        returnedFromPreSales: true,
+        preSalesRequestId: item.id,
+        preSalesNumber: item.numero,
+        preSalesReturnedAt: new Date().toISOString()
+      } : {})
     });
   };
 
@@ -847,8 +970,11 @@ export default function Solicitacoes() {
       setCotacaoContext(effectiveItem);
       setCotacaoTab('COTACOES');
       setCotacaoForm({
-        ...buildInitialCotacaoForm(effectiveItem),
+        ...buildInitialCotacaoForm(effectiveItem, budgetRequests),
+        distribuidorId: lastQuote?.distribuidorId || '',
         distribuidor: lastQuote?.distribuidor || '',
+        fornecedorId: lastQuote?.fornecedorId || '',
+        fornecedor: lastQuote?.fornecedor || '',
         modalidade: lastQuote?.modalidade || inferModalidade(effectiveItem)
       });
       setStatusTransition({ nextStatus: '', motivo: '' });
@@ -897,8 +1023,9 @@ export default function Solicitacoes() {
     if (!cotacaoContext) return;
 
     const distribuidor = String(cotacaoForm.distribuidor || '').trim();
-    if (!distribuidor) {
-      alert('Informe o distribuidor antes de salvar a cotação.');
+    const fornecedor = String(cotacaoForm.fornecedor || '').trim();
+    if (!distribuidor && !fornecedor) {
+      alert('Informe o distribuidor ou fornecedor antes de salvar a cotação.');
       return;
     }
 
@@ -929,6 +1056,18 @@ export default function Solicitacoes() {
         : {};
       const currentCotacoes = Array.isArray(currentDetails.cotacoes) ? currentDetails.cotacoes : [];
       const currentUploads = Array.isArray(currentDetails.uploadsCotacao) ? currentDetails.uploadsCotacao : [];
+      const dadosProposta = {
+        ...(currentDetails.dadosProposta && typeof currentDetails.dadosProposta === 'object' ? currentDetails.dadosProposta : {}),
+        clienteOrgao: String(cotacaoForm.clienteOrgao || '').trim(),
+        cnpjDocumento: String(cotacaoForm.cnpjDocumento || '').trim(),
+        contatoCliente: String(cotacaoForm.contatoCliente || '').trim(),
+        emailCliente: String(cotacaoForm.emailCliente || '').trim(),
+        telefoneCliente: String(cotacaoForm.telefoneCliente || '').trim(),
+        gerenteConta: String(cotacaoForm.gerenteConta || '').trim(),
+        emailGerente: String(cotacaoForm.emailGerente || '').trim(),
+        telefoneGerente: String(cotacaoForm.telefoneGerente || '').trim(),
+        premissasProposta: String(cotacaoForm.premissasProposta || '').trim()
+      };
 
       const subtotal = itensValidos.reduce((acc, entry) => acc + (entry.quantidade * entry.custoUnitario), 0);
       const quoteId = `COT-${Date.now()}`;
@@ -936,8 +1075,11 @@ export default function Solicitacoes() {
       const novoRegistro = {
         id: quoteId,
         modalidade: cotacaoForm.modalidade,
+        distribuidorId: cotacaoForm.distribuidorId || '',
         distribuidor,
-        numeroOrcamento: cotacaoForm.numeroOrcamento || `ORC-${String(Date.now()).slice(-4)}`,
+        fornecedorId: cotacaoForm.fornecedorId || '',
+        fornecedor,
+        numeroOrcamento: cotacaoForm.numeroOrcamento || resolveBudgetNumber(target, budgetRequests),
         itens: itensValidos,
         subtotal,
         observacoesCotacao: String(cotacaoForm.observacoesCotacao || '').trim(),
@@ -959,6 +1101,7 @@ export default function Solicitacoes() {
 
       const nextDetails = {
         ...currentDetails,
+        dadosProposta,
         cotacoes: [novoRegistro, ...currentCotacoes],
         uploadsCotacao: novoUpload ? [novoUpload, ...currentUploads] : currentUploads
       };
@@ -976,6 +1119,8 @@ export default function Solicitacoes() {
 
       await updateRequest(target.id, {
         calculoDetalhes: nextDetails,
+        nomeCliente: dadosProposta.clienteOrgao || target.nomeCliente || null,
+        modalidade: cotacaoForm.modalidade || target.modalidade || null,
         status: 'EM_PRECIFICACAO',
         observacoes: nextObservacoes
       });
@@ -997,37 +1142,27 @@ export default function Solicitacoes() {
         ...target,
         status: 'EM_PRECIFICACAO',
         stage: nextStage,
+        nomeCliente: dadosProposta.clienteOrgao || target.nomeCliente || '',
+        modalidade: cotacaoForm.modalidade || target.modalidade || '',
         observacoes: nextObservacoes,
         calculoDetalhes: nextDetails
       };
 
       setCotacaoContext(nextContext);
-      setCotacaoForm(buildInitialCotacaoForm(nextContext));
+      setCotacaoForm(buildInitialCotacaoForm(nextContext, budgetRequests));
       setCotacaoFeedback(sendToPricing ? 'Cotação salva. Abrindo calculadora...' : 'Cotação salva com sucesso.');
 
       if (sendToPricing) {
-        // Detectar tipo de calculadora pela modalidade
         const modalidade = String(cotacaoForm.modalidade || 'VENDA').toUpperCase();
-        const tipoCalc = modalidade === 'LOCACAO' || modalidade === 'LOCAÇÃO'
-          ? 'locacao'
-          : modalidade === 'SERVICOS' || modalidade === 'SERVIÇOS'
-            ? 'servicos'
-            : 'vendas';
-
-        // Montar URL com itens pré-preenchidos
-        const params = new URLSearchParams();
-        params.set('tipo', tipoCalc);
-
-        // Passar o primeiro item como custo unitário
-        const primeiroItem = itensValidos[0];
-        if (primeiroItem) {
-          params.set('descricao', primeiroItem.descricao || '');
-          params.set('custoUnitario', String(primeiroItem.custoUnitario || 0));
-          params.set('quantidade', String(primeiroItem.quantidade || 1));
-        }
-
-        // Abrir calculadora em nova aba
-        window.open(`/calculadoras?${params.toString()}`, '_blank');
+        const tipoCalc = modalidade === 'LOCACAO' || modalidade === 'LOCAÇÃO' ? 'LOCACAO'
+          : modalidade === 'SERVICOS' || modalidade === 'SERVIÇOS' ? 'SERVICO'
+            : 'VENDA';
+        const cotacaoKey = `cotacao_precificar_${Date.now()}`;
+        localStorage.setItem(cotacaoKey, JSON.stringify(
+          buildCotacaoPricingPayload(nextContext, novoRegistro, nextDetails.cotacoes)
+        ));
+        window.open(`/calculadoras?tipo=${tipoCalc}&cotacaoKey=${encodeURIComponent(cotacaoKey)}`, '_blank');
+        setCotacaoParaPrecificar(novoRegistro);
         setCotacaoTab('PRECIFICACAO');
       }
 
@@ -1307,7 +1442,10 @@ export default function Solicitacoes() {
       source: 'QUOTE',
       id: row?.id || row?.numeroOrcamento,
       numeroOrcamento: row?.numeroOrcamento || '',
+      distribuidorId: row?.distribuidorId || '',
       distribuidor: row?.distribuidor || '',
+      fornecedorId: row?.fornecedorId || '',
+      fornecedor: row?.fornecedor || '',
       modalidade: row?.modalidade || '',
       itens: Array.isArray(row?.itens) ? row.itens : [],
       subtotal: Number(row?.subtotal) || 0,
@@ -1341,7 +1479,10 @@ export default function Solicitacoes() {
         source: 'REQUEST',
         id: request?.id,
         numeroOrcamento: firstQuote?.numeroOrcamento || request?.numero || '',
-        distribuidor: firstQuote?.distribuidor || request?.company?.name || request?.titulo || '',
+        distribuidorId: firstQuote?.distribuidorId || '',
+        distribuidor: firstQuote?.distribuidor || '',
+        fornecedorId: firstQuote?.fornecedorId || '',
+        fornecedor: firstQuote?.fornecedor || '',
         modalidade: firstQuote?.modalidade || inferModalidade(request),
         itens,
         subtotal,
@@ -1367,6 +1508,7 @@ export default function Solicitacoes() {
         return [
           row?.numeroOrcamento,
           row?.distribuidor,
+          row?.fornecedor,
           row?.requestTitle,
           ...(Array.isArray(row?.itens) ? row.itens.map((item) => item?.descricao) : [])
         ].filter(Boolean).join(' ').toLowerCase().includes(term);
@@ -1387,7 +1529,10 @@ export default function Solicitacoes() {
     setCotacaoForm((prev) => ({
       ...prev,
       modalidade: row?.modalidade || prev.modalidade,
+      distribuidorId: row?.distribuidorId || '',
       distribuidor: row?.distribuidor || '',
+      fornecedorId: row?.fornecedorId || '',
+      fornecedor: row?.fornecedor || '',
       numeroOrcamento: row?.numeroOrcamento || prev.numeroOrcamento,
       itens,
       arquivo: null,
@@ -1401,14 +1546,15 @@ export default function Solicitacoes() {
   };
 
   const startNewCotacao = () => {
+    const nextNumber = resolveBudgetNumber(cotacaoContext, budgetRequests);
     setCotacaoForm((prev) => ({
-      ...buildInitialCotacaoForm(cotacaoContext),
+      ...buildInitialCotacaoForm(cotacaoContext, budgetRequests),
       modalidade: prev.modalidade || inferModalidade(cotacaoContext),
-      numeroOrcamento: ''
+      numeroOrcamento: nextNumber
     }));
     setCotacaoParaPrecificar(null);
     setCotacaoPickerOpen(false);
-    setCotacaoFeedback('Nova cotação iniciada. Informe o número do orçamento recebido ou preencha um novo.');
+    setCotacaoFeedback(`Novo orçamento iniciado com o número ${nextNumber}.`);
   };
 
   const renderCardActions = (item) => {
@@ -2018,9 +2164,9 @@ export default function Solicitacoes() {
                     Informe os dados da cotação, faça upload do arquivo e prepare para envio à precificação.
                   </p>
 
-                  <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block text-sm text-slate-300">Modalidade</label>
+	                  <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-4">
+	                    <div>
+	                      <label className="mb-1 block text-sm text-slate-300">Modalidade</label>
                       <select
                         value={cotacaoForm.modalidade}
                         onChange={(e) => setCotacaoForm((prev) => ({ ...prev, modalidade: e.target.value }))}
@@ -2038,6 +2184,16 @@ export default function Solicitacoes() {
                         value={cotacaoForm.distribuidor}
                         onChange={(e) => setCotacaoForm((prev) => ({ ...prev, distribuidor: e.target.value }))}
                         placeholder="Nome do distribuidor"
+                        className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm text-slate-300">Fornecedor</label>
+                      <input
+                        type="text"
+                        value={cotacaoForm.fornecedor}
+                        onChange={(e) => setCotacaoForm((prev) => ({ ...prev, fornecedor: e.target.value }))}
+                        placeholder="Nome do fornecedor"
                         className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
                       />
                     </div>
@@ -2099,7 +2255,12 @@ export default function Solicitacoes() {
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                           <div className="truncate font-mono text-xs font-semibold text-sky-300">{row.numeroOrcamento || '-'}</div>
-                                          <div className="truncate text-xs text-slate-300">{row.distribuidor || 'Distribuidor não informado'}</div>
+                                          <div className="truncate text-xs text-slate-300">
+                                            {row.distribuidor || row.fornecedor || row.requestTitle || 'Distribuidor/fornecedor não informado'}
+                                          </div>
+                                          {row.distribuidor && row.fornecedor && (
+                                            <div className="truncate text-[11px] text-slate-400">{row.fornecedor}</div>
+                                          )}
                                           <div className="truncate text-[11px] font-semibold text-slate-500">{row.label}</div>
                                         </div>
                                         <div className="shrink-0 text-right text-xs text-slate-400">
@@ -2123,11 +2284,107 @@ export default function Solicitacoes() {
                           </div>
                         )}
                       </div>
-                    </div>
-                  </div>
+	                    </div>
+	                  </div>
 
-                  <div className="mt-5">
-                    <div className="mb-2 flex items-center justify-between">
+	                  <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-950/25 p-4">
+	                    <h5 className="text-base font-semibold text-white">Dados da proposta</h5>
+	                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Cliente / Órgão</label>
+	                        <input
+	                          type="text"
+	                          value={cotacaoForm.clienteOrgao}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, clienteOrgao: e.target.value }))}
+	                          placeholder="Nome do cliente ou órgão"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">CNPJ / Documento</label>
+	                        <input
+	                          type="text"
+	                          value={cotacaoForm.cnpjDocumento}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, cnpjDocumento: e.target.value }))}
+	                          placeholder="00.000.000/0000-00"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Contato do Cliente</label>
+	                        <input
+	                          type="text"
+	                          value={cotacaoForm.contatoCliente}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, contatoCliente: e.target.value }))}
+	                          placeholder="Nome do contato"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Email do Cliente</label>
+	                        <input
+	                          type="email"
+	                          value={cotacaoForm.emailCliente}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, emailCliente: e.target.value }))}
+	                          placeholder="email@cliente.com.br"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Telefone do Cliente</label>
+	                        <input
+	                          type="text"
+	                          value={cotacaoForm.telefoneCliente}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, telefoneCliente: e.target.value }))}
+	                          placeholder="(00) 00000-0000"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Gerente de Conta</label>
+	                        <input
+	                          type="text"
+	                          value={cotacaoForm.gerenteConta}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, gerenteConta: e.target.value }))}
+	                          placeholder="Nome do gerente"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Email do Gerente</label>
+	                        <input
+	                          type="email"
+	                          value={cotacaoForm.emailGerente}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, emailGerente: e.target.value }))}
+	                          placeholder="gerente@empresa.com.br"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div>
+	                        <label className="mb-1 block text-sm text-slate-300">Telefone do Gerente</label>
+	                        <input
+	                          type="text"
+	                          value={cotacaoForm.telefoneGerente}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, telefoneGerente: e.target.value }))}
+	                          placeholder="(00) 00000-0000"
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                      <div className="md:col-span-2">
+	                        <label className="mb-1 block text-sm text-slate-300">Premissas da Proposta</label>
+	                        <textarea
+	                          rows={3}
+	                          value={cotacaoForm.premissasProposta}
+	                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, premissasProposta: e.target.value }))}
+	                          placeholder="Escopo, validade, SLA, condições comerciais, exclusões e demais premissas."
+	                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+	                        />
+	                      </div>
+	                    </div>
+	                  </div>
+
+	                  <div className="mt-5">
+	                    <div className="mb-2 flex items-center justify-between">
                       <label className="text-sm text-slate-300">Itens da cotação</label>
                       <button
                         type="button"
@@ -2284,7 +2541,8 @@ export default function Solicitacoes() {
                                   </span>
                                 </div>
                                 <p className="text-sm text-slate-400 mt-0.5">
-                                  {row.distribuidor || 'Distribuidor não informado'} •{' '}
+                                  {row.distribuidor || row.fornecedor || 'Distribuidor/fornecedor não informado'} •{' '}
+                                  {row.fornecedor && row.distribuidor ? `${row.fornecedor} • ` : ''}
                                   {row.createdAt ? new Date(row.createdAt).toLocaleString('pt-BR') : '-'}
                                 </p>
                               </div>
@@ -2313,14 +2571,9 @@ export default function Solicitacoes() {
                               onClick={() => {
                                 // Salvar dados da cotação no localStorage para a calculadora
                                 const cotacaoKey = `cotacao_precificar_${Date.now()}`;
-                                localStorage.setItem(cotacaoKey, JSON.stringify({
-                                  itens: row.itens || [],
-                                  subtotal: row.subtotal,
-                                  modalidade: row.modalidade,
-                                  numeroOrcamento: row.numeroOrcamento,
-                                  distribuidor: row.distribuidor,
-                                  solicitacaoId: cotacaoContext?.id
-                                }));
+                                localStorage.setItem(cotacaoKey, JSON.stringify(
+                                  buildCotacaoPricingPayload(cotacaoContext, row, cotacaoRecords)
+                                ));
 
                                 // Montar URL com tipo e chave
                                 const tipoMap = {
@@ -2555,7 +2808,18 @@ export default function Solicitacoes() {
                     <div className="mt-4 flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => window.open('/calculadoras', '_blank')}
+                        onClick={() => {
+                          if (!cotacaoBase) {
+                            window.open('/calculadoras', '_blank');
+                            return;
+                          }
+                          const tipoCalc = isLocacao ? 'LOCACAO' : isServicos ? 'SERVICO' : 'VENDA';
+                          const cotacaoKey = `cotacao_precificar_${Date.now()}`;
+                          localStorage.setItem(cotacaoKey, JSON.stringify(
+                            buildCotacaoPricingPayload(cotacaoContext, cotacaoBase, cotacaoRecords)
+                          ));
+                          window.open(`/calculadoras?tipo=${tipoCalc}&cotacaoKey=${encodeURIComponent(cotacaoKey)}`, '_blank');
+                        }}
                         className="inline-flex items-center gap-2 rounded-lg border border-slate-600/50 bg-slate-900/40 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800/50 transition-colors"
                       >
                         <ArrowRight className="h-4 w-4" /> Abrir Calculadora Completa

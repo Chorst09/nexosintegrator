@@ -480,6 +480,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
+      numero,
       titulo,
       descricao,
       nomeCliente,
@@ -490,6 +491,7 @@ router.post('/', async (req, res) => {
       tiposPrecificacao,
       regimeTributario,
       items = [],
+      calculoDetalhes,
       observacoes
     } = req.body;
 
@@ -508,12 +510,22 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const numeroFormatado = await generateBudgetNumber();
+    const requestedNumber = String(numero || '').trim().toUpperCase();
+    let numeroFormatado = /^ORC-\d{4}-\d{4}$/.test(requestedNumber)
+      ? requestedNumber
+      : await generateBudgetNumber();
+    const existingNumber = await prisma.preSalesRequest.findUnique({
+      where: { numero: numeroFormatado },
+      select: { id: true }
+    });
+    if (existingNumber) {
+      numeroFormatado = await generateBudgetNumber();
+    }
     const validLeadId = await resolveExistingCompanyId(leadId, req.user);
     const validOpportunityId = await resolveExistingOpportunityId(opportunityId, req.user);
     const requestItems = sanitizePreSalesItems(items);
 
-    // Criar solicitação
+    // Criar orçamento
     const solicitacao = await prisma.preSalesRequest.create({
       data: {
         numero: numeroFormatado,
@@ -525,6 +537,7 @@ router.post('/', async (req, res) => {
         status: 'NOVA',
         tiposPrecificacao,
         regimeTributario,
+        calculoDetalhes: calculoDetalhes && typeof calculoDetalhes === 'object' ? calculoDetalhes : undefined,
         observacoes,
         solicitanteId: req.user.userId, // Usar req.user.userId em vez de req.user.id
         leadId: validLeadId,
@@ -538,7 +551,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Solicitação criada com sucesso',
+      message: 'Orçamento criado com sucesso',
       data: solicitacao
     });
   } catch (error) {

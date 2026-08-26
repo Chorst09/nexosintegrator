@@ -1390,15 +1390,24 @@ export default function Calculadoras({
 
     const nextProposalNumber = generateProposalNumber(savedProposals);
     const proposalNumberFromQuotation = cotacaoData?.numeroOrcamento || nextProposalNumber;
-    const clientName = cotacaoData?.nomeCliente || cotacaoData?.cliente?.nome || '';
+    const clienteCotacao = cotacaoData?.cliente && typeof cotacaoData.cliente === 'object' ? cotacaoData.cliente : {};
+    const gerenteCotacao = cotacaoData?.gerente && typeof cotacaoData.gerente === 'object' ? cotacaoData.gerente : {};
+    const managerDefaults = getManagerDefaults();
+    const clientName = cotacaoData?.nomeCliente || clienteCotacao?.nome || '';
     setProposalForm({
-      ...buildProposalForm(proposalNumberFromQuotation, getManagerDefaults()),
+      ...buildProposalForm(proposalNumberFromQuotation, managerDefaults),
       number: proposalNumberFromQuotation,
+      opportunityId: cotacaoData?.oportunidadeId || cotacaoData?.opportunityId || '',
+      opportunityTitle: cotacaoData?.oportunidadeTitulo || cotacaoData?.opportunityTitle || '',
       clientCompany: clientName,
-      clientContact: cotacaoData?.cliente?.contato || clientName,
-      clientPhone: cotacaoData?.cliente?.telefone || '',
-      clientEmail: cotacaoData?.cliente?.email || '',
-      premises: cotacaoData?.titulo || ''
+      clientContact: clienteCotacao?.contato || clientName,
+      clientPhone: clienteCotacao?.telefone || cotacaoData?.clientPhone || '',
+      clientEmail: clienteCotacao?.email || cotacaoData?.clientEmail || '',
+      clientDocument: clienteCotacao?.documento || clienteCotacao?.document || cotacaoData?.clientDocument || '',
+      managerName: gerenteCotacao?.nome || cotacaoData?.managerName || managerDefaults.managerName || '',
+      managerEmail: gerenteCotacao?.email || cotacaoData?.managerEmail || managerDefaults.managerEmail || '',
+      managerPhone: gerenteCotacao?.telefone || cotacaoData?.managerPhone || managerDefaults.managerPhone || '',
+      premises: cotacaoData?.premissas || cotacaoData?.premises || cotacaoData?.descricao || cotacaoData?.titulo || ''
     });
     setProposalSearchNumber(proposalNumberFromQuotation);
     setActiveProposalId(null);
@@ -1431,10 +1440,10 @@ export default function Calculadoras({
 
       setDistributorCosts(cotacaoCosts);
       setCurrentBudget({
-        distribuidorId: '',
-        distribuidor: cotacaoCosts[0]?.distribuidor || '',
-        fornecedorId: cotacaoCosts[0]?.fornecedorId || '',
-        fornecedor: cotacaoCosts[0]?.fornecedor || '',
+        distribuidorId: cotacaoCosts[0]?.distribuidorId || cotacaoData?.distribuidorId || '',
+        distribuidor: cotacaoCosts[0]?.distribuidor || cotacaoData?.distribuidor || '',
+        fornecedorId: cotacaoCosts[0]?.fornecedorId || cotacaoData?.fornecedorId || '',
+        fornecedor: cotacaoCosts[0]?.fornecedor || cotacaoData?.fornecedor || '',
         numeroOrcamento: cotacaoCosts[0]?.numeroOrcamento || cotacaoData.numeroOrcamento || ''
       });
       setCurrentCost((prev) => ({
@@ -1961,13 +1970,27 @@ export default function Calculadoras({
     const nextNumber = generateProposalNumber(savedProposals);
     const managerDefaults = getManagerDefaults();
     const proposalNumber = solicitacao.__matchedBudgetNumber || solicitacao.numero || nextNumber;
-    const clientName = solicitacao.nomeCliente || solicitacao.lead?.name || '';
+    const requestDetails = solicitacao?.calculoDetalhes && typeof solicitacao.calculoDetalhes === 'object'
+      ? solicitacao.calculoDetalhes
+      : {};
+    const proposalDetails = requestDetails.dadosProposta && typeof requestDetails.dadosProposta === 'object'
+      ? requestDetails.dadosProposta
+      : {};
+    const clientName = proposalDetails.clienteOrgao || solicitacao.nomeCliente || solicitacao.lead?.name || '';
     setProposalForm({
       ...buildProposalForm(proposalNumber, managerDefaults),
       number: proposalNumber,
+      opportunityId: solicitacao?.opportunityId || solicitacao?.opportunity?.id || '',
+      opportunityTitle: solicitacao?.opportunity?.title || '',
       clientCompany: clientName,
-      clientContact: clientName,
-      premises: solicitacao.titulo || ''
+      clientContact: proposalDetails.contatoCliente || clientName,
+      clientPhone: proposalDetails.telefoneCliente || '',
+      clientEmail: proposalDetails.emailCliente || '',
+      clientDocument: proposalDetails.cnpjDocumento || '',
+      managerName: proposalDetails.gerenteConta || solicitacao?.solicitante?.name || managerDefaults.managerName || '',
+      managerEmail: proposalDetails.emailGerente || solicitacao?.solicitante?.email || managerDefaults.managerEmail || '',
+      managerPhone: proposalDetails.telefoneGerente || managerDefaults.managerPhone || '',
+      premises: proposalDetails.premissasProposta || solicitacao.descricao || solicitacao.titulo || ''
     });
     setProposalSearchNumber(proposalNumber);
     setActiveProposalId(null);
@@ -1979,7 +2002,7 @@ export default function Calculadoras({
     clearProposalCart();
     setDistributorCosts(custosDistribuidores);
     setCurrentBudget({
-      distribuidorId: '',
+      distribuidorId: custosDistribuidores[0]?.distribuidorId || '',
       distribuidor: custosDistribuidores[0]?.distribuidor || '',
       fornecedorId: custosDistribuidores[0]?.fornecedorId || '',
       fornecedor: custosDistribuidores[0]?.fornecedor || '',
