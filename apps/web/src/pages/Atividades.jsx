@@ -71,6 +71,28 @@ const DESTINATION_OPTIONS = [
 
 const BUDGET_REQUEST_TYPE = 'SOLICITACAO_ORCAMENTO';
 const PROPOSAL_SENT_STAGE = 'PROPOSTA_ENVIADA';
+const PRE_SALES_BUDGET_NUMBER_RE = /\bORC-\d{4}-\d{4}\b/i;
+
+const toCurrency = (value) => (
+  `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+);
+
+const getActivityPreSalesReference = (activity = {}) => {
+  const flow = activity?.flow || {};
+  const text = [
+    flow.preSalesNumber,
+    flow.numeroOrcamento,
+    flow.numeroProposta,
+    activity.subject,
+    activity.description
+  ].filter(Boolean).join(' ');
+  const matchedNumber = String(text || '').match(PRE_SALES_BUDGET_NUMBER_RE)?.[0] || '';
+
+  return {
+    preSalesRequestId: flow.preSalesRequestId || '',
+    preSalesNumber: flow.preSalesNumber || matchedNumber
+  };
+};
 
 const getActivityDisplayType = (activity) => {
   if (activity?.type === 'TASK' && activity?.flow?.targetArea === 'PRE_VENDAS') {
@@ -128,6 +150,8 @@ export default function Atividades() {
   const lastAppliedPresetKey = useRef('');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [selectedActivityBudget, setSelectedActivityBudget] = useState(null);
+  const [selectedActivityBudgetLoading, setSelectedActivityBudgetLoading] = useState(false);
   const [viewMode, setViewMode] = useState('KANBAN');
 
   const [showForm, setShowForm] = useState(false);
@@ -201,10 +225,37 @@ export default function Atividades() {
     }
   };
 
+  const fetchPreSalesBudgetForActivity = async (activity) => {
+    const { preSalesRequestId, preSalesNumber } = getActivityPreSalesReference(activity);
+    if (!preSalesRequestId && !preSalesNumber) return null;
+
+    const path = preSalesRequestId
+      ? `/pre-vendas/${encodeURIComponent(preSalesRequestId)}`
+      : `/pre-vendas/by-number/${encodeURIComponent(preSalesNumber)}`;
+    const response = await axios.get(buildApiUrl(path), { headers: getAuthHeaders() });
+    const budget = response.data?.data || response.data;
+    if (!budget?.id) throw new Error('Orçamento não encontrado');
+    return budget;
+  };
+
   const openActivityDetails = (activity) => {
     if (!activity) return;
     setSelectedActivity(activity);
+    setSelectedActivityBudget(null);
+    setSelectedActivityBudgetLoading(false);
     setShowDetailsModal(true);
+
+    const { preSalesRequestId, preSalesNumber } = getActivityPreSalesReference(activity);
+    if (preSalesRequestId || preSalesNumber) {
+      setSelectedActivityBudgetLoading(true);
+      fetchPreSalesBudgetForActivity(activity)
+        .then((budget) => setSelectedActivityBudget(budget))
+        .catch((error) => {
+          console.error('Erro ao carregar orçamento da atividade:', error);
+          setSelectedActivityBudget(null);
+        })
+        .finally(() => setSelectedActivityBudgetLoading(false));
+    }
   };
 
   useEffect(() => {
@@ -337,17 +388,11 @@ export default function Atividades() {
   };
 
   const openReturnedPreSalesBudget = async (activity) => {
-    const preSalesRequestId = activity?.flow?.preSalesRequestId;
-    const preSalesNumber = activity?.flow?.preSalesNumber;
+    const { preSalesRequestId, preSalesNumber } = getActivityPreSalesReference(activity);
     if (!preSalesRequestId && !preSalesNumber) return;
 
     try {
-      const path = preSalesRequestId
-        ? `/pre-vendas/${encodeURIComponent(preSalesRequestId)}`
-        : `/pre-vendas/by-number/${encodeURIComponent(preSalesNumber)}`;
-      const response = await axios.get(buildApiUrl(path), { headers: getAuthHeaders() });
-      const budget = response.data?.data || response.data;
-      if (!budget?.id) throw new Error('Orçamento não encontrado');
+      const budget = await fetchPreSalesBudgetForActivity(activity);
       openPreSalesBudgetPdf(budget);
     } catch (error) {
       console.error('Erro ao abrir orçamento devolvido:', error);
@@ -591,7 +636,7 @@ export default function Atividades() {
 
   const renderActivityActions = (item) => (
     <>
-      {(item?.flow?.preSalesRequestId || item?.flow?.preSalesNumber) && (
+      {(getActivityPreSalesReference(item).preSalesRequestId || getActivityPreSalesReference(item).preSalesNumber) && (
         <button
           type="button"
           onClick={() => openReturnedPreSalesBudget(item)}
@@ -920,6 +965,93 @@ export default function Atividades() {
                 <div className="text-sm font-bold text-[var(--crm-ink)] mb-2">Descricao</div>
                 <div className="crm-panel-muted p-4 text-sm text-[var(--crm-ink)] whitespace-pre-wrap">
                   {selectedActivity.description}
+                </div>
+              </div>
+            )}
+
+            {(selectedActivityBudgetLoading || selectedActivityBudget) && (
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm font-bold text-[var(--crm-ink)]">Orçamento devolvido</div>
+                  {selectedActivityBudget && (
+                    <button
+                      type="button"
+                      onClick={() => openPreSalesBudgetPdf(selectedActivityBudget)}
+                      className="crm-btn crm-btn-primary px-3 py-1.5 text-xs"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Abrir PDF
+                    </button>
+                  )}
+                </div>
+
+                <div className="crm-panel-muted p-4">
+                  {selectedActivityBudgetLoading ? (
+                    <div className="text-sm text-[var(--crm-muted)]">Carregando orçamento...</div>
+                  ) : (() => {
+                    const details = selectedActivityBudget?.calculoDetalhes && typeof selectedActivityBudget.calculoDetalhes === 'object'
+                      ? selectedActivityBudget.calculoDetalhes
+                      : {};
+                    const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+                    const propostas = Array.isArray(details.propostasPrecificadas)
+                      ? details.propostasPrecificadas
+                      : details.propostaPrecificada ? [details.propostaPrecificada] : [];
+                    const requestedItems = Array.isArray(selectedActivityBudget?.items) ? selectedActivityBudget.items : [];
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                          <div>
+                            <div className="text-xs uppercase text-[var(--crm-muted)]">Número</div>
+                            <div className="font-bold text-[var(--crm-ink)]">{selectedActivityBudget?.numero || '-'}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase text-[var(--crm-muted)]">Cliente / Órgão</div>
+                            <div className="font-bold text-[var(--crm-ink)]">{details?.dadosProposta?.clienteOrgao || selectedActivityBudget?.nomeCliente || '-'}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase text-[var(--crm-muted)]">Preço final</div>
+                            <div className="font-bold text-[var(--crm-ink)]">{toCurrency(propostas[0]?.result?.finalPrice || selectedActivityBudget?.valorSugerido)}</div>
+                          </div>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-lg border border-[color:var(--crm-border)]">
+                          <table className="min-w-full text-left text-xs">
+                            <thead className="bg-[rgb(var(--crm-surface-rgb)_/_0.75)] text-[var(--crm-muted)]">
+                              <tr>
+                                <th className="px-3 py-2">Item</th>
+                                <th className="px-3 py-2 text-center">Qtde</th>
+                                <th className="px-3 py-2 text-right">Custo unit.</th>
+                                <th className="px-3 py-2 text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[color:var(--crm-border)] text-[var(--crm-ink)]">
+                              {requestedItems.length === 0 ? (
+                                <tr><td className="px-3 py-3 text-center text-[var(--crm-muted)]" colSpan={4}>Sem itens solicitados.</td></tr>
+                              ) : requestedItems.map((budgetItem) => {
+                                const quantity = Number(budgetItem?.quantidade || 0);
+                                const unit = Number(budgetItem?.custoUnitario || 0);
+                                return (
+                                  <tr key={budgetItem.id || budgetItem.descricao}>
+                                    <td className="px-3 py-2">{budgetItem?.descricao || budgetItem?.product?.name || '-'}</td>
+                                    <td className="px-3 py-2 text-center">{quantity || '-'}</td>
+                                    <td className="px-3 py-2 text-right">{toCurrency(unit)}</td>
+                                    <td className="px-3 py-2 text-right font-semibold">{toCurrency(quantity * unit)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {cotacoes.length > 0 && (
+                          <div className="text-xs text-[var(--crm-muted)]">
+                            {cotacoes.length} cotação(ões) registrada(s). Última: <span className="font-semibold text-[var(--crm-ink)]">{cotacoes[0]?.numeroOrcamento || selectedActivityBudget?.numero}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}

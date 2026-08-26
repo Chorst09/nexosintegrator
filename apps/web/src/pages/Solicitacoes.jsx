@@ -1327,8 +1327,18 @@ export default function Solicitacoes() {
           targetArea: returnTargetArea
         }
       }));
-      setCotacaoFeedback('Solicitação devolvida ao Comercial com sucesso.');
+      setCotacaoFeedback('');
       setCotacaoTab('ACOES');
+      setShowCotacaoModal(false);
+      setCotacaoContext(null);
+      setCotacaoParaPrecificar(null);
+      setDevolucaoComercial({
+        numeroProposta: '',
+        versao: '1',
+        validade: '',
+        cenario: 'PADRAO',
+        observacoes: ''
+      });
       await loadSolicitacoes();
     } catch (error) {
       console.error('Erro ao devolver ao Comercial:', error);

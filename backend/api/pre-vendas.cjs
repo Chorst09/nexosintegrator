@@ -214,7 +214,7 @@ const syncPreSalesReturnToCommercial = async (tx, req, solicitacao = {}, status 
   if (tenantCompanyId && String(activity.tenantCompanyId || '') !== tenantCompanyId) return null;
 
   const parsed = parseFlowFromDescription(activity.description);
-  const sourceArea = parsed.flow?.sourceArea && parsed.flow.sourceArea !== 'PRE_VENDAS'
+  const returnTargetArea = parsed.flow?.sourceArea && parsed.flow.sourceArea !== 'PRE_VENDAS'
     ? parsed.flow.sourceArea
     : 'COMERCIAL';
 
@@ -225,7 +225,9 @@ const syncPreSalesReturnToCommercial = async (tx, req, solicitacao = {}, status 
       completedAt: new Date(),
       description: buildDescriptionWithFlow(parsed.cleanDescription, {
         ...parsed.flow,
-        targetArea: sourceArea,
+        originalSourceArea: returnTargetArea,
+        sourceArea: 'PRE_VENDAS',
+        targetArea: returnTargetArea,
         returnedFromPreSales: true,
         activityStage: PROPOSAL_SENT_STAGE,
         preSalesStatus: status,
