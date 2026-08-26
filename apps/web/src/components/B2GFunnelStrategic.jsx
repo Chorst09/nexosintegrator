@@ -8,9 +8,9 @@ const STAGE_PALETTES = {
   SUSPENSO: ['#72dc7e', '#40b85c', '#206739'],
   HOMOLOGADO: ['#36d9e5', '#16aaba', '#0d5d69'],
   CONCLUIDO: ['#258bd0', '#125b9c', '#092f5a'],
-  GANHO: ['#4f76df', '#324fab', '#192c6b'],
-  NO_GO: ['#8e51d5', '#632cac', '#381467'],
-  PERDIDO: ['#ba3bd4', '#81189e', '#480a5b']
+  GANHO: ['#34d399', '#16a34a', '#14532d'],
+  NO_GO: ['#f59e0b', '#d97706', '#78350f'],
+  PERDIDO: ['#ef4444', '#b91c1c', '#7f1d1d']
 };
 
 const B2GFunnelStrategic = ({ funnelRows = [] }) => {
@@ -19,10 +19,16 @@ const B2GFunnelStrategic = ({ funnelRows = [] }) => {
   const centerX = svgWidth / 2;
   const maxStageWidth = 520;
   const stageHeight = 37;
+  const totalCount = funnelRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const maxCount = Math.max(...funnelRows.map((row) => Number(row.count || 0)), 1);
   const funnelData = funnelRows.map((row, index) => ({
     ...row,
     y: 17 + index * 39,
-    renderedWidth: Math.max(148, (Number(row.width || (100 - index * 7.5)) / 100) * maxStageWidth),
+    percentage: totalCount > 0 ? Math.round((Number(row.count || 0) / totalCount) * 100) : 0,
+    renderedWidth: Math.max(
+      Number(row.count || 0) > 0 ? 190 : 126,
+      (Number(row.count || 0) / maxCount) * maxStageWidth
+    ),
     palette: STAGE_PALETTES[row.id] || ['#78a9ff', '#4e79da', '#243c7a']
   }));
 
@@ -64,7 +70,7 @@ const B2GFunnelStrategic = ({ funnelRows = [] }) => {
           const bottomRight = centerX + bottomWidth / 2;
           const topY = stage.y;
           const bottomY = topY + stageHeight;
-          const percent = Math.round((index / Math.max(funnelData.length - 1, 1)) * 100);
+          const percent = Number(stage.percentage || 0);
           const textColor = stage.id === 'HABILITACAO' ? '#27303b' : '#ffffff';
 
           return (

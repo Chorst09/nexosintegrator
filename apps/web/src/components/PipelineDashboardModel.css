@@ -409,18 +409,19 @@
 
 .pipeline-model__thermometer-liquid {
   position: absolute;
-  inset: 9px 7px 0;
+  left: 7px;
+  right: 7px;
+  bottom: 0;
+  height: var(--temperature-height, 100%);
   border-radius: 8px 8px 2px 2px;
   background: linear-gradient(
     to bottom,
-    #ef4444 0%,
-    #ff7a00 24%,
-    #f6b40b 40%,
-    #22c55e 58%,
-    #18c8df 76%,
-    #1f7fe5 100%
+    color-mix(in srgb, var(--temperature-color, #ff7a00) 64%, #ffffff) 0%,
+    var(--temperature-color, #ff7a00) 72%,
+    color-mix(in srgb, var(--temperature-color, #ff7a00) 62%, #000000) 100%
   );
   box-shadow: inset 3px 0 3px rgba(255, 255, 255, 0.25), inset -3px 0 4px rgba(0, 0, 0, 0.25);
+  transition: height 520ms ease, background 520ms ease;
 }
 
 .pipeline-model__thermometer-shine {
@@ -453,8 +454,15 @@
   position: absolute;
   inset: 8px;
   border-radius: 50%;
-  background: radial-gradient(circle at 42% 30%, #ffe08a 0%, #ff7a00 38%, #c45300 72%, #5a2400 100%);
-  box-shadow: inset -5px -7px 9px rgba(42, 17, 0, 0.44), 0 0 12px rgba(255, 122, 0, 0.48);
+  background: radial-gradient(
+    circle at 42% 30%,
+    color-mix(in srgb, var(--temperature-color, #ff7a00) 35%, #ffffff) 0%,
+    var(--temperature-color, #ff7a00) 42%,
+    color-mix(in srgb, var(--temperature-color, #ff7a00) 68%, #000000) 76%,
+    color-mix(in srgb, var(--temperature-color, #ff7a00) 36%, #000000) 100%
+  );
+  box-shadow: inset -5px -7px 9px rgba(5, 18, 14, 0.44), 0 0 12px color-mix(in srgb, var(--temperature-color, #ff7a00) 48%, transparent);
+  transition: background 520ms ease, box-shadow 520ms ease;
 }
 
 .pipeline-model__thermometer-bulb-shine {

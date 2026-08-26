@@ -176,24 +176,24 @@ function ExecutiveSignals({ metrics = [], trendChart, performanceChart, temperat
   const cards = [
     {
       title: metrics[0]?.label || 'Pipeline',
-      label: 'Volume',
+      label: 'Total',
       value: metrics[0]?.value ?? compactNumber(performanceValues.reduce((sum, item) => sum + item, 0)),
       data: performanceValues,
-      color: '#ff7a00'
+      color: metrics[0]?.color || '#ff7a00'
     },
     {
-      title: metrics[2]?.label || 'Conversões',
-      label: 'Realizado',
-      value: metrics[2]?.value ?? compactNumber(trendValues.at(-1) || 0),
+      title: metrics[1]?.label || 'Mensal',
+      label: 'Recorrente',
+      value: metrics[1]?.value ?? compactNumber(trendValues.at(-1) || 0),
       data: trendValues,
-      color: '#22c55e'
+      color: metrics[1]?.color || '#18c8df'
     },
     {
-      title: metrics[3]?.label || 'Eficiência',
-      label: 'Score',
-      value: metrics[3]?.value ?? `${clampPercent(temperature).toFixed(1)}%`,
+      title: metrics[2]?.label || 'Ganho',
+      label: 'Realizado',
+      value: metrics[2]?.value ?? `${clampPercent(temperature).toFixed(1)}%`,
       data: forecastValues.length ? forecastValues : trendValues.map((value, index) => value * ((index + 1) / Math.max(trendValues.length, 1))),
-      color: '#f6b40b'
+      color: metrics[2]?.color || '#22c55e'
     }
   ];
 
@@ -206,14 +206,20 @@ function ExecutiveSignals({ metrics = [], trendChart, performanceChart, temperat
   );
 }
 
-function TemperatureScale({ value = 0, levels = [] }) {
+function TemperatureScale({ value = 0, levels = [], color }) {
+  const score = clampPercent(value);
+  const activeColor = color || levels
+    .slice()
+    .reverse()
+    .find((level) => score >= clampPercent(level.value))?.color || '#ff7a00';
   return (
     <div className="pipeline-model__temperature">
       <div className="pipeline-model__temperature-content">
         <div
           className="pipeline-model__thermometer"
           role="img"
-          aria-label={`Temperatura atual do pipeline: ${clampPercent(value).toFixed(1)}%`}
+          aria-label={`Temperatura atual do pipeline: ${score.toFixed(1)}%`}
+          style={{ '--temperature-color': activeColor, '--temperature-height': `${Math.max(score, 3)}%` }}
         >
           <div className="pipeline-model__thermometer-tube">
             <div className="pipeline-model__thermometer-liquid" />
@@ -224,10 +230,10 @@ function TemperatureScale({ value = 0, levels = [] }) {
             <div className="pipeline-model__thermometer-bulb-shine" />
           </div>
         </div>
-        <div className="pipeline-model__temperature-copy">
+          <div className="pipeline-model__temperature-copy">
           <div className="pipeline-model__temperature-title">
           <strong>Temperatura do Pipeline</strong>
-          <span>{clampPercent(value).toFixed(1)}% atual</span>
+          <span>{score.toFixed(1)}% atual</span>
           </div>
           <div className="pipeline-model__temperature-levels">
             {levels.map((level) => (
@@ -459,6 +465,7 @@ export default function PipelineDashboardModel({
   funnelSubtitle,
   temperature = 0,
   temperatureLevels = [],
+  temperatureColor,
   performanceChart,
   trendChart,
   table,
@@ -489,7 +496,7 @@ export default function PipelineDashboardModel({
           <PanelHeader title={funnelTitle} subtitle={funnelSubtitle} />
           <div className="pipeline-model__funnel-layout">
             <div className="pipeline-model__funnel">{funnel}</div>
-            <TemperatureScale value={temperature} levels={temperatureLevels} />
+            <TemperatureScale value={temperature} levels={temperatureLevels} color={temperatureColor} />
           </div>
         </article>
 

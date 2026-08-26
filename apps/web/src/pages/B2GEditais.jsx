@@ -237,6 +237,19 @@ const DASHBOARD_FUNNEL_META = [
   { id: 'PERDIDO', label: 'Perdido', width: 32, gradient: 'from-[#e53e3e] to-[#c53030]' }
 ];
 
+const DASHBOARD_STAGE_TONES = {
+  ANALISE: '#ef4444',
+  PROPOSTA_ENVIADA: '#f97316',
+  HABILITACAO: '#facc15',
+  RECURSO: '#84cc16',
+  SUSPENSO: '#22c55e',
+  HOMOLOGADO: '#06b6d4',
+  CONCLUIDO: '#2563eb',
+  GANHO: '#22c55e',
+  NO_GO: '#f59e0b',
+  PERDIDO: '#ef4444'
+};
+
 const DASHBOARD_PROBABILITY_LEVELS = [
   { id: 100, label: '100%', min: 90, max: 100, width: 100, gradient: 'from-[#42dcf4] to-[#149ccd]', palette: ['#4fe3f1', '#20a8d0', '#116580'], text: '#ffffff' },
   { id: 75, label: '75%', min: 70, max: 89, width: 88, gradient: 'from-[#a7afff] to-[#5b52ea]', palette: ['#aab3ff', '#6258ea', '#302a91'], text: '#ffffff' },
@@ -584,6 +597,15 @@ const formatCurrencyAxisK = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return 'R$ 0k';
   return `R$ ${Math.round(n / 1000)}k`;
+};
+
+const formatCompactCurrency = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 'R$ 0';
+  if (Math.abs(n) >= 1_000_000_000) return `R$ ${(n / 1_000_000_000).toFixed(2).replace('.', ',')} bi`;
+  if (Math.abs(n) >= 1_000_000) return `R$ ${(n / 1_000_000).toFixed(1).replace('.', ',')} mi`;
+  if (Math.abs(n) >= 1_000) return `R$ ${(n / 1_000).toFixed(1).replace('.', ',')} mil`;
+  return formatCurrencyNoCents(n);
 };
 
 const asObject = (value) =>
@@ -5292,13 +5314,25 @@ export default function B2GEditais() {
 
   const renderB2GStrategicDashboardV2 = () => {
     const palette = ['#ef3b36', '#f08a3a', '#efe58a', '#9ccc4b', '#45c96f', '#21bfe0', '#2784d6', '#3867d6', '#7048d1', '#8a43cf'];
-    const metricBase = Math.max(dashboardTotals.totalCount, dashboardTotals.openCount, dashboardTotals.wonCount, 1);
+    const selectedPhaseTone = dashboardPhaseFilter !== 'ALL'
+      ? (DASHBOARD_STAGE_TONES[dashboardPhaseFilter] || '#ff7a00')
+      : null;
+    const activeDashboardTone = selectedPhaseTone || (
+      dashboardForecastScore >= 70 ? '#22c55e' : dashboardForecastScore >= 45 ? '#f6b40b' : '#ff7a00'
+    );
+    const valueMetricBase = Math.max(
+      Number(dashboardTotals.pipelineValue || 0),
+      Number(dashboardTotals.monthlyValue || 0),
+      Number(dashboardTotals.wonValue || 0),
+      Number(dashboardTotals.projectedValue || 0),
+      1
+    );
     const stageLevels = [
       { value: 0, label: 'Frio', color: palette[0] },
       { value: 25, label: 'Amarelo Claro', color: palette[2] },
       { value: 50, label: 'Verde / Qualificado', color: palette[4] },
       { value: 75, label: 'Ciano / Quente', color: palette[5] },
-      { value: 100, label: 'Roxo / Fechado', color: palette[9] }
+      { value: 100, label: dashboardPhaseFilter === 'GANHO' ? 'Ganho' : 'Fechado', color: dashboardPhaseFilter === 'GANHO' ? '#22c55e' : palette[9] }
     ];
     const monthTotals = monthlyProjectData.months.map((_, monthIndex) => (
       monthlyProjectData.datasets.reduce((sum, dataset) => sum + Number(dataset.data?.[monthIndex] || 0), 0)
@@ -5425,15 +5459,16 @@ export default function B2GEditais() {
             </>
           )}
           metrics={[
-            { label: 'Editais Mapeados', value: dashboardTotals.totalCount, percent: (dashboardTotals.totalCount / metricBase) * 100, color: '#ff7a00' },
-            { label: 'Oportunidades em Análise', value: dashboardTotals.openCount, percent: (dashboardTotals.openCount / metricBase) * 100, color: '#18c8df' },
-            { label: 'Licitações Ganhas', value: dashboardTotals.wonCount, percent: (dashboardTotals.wonCount / metricBase) * 100, color: '#22c55e' },
+            { label: 'Valor Total Filtrado', value: formatCompactCurrency(dashboardTotals.pipelineValue), percent: (dashboardTotals.pipelineValue / valueMetricBase) * 100, color: activeDashboardTone },
+            { label: 'Valor Mensal', value: formatCompactCurrency(dashboardTotals.monthlyValue), percent: (dashboardTotals.monthlyValue / valueMetricBase) * 100, color: '#18c8df' },
+            { label: 'Valor Ganho', value: formatCompactCurrency(dashboardTotals.wonValue), percent: (dashboardTotals.wonValue / valueMetricBase) * 100, color: '#22c55e' },
             { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#ff7a00', secondaryColor: '#f6b40b' }
           ]}
           funnel={<B2GFunnelStrategic funnelRows={dashboardFunnelRows} />}
           funnelTitle="Funil de Licitações B2G"
           funnelSubtitle="Editais e oportunidades por fase"
           temperature={dashboardForecastScore}
+          temperatureColor={activeDashboardTone}
           temperatureLevels={stageLevels}
           performanceChart={{
             title: 'Performance do Pipeline',
