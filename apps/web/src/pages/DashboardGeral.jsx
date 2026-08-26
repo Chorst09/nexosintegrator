@@ -118,11 +118,11 @@ const monthLabel = (date) => `${monthLabels[date.getMonth()]}/${String(date.getF
 const OPEN_STAGES = new Set(['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION']);
 const MONTHLY_PROJECT_TYPE = 'MONTHLY';
 const B2G_STAGE_SUMMARY = [
-  { key: 'ANALISE', label: 'Análise', tone: 'text-cyan-200', bar: 'bg-cyan-400' },
-  { key: 'PROPOSTA_ENVIADA', label: 'Proposta enviada', tone: 'text-amber-200', bar: 'bg-amber-400' },
-  { key: 'HABILITACAO', label: 'Habilitação', tone: 'text-indigo-200', bar: 'bg-indigo-400' },
-  { key: 'RECURSO', label: 'Recurso', tone: 'text-orange-200', bar: 'bg-orange-400' },
-  { key: 'GANHO', label: 'Ganho', tone: 'text-emerald-200', bar: 'bg-emerald-400' }
+  { key: 'ANALISE', label: 'Análise', tone: 'text-cyan-200', bar: 'bg-cyan-400', chartColor: '#22d3ee' },
+  { key: 'PROPOSTA_ENVIADA', label: 'Proposta enviada', tone: 'text-amber-200', bar: 'bg-amber-400', chartColor: '#fbbf24' },
+  { key: 'HABILITACAO', label: 'Habilitação', tone: 'text-indigo-200', bar: 'bg-indigo-400', chartColor: '#818cf8' },
+  { key: 'RECURSO', label: 'Recurso', tone: 'text-orange-200', bar: 'bg-orange-400', chartColor: '#fb923c' },
+  { key: 'GANHO', label: 'Ganho', tone: 'text-emerald-200', bar: 'bg-emerald-400', chartColor: '#34d399' }
 ];
 
 const normalizeB2GStageKey = (value) => {
@@ -329,6 +329,36 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
     { label: 'Pontual', value: consolidatedRevenue.single, color: 'bg-orange-500' }
   ];
   const mixTotal = Math.max(mix.reduce((sum, item) => sum + toNumber(item.value), 0), 1);
+  const b2gVisibleRows = b2gStageBreakdown.filter((row) =>
+    toNumber(row.total) > 0 || toNumber(row.monthly) > 0 || toNumber(row.count) > 0
+  );
+  const b2gChartRows = b2gVisibleRows.length > 0 ? b2gVisibleRows : b2gStageBreakdown;
+  const b2gTotalChartData = useMemo(() => ({
+    labels: b2gChartRows.map((row) => row.label),
+    datasets: [{
+      data: b2gChartRows.map((row) => toNumber(row.total)),
+      backgroundColor: b2gChartRows.map((row) => row.chartColor),
+      borderColor: '#111827',
+      borderWidth: 3,
+      hoverOffset: 6
+    }]
+  }), [b2gChartRows]);
+  const b2gMonthlyChartData = useMemo(() => ({
+    labels: b2gChartRows.map((row) => row.label),
+    datasets: [{
+      label: 'Mensal',
+      data: b2gChartRows.map((row) => toNumber(row.monthly)),
+      backgroundColor: b2gChartRows.map((row) => row.chartColor),
+      borderRadius: 8,
+      borderSkipped: false,
+      barThickness: 10
+    }]
+  }), [b2gChartRows]);
+  const currencyTooltip = {
+    callbacks: {
+      label: (context) => `${context.dataset.label ? `${context.dataset.label}: ` : ''}${formatCurrency(context.parsed?.x ?? context.parsed ?? 0)}`
+    }
+  };
 
   return (
     <div className="dashboard-card overflow-hidden rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] shadow-[0_28px_76px_-56px_rgba(24,200,223,0.18)]">
@@ -423,21 +453,92 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
 
                 {isB2G && b2gRows.length > 0 ? (
                   <div className="mt-5 border-t border-[#263345] pt-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">Valores por fase</p>
-                      <p className="text-[10px] font-bold text-[#8f9caf]">Mensal / Total</p>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">Carteira B2G por fase</p>
+                        <p className="mt-1 text-[11px] font-semibold text-[#6f7f95]">Distribuição total e valor mensal ativo</p>
+                      </div>
+                      <p className="shrink-0 text-[10px] font-bold text-[#8f9caf]">Mensal / Total</p>
                     </div>
-                    <div className="space-y-3">
+
+                    <div className="grid gap-3 lg:grid-cols-[0.86fr_1.14fr]">
+                      <div className="min-h-[172px] rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Total por fase</p>
+                          <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-[10px] font-black text-cyan-100">
+                            {formatNumber(b2gVisibleRows.length)}
+                          </span>
+                        </div>
+                        <div className="h-[126px]">
+                          <Doughnut
+                            data={b2gTotalChartData}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              cutout: '62%',
+                              plugins: {
+                                legend: { display: false },
+                                tooltip: currencyTooltip
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="min-h-[172px] rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Mensal por fase</p>
+                          <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[10px] font-black text-emerald-100">
+                            {formatCompactCurrency(channel.totals.monthly)}
+                          </span>
+                        </div>
+                        <div className="h-[126px]">
+                          <Bar
+                            data={b2gMonthlyChartData}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              indexAxis: 'y',
+                              plugins: {
+                                legend: { display: false },
+                                tooltip: currencyTooltip
+                              },
+                              scales: {
+                                x: {
+                                  beginAtZero: true,
+                                  grid: { color: 'rgba(143,156,175,0.12)' },
+                                  ticks: {
+                                    color: '#8f9caf',
+                                    callback: (value) => formatCompactCurrency(value).replace('R$ ', '')
+                                  }
+                                },
+                                y: {
+                                  grid: { display: false },
+                                  ticks: {
+                                    color: '#c9d4e5',
+                                    font: { size: 10, weight: '700' }
+                                  }
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2">
                       {b2gRows.map((row) => {
                         const width = Math.max(row.total > 0 ? 6 : 0, Math.round((toNumber(row.total) / b2gRowsMax) * 100));
                         return (
-                          <div key={row.key} className="min-w-0">
-                            <div className="mb-1 flex items-center justify-between gap-3">
+                          <div key={row.key} className="min-w-0 rounded-lg border border-[#263345] bg-[#0b1220]/55 px-3 py-2">
+                            <div className="mb-2 flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <span className={`block truncate text-[11px] font-black uppercase tracking-wide ${row.tone}`}>
+                                <span className={`block truncate text-[10px] font-black uppercase tracking-[0.08em] ${row.tone}`}>
                                   {row.label}
                                 </span>
-                                <span className="text-[10px] font-semibold text-[#8f9caf]">{formatNumber(row.count)} oportunidade(s)</span>
+                                <span className="text-[10px] font-semibold text-[#8f9caf]">
+                                  {formatNumber(row.count)} oportunidade(s)
+                                </span>
                               </div>
                               <div className="shrink-0 text-right">
                                 <div className="text-xs font-black text-white" title={formatCurrency(row.monthly)}>
