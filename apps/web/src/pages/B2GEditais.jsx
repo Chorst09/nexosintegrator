@@ -4727,7 +4727,11 @@ export default function B2GEditais() {
             </div>
 
             <div className="mt-5 h-[420px]">
-              <B2GFunnelStrategic funnelRows={dashboardFunnelRows} />
+              <B2GFunnelStrategic
+                funnelRows={dashboardFunnelRows}
+                activeStage={dashboardPhaseFilter}
+                selectedTemperature={dashboardTemperatureFilter}
+              />
             </div>
           </div>
 
@@ -5464,7 +5468,13 @@ export default function B2GEditais() {
             { label: 'Valor Ganho', value: formatCompactCurrency(dashboardTotals.wonValue), percent: (dashboardTotals.wonValue / valueMetricBase) * 100, color: '#22c55e' },
             { label: 'Taxa de Vitória', value: `${dashboardTotals.winRate.toFixed(1)}%`, percent: dashboardTotals.winRate, color: '#ff7a00', secondaryColor: '#f6b40b' }
           ]}
-          funnel={<B2GFunnelStrategic funnelRows={dashboardFunnelRows} />}
+          funnel={(
+            <B2GFunnelStrategic
+              funnelRows={dashboardFunnelRows}
+              activeStage={dashboardPhaseFilter}
+              selectedTemperature={dashboardTemperatureFilter}
+            />
+          )}
           funnelTitle="Funil de Licitações B2G"
           funnelSubtitle="Editais e oportunidades por fase"
           temperature={dashboardForecastScore}
