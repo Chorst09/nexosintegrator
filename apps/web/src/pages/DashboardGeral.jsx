@@ -117,6 +117,15 @@ const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).
 const monthLabel = (date) => `${monthLabels[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
 const OPEN_STAGES = new Set(['LEAD', 'QUALIFICATION', 'DIAGNOSIS', 'PROPOSAL', 'NEGOTIATION']);
 const MONTHLY_PROJECT_TYPE = 'MONTHLY';
+const B2B_STAGE_SUMMARY = [
+  { key: 'LEAD', label: 'Lead', tone: 'text-sky-200', bar: 'bg-sky-400', chartColor: '#38bdf8' },
+  { key: 'QUALIFICATION', label: 'Qualificação', tone: 'text-blue-200', bar: 'bg-blue-400', chartColor: '#60a5fa' },
+  { key: 'DIAGNOSIS', label: 'Diagnóstico', tone: 'text-teal-200', bar: 'bg-teal-400', chartColor: '#2dd4bf' },
+  { key: 'PROPOSAL', label: 'Proposta', tone: 'text-amber-200', bar: 'bg-amber-400', chartColor: '#fbbf24' },
+  { key: 'NEGOTIATION', label: 'Negociação', tone: 'text-orange-200', bar: 'bg-orange-400', chartColor: '#fb923c' },
+  { key: 'WON', label: 'Ganhas', tone: 'text-emerald-200', bar: 'bg-emerald-400', chartColor: '#34d399' },
+  { key: 'LOST', label: 'Perdidas', tone: 'text-slate-200', bar: 'bg-slate-400', chartColor: '#94a3b8' }
+];
 const B2G_STAGE_SUMMARY = [
   { key: 'ANALISE', label: 'Análise', tone: 'text-cyan-200', bar: 'bg-cyan-400', chartColor: '#22d3ee' },
   { key: 'PROPOSTA_ENVIADA', label: 'Proposta enviada', tone: 'text-amber-200', bar: 'bg-amber-400', chartColor: '#fbbf24' },
@@ -269,6 +278,28 @@ const mergeRevenueBreakdowns = (...items) =>
     singleCount: acc.singleCount + toNumber(item?.singleCount)
   }), { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
 
+const buildB2BStageBreakdown = (rows = []) => {
+  const base = Object.fromEntries(
+    B2B_STAGE_SUMMARY.map((stage) => [
+      stage.key,
+      { ...stage, total: 0, monthly: 0, contract: 0, single: 0, count: 0 }
+    ])
+  );
+
+  toArray(rows).forEach((item) => {
+    const stage = String(item?.stage || 'LEAD').trim().toUpperCase();
+    if (!base[stage]) return;
+    const revenue = revenueBreakdownFromOpportunities([item]);
+    base[stage].total += revenue.total;
+    base[stage].monthly += revenue.monthly;
+    base[stage].contract += revenue.contract;
+    base[stage].single += revenue.single;
+    base[stage].count += 1;
+  });
+
+  return B2B_STAGE_SUMMARY.map((stage) => base[stage.key]);
+};
+
 const resolveB2GSummaryStage = (item = {}) => {
   const b2gStage = normalizeB2GStageKey(item?.b2gStage);
   if (b2gStage) return b2gStage;
@@ -298,7 +329,116 @@ const buildB2GStageBreakdown = (rows = []) => {
   return B2G_STAGE_SUMMARY.map((stage) => base[stage.key]);
 };
 
-function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStageBreakdown = [] }) {
+function StageRevenueSection({ title, subtitle, rows = [], totals = {} }) {
+  const visibleRows = rows.filter((row) =>
+    toNumber(row.total) > 0 || toNumber(row.monthly) > 0 || toNumber(row.count) > 0
+  );
+  const chartRows = visibleRows.length > 0 ? visibleRows : rows;
+  const rowsMax = Math.max(...rows.map((row) => toNumber(row.total)), 1);
+  const monthlyChartData = useMemo(() => ({
+    labels: chartRows.map((row) => row.label),
+    datasets: [{
+      label: 'Mensal',
+      data: chartRows.map((row) => toNumber(row.monthly)),
+      backgroundColor: chartRows.map((row) => row.chartColor),
+      borderRadius: 8,
+      borderSkipped: false,
+      barThickness: 9
+    }]
+  }), [chartRows]);
+  const currencyTooltip = {
+    callbacks: {
+      label: (context) => `${context.dataset.label ? `${context.dataset.label}: ` : ''}${formatCurrency(context.parsed?.x ?? context.parsed ?? 0)}`
+    }
+  };
+
+  if (!rows.length) return null;
+
+  return (
+    <div className="mt-5 border-t border-[#263345] pt-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">{title}</p>
+          <p className="mt-1 text-[11px] font-semibold text-[#6f7f95]">{subtitle}</p>
+        </div>
+        <p className="shrink-0 text-[10px] font-bold text-[#8f9caf]">Mensal / Total</p>
+      </div>
+
+      <div className="rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Mensal por fase</p>
+          <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[10px] font-black text-emerald-100">
+            {formatCompactCurrency(totals.monthly)}
+          </span>
+        </div>
+        <div className="h-[132px]">
+          <Bar
+            data={monthlyChartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: 'y',
+              plugins: {
+                legend: { display: false },
+                tooltip: currencyTooltip
+              },
+              scales: {
+                x: {
+                  beginAtZero: true,
+                  grid: { color: 'rgba(143,156,175,0.12)' },
+                  ticks: {
+                    color: '#8f9caf',
+                    callback: (value) => formatCompactCurrency(value).replace('R$ ', '')
+                  }
+                },
+                y: {
+                  grid: { display: false },
+                  ticks: {
+                    color: '#c9d4e5',
+                    font: { size: 10, weight: '700' }
+                  }
+                }
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {rows.map((row) => {
+          const width = Math.max(row.total > 0 ? 6 : 0, Math.round((toNumber(row.total) / rowsMax) * 100));
+          return (
+            <div key={row.key} className="min-w-0 rounded-lg border border-[#263345] bg-[#0b1220]/55 px-3 py-2">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className={`block truncate text-[10px] font-black uppercase tracking-[0.08em] ${row.tone}`}>
+                    {row.label}
+                  </span>
+                  <span className="text-[10px] font-semibold text-[#8f9caf]">
+                    {formatNumber(row.count)} oportunidade(s)
+                  </span>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-xs font-black text-white" title={formatCurrency(row.monthly)}>
+                    {formatCompactCurrency(row.monthly)}
+                  </div>
+                  <div className="text-[10px] font-bold text-[#8f9caf]" title={formatCurrency(row.total)}>
+                    {formatCompactCurrency(row.total)}
+                  </div>
+                </div>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-[#0d1423]">
+                <div className={`h-full rounded-full ${row.bar}`} style={{ width: `${width}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2bStageBreakdown = [], b2gStageBreakdown = [] }) {
   const safeTotal = Math.max(toNumber(consolidatedRevenue.total), 1);
   const channels = [
     {
@@ -309,7 +449,10 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
       totals: b2bRevenue,
       color: 'from-orange-400 to-cyan-400',
       tint: 'text-orange-200',
-      share: Math.round((toNumber(b2bRevenue.total) / safeTotal) * 100)
+      share: Math.round((toNumber(b2bRevenue.total) / safeTotal) * 100),
+      stageBreakdown: b2bStageBreakdown,
+      stageTitle: 'Carteira B2B por fase',
+      stageSubtitle: 'Valor mensal ativo e total no funil privado'
     },
     {
       id: 'b2g',
@@ -319,7 +462,10 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
       totals: b2gRevenue,
       color: 'from-blue-500 to-cyan-400',
       tint: 'text-cyan-200',
-      share: Math.round((toNumber(b2gRevenue.total) / safeTotal) * 100)
+      share: Math.round((toNumber(b2gRevenue.total) / safeTotal) * 100),
+      stageBreakdown: b2gStageBreakdown,
+      stageTitle: 'Carteira B2G por fase',
+      stageSubtitle: 'Valor mensal ativo e total por fase pública'
     }
   ];
 
@@ -329,49 +475,29 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
     { label: 'Pontual', value: consolidatedRevenue.single, color: 'bg-orange-500' }
   ];
   const mixTotal = Math.max(mix.reduce((sum, item) => sum + toNumber(item.value), 0), 1);
-  const b2gVisibleRows = b2gStageBreakdown.filter((row) =>
-    toNumber(row.total) > 0 || toNumber(row.monthly) > 0 || toNumber(row.count) > 0
-  );
-  const b2gChartRows = b2gVisibleRows.length > 0 ? b2gVisibleRows : b2gStageBreakdown;
-  const b2gMonthlyChartData = useMemo(() => ({
-    labels: b2gChartRows.map((row) => row.label),
-    datasets: [{
-      label: 'Mensal',
-      data: b2gChartRows.map((row) => toNumber(row.monthly)),
-      backgroundColor: b2gChartRows.map((row) => row.chartColor),
-      borderRadius: 8,
-      borderSkipped: false,
-      barThickness: 10
-    }]
-  }), [b2gChartRows]);
-  const currencyTooltip = {
-    callbacks: {
-      label: (context) => `${context.dataset.label ? `${context.dataset.label}: ` : ''}${formatCurrency(context.parsed?.x ?? context.parsed ?? 0)}`
-    }
-  };
 
   return (
     <div className="dashboard-card overflow-hidden rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] shadow-[0_28px_76px_-56px_rgba(24,200,223,0.18)]">
-      <div className="grid grid-cols-1 xl:grid-cols-[0.82fr_1.78fr] xl:items-start">
-        <div className="border-b border-[#263345] p-5 xl:border-b-0 xl:border-r">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8f9caf]">Consolidado</p>
-              <h2 className="mt-2 truncate text-[clamp(1.55rem,2.8vw,2.35rem)] font-black leading-none text-white" title={formatCurrency(consolidatedRevenue.total)}>
-                {formatCompactCurrency(consolidatedRevenue.total)}
-              </h2>
-              <p className="mt-2 text-sm font-semibold text-[#a9c5df]">Receita comercial no período selecionado</p>
-            </div>
+      <div className="border-b border-[#263345] p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.55fr)] xl:items-center">
+          <div className="flex items-start gap-4">
             <div className="rounded-2xl border border-orange-300/30 bg-orange-400/10 p-3 text-orange-200">
               <CalendarClock className="h-6 w-6" />
             </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#8f9caf]">Consolidado</p>
+              <h2 className="mt-1 truncate text-[clamp(1.6rem,2.5vw,2.45rem)] font-black leading-none text-white" title={formatCurrency(consolidatedRevenue.total)}>
+                {formatCompactCurrency(consolidatedRevenue.total)}
+              </h2>
+              <p className="mt-2 text-sm font-semibold leading-snug text-[#a9c5df]">Receita comercial no período selecionado</p>
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             {mix.map((item) => {
               const width = Math.max(4, Math.round((toNumber(item.value) / mixTotal) * 100));
               return (
-                <div key={item.label}>
+                <div key={item.label} className="rounded-lg border border-[#263345] bg-[#0b1220]/65 p-3">
                   <div className="mb-1 flex items-center justify-between gap-3 text-xs">
                     <span className="font-bold uppercase tracking-wide text-[#8f9caf]">{item.label}</span>
                     <span className="font-black text-[#f4f7fb]">{formatCompactCurrency(item.value)}</span>
@@ -384,13 +510,11 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
             })}
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 divide-y divide-[#263345] md:grid-cols-[0.82fr_1.18fr] md:items-start md:divide-x md:divide-y-0">
+      <div className="grid grid-cols-1 divide-y divide-[#263345] xl:grid-cols-2 xl:items-start xl:divide-x xl:divide-y-0">
           {channels.map((channel) => {
             const Icon = channel.icon;
-            const isB2G = channel.id === 'b2g';
-            const b2gRows = isB2G ? b2gStageBreakdown : [];
-            const b2gRowsMax = Math.max(...b2gRows.map((row) => toNumber(row.total)), 1);
             return (
               <div key={channel.id} className="p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -441,92 +565,15 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
                   </div>
                 </div>
 
-                {isB2G && b2gRows.length > 0 ? (
-                  <div className="mt-5 border-t border-[#263345] pt-4">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">Carteira B2G por fase</p>
-                        <p className="mt-1 text-[11px] font-semibold text-[#6f7f95]">Valor mensal ativo e total por fase</p>
-                      </div>
-                      <p className="shrink-0 text-[10px] font-bold text-[#8f9caf]">Mensal / Total</p>
-                    </div>
-
-                    <div className="rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Mensal por fase</p>
-                        <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[10px] font-black text-emerald-100">
-                          {formatCompactCurrency(channel.totals.monthly)}
-                        </span>
-                      </div>
-                      <div className="h-[138px]">
-                        <Bar
-                          data={b2gMonthlyChartData}
-                          options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            indexAxis: 'y',
-                            plugins: {
-                              legend: { display: false },
-                              tooltip: currencyTooltip
-                            },
-                            scales: {
-                              x: {
-                                beginAtZero: true,
-                                grid: { color: 'rgba(143,156,175,0.12)' },
-                                ticks: {
-                                  color: '#8f9caf',
-                                  callback: (value) => formatCompactCurrency(value).replace('R$ ', '')
-                                }
-                              },
-                              y: {
-                                grid: { display: false },
-                                ticks: {
-                                  color: '#c9d4e5',
-                                  font: { size: 10, weight: '700' }
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {b2gRows.map((row) => {
-                        const width = Math.max(row.total > 0 ? 6 : 0, Math.round((toNumber(row.total) / b2gRowsMax) * 100));
-                        return (
-                          <div key={row.key} className="min-w-0 rounded-lg border border-[#263345] bg-[#0b1220]/55 px-3 py-2">
-                            <div className="mb-2 flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <span className={`block truncate text-[10px] font-black uppercase tracking-[0.08em] ${row.tone}`}>
-                                  {row.label}
-                                </span>
-                                <span className="text-[10px] font-semibold text-[#8f9caf]">
-                                  {formatNumber(row.count)} oportunidade(s)
-                                </span>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <div className="text-xs font-black text-white" title={formatCurrency(row.monthly)}>
-                                  {formatCompactCurrency(row.monthly)}
-                                </div>
-                                <div className="text-[10px] font-bold text-[#8f9caf]" title={formatCurrency(row.total)}>
-                                  {formatCompactCurrency(row.total)}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-[#0d1423]">
-                              <div className={`h-full rounded-full ${row.bar}`} style={{ width: `${width}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
+                <StageRevenueSection
+                  title={channel.stageTitle}
+                  subtitle={channel.stageSubtitle}
+                  rows={channel.stageBreakdown}
+                  totals={channel.totals}
+                />
               </div>
             );
           })}
-        </div>
       </div>
     </div>
   );
@@ -933,6 +980,7 @@ export default function DashboardGeral() {
     const activeProducts = products.filter((item) => item?.active !== false);
 
     const b2bRevenue = revenueBreakdownFromOpportunities(openB2B);
+    const b2bStageBreakdown = buildB2BStageBreakdown(opportunitiesB2BRange);
     const b2gOpportunityRevenue = revenueBreakdownFromOpportunities(openB2GOpps);
     const b2gNoticeRevenue = revenueBreakdownFromNotices(activeB2GNotices);
     const b2gStageBreakdown = buildB2GStageBreakdown(opportunitiesB2GRange);
@@ -1104,6 +1152,7 @@ export default function DashboardGeral() {
       blockedPreSalesPocs,
       overduePreSalesPocs,
       b2bRevenue,
+      b2bStageBreakdown,
       b2gRevenue,
       b2gStageBreakdown,
       consolidatedRevenue,
@@ -1505,6 +1554,7 @@ export default function DashboardGeral() {
     blockedPreSalesPocs,
     overduePreSalesPocs,
     b2bRevenue,
+    b2bStageBreakdown,
     b2gRevenue,
     b2gStageBreakdown,
     consolidatedRevenue,
@@ -1679,6 +1729,7 @@ export default function DashboardGeral() {
       <div data-section="receita-arquitetura">
         <RevenueOverview
           b2bRevenue={b2bRevenue}
+          b2bStageBreakdown={b2bStageBreakdown}
           b2gRevenue={b2gRevenue}
           b2gStageBreakdown={b2gStageBreakdown}
           consolidatedRevenue={consolidatedRevenue}
