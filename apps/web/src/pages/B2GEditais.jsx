@@ -272,17 +272,28 @@ const toFiniteNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const pickPositiveNumber = (...values) => {
+  for (const value of values) {
+    const parsed = toFiniteNumber(value);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
+};
+
 const getB2GOpportunityFinancials = (item = {}) => {
   const b2g = parseB2GData(item?.description);
-  const monthlyValue = toFiniteNumber(b2g.estimatedMonthlyValue);
-  const oneTimeValue = toFiniteNumber(b2g.estimatedOneTimeValue);
-  const contractMonths = String(b2g.contractType || '').trim().toUpperCase() === 'PONTUAL'
+  const monthlyValue = pickPositiveNumber(b2g.estimatedMonthlyValue, b2g.valorEstimadoMensal);
+  const oneTimeValue = pickPositiveNumber(b2g.estimatedOneTimeValue, b2g.valorEstimadoPontual);
+  const contractType = String(b2g.contractType || b2g.tipoContrato || '').trim().toUpperCase();
+  const contractMonths = contractType === 'PONTUAL'
     ? 1
-    : Math.max(toFiniteNumber(b2g.contractTermMonths || item?.projectMonths), 1);
-  const savedTotal = toFiniteNumber(b2g.estimatedValue);
-  const rawValue = toFiniteNumber(item?.value || item?.estimatedValue);
+    : Math.max(toFiniteNumber(b2g.contractTermMonths || b2g.prazoContratual || item?.projectMonths), 1);
+  const savedTotal = pickPositiveNumber(b2g.estimatedValue, b2g.valorEstimadoTotal);
+  const rawValue = pickPositiveNumber(item?.value, item?.estimatedValue);
   const isMonthly = String(item?.projectType || '').toUpperCase() === 'MONTHLY' || monthlyValue > 0;
-  const totalValue = savedTotal || (isMonthly && monthlyValue > 0 ? (monthlyValue * contractMonths) + oneTimeValue : rawValue);
+  const totalValue = isMonthly && monthlyValue > 0
+    ? (monthlyValue * contractMonths) + oneTimeValue
+    : (savedTotal || rawValue || oneTimeValue);
 
   return {
     monthlyValue: monthlyValue || (isMonthly ? totalValue / contractMonths : 0),
@@ -2120,6 +2131,18 @@ export default function B2GEditais() {
     });
   }, [dashboardSourceOpportunities]);
 
+  const dashboardFilteredOpportunities = useMemo(() => {
+    return dashboardOpportunities.filter((item) => {
+      if (dashboardTemperatureFilter !== 'ALL' && item.__temperatureBand !== Number(dashboardTemperatureFilter)) {
+        return false;
+      }
+      if (dashboardPhaseFilter !== 'ALL' && item.__columnId !== dashboardPhaseFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [dashboardOpportunities, dashboardPhaseFilter, dashboardTemperatureFilter]);
+
   const dashboardTotals = useMemo(() => {
     let pipelineValue = 0;
     let monthlyValue = 0;
@@ -2133,7 +2156,7 @@ export default function B2GEditais() {
     let lostCount = 0;
     let goCount = 0;
 
-    dashboardOpportunities.forEach((item) => {
+    dashboardFilteredOpportunities.forEach((item) => {
       const value = item.__value;
       const probability = item.__probability;
       const columnId = item.__columnId;
@@ -2165,7 +2188,7 @@ export default function B2GEditais() {
       }
     });
 
-    const totalCount = dashboardOpportunities.length;
+    const totalCount = dashboardFilteredOpportunities.length;
     const fallbackMonthlyValue = monthlyValue > 0 ? monthlyValue : wonValue;
 
     return {
@@ -2183,26 +2206,26 @@ export default function B2GEditais() {
       totalCount,
       winRate: (wonCount + lostCount) > 0 ? (wonCount / (wonCount + lostCount)) * 100 : 0
     };
-  }, [dashboardOpportunities]);
+  }, [dashboardFilteredOpportunities]);
 
   const dashboardForecastScore = useMemo(() => {
-    if (dashboardOpportunities.length === 0) return 0;
+    if (dashboardFilteredOpportunities.length === 0) return 0;
     const avg =
-      dashboardOpportunities.reduce((sum, item) => sum + item.__probability, 0) /
-      dashboardOpportunities.length;
+      dashboardFilteredOpportunities.reduce((sum, item) => sum + item.__probability, 0) /
+      dashboardFilteredOpportunities.length;
     return clampScore(avg);
-  }, [dashboardOpportunities]);
+  }, [dashboardFilteredOpportunities]);
 
   const dashboardFunnelRows = useMemo(() => {
     return DASHBOARD_FUNNEL_META.map((meta) => {
-      const rows = dashboardOpportunities.filter((item) => item.__columnId === meta.id);
+      const rows = dashboardFilteredOpportunities.filter((item) => item.__columnId === meta.id);
       return {
         ...meta,
         count: rows.length,
         value: rows.reduce((sum, item) => sum + item.__value, 0)
       };
     });
-  }, [dashboardOpportunities]);
+  }, [dashboardFilteredOpportunities]);
 
   const dashboardProjectionBars = useMemo(
     () => [
@@ -2221,7 +2244,7 @@ export default function B2GEditais() {
 
   const dashboardProbabilityLevels = useMemo(() => {
     return DASHBOARD_PROBABILITY_LEVELS.map((level) => {
-      const rows = dashboardOpportunities.filter((item) => (
+      const rows = dashboardFilteredOpportunities.filter((item) => (
         item.__probability >= level.min && item.__probability <= level.max
       ));
       return {
@@ -2230,10 +2253,10 @@ export default function B2GEditais() {
         value: rows.reduce((sum, item) => sum + item.__value, 0)
       };
     });
-  }, [dashboardOpportunities]);
+  }, [dashboardFilteredOpportunities]);
 
   const dashboardProbabilitySummary = useMemo(() => {
-    const probabilities = dashboardOpportunities
+    const probabilities = dashboardFilteredOpportunities
       .map((item) => item.__probability)
       .sort((a, b) => a - b);
     const totalOpps = probabilities.length;
@@ -2247,9 +2270,9 @@ export default function B2GEditais() {
         : totalOpps % 2 === 0
           ? (probabilities[totalOpps / 2 - 1] + probabilities[totalOpps / 2]) / 2
           : probabilities[Math.floor(totalOpps / 2)];
-    const highConfidence = dashboardOpportunities.filter((item) => item.__probability >= 75).length;
-    const lowConfidence = dashboardOpportunities.filter((item) => item.__probability <= 25).length;
-    const totalValue = dashboardOpportunities.reduce((sum, item) => sum + item.__value, 0);
+    const highConfidence = dashboardFilteredOpportunities.filter((item) => item.__probability >= 75).length;
+    const lowConfidence = dashboardFilteredOpportunities.filter((item) => item.__probability <= 25).length;
+    const totalValue = dashboardFilteredOpportunities.reduce((sum, item) => sum + item.__value, 0);
     return {
       totalOpps,
       avg,
@@ -2258,7 +2281,7 @@ export default function B2GEditais() {
       lowConfidence,
       totalValue
     };
-  }, [dashboardOpportunities]);
+  }, [dashboardFilteredOpportunities]);
 
   const dashboardPhaseOptions = useMemo(
     () => [
@@ -2268,17 +2291,7 @@ export default function B2GEditais() {
     []
   );
 
-  const dashboardTemperatureRows = useMemo(() => {
-    return dashboardOpportunities.filter((item) => {
-      if (dashboardTemperatureFilter !== 'ALL' && item.__temperatureBand !== Number(dashboardTemperatureFilter)) {
-        return false;
-      }
-      if (dashboardPhaseFilter !== 'ALL' && item.__columnId !== dashboardPhaseFilter) {
-        return false;
-      }
-      return true;
-    });
-  }, [dashboardOpportunities, dashboardPhaseFilter, dashboardTemperatureFilter]);
+  const dashboardTemperatureRows = dashboardFilteredOpportunities;
 
   const dashboardTemperatureStats = useMemo(() => {
     const total = dashboardTemperatureRows.length;
@@ -2331,7 +2344,7 @@ export default function B2GEditais() {
     const projectSet = new Set();
     const topN = 6;
 
-    dashboardOpportunities.forEach((item) => {
+    dashboardFilteredOpportunities.forEach((item) => {
       const date = parseFlexibleDate(item.createdAt);
       if (!date) return;
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -2381,7 +2394,7 @@ export default function B2GEditais() {
     });
 
     return { months, datasets };
-  }, [dashboardOpportunities]);
+  }, [dashboardFilteredOpportunities]);
 
   const dashboardCriticalDeadlines = useMemo(() => {
     return filteredNotices

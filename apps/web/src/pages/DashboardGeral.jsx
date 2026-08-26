@@ -149,6 +149,14 @@ const normalizeProjectMonths = (value) => {
   return Number.isFinite(months) && months > 0 ? months : 12;
 };
 
+const pickNumber = (...values) => {
+  for (const value of values) {
+    const parsed = toNumber(value);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
+};
+
 const revenueBreakdownFromOpportunities = (rows = []) =>
   toArray(rows).reduce((acc, item) => {
     const b2g = parseJsonObject(item?.description);
@@ -156,20 +164,27 @@ const revenueBreakdownFromOpportunities = (rows = []) =>
       item?.clientType === 'B2G' ||
       item?.b2gStage ||
       b2g.processNumber ||
+      b2g.numeroEdital ||
       b2g.modality ||
+      b2g.modalidade ||
       b2g.contractTermMonths ||
+      b2g.prazoContratual ||
       b2g.estimatedMonthlyValue !== undefined ||
-      b2g.estimatedOneTimeValue !== undefined
+      b2g.valorEstimadoMensal !== undefined ||
+      b2g.estimatedOneTimeValue !== undefined ||
+      b2g.valorEstimadoPontual !== undefined
     );
-    const b2gMonthly = toNumber(b2g.estimatedMonthlyValue);
-    const b2gOneTime = toNumber(b2g.estimatedOneTimeValue);
-    const b2gMonths = String(b2g.contractType || '').trim().toUpperCase() === 'PONTUAL'
+    const b2gMonthly = pickNumber(b2g.estimatedMonthlyValue, b2g.valorEstimadoMensal);
+    const b2gOneTime = pickNumber(b2g.estimatedOneTimeValue, b2g.valorEstimadoPontual);
+    const b2gContractType = String(b2g.contractType || b2g.tipoContrato || '').trim().toUpperCase();
+    const b2gMonths = b2gContractType === 'PONTUAL'
       ? 1
-      : normalizeProjectMonths(b2g.contractTermMonths || item?.projectMonths);
-    const b2gTotal = toNumber(b2g.estimatedValue);
+      : normalizeProjectMonths(b2g.contractTermMonths || b2g.prazoContratual || item?.projectMonths);
+    const b2gTotal = pickNumber(b2g.estimatedValue, b2g.valorEstimadoTotal, item?.value, item?.estimatedValue);
 
     if (hasB2GFinancialShape && (b2gMonthly > 0 || b2gTotal > 0 || b2gOneTime > 0)) {
-      const total = b2gTotal || (b2gMonthly * b2gMonths) + b2gOneTime;
+      const calculatedTotal = (b2gMonthly * b2gMonths) + b2gOneTime;
+      const total = b2gMonthly > 0 ? calculatedTotal : (b2gTotal || b2gOneTime);
       acc.monthly += b2gMonthly;
       acc.contract += b2gMonthly > 0 ? b2gMonthly * b2gMonths : 0;
       acc.single += b2gOneTime || (b2gMonthly > 0 ? 0 : total);
@@ -749,13 +764,10 @@ export default function DashboardGeral() {
     const b2bRevenue = revenueBreakdownFromOpportunities(openB2B);
     const b2gOpportunityRevenue = revenueBreakdownFromOpportunities(openB2GOpps);
     const b2gNoticeRevenue = revenueBreakdownFromNotices(activeB2GNotices);
-    const b2gRevenue = mergeRevenueBreakdowns(b2gOpportunityRevenue, b2gNoticeRevenue);
+    const b2gRevenue = b2gOpportunityRevenue;
     const consolidatedRevenue = mergeRevenueBreakdowns(b2bRevenue, b2gRevenue);
     const b2bWonRevenue = revenueBreakdownFromOpportunities(wonB2B);
-    const b2gWonRevenue = mergeRevenueBreakdowns(
-      revenueBreakdownFromOpportunities(wonB2GOpps),
-      revenueBreakdownFromNotices(wonB2GNotices)
-    );
+    const b2gWonRevenue = revenueBreakdownFromOpportunities(wonB2GOpps);
 
     const b2bPipelineValue = b2bRevenue.total;
     const b2bWonValue = b2bWonRevenue.total;
@@ -764,14 +776,14 @@ export default function DashboardGeral() {
     const b2gOpportunityPipelineValue = b2gOpportunityRevenue.total;
     const b2gOpportunityWonValue = revenueBreakdownFromOpportunities(wonB2GOpps).total;
 
-    const totalPipeline = b2bPipelineValue + b2gNoticePipelineValue + b2gOpportunityPipelineValue;
-    const totalWonValue = b2bWonValue + b2gNoticeWonValue + b2gOpportunityWonValue;
+    const totalPipeline = b2bPipelineValue + b2gOpportunityPipelineValue;
+    const totalWonValue = b2bWonValue + b2gOpportunityWonValue;
 
     const b2bConversion = opportunitiesB2BRange.length > 0
       ? (wonB2B.length / opportunitiesB2BRange.length) * 100
       : 0;
-    const b2gConversion = b2gNoticesRange.length > 0
-      ? (wonB2GNotices.length / b2gNoticesRange.length) * 100
+    const b2gConversion = opportunitiesB2GRange.length > 0
+      ? (wonB2GOpps.length / opportunitiesB2GRange.length) * 100
       : 0;
     const preSalesApproval = preSalesRange.length > 0
       ? (donePreSales.length / preSalesRange.length) * 100
@@ -856,20 +868,6 @@ export default function DashboardGeral() {
       monthlyPotential[idx] += revenueBreakdownFromOpportunities([item]).total;
       if (String(item.stage || '').toUpperCase() === 'WON') {
         monthlyWon[idx] += revenueBreakdownFromOpportunities([item]).total;
-      }
-    });
-
-    b2gNoticesRange.forEach((item) => {
-      const referenceDate = toDate(item.updatedAt || item.createdAt);
-      if (!referenceDate) return;
-      const idx = monthIndex.get(monthKey(referenceDate));
-      if (idx === undefined) return;
-      if (activeNoticeStatuses.has(String(item.status || '').toUpperCase())) {
-        monthlyPotential[idx] += toNumber(item.estimatedValue);
-        monthlyB2G.single[idx] += toNumber(item.estimatedValue);
-      }
-      if (wonNoticeStatuses.has(String(item.status || '').toUpperCase())) {
-        monthlyWon[idx] += toNumber(item.estimatedValue);
       }
     });
 
