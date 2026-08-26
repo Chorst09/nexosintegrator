@@ -587,6 +587,8 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
   const [registry, setRegistry] = useState({ distribuidores: [], fornecedores: [] });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [budgetPickerOpen, setBudgetPickerOpen] = useState(false);
+  const [budgetSearchTerm, setBudgetSearchTerm] = useState('');
 
   const loadRegistry = useCallback(async () => {
     try {
@@ -614,6 +616,82 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
   }, [isOpen, solicitacao, loadRegistry]);
 
   const setField = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const readyBudgetOptions = useMemo(() => {
+    const map = new Map();
+    custos.forEach((cotacao) => {
+      const number = String(cotacao?.numeroOrcamento || '').trim();
+      if (!number) return;
+      const items = Array.isArray(cotacao?.itens) ? cotacao.itens : [];
+      const total = Number(cotacao?.subtotal) || items.reduce((sum, item) => (
+        sum + ((Number(item?.quantidade) || 0) * (Number(item?.custoUnitario) || 0))
+      ), 0);
+      const current = map.get(number) || {
+        numeroOrcamento: number,
+        modalidade: cotacao?.modalidade || 'VENDA',
+        distribuidorId: cotacao?.distribuidorId || '',
+        distribuidor: cotacao?.distribuidor || '',
+        fornecedorId: cotacao?.fornecedorId || '',
+        fornecedor: cotacao?.fornecedor || '',
+        itemCount: 0,
+        total: 0,
+        lastItem: null,
+        updatedAt: cotacao?.createdAt || ''
+      };
+      current.itemCount += Math.max(1, items.length);
+      current.total += total;
+      current.lastItem = items[0] || current.lastItem;
+      current.updatedAt = cotacao?.createdAt || current.updatedAt;
+      map.set(number, current);
+    });
+
+    const term = budgetSearchTerm.trim().toLowerCase();
+    return Array.from(map.values())
+      .filter((item) => {
+        if (!term) return true;
+        return [
+          item.numeroOrcamento,
+          item.distribuidor,
+          item.fornecedor,
+          item.lastItem?.descricao
+        ].filter(Boolean).join(' ').toLowerCase().includes(term);
+      })
+      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  }, [custos, budgetSearchTerm]);
+
+  const selectReadyBudget = (budget) => {
+    setForm((p) => ({
+      ...p,
+      modalidade: budget.modalidade || p.modalidade,
+      distribuidorId: budget.distribuidorId || '',
+      distribuidor: budget.distribuidor || '',
+      fornecedorId: budget.fornecedorId || '',
+      fornecedor: budget.fornecedor || '',
+      numeroOrcamento: budget.numeroOrcamento || p.numeroOrcamento,
+      descricaoItem: budget.lastItem?.descricao || '',
+      quantidade: budget.lastItem?.quantidade || 1,
+      custoUnitario: budget.lastItem?.custoUnitario || 0
+    }));
+    setBudgetPickerOpen(false);
+    setFeedback('');
+  };
+
+  const startNewBudget = () => {
+    setForm((p) => ({
+      ...p,
+      distribuidorId: '',
+      distribuidor: '',
+      fornecedorId: '',
+      fornecedor: '',
+      numeroOrcamento: '',
+      descricaoItem: '',
+      quantidade: 1,
+      custoUnitario: 0,
+      observacoes: ''
+    }));
+    setBudgetPickerOpen(false);
+    setFeedback('Novo orçamento iniciado. Informe o número recebido do distribuidor ou use o número da solicitação.');
+  };
 
   const handleDistributorChange = (distribuidorId) => {
     const selected = registry.distribuidores.find((item) => item.id === distribuidorId);
@@ -750,8 +828,84 @@ function CustosModal({ isOpen, onClose, solicitacao, onSaved, onPrecificar }) {
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Nº Orçamento</label>
-              <input type="text" value={form.numeroOrcamento} onChange={(e) => setField('numeroOrcamento', e.target.value)}
-                className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50" />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={form.numeroOrcamento}
+                  onFocus={() => setBudgetPickerOpen(true)}
+                  onClick={() => setBudgetPickerOpen(true)}
+                  onChange={(e) => setField('numeroOrcamento', e.target.value)}
+                  placeholder={solicitacao?.numero || fallbackBudgetNumber()}
+                  className="w-full rounded-lg border border-slate-600/50 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                />
+                {budgetPickerOpen && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-xl border border-slate-600/60 bg-[#111d31] p-3 shadow-2xl">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => setBudgetSearchTerm('')}
+                        className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+                      >
+                        Buscar pronto
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={startNewBudget}
+                        className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+                      >
+                        Orçar novo
+                      </button>
+                    </div>
+                    <div className="mt-3">
+                      <input
+                        type="text"
+                        value={budgetSearchTerm}
+                        onChange={(e) => setBudgetSearchTerm(e.target.value)}
+                        placeholder="Buscar número, distribuidor ou item"
+                        className="w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                      />
+                    </div>
+                    <div className="mt-2 max-h-48 overflow-y-auto">
+                      {readyBudgetOptions.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-700/70 px-3 py-4 text-center text-xs text-slate-400">
+                          Nenhum orçamento pronto lançado nesta solicitação.
+                        </div>
+                      ) : (
+                        readyBudgetOptions.map((budget) => (
+                          <button
+                            key={budget.numeroOrcamento}
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => selectReadyBudget(budget)}
+                            className="mb-2 w-full rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-left hover:border-sky-500/50 hover:bg-sky-500/10"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate font-mono text-xs font-semibold text-sky-300">{budget.numeroOrcamento}</div>
+                                <div className="truncate text-xs text-slate-300">{budget.distribuidor || budget.fornecedor || 'Sem fornecedor'}</div>
+                              </div>
+                              <div className="shrink-0 text-right text-xs text-slate-400">
+                                <div>{budget.itemCount} item(ns)</div>
+                                <div>{toCurrency(budget.total)}</div>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => setBudgetPickerOpen(false)}
+                      className="mt-1 w-full rounded-lg px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs text-slate-400 mb-1">Item / Descrição</label>
