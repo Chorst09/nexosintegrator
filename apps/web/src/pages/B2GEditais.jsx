@@ -276,7 +276,9 @@ const getB2GOpportunityFinancials = (item = {}) => {
   const b2g = parseB2GData(item?.description);
   const monthlyValue = toFiniteNumber(b2g.estimatedMonthlyValue);
   const oneTimeValue = toFiniteNumber(b2g.estimatedOneTimeValue);
-  const contractMonths = Math.max(toFiniteNumber(b2g.contractTermMonths || item?.projectMonths), 1);
+  const contractMonths = String(b2g.contractType || '').trim().toUpperCase() === 'PONTUAL'
+    ? 1
+    : Math.max(toFiniteNumber(b2g.contractTermMonths || item?.projectMonths), 1);
   const savedTotal = toFiniteNumber(b2g.estimatedValue);
   const rawValue = toFiniteNumber(item?.value || item?.estimatedValue);
   const isMonthly = String(item?.projectType || '').toUpperCase() === 'MONTHLY' || monthlyValue > 0;

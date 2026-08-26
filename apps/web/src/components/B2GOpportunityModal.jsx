@@ -31,7 +31,10 @@ const PHASES = ['Análise', 'Proposta Enviada', 'Habilitação', 'Recurso', 'Sus
 const SPHERES = ['Federal', 'Estadual', 'Municipal'];
 const RISK_LEVELS = ['baixo', 'medio', 'alto'];
 const COMPETITION_LEVELS = ['baixo', 'medio', 'alto'];
-const CONTRACT_TYPES = ['Contrato', 'Ata de Registro de Preços', 'Ordem de Serviço', 'Dispensa'];
+const CONTRACT_TYPES = ['Contrato', 'Ata de Registro de Preços', 'Ordem de Serviço', 'Dispensa', 'Pontual'];
+
+const isPunctualContract = (contractType) =>
+  String(contractType || '').trim().toUpperCase() === 'PONTUAL';
 
 const parseMoneyInput = (value) => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -54,7 +57,9 @@ const calculateB2GFinancials = (form) => {
   const monthlyValue = parseMoneyInput(form.estimatedMonthlyValue);
   const oneTimeValue = parseMoneyInput(form.estimatedOneTimeValue);
   const manualTotalValue = parseMoneyInput(form.estimatedValue);
-  const contractTermMonths = Math.max(parseInt(form.contractTermMonths, 10) || 0, 0);
+  const contractTermMonths = isPunctualContract(form.contractType)
+    ? 1
+    : Math.max(parseInt(form.contractTermMonths, 10) || 0, 0);
   const calculatedTotal = monthlyValue > 0
     ? (monthlyValue * contractTermMonths) + oneTimeValue
     : (manualTotalValue || oneTimeValue);
@@ -697,9 +702,27 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
   }, [isOpen, opportunity, mode]);
 
   const set = (key, value) => setForm(p => ({ ...p, [key]: value }));
+  const setContractType = (value) => {
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        contractType: value,
+        contractTermMonths: isPunctualContract(value) ? '1' : prev.contractTermMonths
+      };
+      const { monthlyValue, totalValue } = calculateB2GFinancials(next);
+      if (monthlyValue > 0) {
+        next.estimatedValue = formatMoneyInput(totalValue);
+      }
+      return next;
+    });
+  };
+
   const setFinancial = (key, value) => {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
+      if (isPunctualContract(next.contractType)) {
+        next.contractTermMonths = '1';
+      }
       const { monthlyValue, totalValue } = calculateB2GFinancials(next);
       if (monthlyValue > 0) {
         next.estimatedValue = formatMoneyInput(totalValue);
@@ -710,12 +733,16 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
 
   useEffect(() => {
     const { monthlyValue, totalValue } = calculateB2GFinancials(form);
+    if (isPunctualContract(form.contractType) && String(form.contractTermMonths || '') !== '1') {
+      setForm((prev) => ({ ...prev, contractTermMonths: '1', estimatedValue: formatMoneyInput(totalValue) }));
+      return;
+    }
     if (monthlyValue <= 0) return;
     const nextTotal = formatMoneyInput(totalValue);
     if (nextTotal && nextTotal !== String(form.estimatedValue || '')) {
       setForm((prev) => ({ ...prev, estimatedValue: nextTotal }));
     }
-  }, [form.estimatedMonthlyValue, form.estimatedOneTimeValue, form.contractTermMonths]);
+  }, [form.contractType, form.estimatedMonthlyValue, form.estimatedOneTimeValue, form.contractTermMonths]);
 
   const handleSave = async () => {
     if (!form.objectSummary.trim()) { setError('Informe o Objeto Resumido.'); return; }
@@ -953,12 +980,20 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
                 <p className="text-xs text-slate-400">Valores estimados e condições contratuais.</p></div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2"><label className={labelCls}>Tipo de Contrato</label>
-                  <select className={selectCls} value={form.contractType} onChange={e => set('contractType', e.target.value)}>
+                  <select className={selectCls} value={form.contractType} onChange={e => setContractType(e.target.value)}>
                     {CONTRACT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div><label className={labelCls}>Prazo Contratual (meses)</label>
-                  <input type="text" inputMode="numeric" className={inputCls} placeholder="12" value={form.contractTermMonths} onChange={e => setFinancial('contractTermMonths', e.target.value)} /></div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className={inputCls}
+                    placeholder="12"
+                    value={isPunctualContract(form.contractType) ? '1' : form.contractTermMonths}
+                    onChange={e => setFinancial('contractTermMonths', e.target.value)}
+                    disabled={isPunctualContract(form.contractType)}
+                  /></div>
                 <div><label className={labelCls}>Garantia (%)</label>
                   <input type="text" inputMode="decimal" className={inputCls} placeholder="0" value={form.guaranteePercentage} onChange={e => set('guaranteePercentage', e.target.value)} /></div>
               </div>

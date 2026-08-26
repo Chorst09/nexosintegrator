@@ -163,7 +163,9 @@ const revenueBreakdownFromOpportunities = (rows = []) =>
     );
     const b2gMonthly = toNumber(b2g.estimatedMonthlyValue);
     const b2gOneTime = toNumber(b2g.estimatedOneTimeValue);
-    const b2gMonths = normalizeProjectMonths(b2g.contractTermMonths || item?.projectMonths);
+    const b2gMonths = String(b2g.contractType || '').trim().toUpperCase() === 'PONTUAL'
+      ? 1
+      : normalizeProjectMonths(b2g.contractTermMonths || item?.projectMonths);
     const b2gTotal = toNumber(b2g.estimatedValue);
 
     if (hasB2GFinancialShape && (b2gMonthly > 0 || b2gTotal > 0 || b2gOneTime > 0)) {
