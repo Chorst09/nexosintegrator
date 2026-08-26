@@ -324,6 +324,7 @@ const mapActivityRow = (activity) => {
 
 const stageLabel = (stage) => STAGE_META[stage]?.title || stage;
 const COTACAO_TABS = ['ITENS', 'HISTORICO', 'COTACOES', 'PRECIFICACAO', 'PROPOSTAS', 'ACOES'];
+const toCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
 const nextQuoteItem = () => ({
   id: `q-item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -387,6 +388,8 @@ export default function Solicitacoes() {
     observacoes: ''
   });
   const [cotacaoParaPrecificar, setCotacaoParaPrecificar] = useState(null);
+  const [cotacaoPickerOpen, setCotacaoPickerOpen] = useState(false);
+  const [cotacaoSearchTerm, setCotacaoSearchTerm] = useState('');
 
   const [queueView, setQueueView] = useState('PRE_VENDAS');
   const [viewMode, setViewMode] = useState('KANBAN');
@@ -1293,6 +1296,57 @@ export default function Solicitacoes() {
     };
   }, [cotacaoRecords, cotacaoUploads]);
 
+  const cotacaoOptions = useMemo(() => {
+    const term = cotacaoSearchTerm.trim().toLowerCase();
+    return cotacaoRecords
+      .filter((row) => {
+        if (!term) return true;
+        return [
+          row?.numeroOrcamento,
+          row?.distribuidor,
+          ...(Array.isArray(row?.itens) ? row.itens.map((item) => item?.descricao) : [])
+        ].filter(Boolean).join(' ').toLowerCase().includes(term);
+      })
+      .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
+  }, [cotacaoRecords, cotacaoSearchTerm]);
+
+  const openExistingCotacao = (row) => {
+    const itens = Array.isArray(row?.itens) && row.itens.length > 0
+      ? row.itens.map((item) => ({
+        id: item.id || nextQuoteItem().id,
+        descricao: item.descricao || '',
+        quantidade: item.quantidade || 1,
+        custoUnitario: item.custoUnitario ?? ''
+      }))
+      : [nextQuoteItem()];
+
+    setCotacaoForm((prev) => ({
+      ...prev,
+      modalidade: row?.modalidade || prev.modalidade,
+      distribuidor: row?.distribuidor || '',
+      numeroOrcamento: row?.numeroOrcamento || prev.numeroOrcamento,
+      itens,
+      arquivo: null,
+      arquivoNome: row?.arquivoNome || '',
+      observacoesCotacao: row?.observacoesCotacao || '',
+      observacoesUpload: row?.observacoesUpload || ''
+    }));
+    setCotacaoParaPrecificar(row);
+    setCotacaoPickerOpen(false);
+    setCotacaoFeedback(`Cotação ${row?.numeroOrcamento || ''} carregada para edição/precificação.`);
+  };
+
+  const startNewCotacao = () => {
+    setCotacaoForm((prev) => ({
+      ...buildInitialCotacaoForm(cotacaoContext),
+      modalidade: prev.modalidade || inferModalidade(cotacaoContext),
+      numeroOrcamento: ''
+    }));
+    setCotacaoParaPrecificar(null);
+    setCotacaoPickerOpen(false);
+    setCotacaoFeedback('Nova cotação iniciada. Informe o número do orçamento recebido ou preencha um novo.');
+  };
+
   const renderCardActions = (item) => {
     const stage = resolveStage(item.status, item.stage);
 
@@ -1925,12 +1979,85 @@ export default function Solicitacoes() {
                     </div>
                     <div>
                       <label className="mb-1 block text-sm text-slate-300">Nº Orçamento</label>
-                      <input
-                        type="text"
-                        value={cotacaoForm.numeroOrcamento}
-                        onChange={(e) => setCotacaoForm((prev) => ({ ...prev, numeroOrcamento: e.target.value }))}
-                        className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={cotacaoForm.numeroOrcamento}
+                          onFocus={() => setCotacaoPickerOpen(true)}
+                          onClick={() => setCotacaoPickerOpen(true)}
+                          onChange={(e) => setCotacaoForm((prev) => ({ ...prev, numeroOrcamento: e.target.value }))}
+                          placeholder="Clique para buscar ou orçar novo"
+                          className="w-full rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2 text-white placeholder-slate-400"
+                        />
+                        {cotacaoPickerOpen && (
+                          <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 rounded-xl border border-slate-600/60 bg-[#111d31] p-3 shadow-2xl">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => setCotacaoSearchTerm('')}
+                                className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+                              >
+                                Abrir cotação existente
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={startNewCotacao}
+                                className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+                              >
+                                Orçar novo
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={cotacaoSearchTerm}
+                              onChange={(e) => setCotacaoSearchTerm(e.target.value)}
+                              placeholder="Buscar por número, distribuidor ou item"
+                              className="mt-3 w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                            />
+                            <div className="mt-2 max-h-52 overflow-y-auto">
+                              {cotacaoOptions.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-slate-700/70 px-3 py-4 text-center text-xs text-slate-400">
+                                  Nenhuma cotação existente nesta solicitação.
+                                </div>
+                              ) : (
+                                cotacaoOptions.map((row) => {
+                                  const itemCount = Array.isArray(row?.itens) ? row.itens.length : 0;
+                                  return (
+                                    <button
+                                      key={row.id || row.numeroOrcamento}
+                                      type="button"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => openExistingCotacao(row)}
+                                      className="mb-2 w-full rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-left hover:border-sky-500/50 hover:bg-sky-500/10"
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="truncate font-mono text-xs font-semibold text-sky-300">{row.numeroOrcamento || '-'}</div>
+                                          <div className="truncate text-xs text-slate-300">{row.distribuidor || 'Distribuidor não informado'}</div>
+                                        </div>
+                                        <div className="shrink-0 text-right text-xs text-slate-400">
+                                          <div>{itemCount} item(ns)</div>
+                                          <div>{toCurrency(row.subtotal)}</div>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => setCotacaoPickerOpen(false)}
+                              className="mt-1 w-full rounded-lg px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                            >
+                              Fechar
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
