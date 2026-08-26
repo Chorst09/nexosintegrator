@@ -71,6 +71,12 @@ const formatCurrencyNoCents = (value) => new Intl.NumberFormat('pt-BR', {
 
 const formatPercent = (value) => `${Number(value || 0).toFixed(1)}%`;
 
+const clampPercent = (value) => {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return 0;
+  return Math.min(100, Math.max(0, score));
+};
+
 const STAGE_LABELS = {
   LEAD_GENERATION: 'Geração',
   LEAD_QUALIFICATION: 'Qualificação',
@@ -125,6 +131,7 @@ const calculateKPIs = ({ apiKpis = {}, charts = {} }) => {
   const firstCount = toCount(firstStage);
   const lastCount = toCount(lastStage);
   const funnelValue = funnel.reduce((sum, item) => sum + toValue(item), 0);
+  const leadStageCount = toCount(funnel.find((item) => item?.stage === 'LEAD' || item?.key === 'LEAD'));
   const lastStageValue = toValue(lastStage);
   const monthlyRevenue = charts.monthlyRevenue || [];
   const lastRevenue = monthlyRevenue[monthlyRevenue.length - 1]?.revenue || 0;
@@ -132,7 +139,7 @@ const calculateKPIs = ({ apiKpis = {}, charts = {} }) => {
   const wonOpportunities = hasPositiveValue(apiKpis.wonOpportunities) ? apiKpis.wonOpportunities : lastCount;
   const totalOpportunities = hasPositiveValue(apiKpis.totalOpportunities) ? apiKpis.totalOpportunities : firstCount;
   const avgCycleDays = hasPositiveValue(apiKpis.avgCycleDays) ? Math.round(apiKpis.avgCycleDays) : avg(charts.velocityByStage || []);
-  const activeLeads = hasPositiveValue(apiKpis.activeLeads) ? apiKpis.activeLeads : firstCount;
+  const activeLeads = apiKpis.activeLeads !== undefined ? Number(apiKpis.activeLeads || 0) : leadStageCount;
   const pipelineVelocity = hasPositiveValue(apiKpis.pipelineVelocity)
     ? apiKpis.pipelineVelocity
     : avgCycleDays > 0 ? Number((activeLeads / avgCycleDays).toFixed(1)) : 0;
@@ -623,9 +630,15 @@ export default function Dashboard() {
   ];
   const opportunityBase = Math.max(kpis.activeLeads, kpis.totalOpportunities, kpis.wonOpportunities, 1);
   const temperatureTotal = Object.values(temperatureCounts).reduce((sum, count) => sum + Number(count || 0), 0);
-  const pipelineTemperature = temperatureTotal > 0
-    ? Object.entries(temperatureCounts).reduce((sum, [level, count]) => sum + Number(level) * Number(count || 0), 0) / temperatureTotal
-    : kpis.conversionRate;
+  const pipelineTemperature = filteredOpportunities.length > 0
+    ? filteredOpportunities.reduce((sum, item) => sum + clampPercent(item?.probability), 0) / filteredOpportunities.length
+    : temperatureTotal > 0
+      ? Object.entries(temperatureCounts).reduce((sum, [level, count]) => sum + Number(level) * Number(count || 0), 0) / temperatureTotal
+      : 0;
+  const pipelineTemperatureColor = referenceStageLevels
+    .slice()
+    .reverse()
+    .find((level) => pipelineTemperature >= level.value)?.color || '#ff7a00';
   const openOpportunities = filteredOpportunities
     .filter((item) => !['WON', 'LOST'].includes(String(item?.stage || '').toUpperCase()))
     .sort((a, b) => Number(a?.probability || 0) - Number(b?.probability || 0));
@@ -744,6 +757,7 @@ export default function Dashboard() {
           funnelTitle="Funil Comercial B2B"
           funnelSubtitle="Volume de oportunidades por etapa"
           temperature={pipelineTemperature}
+          temperatureColor={pipelineTemperatureColor}
           temperatureLevels={referenceStageLevels}
           performanceChart={{
             title: 'Performance por Origem',

@@ -1,18 +1,23 @@
 import React from 'react';
 
 const B2B_STAGES = [
-  { key: 'LEAD_GENERATION', label: 'Geração de Leads', lines: ['Geração de Leads (0%)'], width: 100, height: 46, palette: ['#ff4b42', '#db1f25', '#7f1018'] },
-  { key: 'LEAD_QUALIFICATION', label: 'Qualificar Leads', lines: ['Qualificar Leads (25%)'], width: 86, height: 46, palette: ['#fff4a6', '#e4d66e', '#837934'] },
-  { key: 'PROBLEM_ASSESSMENT', label: 'Avaliar Desafios / Problemas', lines: ['Avaliar Desafios / Problemas', '(50%)'], width: 72, height: 53, palette: ['#9ddd50', '#67b934', '#315f1d'] },
-  { key: 'SOLUTION', label: 'Solucionar Problemas', lines: ['Solucionar', 'Problemas (75%)'], width: 58, height: 53, palette: ['#36d9e5', '#16aaba', '#0d5d69'] },
-  { key: 'CONVERSION', label: 'Converter', lines: ['Converter'], width: 44, height: 46, palette: ['#258bd0', '#125b9c', '#092f5a'] },
-  { key: 'CLOSING', label: 'Fechar', lines: ['Fechar', '(100%)'], width: 32, height: 52, palette: ['#a63ce0', '#701bab', '#3d0c65'] }
+  { key: 'LEAD', label: 'Lead', width: 100, height: 43, palette: ['#38bdf8', '#0284c7', '#075985'] },
+  { key: 'QUALIFICATION', label: 'Qualificação', width: 88, height: 43, palette: ['#60a5fa', '#2563eb', '#1e3a8a'] },
+  { key: 'DIAGNOSIS', label: 'Diagnóstico', width: 76, height: 43, palette: ['#2dd4bf', '#0d9488', '#134e4a'] },
+  { key: 'PROPOSAL', label: 'Proposta', width: 64, height: 43, palette: ['#fbbf24', '#f59e0b', '#92400e'] },
+  { key: 'NEGOTIATION', label: 'Negociação', width: 52, height: 43, palette: ['#fb923c', '#ea580c', '#9a3412'] },
+  { key: 'WON', label: 'Ganhas', width: 42, height: 43, palette: ['#34d399', '#16a34a', '#14532d'] },
+  { key: 'LOST', label: 'Perdidas', width: 34, height: 43, palette: ['#94a3b8', '#64748b', '#334155'] }
 ];
 
-const getStageCount = (data, stage, index) => {
+const getStageCount = (data, stage) => {
   const row = data.find((item) => item?.stage === stage.key || item?.key === stage.key);
-  const source = row || data[index] || {};
-  return Number(source?._count?.stage ?? source?.count ?? source?.value ?? 0) || 0;
+  return Number(row?._count?.stage ?? row?.count ?? row?.deals ?? 0) || 0;
+};
+
+const getStageValue = (data, stage) => {
+  const row = data.find((item) => item?.stage === stage.key || item?.key === stage.key);
+  return Number(row?._sum?.value ?? row?.value ?? row?.revenue ?? 0) || 0;
 };
 
 const SalesFunnel = ({ data = [] }) => {
@@ -20,13 +25,18 @@ const SalesFunnel = ({ data = [] }) => {
   const svgHeight = 340;
   const centerX = svgWidth / 2;
   const maxStageWidth = 510;
+  const totalCount = B2B_STAGES.reduce((sum, stage) => sum + getStageCount(data, stage), 0);
+  const maxCount = Math.max(...B2B_STAGES.map((stage) => getStageCount(data, stage)), 1);
   let currentY = 18;
   const layouts = B2B_STAGES.map((stage, index) => {
-    const renderedWidth = (stage.width / 100) * maxStageWidth;
+    const count = getStageCount(data, stage);
+    const percent = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+    const dynamicWidth = totalCount > 0 ? Math.max(34, (count / maxCount) * 100) : stage.width;
+    const renderedWidth = (dynamicWidth / 100) * maxStageWidth;
     const bottomWidth = index < B2B_STAGES.length - 1
-      ? (B2B_STAGES[index + 1].width / 100) * maxStageWidth + 14
+      ? Math.max(34, (getStageCount(data, B2B_STAGES[index + 1]) / maxCount) * 100) / 100 * maxStageWidth + 14
       : renderedWidth * 0.7;
-    const layout = { ...stage, y: currentY, renderedWidth, bottomWidth };
+    const layout = { ...stage, y: currentY, renderedWidth, bottomWidth, count, percent, value: getStageValue(data, stage) };
     currentY += stage.height + 2;
     return layout;
   });
@@ -67,21 +77,20 @@ const SalesFunnel = ({ data = [] }) => {
           const bottomRight = centerX + stage.bottomWidth / 2;
           const topY = stage.y;
           const bottomY = topY + stage.height;
-          const count = getStageCount(data, stage, index);
-          const textColor = stage.key === 'LEAD_QUALIFICATION' ? '#27303b' : '#ffffff';
-          const lineHeight = stage.lines.length > 1 ? 17 : 18;
-          const textStartY = topY + (stage.height / 2) - ((stage.lines.length - 1) * lineHeight / 2) + 7;
+          const textColor = stage.key === 'PROPOSAL' ? '#27303b' : '#ffffff';
+          const textStartY = topY + (stage.height / 2) + 1;
 
           return (
             <g key={stage.key} filter="url(#b2b-stage-shadow)">
-              <title>{`${stage.label}: ${count} oportunidade${count === 1 ? '' : 's'}`}</title>
+              <title>{`${stage.label}: ${stage.count} oportunidade${stage.count === 1 ? '' : 's'} • ${stage.percent}%`}</title>
               <path d={`M ${topLeft + 5} ${topY + 2} C ${topLeft + 10} ${topY + 14}, ${bottomLeft - 3} ${bottomY - 13}, ${bottomLeft} ${bottomY - 5} Q ${centerX} ${bottomY + 7} ${bottomRight} ${bottomY - 5} C ${bottomRight + 3} ${bottomY - 13}, ${topRight - 10} ${topY + 14}, ${topRight - 5} ${topY + 2} Z`} fill={`url(#b2b-front-${stage.key})`} stroke={stage.palette[2]} strokeWidth="1.2" />
               <path d={`M ${bottomLeft} ${bottomY - 8} Q ${centerX} ${bottomY + 8} ${bottomRight} ${bottomY - 8} Q ${centerX} ${bottomY + 15} ${bottomLeft} ${bottomY - 8} Z`} fill={`url(#b2b-depth-${stage.key})`} opacity="0.8" />
               <ellipse cx={centerX} cy={topY + 2} rx={stage.renderedWidth / 2} ry="11" fill={`url(#b2b-rim-${stage.key})`} stroke="rgba(255,255,255,0.42)" strokeWidth="1.2" />
               <ellipse cx={centerX} cy={topY + 3} rx={Math.max(stage.renderedWidth / 2 - 10, 24)} ry="6" fill={stage.palette[2]} opacity="0.72" />
               <path d={`M ${topLeft + 16} ${topY - 1} Q ${centerX} ${topY - 8} ${topRight - 16} ${topY - 1}`} fill="none" stroke="#ffffff" strokeLinecap="round" strokeWidth="2" opacity="0.38" />
-              <text x={centerX} y={textStartY} textAnchor="middle" fill={textColor} fontFamily="Arial, Segoe UI, sans-serif" fontSize={stage.key === 'PROBLEM_ASSESSMENT' ? '15' : '17'} fontWeight="800" paintOrder="stroke" stroke={textColor === '#ffffff' ? 'rgba(3,8,18,0.34)' : 'transparent'} strokeWidth="1.4">
-                {stage.lines.map((line, lineIndex) => <tspan key={line} x={centerX} dy={lineIndex === 0 ? 0 : lineHeight}>{line}</tspan>)}
+              <text x={centerX} y={textStartY} textAnchor="middle" fill={textColor} fontFamily="Arial, Segoe UI, sans-serif" fontSize="15" fontWeight="800" paintOrder="stroke" stroke={textColor === '#ffffff' ? 'rgba(3,8,18,0.34)' : 'transparent'} strokeWidth="1.2">
+                <tspan x={centerX}>{stage.label}</tspan>
+                <tspan x={centerX} dy="16">{stage.count} • {stage.percent}%</tspan>
               </text>
             </g>
           );

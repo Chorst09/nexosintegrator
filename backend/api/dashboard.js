@@ -487,10 +487,22 @@ export default async function handler(req) {
           };
         }
 
-        const chartsWhere = { ...baseWhere };
+        const chartsWhere = { ...whereClause };
 
-        const whereNoDate = withOpportunityTenant({ ...b2bOpportunityFilter, company: { clientType: 'B2B' } });
-        if (ownerId) whereNoDate.ownerId = ownerId;
+        const temperatureCountWhere = { ...baseWhere };
+        const monthlyRevenueWhere = withOpportunityTenant({
+          ...b2bOpportunityFilter,
+          stage: 'WON',
+          company: { clientType: 'B2B' },
+          updatedAt: { gte: revenueStartDate }
+        });
+        if (ownerId) monthlyRevenueWhere.ownerId = ownerId;
+        if (tempFilter && temperatureRange[tempFilter]) {
+          monthlyRevenueWhere.probability = {
+            gte: temperatureRange[tempFilter].gte,
+            lte: temperatureRange[tempFilter].lte
+          };
+        }
 
         const [
           totalCompanies,
@@ -547,12 +559,7 @@ export default async function handler(req) {
             take: 200
           }),
           prisma.opportunity.findMany({
-            where: withOpportunityTenant({
-              ...b2bOpportunityFilter,
-              stage: 'WON',
-              company: { clientType: 'B2B' },
-              updatedAt: { gte: revenueStartDate }
-            }),
+            where: monthlyRevenueWhere,
             select: {
               updatedAt: true,
               value: true
@@ -563,7 +570,7 @@ export default async function handler(req) {
         // Contagens por temperatura
         const allProbabilities = await prisma.opportunity.groupBy({
           by: ['probability'],
-          where: { ...whereNoDate },
+          where: { ...temperatureCountWhere },
           _count: { probability: true }
         });
 
@@ -590,6 +597,10 @@ export default async function handler(req) {
             revenue: perf._sum.value || 0
           };
         });
+
+        const activeLeads = funnelData
+          .filter(item => item.stage === 'LEAD')
+          .reduce((sum, item) => sum + (item._count?.stage || 0), 0);
 
         const conversion = (wonOpportunities + lostOpportunities) > 0
           ? (wonOpportunities / (wonOpportunities + lostOpportunities)) * 100
@@ -619,6 +630,7 @@ export default async function handler(req) {
             totalOpportunities,
             wonOpportunities,
             lostOpportunities,
+            activeLeads,
             totalCompanies
           },
           charts: {
