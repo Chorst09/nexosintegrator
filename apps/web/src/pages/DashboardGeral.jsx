@@ -76,8 +76,25 @@ const formatCompactCurrency = (value) => {
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toNumber = (value) => {
-  const n = Number(value);
+  const normalized = typeof value === 'string'
+    ? value
+      .replace(/[^\d,.-]/g, '')
+      .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+      .replace(',', '.')
+    : value;
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
+};
+
+const parseJsonObject = (value) => {
+  if (!value) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 };
 
 const toDate = (value) => {
@@ -134,6 +151,33 @@ const normalizeProjectMonths = (value) => {
 
 const revenueBreakdownFromOpportunities = (rows = []) =>
   toArray(rows).reduce((acc, item) => {
+    const b2g = parseJsonObject(item?.description);
+    const hasB2GFinancialShape = Boolean(
+      item?.clientType === 'B2G' ||
+      item?.b2gStage ||
+      b2g.processNumber ||
+      b2g.modality ||
+      b2g.contractTermMonths ||
+      b2g.estimatedMonthlyValue !== undefined ||
+      b2g.estimatedOneTimeValue !== undefined
+    );
+    const b2gMonthly = toNumber(b2g.estimatedMonthlyValue);
+    const b2gOneTime = toNumber(b2g.estimatedOneTimeValue);
+    const b2gMonths = normalizeProjectMonths(b2g.contractTermMonths || item?.projectMonths);
+    const b2gTotal = toNumber(b2g.estimatedValue);
+
+    if (hasB2GFinancialShape && (b2gMonthly > 0 || b2gTotal > 0 || b2gOneTime > 0)) {
+      const total = b2gTotal || (b2gMonthly * b2gMonths) + b2gOneTime;
+      acc.monthly += b2gMonthly;
+      acc.contract += b2gMonthly > 0 ? b2gMonthly * b2gMonths : 0;
+      acc.single += b2gOneTime || (b2gMonthly > 0 ? 0 : total);
+      acc.total += total;
+      acc.monthlyCount += b2gMonthly > 0 ? 1 : 0;
+      acc.singleCount += b2gMonthly > 0 ? 0 : 1;
+      acc.count += 1;
+      return acc;
+    }
+
     const value = toNumber(item?.value);
     const isMonthly = normalizeProjectType(item?.projectType) === MONTHLY_PROJECT_TYPE;
     if (isMonthly) {
@@ -754,7 +798,7 @@ export default function DashboardGeral() {
         teamMap[ownerName].won += 1;
       }
       if (OPEN_STAGES.has(String(item.stage || '').toUpperCase())) {
-        teamMap[ownerName].pipeline += toNumber(item.value);
+        teamMap[ownerName].pipeline += revenueBreakdownFromOpportunities([item]).total;
       }
     });
 
@@ -793,13 +837,10 @@ export default function DashboardGeral() {
       if (!createdDate) return;
       const idx = monthIndex.get(monthKey(createdDate));
       if (idx === undefined) return;
-      const value = toNumber(item.value);
-      if (normalizeProjectType(item.projectType) === MONTHLY_PROJECT_TYPE) {
-        bucketSet.recurring[idx] += value;
-        bucketSet.contract[idx] += value * normalizeProjectMonths(item.projectMonths);
-      } else {
-        bucketSet.single[idx] += value;
-      }
+      const revenue = revenueBreakdownFromOpportunities([item]);
+      bucketSet.recurring[idx] += revenue.monthly;
+      bucketSet.contract[idx] += revenue.contract;
+      bucketSet.single[idx] += revenue.single;
     };
 
     opportunitiesB2BRange.forEach((item) => addOpportunityRevenueToBucket(item, monthlyB2B));
@@ -810,9 +851,9 @@ export default function DashboardGeral() {
       if (!createdDate) return;
       const idx = monthIndex.get(monthKey(createdDate));
       if (idx === undefined) return;
-      monthlyPotential[idx] += toNumber(item.value);
+      monthlyPotential[idx] += revenueBreakdownFromOpportunities([item]).total;
       if (String(item.stage || '').toUpperCase() === 'WON') {
-        monthlyWon[idx] += toNumber(item.value);
+        monthlyWon[idx] += revenueBreakdownFromOpportunities([item]).total;
       }
     });
 

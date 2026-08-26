@@ -108,9 +108,12 @@ const buildGeneralDashboard = async (user = {}) => {
   const opportunitySelect = {
     id: true,
     value: true,
+    description: true,
     projectType: true,
     projectMonths: true,
+    projectClientType: true,
     stage: true,
+    b2gStage: true,
     createdAt: true,
     updatedAt: true,
     owner: { select: { name: true } }
@@ -155,6 +158,7 @@ const buildGeneralDashboard = async (user = {}) => {
       where: {
         ...tenantWhere,
         OR: [
+          { projectClientType: 'B2G' },
           { b2gStage: { not: null } },
           { company: { clientType: 'B2G' } }
         ],

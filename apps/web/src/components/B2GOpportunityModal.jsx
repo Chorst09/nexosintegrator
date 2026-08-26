@@ -33,6 +33,40 @@ const RISK_LEVELS = ['baixo', 'medio', 'alto'];
 const COMPETITION_LEVELS = ['baixo', 'medio', 'alto'];
 const CONTRACT_TYPES = ['Contrato', 'Ata de Registro de Preços', 'Ordem de Serviço', 'Dispensa'];
 
+const parseMoneyInput = (value) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const raw = String(value ?? '').trim();
+  if (!raw) return 0;
+  const normalized = raw
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatMoneyInput = (value) => {
+  const parsed = parseMoneyInput(value);
+  return parsed > 0 ? parsed.toFixed(2) : '';
+};
+
+const calculateB2GFinancials = (form) => {
+  const monthlyValue = parseMoneyInput(form.estimatedMonthlyValue);
+  const oneTimeValue = parseMoneyInput(form.estimatedOneTimeValue);
+  const manualTotalValue = parseMoneyInput(form.estimatedValue);
+  const contractTermMonths = Math.max(parseInt(form.contractTermMonths, 10) || 0, 0);
+  const calculatedTotal = monthlyValue > 0
+    ? (monthlyValue * contractTermMonths) + oneTimeValue
+    : (manualTotalValue || oneTimeValue);
+
+  return {
+    monthlyValue,
+    oneTimeValue,
+    totalValue: Number(calculatedTotal.toFixed(2)),
+    contractTermMonths: contractTermMonths || 12
+  };
+};
+
 const DECISION_COLORS = {
   'GO': 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40',
   'NO GO': 'bg-red-500/20 text-red-300 border-red-400/40',
@@ -663,6 +697,25 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
   }, [isOpen, opportunity, mode]);
 
   const set = (key, value) => setForm(p => ({ ...p, [key]: value }));
+  const setFinancial = (key, value) => {
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      const { monthlyValue, totalValue } = calculateB2GFinancials(next);
+      if (monthlyValue > 0) {
+        next.estimatedValue = formatMoneyInput(totalValue);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const { monthlyValue, totalValue } = calculateB2GFinancials(form);
+    if (monthlyValue <= 0) return;
+    const nextTotal = formatMoneyInput(totalValue);
+    if (nextTotal && nextTotal !== String(form.estimatedValue || '')) {
+      setForm((prev) => ({ ...prev, estimatedValue: nextTotal }));
+    }
+  }, [form.estimatedMonthlyValue, form.estimatedOneTimeValue, form.contractTermMonths]);
 
   const handleSave = async () => {
     if (!form.objectSummary.trim()) { setError('Informe o Objeto Resumido.'); return; }
@@ -673,6 +726,8 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
       ? (leads?.find(l => l.name === form.agency)?.id || leads?.[0]?.id || '')
       : (opportunity?.companyId || opportunity?.company?.id || '');
 
+    const financials = calculateB2GFinancials(form);
+    const hasMonthlyContract = financials.monthlyValue > 0;
     const b2gData = {
       ...parseB2GData(opportunity?.description),
       processNumber: form.processNumber, uasgId: form.uasgId,
@@ -683,14 +738,14 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
       manufacturerRegistrationStatus: form.manufacturerRegistrationStatus,
       modality: form.modality, type: form.type,
       objectSummary: form.objectSummary, objectDetailed: form.objectDetailed,
-      estimatedMonthlyValue: parseFloat(form.estimatedMonthlyValue) || 0,
-      estimatedOneTimeValue: parseFloat(form.estimatedOneTimeValue) || 0,
-      estimatedValue: parseFloat(form.estimatedValue) || 0,
-      maxAcceptableValue: parseFloat(form.maxAcceptableValue) || 0,
-      estimatedMargin: parseFloat(form.estimatedMargin) || 0,
-      expectedTicket: parseFloat(form.expectedTicket) || 0,
-      contractType: form.contractType, contractTermMonths: parseInt(form.contractTermMonths) || 12,
-      readjustmentClause: form.readjustmentClause, guaranteePercentage: parseFloat(form.guaranteePercentage) || 0,
+      estimatedMonthlyValue: financials.monthlyValue,
+      estimatedOneTimeValue: financials.oneTimeValue,
+      estimatedValue: financials.totalValue,
+      maxAcceptableValue: parseMoneyInput(form.maxAcceptableValue),
+      estimatedMargin: parseMoneyInput(form.estimatedMargin),
+      expectedTicket: parseMoneyInput(form.expectedTicket),
+      contractType: form.contractType, contractTermMonths: financials.contractTermMonths,
+      readjustmentClause: form.readjustmentClause, guaranteePercentage: parseMoneyInput(form.guaranteePercentage),
       publicationDate: form.publicationDate, openingDate: form.openingDate,
       challengeDeadline: form.challengeDeadline, proposalDeadline: form.proposalDeadline,
       estimatedValidity: form.estimatedValidity, currentPhase: form.currentPhase,
@@ -698,7 +753,7 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
       partner: form.partner, manufacturer: form.manufacturer,
       competitionLevel: form.competitionLevel, mainCompetitors: form.mainCompetitors,
       strategyDescription: form.strategyDescription,
-      winProbability: parseFloat(form.winProbability) || 0,
+      winProbability: parseMoneyInput(form.winProbability),
       decision: form.decision, decisionJustification: form.decisionJustification,
       briefingLink: form.briefingLink, documentChecklistComplete: form.documentChecklistComplete,
       certificatesRequired: form.certificatesRequired, samplesRequired: form.samplesRequired,
@@ -718,8 +773,10 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
         projectName: form.projectName || form.objectSummary,
         projectClientType: form.customerRelationship,
         description: JSON.stringify(b2gData),
-        value: parseFloat(form.estimatedValue) || 0,
-        probability: parseFloat(form.winProbability) || 50,
+        value: financials.totalValue,
+        projectType: hasMonthlyContract ? 'MONTHLY' : 'SINGLE',
+        projectMonths: hasMonthlyContract ? financials.contractTermMonths : null,
+        probability: parseMoneyInput(form.winProbability) || 50,
         stage: isCreateMode ? 'QUALIFICATION' : preservedPipelineStage,
         source: 'MANUAL',
         companyId, ownerId: user?.id || '', clientType: 'B2G',
@@ -894,22 +951,6 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
             <div className={sectionCls}>
               <div><h3 className="text-lg font-bold text-white">Dados Financeiros</h3>
                 <p className="text-xs text-slate-400">Valores estimados e condições contratuais.</p></div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div><label className={labelCls}>Valor Estimado Mensal (R$)</label>
-                  <input type="number" min="0" step="0.01" className={inputCls} placeholder="0,00" value={form.estimatedMonthlyValue} onChange={e => set('estimatedMonthlyValue', e.target.value)} /></div>
-                <div><label className={labelCls}>Valor Estimado Pontual (R$)</label>
-                  <input type="number" min="0" step="0.01" className={inputCls} placeholder="0,00" value={form.estimatedOneTimeValue} onChange={e => set('estimatedOneTimeValue', e.target.value)} /></div>
-                <div><label className={labelCls}>Valor Total Estimado (R$)</label>
-                  <input type="number" min="0" step="0.01" className={inputCls} placeholder="0,00" value={form.estimatedValue} onChange={e => set('estimatedValue', e.target.value)} /></div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div><label className={labelCls}>Valor Máximo Aceitável (R$)</label>
-                  <input type="number" min="0" step="0.01" className={inputCls} placeholder="0,00" value={form.maxAcceptableValue} onChange={e => set('maxAcceptableValue', e.target.value)} /></div>
-                <div><label className={labelCls}>Margem Estimada (%)</label>
-                  <input type="number" min="0" max="100" className={inputCls} placeholder="0" value={form.estimatedMargin} onChange={e => set('estimatedMargin', e.target.value)} /></div>
-                <div><label className={labelCls}>Ticket Esperado (R$)</label>
-                  <input type="number" min="0" step="0.01" className={inputCls} placeholder="0,00" value={form.expectedTicket} onChange={e => set('expectedTicket', e.target.value)} /></div>
-              </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2"><label className={labelCls}>Tipo de Contrato</label>
                   <select className={selectCls} value={form.contractType} onChange={e => set('contractType', e.target.value)}>
@@ -917,9 +958,29 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
                   </select>
                 </div>
                 <div><label className={labelCls}>Prazo Contratual (meses)</label>
-                  <input type="number" min="0" className={inputCls} placeholder="12" value={form.contractTermMonths} onChange={e => set('contractTermMonths', e.target.value)} /></div>
+                  <input type="text" inputMode="numeric" className={inputCls} placeholder="12" value={form.contractTermMonths} onChange={e => setFinancial('contractTermMonths', e.target.value)} /></div>
                 <div><label className={labelCls}>Garantia (%)</label>
-                  <input type="number" min="0" max="100" className={inputCls} placeholder="0" value={form.guaranteePercentage} onChange={e => set('guaranteePercentage', e.target.value)} /></div>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0" value={form.guaranteePercentage} onChange={e => set('guaranteePercentage', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div><label className={labelCls}>Temperatura do negócio (%)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="50" value={form.winProbability} onChange={e => set('winProbability', e.target.value)} /></div>
+                <div><label className={labelCls}>Valor Estimado Mensal (R$)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0,00" value={form.estimatedMonthlyValue} onChange={e => setFinancial('estimatedMonthlyValue', e.target.value)} /></div>
+                <div><label className={labelCls}>Valor Estimado Pontual (R$)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0,00" value={form.estimatedOneTimeValue} onChange={e => setFinancial('estimatedOneTimeValue', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div><label className={labelCls}>Valor Total Estimado (R$)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0,00" value={form.estimatedValue} onChange={e => setFinancial('estimatedValue', e.target.value)} /></div>
+                <div><label className={labelCls}>Valor Máximo Aceitável (R$)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0,00" value={form.maxAcceptableValue} onChange={e => set('maxAcceptableValue', e.target.value)} /></div>
+                <div><label className={labelCls}>Margem Estimada (%)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0" value={form.estimatedMargin} onChange={e => set('estimatedMargin', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div><label className={labelCls}>Ticket Esperado (R$)</label>
+                  <input type="text" inputMode="decimal" className={inputCls} placeholder="0,00" value={form.expectedTicket} onChange={e => set('expectedTicket', e.target.value)} /></div>
               </div>
               <div className="flex items-center gap-2 mt-1">
                 <input type="checkbox" id="readjustmentClause" checked={form.readjustmentClause} onChange={e => set('readjustmentClause', e.target.checked)} className="rounded accent-cyan-500" />
@@ -978,8 +1039,6 @@ export function B2GOpportunityEditModal({ isOpen, onClose, opportunity, leads, o
                     {COMPETITION_LEVELS.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
                   </select>
                 </div>
-                <div><label className={labelCls}>Probabilidade de Ganho (%)</label>
-                  <input type="number" min="0" max="100" className={inputCls} placeholder="50" value={form.winProbability} onChange={e => set('winProbability', e.target.value)} /></div>
                 <div><label className={labelCls}>Decisão GO/NO GO</label>
                   <select className={selectCls} value={form.decision} onChange={e => set('decision', e.target.value)}>
                     <option value="PENDING">Pendente</option>

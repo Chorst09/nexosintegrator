@@ -457,7 +457,7 @@ export default async function handler(req) {
       updateData.projectMonths = normalizeProjectMonths(body.projectType || 'MONTHLY', body.projectMonths);
     }
     if (body.description !== undefined) updateData.description = body.description;
-    if (body.value) updateData.value = body.value;
+    if (body.value !== undefined) updateData.value = body.value;
     if (body.probability !== undefined) updateData.probability = body.probability;
     if (body.expectedCloseDate) updateData.expectedCloseDate = new Date(body.expectedCloseDate);
     if (body.lossReason !== undefined) {

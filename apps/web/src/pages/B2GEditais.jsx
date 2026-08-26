@@ -86,7 +86,7 @@ import TemperatureGauge from '../components/TemperatureGauge';
 import Modal from '../components/Modal';
 import OpportunityForm from '../components/OpportunityForm';
 import CloseOpportunityModal from '../components/CloseOpportunityModal';
-import { B2GOpportunityDetailModal, B2GOpportunityEditModal } from '../components/B2GOpportunityModal';
+import { B2GOpportunityDetailModal, B2GOpportunityEditModal, parseB2GData } from '../components/B2GOpportunityModal';
 import B2GOpportunityAlerts from '../components/B2GOpportunityAlerts';
 import PresentationControls from '../components/PresentationControls';
 import PipelineDashboardModel from '../components/PipelineDashboardModel';
@@ -260,6 +260,36 @@ const PERIOD_OPTIONS = [
   { value: '90', label: 'Últimos 90 dias' },
   { value: '180', label: 'Últimos 180 dias' }
 ];
+
+const toFiniteNumber = (value) => {
+  const normalized = typeof value === 'string'
+    ? value
+      .replace(/[^\d,.-]/g, '')
+      .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+      .replace(',', '.')
+    : value;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getB2GOpportunityFinancials = (item = {}) => {
+  const b2g = parseB2GData(item?.description);
+  const monthlyValue = toFiniteNumber(b2g.estimatedMonthlyValue);
+  const oneTimeValue = toFiniteNumber(b2g.estimatedOneTimeValue);
+  const contractMonths = Math.max(toFiniteNumber(b2g.contractTermMonths || item?.projectMonths), 1);
+  const savedTotal = toFiniteNumber(b2g.estimatedValue);
+  const rawValue = toFiniteNumber(item?.value || item?.estimatedValue);
+  const isMonthly = String(item?.projectType || '').toUpperCase() === 'MONTHLY' || monthlyValue > 0;
+  const totalValue = savedTotal || (isMonthly && monthlyValue > 0 ? (monthlyValue * contractMonths) + oneTimeValue : rawValue);
+
+  return {
+    monthlyValue: monthlyValue || (isMonthly ? totalValue / contractMonths : 0),
+    oneTimeValue: oneTimeValue || (!isMonthly ? totalValue : 0),
+    totalValue,
+    contractMonths,
+    isMonthly
+  };
+};
 
 const KANBAN_TONE_STYLES = {
   default: {
@@ -2063,7 +2093,7 @@ export default function B2GEditais() {
     return dashboardSourceOpportunities.map((item) => {
       const columnId = resolveKanbanColumnId(item?.b2gStage || item?.stage);
       const probability = clampScore(item?.probability);
-      const value = Number(item?.value || item?.estimatedValue || 0);
+      const financials = getB2GOpportunityFinancials(item);
       const organization =
         item?.company?.name ||
         item?.organization ||
@@ -2077,7 +2107,11 @@ export default function B2GEditais() {
         __stageLabel: KANBAN_COLUMN_LABELS[columnId] || OPPORTUNITY_STAGE_LABELS[item?.stage] || 'Análise',
         __temperatureBand: getTemperatureBand(probability),
         __probability: probability,
-        __value: Number.isFinite(value) ? value : 0,
+        __value: financials.totalValue,
+        __monthlyValue: financials.monthlyValue,
+        __punctualValue: financials.oneTimeValue,
+        __contractMonths: financials.contractMonths,
+        __isMonthly: financials.isMonthly,
         __organization: organization,
         __title: title
       };
@@ -2101,15 +2135,15 @@ export default function B2GEditais() {
       const value = item.__value;
       const probability = item.__probability;
       const columnId = item.__columnId;
-      const projectType = item?.projectType || 'SINGLE';
-      const projectMonths = Number(item?.projectMonths) || 1;
-      const monthlyPart = projectType === 'MONTHLY' ? (value / projectMonths) : value;
+      const projectType = item.__isMonthly ? 'MONTHLY' : (item?.projectType || 'SINGLE');
+      const monthlyPart = item.__monthlyValue || (projectType === 'MONTHLY' ? (value / item.__contractMonths) : value);
 
       pipelineValue += value;
       projectedValue += value * (probability / 100);
 
       if (projectType === 'MONTHLY') {
         monthlyValue += monthlyPart;
+        punctualValue += item.__punctualValue || 0;
       } else {
         punctualValue += value;
       }
@@ -2300,10 +2334,9 @@ export default function B2GEditais() {
       if (!date) return;
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const project = item.__organization || 'Não identificado';
-      const totalValue = Number(item.value) || 0;
-      const projectType = item?.projectType || 'SINGLE';
-      const projectMonths = Number(item?.projectMonths) || 1;
-      const monthlyPart = projectType === 'MONTHLY' ? (totalValue / projectMonths) : totalValue;
+      const totalValue = Number(item.__value) || 0;
+      const projectType = item.__isMonthly ? 'MONTHLY' : (item?.projectType || 'SINGLE');
+      const monthlyPart = item.__monthlyValue || (projectType === 'MONTHLY' ? (totalValue / item.__contractMonths) : totalValue);
 
       if (!byMonth[monthKey]) byMonth[monthKey] = {};
       if (!byMonth[monthKey][project]) byMonth[monthKey][project] = 0;
