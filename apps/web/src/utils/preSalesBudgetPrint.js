@@ -44,6 +44,9 @@ export const buildPreSalesBudgetPrintHtml = (item) => {
   const details = item?.calculoDetalhes && typeof item.calculoDetalhes === 'object' ? item.calculoDetalhes : {};
   const proposalDetails = details.dadosProposta && typeof details.dadosProposta === 'object' ? details.dadosProposta : {};
   const cotacoes = Array.isArray(details.cotacoes) ? details.cotacoes : [];
+  const propostasPrecificadas = Array.isArray(details.propostasPrecificadas)
+    ? details.propostasPrecificadas
+    : details.propostaPrecificada ? [details.propostaPrecificada] : [];
   const itensSolicitados = Array.isArray(item?.items) ? item.items : [];
   const createdAt = item?.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : '-';
   const updatedAt = item?.updatedAt ? new Date(item.updatedAt).toLocaleString('pt-BR') : '-';
@@ -88,6 +91,24 @@ export const buildPreSalesBudgetPrintHtml = (item) => {
         });
       }).join('')
     : '<tr><td colspan="8" class="empty">Sem cotações de distribuidores registradas.</td></tr>';
+
+  const pricingRows = propostasPrecificadas.length > 0
+    ? propostasPrecificadas.map((proposta) => {
+        const finalPrice = Number(proposta?.result?.finalPrice) || 0;
+        const monthlyPrice = Number(proposta?.result?.monthlyPrice) || 0;
+        const baseCost = Number(proposta?.result?.baseCost) || 0;
+        const margin = Number(proposta?.pricing?.desiredMargin) || 0;
+        return `<tr>
+          <td>${escapeHtml(proposta?.number || '-')}</td>
+          <td>${escapeHtml(proposta?.calculatorLabel || proposta?.calculatorType || '-')}</td>
+          <td style="text-align:right">${escapeHtml(toCurrency(finalPrice))}</td>
+          <td style="text-align:right">${escapeHtml(toCurrency(monthlyPrice))}</td>
+          <td style="text-align:right">${escapeHtml(toCurrency(baseCost))}</td>
+          <td style="text-align:right">${escapeHtml(`${margin.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)}</td>
+          <td>${escapeHtml(proposta?.sentToReviewAt ? new Date(proposta.sentToReviewAt).toLocaleString('pt-BR') : '-')}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="7" class="empty">Sem proposta precificada em revisão.</td></tr>';
 
   return `
     <!doctype html>
@@ -168,6 +189,11 @@ export const buildPreSalesBudgetPrintHtml = (item) => {
       <table>
         <thead><tr><th>Modalidade</th><th>Distribuidor</th><th>Fornecedor</th><th>Orçamento</th><th>Item</th><th style="text-align:center">Qtde</th><th style="text-align:right">Custo Unit.</th><th style="text-align:right">Total</th></tr></thead>
         <tbody>${quotationRows}</tbody>
+      </table>
+      <h2>Proposta Precificada</h2>
+      <table>
+        <thead><tr><th>Nº Proposta</th><th>Tipo</th><th style="text-align:right">Valor Final</th><th style="text-align:right">Valor Mensal</th><th style="text-align:right">Custo Base</th><th style="text-align:right">Margem</th><th>Enviada em</th></tr></thead>
+        <tbody>${pricingRows}</tbody>
       </table>
       <section class="footer">Documento gerado pelo módulo de Orçamentos de Pré-vendas.</section>
     </body>

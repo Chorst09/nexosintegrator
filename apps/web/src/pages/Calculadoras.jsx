@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calculator,
   Package,
@@ -1268,6 +1269,7 @@ export default function Calculadoras({
   showCalculatorCards = true,
   showPricingActions = false
 }) {
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showCotacaoModal, setShowCotacaoModal] = useState(false); // NOVO: Modal de seleção de cotações
@@ -1305,6 +1307,7 @@ export default function Calculadoras({
   const lastAutoBudgetSearchRef = useRef('');
   const [proposalFeedback, setProposalFeedback] = useState(null);
   const [homeFeedback, setHomeFeedback] = useState(null);
+  const [preSalesSource, setPreSalesSource] = useState(null);
   const [previewProposal, setPreviewProposal] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [proposalForm, setProposalForm] = useState(() => buildProposalForm('', getManagerDefaults()));
@@ -1434,6 +1437,12 @@ export default function Calculadoras({
     }
 
     if (!urlParams.has('tipo') && !cotacaoData) return;
+    setPreSalesSource(cotacaoData?.solicitacaoId ? {
+      id: cotacaoData.solicitacaoId,
+      numero: cotacaoData.numeroOrcamento || '',
+      titulo: cotacaoData.titulo || '',
+      origem: cotacaoData
+    } : null);
 
     const tipo = urlParams.get('tipo') || cotacaoData?.modalidade || 'VENDA';
     const custoUnitario = toNumber(urlParams.get('custoUnitario'), 0);
@@ -1980,6 +1989,7 @@ export default function Calculadoras({
   };
 
   const createBlankProposal = (tabId = currentTab) => {
+    setPreSalesSource(null);
     setShowCotacaoModal(false);
     resetForm();
     setCurrentTab(tabId);
@@ -2035,6 +2045,12 @@ export default function Calculadoras({
   const selecionarCotacao = (solicitacao) => {
     // Fechar modal de seleção
     setShowCotacaoModal(false);
+    setPreSalesSource({
+      id: solicitacao?.id || '',
+      numero: solicitacao?.__matchedBudgetNumber || solicitacao?.numero || '',
+      titulo: solicitacao?.titulo || '',
+      origem: solicitacao
+    });
     
     // Preparar dados da cotação
     const todosCustos = getCotacoesByModalidade(solicitacao);
@@ -2438,6 +2454,11 @@ export default function Calculadoras({
           }))
       },
       distributorCosts: deepClone(distributorCosts), // NOVO: Salvar custos de distribuidores
+      preSales: preSalesSource?.id ? {
+        requestId: preSalesSource.id,
+        number: preSalesSource.numero || proposalNumber,
+        title: preSalesSource.titulo || ''
+      } : null,
       result: {
         finalPrice: toNumber(calculationPreview.calculationResults.finalPrice, 0),
         monthlyPrice: toNumber(calculationPreview.calculationResults.monthlyPrice, 0),
@@ -2475,6 +2496,90 @@ export default function Calculadoras({
     }
 
     return payload;
+  };
+
+  const sendProposalToPreSalesReview = async (proposal) => {
+    const requestId = proposal?.preSales?.requestId || preSalesSource?.id;
+    if (!requestId) return null;
+
+    const currentResponse = await fetch(buildApiUrl(`/pre-vendas/${encodeURIComponent(requestId)}`), {
+      headers: getAuthHeaders()
+    });
+    if (!currentResponse.ok) {
+      const data = await currentResponse.json().catch(() => ({}));
+      throw new Error(data?.message || data?.error || 'Não foi possível carregar a solicitação para revisão.');
+    }
+
+    const currentPayload = await currentResponse.json().catch(() => ({}));
+    const currentRequest = currentPayload?.data && typeof currentPayload.data === 'object'
+      ? currentPayload.data
+      : currentPayload;
+    const currentDetails = currentRequest?.calculoDetalhes && typeof currentRequest.calculoDetalhes === 'object'
+      ? currentRequest.calculoDetalhes
+      : {};
+    const previousReviewed = Array.isArray(currentDetails.propostasPrecificadas)
+      ? currentDetails.propostasPrecificadas
+      : [];
+    const nowIso = new Date().toISOString();
+    const pricingSummary = {
+      id: proposal.id,
+      number: proposal.number,
+      calculatorType: proposal.calculatorType,
+      calculatorLabel: proposal.calculatorLabel,
+      client: proposal.client,
+      opportunity: proposal.opportunity,
+      distributorCosts: proposal.distributorCosts,
+      snapshot: proposal.snapshot,
+      pricing: proposal.pricing,
+      result: proposal.result,
+      pdfAvailable: true,
+      reviewStatus: 'AGUARDANDO_APROVACAO',
+      reviewStage: 'REVISAO',
+      sentToReviewAt: nowIso,
+      updatedAt: proposal.updatedAt || nowIso
+    };
+    const previousNotes = String(currentRequest?.observacoes || '').trim();
+    const reviewNote = [
+      previousNotes,
+      `[${new Date().toLocaleString('pt-BR')}] Pré-vendas: Precificação concluída e enviada para revisão.`,
+      `Proposta: ${proposal.number}`,
+      `Valor final: ${formatCurrency(proposal?.result?.finalPrice || 0)}`,
+      proposal?.result?.monthlyPrice ? `Valor mensal: ${formatCurrency(proposal.result.monthlyPrice)}` : null,
+      '[FLOW_STAGE:REVISAO]'
+    ].filter(Boolean).join('\n\n');
+
+    const updateResponse = await fetch(buildApiUrl(`/pre-vendas/${encodeURIComponent(requestId)}`), {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        status: 'AGUARDANDO_APROVACAO',
+        valorSugerido: proposal?.result?.finalPrice || 0,
+        custoTotal: proposal?.result?.baseCost || 0,
+        margemLucro: proposal?.pricing?.desiredMargin || 0,
+        observacoes: reviewNote,
+        calculoDetalhes: {
+          ...currentDetails,
+          propostaPrecificada: pricingSummary,
+          propostasPrecificadas: [pricingSummary, ...previousReviewed.filter((item) => item?.id !== proposal.id)]
+        }
+      })
+    });
+
+    if (!updateResponse.ok) {
+      const data = await updateResponse.json().catch(() => ({}));
+      throw new Error(data?.message || data?.error || 'Não foi possível enviar a precificação para revisão.');
+    }
+
+    return updateResponse.json().catch(() => null);
+  };
+
+  const finishPreSalesPricingFlow = async (proposal) => {
+    if (!proposal?.preSales?.requestId && !preSalesSource?.id) return false;
+    await sendProposalToPreSalesReview(proposal);
+    closeCalculatorModal();
+    setHomeFeedback(`Proposta ${proposal.number} enviada para revisão em Solicitações.`);
+    navigate('/solicitacoes');
+    return true;
   };
 
   // Funções do carrinho de propostas
@@ -2689,6 +2794,11 @@ export default function Calculadoras({
         serviceItems: deepClone(proposalCart.services)
       },
       distributorCosts: deepClone(distributorCosts),
+      preSales: preSalesSource?.id ? {
+        requestId: preSalesSource.id,
+        number: preSalesSource.numero || proposalNumber,
+        title: preSalesSource.titulo || ''
+      } : null,
       result: {
         finalPrice: totalFinalPrice,
         monthlyPrice: totalMonthlyPrice,
@@ -2719,9 +2829,19 @@ export default function Calculadoras({
     return payload;
   };
 
-  const handleSaveProposalWithCart = () => {
+  const handleSaveProposalWithCart = async () => {
     const saved = saveProposalWithCart();
     if (!saved) return;
+    try {
+      const sentToReview = await finishPreSalesPricingFlow(saved);
+      if (sentToReview) return;
+    } catch (error) {
+      setProposalFeedback({
+        type: 'error',
+        text: error.message || 'Proposta salva, mas não foi possível enviar para revisão.'
+      });
+      return;
+    }
     closeCalculatorModal();
     setHomeFeedback('Proposta salva com sucesso');
   };
@@ -2930,14 +3050,25 @@ export default function Calculadoras({
     setShowModal(false);
     setActiveProposalId(null);
     setProposalFeedback(null);
+    setPreSalesSource(null);
     setCalculatorStep('proposal');
     clearProposalCart();
     resetForm();
   };
 
-  const handleSaveAndReturnHome = () => {
+  const handleSaveAndReturnHome = async () => {
     const saved = saveCurrentProposal();
     if (!saved) return;
+    try {
+      const sentToReview = await finishPreSalesPricingFlow(saved);
+      if (sentToReview) return;
+    } catch (error) {
+      setProposalFeedback({
+        type: 'error',
+        text: error.message || 'Proposta salva, mas não foi possível enviar para revisão.'
+      });
+      return;
+    }
     closeCalculatorModal();
     setHomeFeedback('Proposta Salva com sucesso');
   };
@@ -2956,6 +3087,8 @@ export default function Calculadoras({
     const snapServiceItems = proposal?.snapshot?.serviceItems || [];
     const itemCount = snapSaleItems.length + snapRentalItems.length + snapServiceItems.length;
     const rentalPeriodSaved = toNumber(proposal?.pricing?.rentalPeriod, 12);
+    const escRow = (v) => escapeHtml(String(v ?? '-'));
+    const cur = (v) => escapeHtml(formatCurrency(toNumber(v, 0)));
 
     const distributorCostsData = Array.isArray(proposal?.distributorCosts) ? proposal.distributorCosts : [];
     const distributorRows = distributorCostsData.map((dc, i) => {
@@ -2972,9 +3105,6 @@ export default function Calculadoras({
         <td style="text-align:right">${cur(qty * unitCost)}</td>
       </tr>`;
     }).join('');
-
-    const escRow = (v) => escapeHtml(String(v ?? '-'));
-    const cur = (v) => escapeHtml(formatCurrency(toNumber(v, 0)));
 
     const saleRows = snapSaleItems.map(item => {
       const qty = Math.max(0, toNumber(item?.quantity, 0));
@@ -3439,7 +3569,7 @@ export default function Calculadoras({
                 className="crm-btn crm-btn-primary h-12"
               >
                 <Save className="w-4 h-4" />
-                Salvar Simulação
+                {preSalesSource?.id ? 'Enviar para Revisão' : 'Salvar Simulação'}
               </button>
             </div>
           </div>
@@ -3889,7 +4019,7 @@ export default function Calculadoras({
                   className="crm-btn crm-btn-primary px-4 py-3"
                 >
                   <Save className="w-4 h-4" />
-                  Salvar Simulação
+                  {preSalesSource?.id ? 'Enviar para Revisão' : 'Salvar Simulação'}
                 </button>
                 <button
                   type="button"
@@ -4665,7 +4795,9 @@ export default function Calculadoras({
                   disabled={getTotalCartItems() === 0}
                 >
                   <Save className="w-4 h-4" />
-                  Salvar Proposta {getTotalCartItems() > 0 && `(${getTotalCartItems()} itens)`}
+                  {preSalesSource?.id
+                    ? `Enviar para Revisão ${getTotalCartItems() > 0 ? `(${getTotalCartItems()} itens)` : ''}`
+                    : `Salvar Proposta ${getTotalCartItems() > 0 ? `(${getTotalCartItems()} itens)` : ''}`}
                 </button>
                 <button
                   type="button"

@@ -19,13 +19,15 @@ import {
   Trash2,
   Undo2,
   Save,
-  ArrowLeft
+  ArrowLeft,
+  FileText
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import Modal from '../components/Modal';
 import PageHeader from '../components/PageHeader';
 import AnimatedStats from '../components/AnimatedStats';
 import { addFlowMetadataToDescription, getAreaLabel, hydrateActivityFlow } from '../utils/activityFlow';
+import { openPreSalesBudgetPdf } from '../utils/preSalesBudgetPrint';
 
 const REQUEST_STATUS_FROM_ACTIVITY = {
   PENDING: 'NOVA',
@@ -980,20 +982,25 @@ export default function Solicitacoes() {
         ? effectiveItem.calculoDetalhes
         : {};
       const lastReturn = Array.isArray(details.devolucoesComercial) ? details.devolucoesComercial[0] : null;
+      const propostasPrecificadas = Array.isArray(details.propostasPrecificadas)
+        ? details.propostasPrecificadas
+        : details.propostaPrecificada ? [details.propostaPrecificada] : [];
+      const lastPricedProposal = propostasPrecificadas[0] || null;
+      const effectiveStage = resolveStage(effectiveItem.status, effectiveItem.stage);
 
       setCotacaoContext(effectiveItem);
-      setCotacaoTab('COTACOES');
+      setCotacaoTab(effectiveStage === 'REVISAO' ? 'PROPOSTAS' : 'COTACOES');
       setCotacaoForm({
         ...buildInitialCotacaoForm(effectiveItem, budgetRequests),
-        distribuidorId: lastQuote?.distribuidorId || '',
-        distribuidor: lastQuote?.distribuidor || '',
-        fornecedorId: lastQuote?.fornecedorId || '',
-        fornecedor: lastQuote?.fornecedor || '',
+        distribuidorId: lastQuote?.distribuidorId || details?.dadosProposta?.distribuidorId || '',
+        distribuidor: lastQuote?.distribuidor || details?.dadosProposta?.distribuidor || '',
+        fornecedorId: lastQuote?.fornecedorId || details?.dadosProposta?.fornecedorId || '',
+        fornecedor: lastQuote?.fornecedor || details?.dadosProposta?.fornecedor || '',
         modalidade: lastQuote?.modalidade || inferModalidade(effectiveItem)
       });
       setStatusTransition({ nextStatus: '', motivo: '' });
       setDevolucaoComercial({
-        numeroProposta: lastReturn?.numeroProposta || '',
+        numeroProposta: lastReturn?.numeroProposta || lastPricedProposal?.number || '',
         versao: String(lastReturn?.versao || '1'),
         validade: lastReturn?.validade || '',
         cenario: lastReturn?.cenario || 'PADRAO',
@@ -1080,7 +1087,11 @@ export default function Solicitacoes() {
         gerenteConta: String(cotacaoForm.gerenteConta || '').trim(),
         emailGerente: String(cotacaoForm.emailGerente || '').trim(),
         telefoneGerente: String(cotacaoForm.telefoneGerente || '').trim(),
-        premissasProposta: String(cotacaoForm.premissasProposta || '').trim()
+        premissasProposta: String(cotacaoForm.premissasProposta || '').trim(),
+        distribuidorId: cotacaoForm.distribuidorId || '',
+        distribuidor,
+        fornecedorId: cotacaoForm.fornecedorId || '',
+        fornecedor
       };
 
       const subtotal = itensValidos.reduce((acc, entry) => acc + (entry.quantidade * entry.custoUnitario), 0);
@@ -1640,10 +1651,10 @@ export default function Solicitacoes() {
           <button
             type="button"
             disabled={saving}
-            onClick={() => handleAvancarEtapa(item)}
+            onClick={() => openCotacaoModal(item)}
             className="inline-flex items-center gap-1 rounded-lg border border-sky-500/40 bg-sky-500/20 px-3 py-2 text-xs text-sky-200 hover:bg-sky-500/30 disabled:opacity-60"
           >
-            <Send className="h-3.5 w-3.5" /> Enviar
+            <Send className="h-3.5 w-3.5" /> Revisar/Devolver
           </button>
           <button
             type="button"
@@ -2898,7 +2909,7 @@ export default function Solicitacoes() {
                   {/* Botão Responder Solicitação */}
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
                     <h5 className="text-base font-semibold text-white mb-1">Precificação concluída?</h5>
-                    <p className="text-sm text-slate-400 mb-4">Após definir o valor, devolva a proposta ao Comercial.</p>
+                    <p className="text-sm text-slate-400 mb-4">Após definir o valor, envie para revisão antes da devolução ao Comercial.</p>
                     <button
                       type="button"
                       disabled={!respostaData.valorSugerido || saving}
@@ -2914,21 +2925,94 @@ export default function Solicitacoes() {
                       }}
                       className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
                     >
-                      <Send className="h-4 w-4" /> Responder Solicitação
+                      <Send className="h-4 w-4" /> Enviar para Revisão
                     </button>
                   </div>
                 </div>
               );
             })()}
 
-            {cotacaoTab === 'PROPOSTAS' && (
-              <div className="rounded-xl border border-slate-600/40 bg-[#102540] p-6">
-                <h4 className="text-2xl font-semibold text-white">Propostas</h4>
-                <p className="mt-2 text-slate-300">
-                  Fluxo pronto para integração com o módulo de propostas após finalizar a precificação.
-                </p>
-              </div>
-            )}
+            {cotacaoTab === 'PROPOSTAS' && (() => {
+              const details = cotacaoContext?.calculoDetalhes && typeof cotacaoContext.calculoDetalhes === 'object'
+                ? cotacaoContext.calculoDetalhes
+                : {};
+              const propostas = Array.isArray(details.propostasPrecificadas)
+                ? details.propostasPrecificadas
+                : details.propostaPrecificada ? [details.propostaPrecificada] : [];
+
+              return (
+                <div className="rounded-xl border border-slate-600/40 bg-[#102540] p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-2xl font-semibold text-white">Propostas em Revisão</h4>
+                      <p className="mt-2 text-sm text-slate-300">Precificações prontas para abrir o PDF e devolver ao Comercial.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openPreSalesBudgetPdf(cotacaoContext)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/25"
+                    >
+                      <FileText className="h-4 w-4" /> PDF do Orçamento
+                    </button>
+                  </div>
+
+                  {propostas.length === 0 ? (
+                    <div className="mt-5 rounded-lg border border-dashed border-slate-600/50 p-6 text-center text-sm text-slate-400">
+                      Nenhuma proposta precificada enviada para revisão.
+                    </div>
+                  ) : (
+                    <div className="mt-5 space-y-3">
+                      {propostas.map((proposta) => (
+                        <div key={proposta.id || proposta.number} className="rounded-xl border border-slate-600/40 bg-slate-950/35 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-lg font-bold text-cyan-200">{proposta.number || 'Proposta sem número'}</p>
+                              <p className="mt-1 text-sm text-slate-300">{proposta.client?.companyName || cotacaoContext?.nomeCliente || '-'}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {proposta.calculatorLabel || proposta.calculatorType || 'Precificação'} • enviada para revisão
+                              </p>
+                            </div>
+                            <div className="grid min-w-[260px] grid-cols-2 gap-3 text-right">
+                              <div>
+                                <p className="text-xs uppercase tracking-wide text-slate-500">Preço final</p>
+                                <p className="text-base font-bold text-white">{toCurrency(proposta.result?.finalPrice)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs uppercase tracking-wide text-slate-500">Mensal</p>
+                                <p className="text-base font-bold text-white">{toCurrency(proposta.result?.monthlyPrice)}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openPreSalesBudgetPdf(cotacaoContext)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+                            >
+                              <FileText className="h-3.5 w-3.5" /> Abrir PDF
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDevolucaoComercial((prev) => ({
+                                  ...prev,
+                                  numeroProposta: proposta.number || prev.numeroProposta,
+                                  observacoes: prev.observacoes || `Proposta ${proposta.number || ''} revisada e pronta para envio ao Comercial.`
+                                }));
+                                setCotacaoTab('ACOES');
+                              }}
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600/80 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-600"
+                            >
+                              <Send className="h-3.5 w-3.5" /> Devolver
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {cotacaoTab === 'ACOES' && (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
