@@ -28,6 +28,178 @@ import Modal from '../components/Modal';
 const isBlank = (v) => v === null || v === undefined || String(v).trim() === '';
 const safeArray = (v) => (Array.isArray(v) ? v : []);
 
+const SIMULADORES_PROPOSAL_TEMPLATE = {
+  type: 'COMMERCIAL',
+  name: 'Modelo Simuladores B2B',
+  description: 'Modelo padrão de proposta comercial usado no fluxo de Simuladores.',
+  isDefault: false,
+  coverEnabled: true,
+  coverTitle: 'Proposta Comercial',
+  coverSubtitle: 'Solução personalizada para seu negócio',
+  coverLogo: '',
+  coverBackground: 'linear-gradient(135deg, rgba(30, 64, 175, 0.95) 0%, rgba(29, 78, 216, 0.88) 48%, rgba(14, 165, 233, 0.82) 100%), url("https://st4.depositphotos.com/1025323/27146/i/450/depositphotos_271460380-stock-photo-perspectives-of-virtual-world.jpg") center/cover no-repeat',
+  headerEnabled: true,
+  headerLogo: '',
+  headerText: 'PROPOSTA COMERCIAL',
+  headerHeight: 80,
+  footerEnabled: true,
+  footerText: 'Documento confidencial - Uso restrito',
+  footerLogo: '',
+  footerHeight: 60,
+  indexEnabled: true,
+  indexTitle: 'Índice',
+  sections: [
+    {
+      id: 'client_project',
+      title: 'Cliente e Projeto',
+      enabled: true,
+      order: 1,
+      body: 'Dados do cliente, contato, projeto e responsável comercial.',
+      placeholders: ['Cliente', 'Projeto', 'Contato', 'Gerente de conta']
+    },
+    {
+      id: 'solution',
+      title: 'Solução Proposta',
+      enabled: true,
+      order: 2,
+      body: 'Descrição da solução, escopo técnico-comercial e diferenciais apresentados ao cliente.',
+      placeholders: ['Produto / Serviço', 'Escopo', 'Benefícios']
+    },
+    {
+      id: 'items',
+      title: 'Itens da Proposta',
+      enabled: true,
+      order: 3,
+      body: 'Tabela com itens, quantidades, modalidade, custo unitário e total da proposta.',
+      placeholders: ['Itens', 'Quantidade', 'Valor unitário', 'Valor total']
+    },
+    {
+      id: 'investment',
+      title: 'Investimento',
+      enabled: true,
+      order: 4,
+      body: 'Resumo financeiro consolidando implantação, mensalidade, impostos, descontos e preço final.',
+      highlights: ['Preço final', 'Mensalidade', 'Contrato']
+    },
+    {
+      id: 'commercial_terms',
+      title: 'Condições Comerciais',
+      enabled: true,
+      order: 5,
+      bullets: [
+        'Validade da proposta conforme negociação comercial.',
+        'Condições de pagamento, prazos e impostos conforme composição do orçamento.',
+        'Itens e premissas sujeitos à validação técnica e comercial.'
+      ]
+    },
+    {
+      id: 'approval',
+      title: 'Aprovação',
+      enabled: true,
+      order: 6,
+      body: 'Área destinada ao aceite, assinatura e formalização da proposta.'
+    }
+  ],
+  primaryColor: '#1D4ED8',
+  secondaryColor: '#0EA5E9',
+  fontFamily: 'Inter',
+  fontSize: 12,
+  pageMargins: { top: 40, right: 40, bottom: 40, left: 40 },
+  pageSize: 'A4',
+  pageOrientation: 'portrait'
+};
+
+const TECHNICAL_TEMPLATE_DEFAULTS = {
+  coverTitle: 'PROPOSTA TÉCNICA',
+  coverSubtitle: 'Detalhamento técnico da solução proposta',
+  headerText: 'PROPOSTA TÉCNICA',
+  sections: [
+    { id: 'company', title: 'Informações do Cliente', enabled: true, order: 1 },
+    { id: 'technical_summary', title: 'Resumo Técnico', enabled: true, order: 2 },
+    { id: 'scope', title: 'Escopo', enabled: true, order: 3 },
+    { id: 'requirements', title: 'Requisitos', enabled: true, order: 4 },
+    { id: 'solution', title: 'Solução Proposta', enabled: true, order: 5 },
+    { id: 'timeline', title: 'Cronograma', enabled: true, order: 6 },
+    { id: 'assumptions', title: 'Premissas', enabled: true, order: 7 },
+    { id: 'exclusions', title: 'Exclusões', enabled: true, order: 8 },
+    { id: 'support', title: 'Suporte e SLA', enabled: true, order: 9 }
+  ],
+  primaryColor: '#0F172A',
+  secondaryColor: '#475569'
+};
+
+const cloneTemplateDefaults = (template = SIMULADORES_PROPOSAL_TEMPLATE) =>
+  JSON.parse(JSON.stringify(template));
+
+const parseMaybeJson = (value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return [];
+  }
+};
+
+const normalizeTemplateSections = (sections, type = 'COMMERCIAL') => {
+  const parsed = parseMaybeJson(sections);
+  const fallback = type === 'TECHNICAL'
+    ? TECHNICAL_TEMPLATE_DEFAULTS.sections
+    : SIMULADORES_PROPOSAL_TEMPLATE.sections;
+
+  let source = [];
+  if (Array.isArray(parsed)) {
+    source = parsed;
+  } else if (parsed && typeof parsed === 'object') {
+    source = Array.isArray(parsed.sections)
+      ? parsed.sections
+      : Object.entries(parsed).map(([id, value], index) => (
+          value && typeof value === 'object'
+            ? { id, ...value, order: value.order ?? index + 1 }
+            : { id, title: String(value || id), enabled: true, order: index + 1 }
+        ));
+  }
+
+  const normalized = source.length > 0 ? source : fallback;
+  return normalized.map((section, index) => ({
+    id: section?.id || `section_${index + 1}`,
+    title: section?.title || `Seção ${index + 1}`,
+    enabled: section?.enabled !== false,
+    order: Number.isFinite(Number(section?.order)) ? Number(section.order) : index + 1,
+    body: section?.body || '',
+    bullets: safeArray(section?.bullets),
+    highlights: safeArray(section?.highlights),
+    placeholders: safeArray(section?.placeholders),
+    notes: section?.notes || '',
+    layout: section?.layout,
+    pageBackground: section?.pageBackground
+  }));
+};
+
+const normalizeTemplate = (template = {}) => {
+  const base = template.type === 'TECHNICAL'
+    ? { ...cloneTemplateDefaults(), ...TECHNICAL_TEMPLATE_DEFAULTS, type: 'TECHNICAL' }
+    : cloneTemplateDefaults();
+
+  return {
+    ...base,
+    ...template,
+    isDefault: Boolean(template.isDefault),
+    coverEnabled: template.coverEnabled !== false,
+    headerEnabled: template.headerEnabled !== false,
+    footerEnabled: template.footerEnabled !== false,
+    indexEnabled: template.indexEnabled !== false,
+    headerHeight: Number(template.headerHeight || base.headerHeight || 80),
+    footerHeight: Number(template.footerHeight || base.footerHeight || 60),
+    fontSize: Number(template.fontSize || base.fontSize || 12),
+    pageMargins: template.pageMargins && typeof template.pageMargins === 'object'
+      ? template.pageMargins
+      : base.pageMargins,
+    sections: normalizeTemplateSections(template.sections, template.type || base.type)
+  };
+};
+
 const isDoubleVisualTemplate = (template) => {
   const haystack = [
     template?.coverBackground,
@@ -395,40 +567,7 @@ const TemplatesPropostas = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState(null);
-  const [formData, setFormData] = useState({
-    type: 'COMMERCIAL',
-    name: '',
-    description: '',
-    isDefault: false,
-    coverEnabled: true,
-    coverTitle: 'PROPOSTA COMERCIAL',
-    coverSubtitle: 'Solução personalizada para seu negócio',
-    coverLogo: '',
-    coverBackground: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    headerEnabled: true,
-    headerLogo: '',
-    headerText: 'PROPOSTA COMERCIAL',
-    headerHeight: 80,
-    footerEnabled: true,
-    footerText: 'Documento confidencial - Uso restrito',
-    footerLogo: '',
-    footerHeight: 60,
-    indexEnabled: true,
-    indexTitle: 'Índice',
-    sections: [
-      { id: 'company', title: 'Informações da Empresa', enabled: true, order: 1 },
-      { id: 'proposal', title: 'Detalhes da Proposta', enabled: true, order: 2 },
-      { id: 'items', title: 'Itens da Proposta', enabled: true, order: 3 },
-      { id: 'financial', title: 'Resumo Financeiro', enabled: true, order: 4 }
-    ],
-    primaryColor: '#3B82F6',
-    secondaryColor: '#64748B',
-    fontFamily: 'Inter',
-    fontSize: 12,
-    pageMargins: { top: 40, right: 40, bottom: 40, left: 40 },
-    pageSize: 'A4',
-    pageOrientation: 'portrait'
-  });
+  const [formData, setFormData] = useState(() => cloneTemplateDefaults());
 
   // Carregar templates ao montar o componente
   useEffect(() => {
@@ -441,7 +580,7 @@ const TemplatesPropostas = () => {
         headers: getAuthHeaders()
       });
       const data = await response.json();
-      setTemplates(Array.isArray(data) ? data : []);
+      setTemplates(Array.isArray(data) ? data.map(normalizeTemplate) : []);
     } catch (error) {
       console.error('Erro ao carregar templates:', error);
     } finally {
@@ -466,7 +605,7 @@ const TemplatesPropostas = () => {
       const response = await fetch(url, {
         method,
         headers: getAuthHeaders(),
-        body: JSON.stringify(formData)
+        body: JSON.stringify(normalizeTemplate(formData))
       });
 
       if (response.ok) {
@@ -484,40 +623,7 @@ const TemplatesPropostas = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      type: 'COMMERCIAL',
-      name: '',
-      description: '',
-      isDefault: false,
-      coverEnabled: true,
-      coverTitle: 'PROPOSTA COMERCIAL',
-      coverSubtitle: 'Solução personalizada para seu negócio',
-      coverLogo: '',
-      coverBackground: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      headerEnabled: true,
-      headerLogo: '',
-      headerText: 'PROPOSTA COMERCIAL',
-      headerHeight: 80,
-      footerEnabled: true,
-      footerText: 'Documento confidencial - Uso restrito',
-      footerLogo: '',
-      footerHeight: 60,
-      indexEnabled: true,
-      indexTitle: 'Índice',
-      sections: [
-        { id: 'company', title: 'Informações da Empresa', enabled: true, order: 1 },
-        { id: 'proposal', title: 'Detalhes da Proposta', enabled: true, order: 2 },
-        { id: 'items', title: 'Itens da Proposta', enabled: true, order: 3 },
-        { id: 'financial', title: 'Resumo Financeiro', enabled: true, order: 4 }
-      ],
-      primaryColor: '#3B82F6',
-      secondaryColor: '#64748B',
-      fontFamily: 'Inter',
-      fontSize: 12,
-      pageMargins: { top: 40, right: 40, bottom: 40, left: 40 },
-      pageSize: 'A4',
-      pageOrientation: 'portrait'
-    });
+    setFormData(cloneTemplateDefaults());
     setEditingTemplate(null);
     setShowForm(false);
   };
@@ -586,14 +692,14 @@ const TemplatesPropostas = () => {
   };
 
   const handlePreview = (template) => {
-    setPreviewTemplate(template);
+    setPreviewTemplate(normalizeTemplate(template));
     setShowPreview(true);
   };
 
   const updateSection = (index, field, value) => {
     setFormData(prev => ({
       ...prev,
-      sections: prev.sections.map((section, i) => 
+      sections: normalizeTemplateSections(prev.sections, prev.type).map((section, i) =>
         i === index ? { ...section, [field]: value } : section
       )
     }));
@@ -604,18 +710,18 @@ const TemplatesPropostas = () => {
       id: `section_${Date.now()}`,
       title: 'Nova Seção',
       enabled: true,
-      order: formData.sections.length + 1
+      order: normalizeTemplateSections(formData.sections, formData.type).length + 1
     };
     setFormData(prev => ({
       ...prev,
-      sections: [...prev.sections, newSection]
+      sections: [...normalizeTemplateSections(prev.sections, prev.type), newSection]
     }));
   };
 
   const removeSection = (index) => {
     setFormData(prev => ({
       ...prev,
-      sections: prev.sections.filter((_, i) => i !== index)
+      sections: normalizeTemplateSections(prev.sections, prev.type).filter((_, i) => i !== index)
     }));
   };
 
@@ -765,41 +871,17 @@ const TemplatesPropostas = () => {
                           if (editingTemplate) return updated;
 
                           if (nextType === 'TECHNICAL') {
-                            return {
+                            return normalizeTemplate({
+                              ...cloneTemplateDefaults(),
                               ...updated,
-                              coverTitle: 'PROPOSTA TÉCNICA',
-                              coverSubtitle: 'Detalhamento técnico da solução proposta',
-                              headerText: 'PROPOSTA TÉCNICA',
-                              sections: [
-                                { id: 'company', title: 'Informações do Cliente', enabled: true, order: 1 },
-                                { id: 'technical_summary', title: 'Resumo Técnico', enabled: true, order: 2 },
-                                { id: 'scope', title: 'Escopo', enabled: true, order: 3 },
-                                { id: 'requirements', title: 'Requisitos', enabled: true, order: 4 },
-                                { id: 'solution', title: 'Solução Proposta', enabled: true, order: 5 },
-                                { id: 'timeline', title: 'Cronograma', enabled: true, order: 6 },
-                                { id: 'assumptions', title: 'Premissas', enabled: true, order: 7 },
-                                { id: 'exclusions', title: 'Exclusões', enabled: true, order: 8 },
-                                { id: 'support', title: 'Suporte e SLA', enabled: true, order: 9 }
-                              ],
-                              primaryColor: '#0F172A',
-                              secondaryColor: '#475569'
-                            };
+                              ...TECHNICAL_TEMPLATE_DEFAULTS
+                            });
                           }
 
-                          return {
-                            ...updated,
-                            coverTitle: 'PROPOSTA COMERCIAL',
-                            coverSubtitle: 'Solução personalizada para seu negócio',
-                            headerText: 'PROPOSTA COMERCIAL',
-                            sections: [
-                              { id: 'company', title: 'Informações da Empresa', enabled: true, order: 1 },
-                              { id: 'proposal', title: 'Detalhes da Proposta', enabled: true, order: 2 },
-                              { id: 'items', title: 'Itens da Proposta', enabled: true, order: 3 },
-                              { id: 'financial', title: 'Resumo Financeiro', enabled: true, order: 4 }
-                            ],
-                            primaryColor: '#3B82F6',
-                            secondaryColor: '#64748B'
-                          };
+                          return normalizeTemplate({
+                            ...cloneTemplateDefaults(),
+                            ...updated
+                          });
                         });
                       }}
                       className="crm-input"
@@ -1081,7 +1163,7 @@ const TemplatesPropostas = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {formData.sections.map((section, index) => (
+                  {normalizeTemplateSections(formData.sections, formData.type).map((section, index) => (
                     <div key={index} className="flex items-center gap-4 p-4 crm-panel-muted">
                       <div className="flex items-center">
                         <input
@@ -1290,7 +1372,7 @@ const TemplatesPropostas = () => {
             label: 'Seções',
             render: (template) => (
               <div className="text-sm text-gray-900 dark:text-gray-100">
-                {template.sections.filter(s => s.enabled).length} seções ativas
+                {normalizeTemplateSections(template.sections, template.type).filter(s => s.enabled).length} seções ativas
               </div>
             )
           },
@@ -1334,36 +1416,9 @@ const TemplatesPropostas = () => {
         onSearchChange={setSearchTerm}
         onView={handlePreview}
         onEdit={(template) => {
-          setEditingTemplate(template);
-          setFormData({
-            type: template.type || 'COMMERCIAL',
-            name: template.name,
-            description: template.description || '',
-            isDefault: template.isDefault,
-            coverEnabled: template.coverEnabled,
-            coverTitle: template.coverTitle || '',
-            coverSubtitle: template.coverSubtitle || '',
-            coverLogo: template.coverLogo || '',
-            coverBackground: template.coverBackground || '',
-            headerEnabled: template.headerEnabled,
-            headerLogo: template.headerLogo || '',
-            headerText: template.headerText || '',
-            headerHeight: template.headerHeight,
-            footerEnabled: template.footerEnabled,
-            footerText: template.footerText || '',
-            footerLogo: template.footerLogo || '',
-            footerHeight: template.footerHeight,
-            indexEnabled: template.indexEnabled,
-            indexTitle: template.indexTitle || 'Índice',
-            sections: template.sections || [],
-            primaryColor: template.primaryColor,
-            secondaryColor: template.secondaryColor,
-            fontFamily: template.fontFamily,
-            fontSize: template.fontSize,
-            pageMargins: template.pageMargins,
-            pageSize: template.pageSize,
-            pageOrientation: template.pageOrientation
-          });
+          const normalizedTemplate = normalizeTemplate(template);
+          setEditingTemplate(normalizedTemplate);
+          setFormData(normalizedTemplate);
           setShowForm(true);
         }}
         customActions={[
