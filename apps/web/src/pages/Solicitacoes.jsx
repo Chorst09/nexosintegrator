@@ -274,10 +274,12 @@ const mapRequestRow = (row) => {
     solicitante: row.solicitante || null,
     assignedTo: null,
     createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     dueDate: null,
     tiposPrecificacao: Array.isArray(row.tiposPrecificacao) ? row.tiposPrecificacao : [],
     observacoes: row.observacoes || '',
     calculoDetalhes: row.calculoDetalhes && typeof row.calculoDetalhes === 'object' ? row.calculoDetalhes : {},
+    items: Array.isArray(row.items) ? row.items : [],
     valorSugerido: row.valorSugerido || 0,
     custoTotal: row.custoTotal || 0,
     margemLucro: row.margemLucro || 0,
@@ -367,6 +369,7 @@ export default function Solicitacoes() {
   const currentUserId = getCurrentUserId();
 
   const [solicitacoes, setSolicitacoes] = useState([]);
+  const [budgetRequests, setBudgetRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -420,6 +423,7 @@ export default function Solicitacoes() {
       const requestRows = getPreSalesRows(requestPayload);
 
       const mappedRequests = requestRows.map(mapRequestRow);
+      setBudgetRequests(mappedRequests);
       const linkedActivityIds = new Set(mappedRequests.map((item) => item.linkedActivityId).filter(Boolean));
 
       const activityPayload = activitiesRes.ok ? await activitiesRes.json() : [];
@@ -444,6 +448,7 @@ export default function Solicitacoes() {
     } catch (error) {
       console.error('Erro ao carregar solicitações:', error);
       setSolicitacoes([]);
+      setBudgetRequests([]);
     } finally {
       setLoading(false);
     }
@@ -1298,17 +1303,76 @@ export default function Solicitacoes() {
 
   const cotacaoOptions = useMemo(() => {
     const term = cotacaoSearchTerm.trim().toLowerCase();
-    return cotacaoRecords
+    const quoteOptions = cotacaoRecords.map((row) => ({
+      source: 'QUOTE',
+      id: row?.id || row?.numeroOrcamento,
+      numeroOrcamento: row?.numeroOrcamento || '',
+      distribuidor: row?.distribuidor || '',
+      modalidade: row?.modalidade || '',
+      itens: Array.isArray(row?.itens) ? row.itens : [],
+      subtotal: Number(row?.subtotal) || 0,
+      arquivoNome: row?.arquivoNome || '',
+      observacoesCotacao: row?.observacoesCotacao || '',
+      observacoesUpload: row?.observacoesUpload || '',
+      createdAt: row?.createdAt || '',
+      label: 'Cotação registrada'
+    }));
+
+    const requestOptions = budgetRequests.map((request) => {
+      const { cotacoes } = readCotacaoDetails(request);
+      const firstQuote = cotacoes[0] || null;
+      const requestItems = Array.isArray(request?.items)
+        ? request.items.map((item) => ({
+          id: item.id || nextQuoteItem().id,
+          descricao: item.descricao || item.product?.name || '',
+          quantidade: item.quantidade || 1,
+          custoUnitario: item.custoUnitario ?? item.product?.price ?? ''
+        })).filter((item) => item.descricao)
+        : [];
+      const quoteItems = Array.isArray(firstQuote?.itens) ? firstQuote.itens : [];
+      const itens = quoteItems.length > 0 ? quoteItems : requestItems;
+      const subtotal = Number(firstQuote?.subtotal)
+        || itens.reduce((sum, item) => sum + ((Number(item?.quantidade) || 0) * (Number(item?.custoUnitario) || 0)), 0)
+        || Number(request?.custoTotal)
+        || Number(request?.valorSugerido)
+        || 0;
+
+      return {
+        source: 'REQUEST',
+        id: request?.id,
+        numeroOrcamento: firstQuote?.numeroOrcamento || request?.numero || '',
+        distribuidor: firstQuote?.distribuidor || request?.company?.name || request?.titulo || '',
+        modalidade: firstQuote?.modalidade || inferModalidade(request),
+        itens,
+        subtotal,
+        arquivoNome: firstQuote?.arquivoNome || '',
+        observacoesCotacao: firstQuote?.observacoesCotacao || request?.descricao || '',
+        observacoesUpload: firstQuote?.observacoesUpload || '',
+        createdAt: firstQuote?.createdAt || request?.updatedAt || request?.createdAt || '',
+        label: 'Orçamento da fila',
+        requestTitle: request?.titulo || ''
+      };
+    });
+
+    const seen = new Set();
+    return [...quoteOptions, ...requestOptions]
+      .filter((row) => {
+        const key = `${row.source}:${row.id || row.numeroOrcamento}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .filter((row) => {
         if (!term) return true;
         return [
           row?.numeroOrcamento,
           row?.distribuidor,
+          row?.requestTitle,
           ...(Array.isArray(row?.itens) ? row.itens.map((item) => item?.descricao) : [])
         ].filter(Boolean).join(' ').toLowerCase().includes(term);
       })
       .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
-  }, [cotacaoRecords, cotacaoSearchTerm]);
+  }, [budgetRequests, cotacaoRecords, cotacaoSearchTerm]);
 
   const openExistingCotacao = (row) => {
     const itens = Array.isArray(row?.itens) && row.itens.length > 0
@@ -1333,7 +1397,7 @@ export default function Solicitacoes() {
     }));
     setCotacaoParaPrecificar(row);
     setCotacaoPickerOpen(false);
-    setCotacaoFeedback(`Cotação ${row?.numeroOrcamento || ''} carregada para edição/precificação.`);
+    setCotacaoFeedback(`${row?.label || 'Cotação'} ${row?.numeroOrcamento || ''} carregada para edição/precificação.`);
   };
 
   const startNewCotacao = () => {
@@ -2019,7 +2083,7 @@ export default function Solicitacoes() {
                             <div className="mt-2 max-h-52 overflow-y-auto">
                               {cotacaoOptions.length === 0 ? (
                                 <div className="rounded-lg border border-dashed border-slate-700/70 px-3 py-4 text-center text-xs text-slate-400">
-                                  Nenhuma cotação existente nesta solicitação.
+                                  Nenhuma cotação ou orçamento encontrado.
                                 </div>
                               ) : (
                                 cotacaoOptions.map((row) => {
@@ -2036,6 +2100,7 @@ export default function Solicitacoes() {
                                         <div className="min-w-0">
                                           <div className="truncate font-mono text-xs font-semibold text-sky-300">{row.numeroOrcamento || '-'}</div>
                                           <div className="truncate text-xs text-slate-300">{row.distribuidor || 'Distribuidor não informado'}</div>
+                                          <div className="truncate text-[11px] font-semibold text-slate-500">{row.label}</div>
                                         </div>
                                         <div className="shrink-0 text-right text-xs text-slate-400">
                                           <div>{itemCount} item(ns)</div>
