@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Building2, Flame, Plus, Sparkles, Users, Mail, Phone, MapPin, Globe, FileText, Target, Calendar, Paperclip, User, FileSignature, Download, Trash2, Upload } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -91,6 +91,7 @@ const ScorePill = ({ score }) => {
 
 export default function Empresas({ clientType = 'B2B' }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const pageClientType = normalizeClientType(clientType);
   const isGovernmentMode = pageClientType === 'B2G';
   const entityLabel = isGovernmentMode ? 'Órgão' : 'Empresa';
@@ -135,6 +136,11 @@ export default function Empresas({ clientType = 'B2B' }) {
   useEffect(() => {
     loadEmpresas();
   }, [pageClientType]);
+
+  useEffect(() => {
+    if (searchParams.get('openForm') !== '1') return;
+    openCreate();
+  }, [searchParams, pageClientType]);
 
   const getUploadHeaders = () => {
     const token = localStorage.getItem('token');
@@ -420,6 +426,11 @@ export default function Empresas({ clientType = 'B2B' }) {
 
         closeModal();
         loadEmpresas();
+        const returnTo = searchParams.get('returnTo');
+        if (returnTo && companyId && !editingCompany?.id) {
+          const separator = returnTo.includes('?') ? '&' : '?';
+          navigate(`${returnTo}${separator}companyId=${encodeURIComponent(companyId)}`, { replace: true });
+        }
       }
     } catch (error) {
       console.error('Erro ao salvar empresa:', error);

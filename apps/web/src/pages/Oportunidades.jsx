@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api';
 import { 
   Plus, 
@@ -84,6 +84,7 @@ const parseStageDecisionDetails = (details) => {
 };
 
 export default function Oportunidades() {
+  const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [users, setUsers] = useState([]);
@@ -112,6 +113,7 @@ export default function Oportunidades() {
     ? 'Edição de oportunidades do funil público sem mistura com o pipeline B2B.'
     : 'Gerencie oportunidades e acompanhe o funil de vendas em tempo real';
   const lastOpenedOpportunityId = useRef(null);
+  const lastCompanyReturnKey = useRef(null);
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
 
@@ -196,6 +198,23 @@ export default function Oportunidades() {
     ownerId: ''
   });
 
+  const createEmptyFormData = (overrides = {}) => ({
+    title: '',
+    projectName: '',
+    projectClientType: '',
+    projectType: 'SINGLE',
+    projectMonths: '12',
+    description: '',
+    value: '',
+    probability: 50,
+    stage: 'LEAD',
+    source: 'MANUAL',
+    expectedCloseDate: '',
+    companyId: '',
+    ownerId: '',
+    ...overrides
+  });
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return {
@@ -271,6 +290,24 @@ export default function Oportunidades() {
     fetchOpportunities();
     fetchDependencies();
   }, [pipelineClientType]);
+
+  useEffect(() => {
+    const shouldOpen = searchParams.get('newOpportunity') === '1';
+    if (!shouldOpen) return;
+    const companyId = searchParams.get('companyId') || '';
+    const key = `${companyId || 'none'}:${pipelineClientType}`;
+    if (lastCompanyReturnKey.current === key) return;
+
+    lastCompanyReturnKey.current = key;
+    setSelectedOpportunity(null);
+    setFormData(createEmptyFormData({
+      projectClientType: companyId ? 'BASE_CLIENT' : '',
+      companyId
+    }));
+    setShowDetailsModal(false);
+    setShowModal(true);
+    navigate('/oportunidades', { replace: true });
+  }, [navigate, pipelineClientType, searchParams]);
 
   useEffect(() => {
     const opportunityId = searchParams.get('opportunityId');
@@ -385,6 +422,15 @@ export default function Oportunidades() {
     console.log('[handleSubmit] selectedOpportunity:', selectedOpportunity?.id);
 
     const selectedCompany = companies.find((item) => item.id === payloadFormData.companyId);
+    if (pipelineClientType === 'B2B' && payloadFormData.projectClientType === 'NEW_CLIENT' && !payloadFormData.companyId) {
+      alert('Cadastre a empresa antes de criar uma oportunidade para cliente novo.');
+      navigate('/empresas?openForm=1&returnTo=/oportunidades%3FnewOpportunity%3D1');
+      return;
+    }
+    if (pipelineClientType === 'B2B' && ['BASE_CLIENT', 'RENEWAL'].includes(payloadFormData.projectClientType) && !payloadFormData.companyId) {
+      alert('Selecione a empresa cadastrada para cliente da base ou renovação.');
+      return;
+    }
     if (selectedCompany && !isCompanyInClientType(selectedCompany, pipelineClientType)) {
       alert(`Selecione uma empresa ${pipelineClientType} para este pipeline.`);
       return;
@@ -456,22 +502,20 @@ export default function Oportunidades() {
   };
 
   const resetForm = () => {
-    setFormData({
-      title: '',
-      projectName: '',
-      projectClientType: 'NEW_CLIENT',
-      projectType: 'SINGLE',
-      projectMonths: '12',
-      description: '',
-      value: '',
-      probability: 50,
-      stage: 'LEAD',
-      source: 'MANUAL',
-      expectedCloseDate: '',
-      companyId: '',
-      ownerId: ''
-    });
+    setFormData(createEmptyFormData());
     setSelectedOpportunity(null);
+  };
+
+  const openCreateOpportunity = () => {
+    setSelectedOpportunity(null);
+    setFormData(createEmptyFormData());
+    setShowDetailsModal(false);
+    setShowModal(true);
+  };
+
+  const openNewCompanyFromOpportunity = () => {
+    setShowModal(false);
+    navigate('/empresas?openForm=1&returnTo=/oportunidades%3FnewOpportunity%3D1');
   };
 
   const handleEdit = (opportunity) => {
@@ -775,7 +819,7 @@ export default function Oportunidades() {
           {
             label: 'Nova Oportunidade',
             icon: Plus,
-            onClick: () => setShowModal(true),
+            onClick: openCreateOpportunity,
             variant: 'primary'
           }
         ]}
@@ -1176,6 +1220,8 @@ export default function Oportunidades() {
             modalSubmitButtonClass={modalSubmitButtonClass}
             onCancel={() => { setShowModal(false); resetForm(); }}
             onSubmit={handleSubmit}
+            onCreateCompany={openNewCompanyFromOpportunity}
+            onRefreshCompanies={fetchDependencies}
           />
         </Modal>
       )}

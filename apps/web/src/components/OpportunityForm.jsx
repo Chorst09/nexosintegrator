@@ -30,6 +30,11 @@ const FASE_OPTIONS = [
 ];
 
 const PROJECT_MONTH_OPTIONS = [12, 24, 36, 48, 60];
+const PROJECT_CLIENT_TYPE_OPTIONS = [
+  { value: 'NEW_CLIENT', label: 'Cliente Novo' },
+  { value: 'BASE_CLIENT', label: 'Cliente da Base' },
+  { value: 'RENEWAL', label: 'Renovação' }
+];
 
 const DEFAULT_B2G = {
   numeroEdital: '', uasgId: '', orgaoEntidade: '', esfera: 'Municipal',
@@ -107,6 +112,8 @@ export default function OpportunityForm({
   modalSubmitButtonClass,
   onCancel,
   onSubmit,
+  onCreateCompany,
+  onRefreshCompanies,
 }) {
   const [activeTab, setActiveTab] = useState('identificacao');
   const [b2gForm, setB2gForm] = useState(() => ({ ...DEFAULT_B2G }));
@@ -274,6 +281,22 @@ export default function OpportunityForm({
   };
 
   const setB2g = (field, value) => setB2gForm(prev => ({ ...prev, [field]: value }));
+  const projectClientType = String(formData.projectClientType || '');
+  const shouldSelectExistingCompany = projectClientType === 'BASE_CLIENT' || projectClientType === 'RENEWAL';
+  const shouldCreateCompanyFirst = projectClientType === 'NEW_CLIENT' && !selectedOpportunity;
+  const handleProjectClientTypeChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      projectClientType: value,
+      companyId: value === 'NEW_CLIENT' ? '' : prev.companyId
+    }));
+    if (value === 'BASE_CLIENT' || value === 'RENEWAL') {
+      onRefreshCompanies?.();
+    }
+    if (value === 'NEW_CLIENT' && !selectedOpportunity) {
+      onCreateCompany?.();
+    }
+  };
 
   const inputCls = modalInputClass || 'w-full rounded-lg border border-[var(--crm-border)] bg-[var(--crm-surface)] text-[var(--crm-text)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
   const labelCls = modalLabelClass || 'text-xs font-medium text-[var(--crm-muted)] mb-1 block';
@@ -297,13 +320,27 @@ export default function OpportunityForm({
 
           <div>
             <label className={labelCls}>Tipo de Cliente</label>
-            <select className={inputCls} value={formData.projectClientType || ''} onChange={e => setFormData(p => ({ ...p, projectClientType: e.target.value }))}>
+            <select className={inputCls} value={formData.projectClientType || ''} onChange={e => handleProjectClientTypeChange(e.target.value)} required>
               <option value="">Selecione...</option>
-              <option value="Cliente Novo">Cliente Novo</option>
-              <option value="Cliente da Base">Cliente da Base</option>
-              <option value="Renovação">Renovação</option>
+              {PROJECT_CLIENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </div>
+
+          {shouldCreateCompanyFirst && (
+            <div className="sm:col-span-2 rounded-xl border border-amber-400/35 bg-amber-400/10 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--crm-ink)]">Cadastre a empresa para continuar.</p>
+                  <p className="mt-1 text-xs text-[var(--crm-muted)]">Depois do cadastro, a oportunidade volta aberta com a empresa selecionada.</p>
+                </div>
+                <button type="button" onClick={onCreateCompany} className="crm-btn crm-btn-primary whitespace-nowrap">
+                  Nova Empresa
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className={labelCls}>Modelo de Comissão</label>
@@ -370,13 +407,15 @@ export default function OpportunityForm({
             <input type="date" className={inputCls} value={formData.expectedCloseDate || ''} onChange={e => setFormData(p => ({ ...p, expectedCloseDate: e.target.value }))} />
           </div>
 
+          {shouldSelectExistingCompany && (
           <div>
             <label className={labelCls}>Empresa</label>
-            <select className={inputCls} value={formData.companyId || ''} onChange={e => setFormData(p => ({ ...p, companyId: e.target.value }))}>
+            <select className={inputCls} value={formData.companyId || ''} onChange={e => setFormData(p => ({ ...p, companyId: e.target.value }))} required>
               <option value="">Selecione...</option>
               {(companies || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          )}
 
           <div>
             <label className={labelCls}>Responsável</label>
@@ -404,7 +443,7 @@ export default function OpportunityForm({
 
         <div className={modalActionsClass || 'flex justify-end gap-3 mt-6'}>
           <button type="button" onClick={onCancel} className={modalCancelButtonClass}>Cancelar</button>
-          <button type="submit" className={modalSubmitButtonClass}>
+          <button type="submit" className={modalSubmitButtonClass} disabled={shouldCreateCompanyFirst}>
             {selectedOpportunity ? 'Salvar Alterações' : 'Criar Oportunidade'}
           </button>
         </div>
