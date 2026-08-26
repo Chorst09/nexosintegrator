@@ -35,7 +35,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { getUserAccess, normalizeRole } from '../utils/permissions';
 import PresentationControls from '../components/PresentationControls';
@@ -333,16 +333,6 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
     toNumber(row.total) > 0 || toNumber(row.monthly) > 0 || toNumber(row.count) > 0
   );
   const b2gChartRows = b2gVisibleRows.length > 0 ? b2gVisibleRows : b2gStageBreakdown;
-  const b2gTotalChartData = useMemo(() => ({
-    labels: b2gChartRows.map((row) => row.label),
-    datasets: [{
-      data: b2gChartRows.map((row) => toNumber(row.total)),
-      backgroundColor: b2gChartRows.map((row) => row.chartColor),
-      borderColor: '#111827',
-      borderWidth: 3,
-      hoverOffset: 6
-    }]
-  }), [b2gChartRows]);
   const b2gMonthlyChartData = useMemo(() => ({
     labels: b2gChartRows.map((row) => row.label),
     datasets: [{
@@ -362,7 +352,7 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
 
   return (
     <div className="dashboard-card overflow-hidden rounded-2xl border border-[#263345] bg-[linear-gradient(140deg,rgba(17,24,39,0.97),rgba(13,20,35,0.98))] shadow-[0_28px_76px_-56px_rgba(24,200,223,0.18)]">
-      <div className="grid grid-cols-1 xl:grid-cols-[1.05fr_1.6fr]">
+      <div className="grid grid-cols-1 xl:grid-cols-[0.82fr_1.78fr] xl:items-start">
         <div className="border-b border-[#263345] p-5 xl:border-b-0 xl:border-r">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -395,7 +385,7 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
           </div>
         </div>
 
-        <div className="grid grid-cols-1 divide-y divide-[#263345] md:grid-cols-2 md:divide-x md:divide-y-0">
+        <div className="grid grid-cols-1 divide-y divide-[#263345] md:grid-cols-[0.82fr_1.18fr] md:items-start md:divide-x md:divide-y-0">
           {channels.map((channel) => {
             const Icon = channel.icon;
             const isB2G = channel.id === 'b2g';
@@ -456,77 +446,52 @@ function RevenueOverview({ b2bRevenue, b2gRevenue, consolidatedRevenue, b2gStage
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">Carteira B2G por fase</p>
-                        <p className="mt-1 text-[11px] font-semibold text-[#6f7f95]">Distribuição total e valor mensal ativo</p>
+                        <p className="mt-1 text-[11px] font-semibold text-[#6f7f95]">Valor mensal ativo e total por fase</p>
                       </div>
                       <p className="shrink-0 text-[10px] font-bold text-[#8f9caf]">Mensal / Total</p>
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-[0.86fr_1.14fr]">
-                      <div className="min-h-[172px] rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Total por fase</p>
-                          <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-[10px] font-black text-cyan-100">
-                            {formatNumber(b2gVisibleRows.length)}
-                          </span>
-                        </div>
-                        <div className="h-[126px]">
-                          <Doughnut
-                            data={b2gTotalChartData}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              cutout: '62%',
-                              plugins: {
-                                legend: { display: false },
-                                tooltip: currencyTooltip
-                              }
-                            }}
-                          />
-                        </div>
+                    <div className="rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Mensal por fase</p>
+                        <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[10px] font-black text-emerald-100">
+                          {formatCompactCurrency(channel.totals.monthly)}
+                        </span>
                       </div>
-
-                      <div className="min-h-[172px] rounded-lg border border-[#263345] bg-[#0b1220]/70 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-black uppercase tracking-wide text-[#8f9caf]">Mensal por fase</p>
-                          <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[10px] font-black text-emerald-100">
-                            {formatCompactCurrency(channel.totals.monthly)}
-                          </span>
-                        </div>
-                        <div className="h-[126px]">
-                          <Bar
-                            data={b2gMonthlyChartData}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              indexAxis: 'y',
-                              plugins: {
-                                legend: { display: false },
-                                tooltip: currencyTooltip
+                      <div className="h-[138px]">
+                        <Bar
+                          data={b2gMonthlyChartData}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            indexAxis: 'y',
+                            plugins: {
+                              legend: { display: false },
+                              tooltip: currencyTooltip
+                            },
+                            scales: {
+                              x: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(143,156,175,0.12)' },
+                                ticks: {
+                                  color: '#8f9caf',
+                                  callback: (value) => formatCompactCurrency(value).replace('R$ ', '')
+                                }
                               },
-                              scales: {
-                                x: {
-                                  beginAtZero: true,
-                                  grid: { color: 'rgba(143,156,175,0.12)' },
-                                  ticks: {
-                                    color: '#8f9caf',
-                                    callback: (value) => formatCompactCurrency(value).replace('R$ ', '')
-                                  }
-                                },
-                                y: {
-                                  grid: { display: false },
-                                  ticks: {
-                                    color: '#c9d4e5',
-                                    font: { size: 10, weight: '700' }
-                                  }
+                              y: {
+                                grid: { display: false },
+                                ticks: {
+                                  color: '#c9d4e5',
+                                  font: { size: 10, weight: '700' }
                                 }
                               }
-                            }}
-                          />
-                        </div>
+                            }
+                          }}
+                        />
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-2">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {b2gRows.map((row) => {
                         const width = Math.max(row.total > 0 ? 6 : 0, Math.round((toNumber(row.total) / b2gRowsMax) * 100));
                         return (
