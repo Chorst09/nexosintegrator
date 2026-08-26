@@ -6,6 +6,9 @@ const router = express.Router();
 const ACTIVITY_FLOW_MARKER = '[CRM_ACTIVITY_FLOW]';
 const PRE_SALES_TARGET = 'PRE_VENDAS';
 
+const normalizeRole = (user = {}) => String(user.actualRole || user.role || '').trim().toUpperCase();
+const canDeleteActivity = (user = {}) => ['ADMIN', 'MASTER'].includes(normalizeRole(user));
+
 const normalizeFlowArea = (value, fallback = 'COMERCIAL') => {
   const raw = String(value || '')
     .trim()
@@ -395,6 +398,36 @@ router.put('/', async (req, res) => {
     res.status(500).json({ 
       error: 'Erro interno do servidor',
       message: error.message 
+    });
+  }
+});
+
+// DELETE /api/activities-simple/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Token não fornecido' });
+    if (!canDeleteActivity(req.user)) {
+      return res.status(403).json({ error: 'Apenas usuários Admin e Master podem excluir atividades' });
+    }
+
+    const { id } = req.params;
+    const existing = await prisma.activity.findUnique({
+      where: { id },
+      select: { id: true, tenantCompanyId: true }
+    });
+
+    if (!existing) return res.status(404).json({ error: 'Atividade não encontrada' });
+    if (!isTenantRecordVisible(req.user, existing)) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    await prisma.activity.delete({ where: { id } });
+    res.json({ success: true, deletedId: id });
+  } catch (error) {
+    console.error('Erro ao excluir atividade:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor',
+      message: error.message
     });
   }
 });

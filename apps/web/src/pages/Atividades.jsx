@@ -17,6 +17,7 @@ import {
   RefreshCcw,
   Search,
   Send,
+  Trash2,
   X
 } from 'lucide-react';
 
@@ -108,6 +109,16 @@ const getCurrentUserId = () => {
   }
 };
 
+const getCurrentUserRole = () => {
+  try {
+    const userRaw = localStorage.getItem('user');
+    const user = userRaw ? JSON.parse(userRaw) : {};
+    return String(user?.actualRole || user?.role || '').trim().toUpperCase();
+  } catch {
+    return '';
+  }
+};
+
 export default function Atividades() {
   const [atividades, setAtividades] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -137,6 +148,7 @@ export default function Atividades() {
   const [empresas, setEmpresas] = useState([]);
   const [oportunidades, setOportunidades] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const canDeleteActivities = useMemo(() => ['ADMIN', 'MASTER'].includes(getCurrentUserRole()), []);
 
   const [filtros, setFiltros] = useState({
     status: '',
@@ -272,6 +284,30 @@ export default function Atividades() {
       loadAtividades();
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
+    }
+  };
+
+  const deleteActivity = async (activity) => {
+    if (!activity?.id || !canDeleteActivities) return;
+    const title = activity.subject || 'esta atividade';
+    if (!window.confirm(`Excluir ${title}? Esta ação não poderá ser desfeita.`)) return;
+
+    try {
+      setLoading(true);
+      await axios.delete(
+        buildApiUrl(`/activities-simple/${encodeURIComponent(activity.id)}`),
+        { headers: getAuthHeaders() }
+      );
+      setAtividades((prev) => prev.filter((item) => item.id !== activity.id));
+      if (selectedActivity?.id === activity.id) {
+        setSelectedActivity(null);
+        setShowDetailsModal(false);
+      }
+    } catch (error) {
+      console.error('Erro ao excluir atividade:', error);
+      alert(error?.response?.data?.error || error?.response?.data?.message || 'Não foi possível excluir a atividade.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -619,6 +655,17 @@ export default function Atividades() {
         <Eye className="h-4 w-4" />
         Detalhes
       </button>
+      {canDeleteActivities && (
+        <button
+          type="button"
+          onClick={() => deleteActivity(item)}
+          className="crm-btn crm-btn-danger px-3 py-1.5 text-xs"
+          title="Excluir atividade"
+        >
+          <Trash2 className="h-4 w-4" />
+          Excluir
+        </button>
+      )}
     </>
   );
 
@@ -925,6 +972,16 @@ export default function Atividades() {
                   className="crm-btn crm-btn-danger"
                 >
                   Cancelar
+                </button>
+              )}
+              {canDeleteActivities && (
+                <button
+                  type="button"
+                  onClick={() => deleteActivity(selectedActivity)}
+                  className="crm-btn crm-btn-danger"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir
                 </button>
               )}
               <button
