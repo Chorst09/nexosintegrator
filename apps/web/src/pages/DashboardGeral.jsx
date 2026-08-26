@@ -125,6 +125,35 @@ const B2G_STAGE_SUMMARY = [
   { key: 'GANHO', label: 'Ganho', tone: 'text-emerald-200', bar: 'bg-emerald-400' }
 ];
 
+const normalizeB2GStageKey = (value) => {
+  const key = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  const aliases = {
+    ANALISE: 'ANALISE',
+    ANALISE_EM_ANDAMENTO: 'ANALISE',
+    PROPOSTA: 'PROPOSTA_ENVIADA',
+    PROPOSAL: 'PROPOSTA_ENVIADA',
+    PROPOSTA_ENVIADA: 'PROPOSTA_ENVIADA',
+    HABILITACAO: 'HABILITACAO',
+    NEGOTIATION: 'HABILITACAO',
+    RECURSO: 'RECURSO',
+    GANHO: 'GANHO',
+    GANHA: 'GANHO',
+    WON: 'GANHO',
+    PERDIDO: 'PERDIDO',
+    LOST: 'PERDIDO',
+    NO_GO: 'NO_GO'
+  };
+
+  return aliases[key] || key;
+};
+
 const createMonthBuckets = (count = 6) => {
   const now = new Date();
   const buckets = [];
@@ -241,15 +270,10 @@ const mergeRevenueBreakdowns = (...items) =>
   }), { monthly: 0, contract: 0, single: 0, total: 0, count: 0, monthlyCount: 0, singleCount: 0 });
 
 const resolveB2GSummaryStage = (item = {}) => {
-  const b2gStage = String(item?.b2gStage || '').trim().toUpperCase();
+  const b2gStage = normalizeB2GStageKey(item?.b2gStage);
   if (b2gStage) return b2gStage;
 
-  const stage = String(item?.stage || '').trim().toUpperCase();
-  if (stage === 'WON') return 'GANHO';
-  if (stage === 'LOST') return 'PERDIDO';
-  if (stage === 'PROPOSAL') return 'PROPOSTA_ENVIADA';
-  if (stage === 'NEGOTIATION') return 'HABILITACAO';
-  return 'ANALISE';
+  return normalizeB2GStageKey(item?.stage) || 'ANALISE';
 };
 
 const buildB2GStageBreakdown = (rows = []) => {
