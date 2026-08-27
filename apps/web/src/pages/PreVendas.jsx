@@ -1446,7 +1446,7 @@ export default function PreVendas() {
                   <h3 className="text-xl font-semibold text-white">Distribuidores Homologados</h3>
                   <p className="text-sm text-slate-400">Consulta rápida da base para cotações.</p>
                 </div>
-                <button type="button" onClick={loadPrevendasCadastros} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30">
+                <button type="button" onClick={loadPrevendasCadastros} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30 transition-colors">
                   <RefreshCcw className="h-3.5 w-3.5" />
                   Atualizar
                 </button>
@@ -1456,14 +1456,57 @@ export default function PreVendas() {
               ) : distribuidores.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-400">Nenhum distribuidor cadastrado.</p>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {distribuidores.slice(0, 9).map((item) => (
-                    <div key={item.id || item.nome} className="rounded-lg border border-slate-700/50 bg-slate-900/35 p-4">
-                      <p className="truncate text-sm font-semibold text-white">{item.nome || item.name || 'Distribuidor'}</p>
-                      <p className="mt-1 truncate text-xs text-slate-400">{item.cidade || item.city || '-'}{item.estado || item.uf ? ` / ${item.estado || item.uf}` : ''}</p>
-                      <p className="mt-3 truncate text-xs text-slate-300">{item.email || item.telefone || item.phone || 'Contato não informado'}</p>
-                    </div>
-                  ))}
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {distribuidores.slice(0, 9).map((item) => {
+                    const isActive = item.ativo !== false && item.status !== 'INATIVO';
+                    return (
+                      <div key={item.id || item.nome} className="group relative overflow-hidden rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-800/40 p-4 transition-all duration-300 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/10">
+                        {/* Gradiente de fundo decorativo */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
+                        
+                        <div className="relative">
+                          {/* Header com ícone e badge */}
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 transition-colors duration-300 group-hover:bg-orange-500/20">
+                              <Network className="h-5 w-5" />
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                              isActive 
+                                ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                                : 'bg-slate-600/20 text-slate-400 border border-slate-600/20'
+                            }`}>
+                              {isActive ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+                          
+                          {/* Conteúdo */}
+                          <h4 className="mb-2 truncate text-base font-semibold text-white transition-colors duration-300 group-hover:text-orange-300">
+                            {item.nome || item.name || 'Distribuidor'}
+                          </h4>
+                          
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <span className="truncate">
+                                {item.cidade || item.city || 'Cidade não informada'}
+                                {item.estado || item.uf ? ` / ${item.estado || item.uf}` : ''}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              <span className="truncate">{item.email || item.telefone || item.phone || 'Contato não informado'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1485,7 +1528,7 @@ export default function PreVendas() {
                   <h3 className="text-xl font-semibold text-white">Fornecedores Homologados</h3>
                   <p className="text-sm text-slate-400">Consulta rápida da base técnica e comercial.</p>
                 </div>
-                <button type="button" onClick={loadPrevendasCadastros} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30">
+                <button type="button" onClick={loadPrevendasCadastros} className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/20 px-3 py-2 text-xs text-blue-100 hover:bg-blue-500/30 transition-colors">
                   <RefreshCcw className="h-3.5 w-3.5" />
                   Atualizar
                 </button>
@@ -1495,14 +1538,53 @@ export default function PreVendas() {
               ) : fornecedores.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-400">Nenhum fornecedor cadastrado.</p>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {fornecedores.slice(0, 9).map((item) => (
-                    <div key={item.id || item.nome} className="rounded-lg border border-slate-700/50 bg-slate-900/35 p-4">
-                      <p className="truncate text-sm font-semibold text-white">{item.nome || item.name || 'Fornecedor'}</p>
-                      <p className="mt-1 truncate text-xs text-slate-400">{item.categoria || item.segmento || item.tipo || 'Categoria não informada'}</p>
-                      <p className="mt-3 truncate text-xs text-slate-300">{item.email || item.telefone || item.phone || 'Contato não informado'}</p>
-                    </div>
-                  ))}
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {fornecedores.slice(0, 9).map((item) => {
+                    const isActive = item.ativo !== false && item.status !== 'INATIVO';
+                    return (
+                      <div key={item.id || item.nome} className="group relative overflow-hidden rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-800/40 p-4 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10">
+                        {/* Gradiente de fundo decorativo */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
+                        
+                        <div className="relative">
+                          {/* Header com ícone e badge */}
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 transition-colors duration-300 group-hover:bg-cyan-500/20">
+                              <Package className="h-5 w-5" />
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                              isActive 
+                                ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                                : 'bg-slate-600/20 text-slate-400 border border-slate-600/20'
+                            }`}>
+                              {isActive ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+                          
+                          {/* Conteúdo */}
+                          <h4 className="mb-2 truncate text-base font-semibold text-white transition-colors duration-300 group-hover:text-cyan-300">
+                            {item.nome || item.name || 'Fornecedor'}
+                          </h4>
+                          
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                              </svg>
+                              <span className="truncate">{item.categoria || item.segmento || item.tipo || 'Categoria não informada'}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              <span className="truncate">{item.email || item.telefone || item.phone || 'Contato não informado'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
