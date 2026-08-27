@@ -3504,8 +3504,8 @@ export default function Calculadoras({
               <h2 className="text-base font-semibold text-[var(--crm-ink)]">Controle da proposta</h2>
               <p className="text-sm text-[var(--crm-muted)]">Crie, localize e salve simulações de venda, locação e serviços.</p>
             </div>
-            <span className="inline-flex w-fit items-center rounded-full border border-[rgb(var(--crm-accent-rgb)_/_0.32)] bg-[rgb(var(--crm-accent-rgb)_/_0.12)] px-3 py-1.5 text-sm font-semibold text-[var(--crm-ink)]">
-              Regime ativo: <span className="ml-1 text-[var(--crm-accent)]">{regimeAtivoHeader?.nome || 'Não definido'}</span>
+            <span className="inline-flex w-fit items-center rounded-full border border-cyan-300/35 bg-gradient-to-br from-cyan-500/15 via-teal-500/10 to-emerald-500/15 px-3 py-1.5 text-sm font-semibold text-[var(--crm-ink)] shadow-inner shadow-cyan-300/10">
+              Regime ativo: <span className="ml-1 text-cyan-100">{regimeAtivoHeader?.nome || 'Não definido'}</span>
             </span>
           </div>
 
@@ -3623,8 +3623,8 @@ export default function Calculadoras({
                 >
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-lg font-semibold text-[var(--crm-accent)]">{proposal.number}</span>
-                      <span className="text-xs px-2 py-1 rounded bg-[rgb(var(--crm-accent-rgb)_/_0.14)] text-[var(--crm-ink)] border border-[rgb(var(--crm-accent-rgb)_/_0.28)]">
+                      <span className="text-lg font-semibold text-cyan-100">{proposal.number}</span>
+                      <span className="rounded border border-cyan-300/30 bg-gradient-to-br from-cyan-500/15 via-teal-500/10 to-emerald-500/15 px-2 py-1 text-xs text-cyan-100">
                         {proposal.calculatorLabel || '-'}
                       </span>
                     </div>

@@ -491,7 +491,7 @@ h4 {
   color: var(--crm-ink);
   --prec-card-bg: rgb(var(--crm-surface-rgb) / 0.92);
   --prec-card-muted: rgb(var(--crm-surface-2-rgb) / 0.74);
-  --prec-active-bg: var(--crm-accent);
+  --prec-active-bg: linear-gradient(135deg, rgb(34 211 238 / 0.24), rgb(20 184 166 / 0.18), rgb(16 185 129 / 0.22));
   --prec-active-text: #ffffff;
   --prec-button-text: #ffffff;
 }
@@ -524,7 +524,7 @@ h4 {
 .precificacao-module .bg-purple-50,
 .precificacao-module .bg-primary\/5,
 .precificacao-module .bg-indigo-50\/30 {
-  background: rgb(var(--crm-accent-rgb) / 0.12);
+  background: linear-gradient(135deg, rgb(34 211 238 / 0.16), rgb(20 184 166 / 0.10), rgb(16 185 129 / 0.13));
 }
 
 .precificacao-module .bg-amber-50,
@@ -642,13 +642,15 @@ h4 {
 .precificacao-module .text-indigo-500,
 .precificacao-module .text-emerald-600,
 .precificacao-module .text-emerald-700 {
-  color: var(--crm-accent);
+  color: rgb(165 243 252);
 }
 
 .precificacao-module .bg-primary,
 .precificacao-module .data-\[state\=active\]\:bg-primary\/5[data-state='active'] {
   background: var(--prec-active-bg);
+  border-color: rgb(103 232 249 / 0.38);
   color: var(--prec-active-text);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 12px 26px rgb(34 211 238 / 0.10);
 }
 
 .precificacao-module .data-\[state\=active\]\:text-primary[data-state='active'] {
@@ -666,13 +668,13 @@ h4 {
 }
 
 .precificacao-module .from-primary {
-  --tw-gradient-from: rgb(var(--crm-accent-rgb) / 0.98) var(--tw-gradient-from-position);
-  --tw-gradient-to: rgb(var(--crm-accent-rgb) / 0) var(--tw-gradient-to-position);
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  --tw-gradient-from: rgb(34 211 238 / 0.36) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(34 211 238 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(20 184 166 / 0.28), rgb(16 185 129 / 0.30);
 }
 
 .precificacao-module .to-indigo-800 {
-  --tw-gradient-to: rgb(var(--crm-accent-rgb) / 0.72) var(--tw-gradient-to-position);
+  --tw-gradient-to: rgb(16 185 129 / 0.34) var(--tw-gradient-to-position);
 }
 
 .precificacao-module input,
@@ -742,9 +744,9 @@ h4 {
 .dark .precificacao-module {
   --prec-card-bg: rgb(var(--crm-surface-rgb) / 0.96);
   --prec-card-muted: rgb(var(--crm-surface-2-rgb) / 0.78);
-  --prec-active-bg: #38bdf8;
-  --prec-active-text: #06111f;
-  --prec-button-text: #06111f;
+  --prec-active-bg: linear-gradient(135deg, rgb(34 211 238 / 0.26), rgb(20 184 166 / 0.20), rgb(16 185 129 / 0.24));
+  --prec-active-text: #f8fafc;
+  --prec-button-text: #f8fafc;
 }
 
 .dark .precificacao-module .shadow-sm,
@@ -804,7 +806,7 @@ h4 {
 .precificacao-module .text-sky-400,
 .precificacao-module .text-blue-300,
 .precificacao-module .text-blue-100 {
-  color: var(--crm-accent);
+  color: rgb(165 243 252);
 }
 
 .precificacao-module .text-cyan-100,
@@ -818,21 +820,39 @@ h4 {
 .precificacao-module .bg-blue-500\/15,
 .precificacao-module .bg-blue-500\/10,
 .precificacao-module .bg-sky-500 {
-  background: rgb(var(--crm-accent-rgb) / 0.14);
+  background: linear-gradient(135deg, rgb(34 211 238 / 0.18), rgb(20 184 166 / 0.12), rgb(16 185 129 / 0.15));
 }
 
 .precificacao-module .bg-blue-500\/85,
 .precificacao-module .bg-blue-500\/80,
 .precificacao-module .bg-blue-500\/70,
 .precificacao-module .from-blue-600 {
-  --tw-gradient-from: rgb(var(--crm-accent-rgb) / 0.98) var(--tw-gradient-from-position);
-  --tw-gradient-to: rgb(var(--crm-accent-rgb) / 0) var(--tw-gradient-to-position);
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
-  background-color: rgb(var(--crm-accent-rgb) / 0.88);
+  --tw-gradient-from: rgb(34 211 238 / 0.28) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(34 211 238 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(20 184 166 / 0.24), rgb(16 185 129 / 0.26);
+  background-color: rgb(20 184 166 / 0.18);
 }
 
-.precificacao-module .to-blue-700 {
-  --tw-gradient-to: rgb(34 211 238 / 0.76) var(--tw-gradient-to-position);
+.precificacao-module .via-blue-700 {
+  --tw-gradient-to: rgb(20 184 166 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(20 184 166 / 0.24) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
+
+.precificacao-module .to-blue-700,
+.precificacao-module .to-blue-800 {
+  --tw-gradient-to: rgb(16 185 129 / 0.28) var(--tw-gradient-to-position);
+}
+
+.precificacao-module .crm-btn-primary {
+  background: linear-gradient(135deg, rgb(34 211 238 / 0.26), rgb(20 184 166 / 0.20) 45%, rgb(16 185 129 / 0.24));
+  border-color: rgb(103 232 249 / 0.46);
+  color: rgb(224 255 255);
+  box-shadow: 0 18px 44px rgb(34 211 238 / 0.10), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.precificacao-module .crm-btn-primary:hover {
+  background: linear-gradient(135deg, rgb(34 211 238 / 0.34), rgb(20 184 166 / 0.26) 45%, rgb(16 185 129 / 0.30));
+  box-shadow: 0 22px 52px rgb(34 211 238 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.16);
 }
 
 .precificacao-module .border-cyan-400\/40,
@@ -841,7 +861,7 @@ h4 {
 .precificacao-module .border-blue-400\/40,
 .precificacao-module .border-blue-400\/30,
 .precificacao-module .border-sky-500\/50 {
-  border-color: rgb(var(--crm-accent-rgb) / 0.42);
+  border-color: rgb(103 232 249 / 0.42);
 }
 
 .precificacao-module .hover\:bg-blue-500:hover,
@@ -853,7 +873,7 @@ h4 {
 .precificacao-module .hover\:bg-slate-800\/70:hover,
 .precificacao-module .hover\:bg-slate-800\/80:hover,
 .precificacao-module .hover\:bg-slate-700\/50:hover {
-  background: rgb(var(--crm-accent-rgb) / 0.18);
+  background: linear-gradient(135deg, rgb(34 211 238 / 0.20), rgb(20 184 166 / 0.12), rgb(16 185 129 / 0.14));
 }
 
 .gestao-pocs-module {
