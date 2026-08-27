@@ -41,10 +41,43 @@ const resolveUserAccess = (role, input = {}) => {
   };
 };
 
+const selectTenantAccess = {
+  accessB2B: true,
+  accessB2G: true,
+  accessPreSales: true,
+  accessManagement: true,
+  accessAutomation: true
+};
+
+const constrainAccessToTenant = (access, tenantCompany) => {
+  if (!tenantCompany) return access;
+  return {
+    accessB2B: Boolean(access.accessB2B && tenantCompany.accessB2B),
+    accessB2G: Boolean(access.accessB2G && tenantCompany.accessB2G),
+    accessPreSales: Boolean(access.accessPreSales && tenantCompany.accessPreSales),
+    accessManagement: Boolean(access.accessManagement && tenantCompany.accessManagement),
+    accessAutomation: Boolean(access.accessAutomation && tenantCompany.accessAutomation)
+  };
+};
+
+const resolveStoredUserAccess = (role, user = {}) => {
+  const normalizedRole = normalizeRole(role);
+  const defaultAccess = resolveUserAccess(normalizedRole, user);
+  if (!['ADMIN', 'MANAGER', 'DIRECTOR'].includes(normalizedRole)) return defaultAccess;
+
+  return {
+    accessB2B: user.accessB2B !== undefined && user.accessB2B !== null ? Boolean(user.accessB2B) : defaultAccess.accessB2B,
+    accessB2G: user.accessB2G !== undefined && user.accessB2G !== null ? Boolean(user.accessB2G) : defaultAccess.accessB2G,
+    accessPreSales: user.accessPreSales !== undefined && user.accessPreSales !== null ? Boolean(user.accessPreSales) : defaultAccess.accessPreSales,
+    accessManagement: user.accessManagement !== undefined && user.accessManagement !== null ? Boolean(user.accessManagement) : defaultAccess.accessManagement,
+    accessAutomation: user.accessAutomation !== undefined && user.accessAutomation !== null ? Boolean(user.accessAutomation) : defaultAccess.accessAutomation
+  };
+};
+
 const sanitizeUser = (user) => {
   if (!user) return user;
   const role = normalizeRole(user.role);
-  const access = resolveUserAccess(role, user);
+  const access = resolveStoredUserAccess(role, user);
 
   return {
     id: user.id,
@@ -207,13 +240,18 @@ export default async function handler(req) {
       return Response.json({ error: 'Sem permissão para criar usuário em outra empresa' }, { status: 403 });
     }
 
-    const access = resolveUserAccess(role, {
+    const tenantCompany = tenantCompanyId
+      ? await prisma.tenantCompany.findUnique({ where: { id: tenantCompanyId }, select: selectTenantAccess })
+      : null;
+
+    const requestedAccess = resolveUserAccess(role, {
       accessB2B: body.accessB2B,
       accessB2G: body.accessB2G,
       accessPreSales: body.accessPreSales,
       accessManagement: body.accessManagement,
       accessAutomation: body.accessAutomation
     });
+    const access = isMaster(req.user) ? requestedAccess : constrainAccessToTenant(requestedAccess, tenantCompany);
 
     const hashedPassword = await bcrypt.hash(body.password, 10);
 
@@ -313,13 +351,22 @@ export default async function handler(req) {
       return Response.json({ error: 'Não é permitido remover role ADMIN do dono da empresa' }, { status: 403 });
     }
 
-    const access = resolveUserAccess(nextRole, {
+    const nextTenantCompanyId =
+      isMaster(req.user) && body.tenantCompanyId !== undefined
+        ? body.tenantCompanyId
+        : current.tenantCompanyId;
+    const tenantCompany = nextTenantCompanyId
+      ? await prisma.tenantCompany.findUnique({ where: { id: nextTenantCompanyId }, select: selectTenantAccess })
+      : null;
+
+    const requestedAccess = resolveUserAccess(nextRole, {
       accessB2B: body.accessB2B,
       accessB2G: body.accessB2G,
       accessPreSales: body.accessPreSales,
       accessManagement: body.accessManagement,
       accessAutomation: body.accessAutomation
     });
+    const access = isMaster(req.user) ? requestedAccess : constrainAccessToTenant(requestedAccess, tenantCompany);
 
     const updateData = {
       name: body.name,

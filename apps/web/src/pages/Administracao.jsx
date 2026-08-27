@@ -127,6 +127,14 @@ const companyModuleBadges = (company = {}) => {
   ].filter(Boolean);
 };
 
+const MODULE_ACCESS_ITEMS = [
+  { key: 'accessB2B', label: 'B2B', description: 'CRM comercial, empresas, oportunidades e propostas.' },
+  { key: 'accessB2G', label: 'B2G', description: 'Licitações, editais, análises e pipeline de governo.' },
+  { key: 'accessPreSales', label: 'Pré-vendas', description: 'Solicitações, orçamentos, calculadoras e apoio técnico.' },
+  { key: 'accessManagement', label: 'Gestão', description: 'Projetos, kickoff, pós-venda e relatórios operacionais.' },
+  { key: 'accessAutomation', label: 'Automações', description: 'Fluxos automáticos, integrações e jornadas.' }
+];
+
 const constrainAccessToCompanyModules = (access, company) => {
   if (!access) access = {};
   if (!company) company = {};
@@ -143,144 +151,17 @@ const constrainAccessToCompanyModules = (access, company) => {
 const SETTINGS_TABS = [
   { id: 'perfil', label: 'Perfil', icon: '👤' },
   { id: 'empresa', label: 'Empresa', icon: '🏢' },
+  { id: 'plano_contratado', label: 'Plano Contratado', icon: '📄', adminOnly: true, settingsRouteOnly: true },
+  { id: 'politicas_role', label: 'Políticas por Role', icon: '🧭', adminOnly: true, settingsRouteOnly: true },
   { id: 'avisos', label: 'Avisos', icon: '🔔' },
   { id: 'seguranca', label: 'Segurança', icon: '🔒' },
   { id: 'backup', label: 'Backup', icon: '💾' },
   { id: 'usuarios_acessos', label: 'Usuários e Acessos', icon: '👥' },
   { id: 'gestao_empresas', label: 'Gestão de Empresas', icon: '🏛️', masterOnly: true, adminRouteOnly: true },
-  { id: 'politicas_role', label: 'Políticas por Role', icon: '🧭', adminOnly: true },
-  { id: 'licenciamento', label: 'Licenciamento', icon: '🛡️', masterOnly: true }
+  { id: 'licenciamento', label: 'Administração de Licenças', icon: '🛡️', masterOnly: true, adminRouteOnly: true }
 ];
 
 const ROLE_POLICY_VISIBLE_ROLES = ['USER', 'PRE_SALES', 'ADMIN', 'MASTER'];
-
-const ROLE_POLICY_ITEMS = [
-  {
-    key: 'dashboard',
-    label: 'Painel de Controle',
-    description: 'Visão executiva geral e indicadores do funil.'
-  },
-  {
-    key: 'leads',
-    label: 'Leads',
-    description: 'Cadastro e acompanhamento de novos leads corporativos.'
-  },
-  {
-    key: 'opportunities',
-    label: 'Oportunidades',
-    description: 'Cadastro e acompanhamento de oportunidades corporativas.'
-  },
-  {
-    key: 'publicOpportunities',
-    label: 'Busca de Oportunidades Públicas',
-    description: 'Monitoramento de editais e licitações em fontes públicas.'
-  },
-  {
-    key: 'ownOpportunitiesOnly',
-    label: 'Somente suas oportunidades',
-    description: 'Quando ativo, o usuário vê apenas oportunidades criadas por ele.'
-  },
-  {
-    key: 'manufacturerRegistry',
-    label: 'Registro no Fabricante',
-    description: 'Gestão de deal registration com fabricantes.'
-  },
-  {
-    key: 'documentation',
-    label: 'Documentação',
-    description: 'Controle de documentos e validações.'
-  },
-  {
-    key: 'strategicReports',
-    label: 'Relatórios Estratégicos',
-    description: 'Análises, desempenho e inteligência comercial.'
-  },
-  {
-    key: 'management',
-    label: 'Gestão',
-    description: 'Projetos, kickoff, fases, acompanhamentos e painéis operacionais.'
-  },
-  {
-    key: 'automation',
-    label: 'Automações',
-    description: 'Workflows, integrações e execução automatizada de processos.'
-  }
-];
-
-const ROLE_POLICY_MATRIX = {
-  USER: {
-    dashboard: true,
-    leads: true,
-    opportunities: true,
-    publicOpportunities: true,
-    ownOpportunitiesOnly: true,
-    manufacturerRegistry: true,
-    documentation: true,
-    strategicReports: true,
-    management: false,
-    automation: false
-  },
-  PRE_SALES: {
-    dashboard: true,
-    leads: true,
-    opportunities: true,
-    publicOpportunities: false,
-    ownOpportunitiesOnly: true,
-    manufacturerRegistry: false,
-    documentation: false,
-    strategicReports: false,
-    management: false,
-    automation: false
-  },
-  SELLER: {
-    dashboard: true,
-    leads: true,
-    opportunities: true,
-    publicOpportunities: true,
-    ownOpportunitiesOnly: true,
-    manufacturerRegistry: true,
-    documentation: true,
-    strategicReports: true,
-    management: false,
-    automation: false
-  },
-  MANAGER: {
-    dashboard: true,
-    leads: true,
-    opportunities: true,
-    publicOpportunities: true,
-    ownOpportunitiesOnly: false,
-    manufacturerRegistry: true,
-    documentation: true,
-    strategicReports: true,
-    management: true,
-    automation: true
-  },
-  ADMIN: {
-    dashboard: true,
-    leads: true,
-    opportunities: true,
-    publicOpportunities: true,
-    ownOpportunitiesOnly: false,
-    manufacturerRegistry: true,
-    documentation: true,
-    strategicReports: true,
-    management: true,
-    automation: true
-  },
-  MASTER: {
-    dashboard: true,
-    leads: true,
-    opportunities: true,
-    publicOpportunities: true,
-    ownOpportunitiesOnly: false,
-    manufacturerRegistry: true,
-    documentation: true,
-    strategicReports: true,
-    management: true,
-    automation: true
-  }
-};
 
 const extractCollection = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -527,14 +408,15 @@ export default function Administracao() {
   const isAdminSession = normalizeRole(sessionUser?.role) === 'ADMIN';
   const isAdministrationRoute = location.pathname.startsWith('/administracao');
   const defaultTab = isAdministrationRoute
-    ? 'usuarios_acessos'
-    : (normalizeRole(sessionUser?.role) === 'ADMIN' ? 'usuarios_acessos' : 'perfil');
+    ? (isMasterSession ? 'gestao_empresas' : 'usuarios_acessos')
+    : (isAdminSession ? 'plano_contratado' : 'perfil');
   const availableTabs = useMemo(
     () =>
       SETTINGS_TABS.filter((tab) => {
         if (tab.masterOnly && !isMasterSession) return false;
         if (tab.adminOnly && !isMasterSession && !isAdminSession) return false;
         if (tab.adminRouteOnly && !isAdministrationRoute) return false;
+        if (tab.settingsRouteOnly && isAdministrationRoute) return false;
         return true;
       }),
     [isAdministrationRoute, isAdminSession, isMasterSession]
@@ -567,6 +449,17 @@ export default function Administracao() {
       activeLicenses: licensingCompanies.filter((company) => company?.license?.status === 'ACTIVE').length
     }),
     [licensingCompanies]
+  );
+  const contractedCompany = useMemo(() => {
+    if (!licensingCompanies.length) return null;
+    if (isMasterSession && sessionUser?.tenantCompanyId) {
+      return licensingCompanies.find((company) => company.id === sessionUser.tenantCompanyId) || licensingCompanies[0];
+    }
+    return licensingCompanies[0];
+  }, [isMasterSession, licensingCompanies, sessionUser?.tenantCompanyId]);
+  const contractedCompanyAccess = useMemo(
+    () => normalizeCompanyModuleAccess(contractedCompany || {}),
+    [contractedCompany]
   );
 
   const resetSessionAndGoToLogin = (message) => {
@@ -744,7 +637,7 @@ export default function Administracao() {
   };
 
   const loadLicensingData = async () => {
-    if (!isMasterSession) {
+    if (!isMasterSession && !isAdminSession) {
       setLicensingPlans([]);
       setLicensingCompanies([]);
       setLicenseDrafts({});
@@ -754,7 +647,9 @@ export default function Administracao() {
     try {
       setLoadingLicensing(true);
       const [plansRes, companiesRes] = await Promise.all([
-        fetch(API_ENDPOINTS.licensing.plans, { headers: getAuthHeaders() }),
+        isMasterSession
+          ? fetch(API_ENDPOINTS.licensing.plans, { headers: getAuthHeaders() })
+          : Promise.resolve({ ok: true, json: async () => ({ data: [] }) }),
         fetch(API_ENDPOINTS.licensing.companies, { headers: getAuthHeaders() })
       ]);
 
@@ -816,7 +711,7 @@ export default function Administracao() {
         logoUrl: settingsData?.logoUrl || null
       });
 
-      if (isMasterSession) {
+      if (isMasterSession || isAdminSession) {
         await loadLicensingData();
       } else {
         setLicensingPlans([]);
@@ -832,6 +727,13 @@ export default function Administracao() {
   };
 
   const openNewUser = () => {
+    const defaultAccess = isMasterSession
+      ? { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: false, accessAutomation: false }
+      : constrainAccessToCompanyModules(
+          { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: false, accessAutomation: false },
+          contractedCompany
+        );
+
     setEditingUser(null);
     setUserForm({
       name: '',
@@ -846,11 +748,7 @@ export default function Administracao() {
       commissionProject36: '',
       commissionProject48: '',
       commissionProject60: '',
-      accessB2B: true,
-      accessB2G: true,
-      accessPreSales: false,
-      accessManagement: false,
-      accessAutomation: false,
+      ...defaultAccess,
       isCompanyOwner: false
     });
     setShowUserModal(true);
@@ -865,6 +763,7 @@ export default function Administracao() {
       accessManagement: user?.accessManagement,
       accessAutomation: user?.accessAutomation
     });
+    const safeAccess = isMasterSession ? resolvedAccess : constrainAccessToCompanyModules(resolvedAccess, contractedCompany);
 
     setEditingUser(user);
     setUserForm({
@@ -880,11 +779,11 @@ export default function Administracao() {
       commissionProject36: user?.commissionProject36 != null ? String(user.commissionProject36) : '',
       commissionProject48: user?.commissionProject48 != null ? String(user.commissionProject48) : '',
       commissionProject60: user?.commissionProject60 != null ? String(user.commissionProject60) : '',
-      accessB2B: resolvedAccess.accessB2B,
-      accessB2G: resolvedAccess.accessB2G,
-      accessPreSales: resolvedAccess.accessPreSales,
-      accessManagement: resolvedAccess.accessManagement,
-      accessAutomation: resolvedAccess.accessAutomation,
+      accessB2B: safeAccess.accessB2B,
+      accessB2G: safeAccess.accessB2G,
+      accessPreSales: safeAccess.accessPreSales,
+      accessManagement: safeAccess.accessManagement,
+      accessAutomation: safeAccess.accessAutomation,
       isCompanyOwner: user?.isCompanyOwner !== undefined ? Boolean(user.isCompanyOwner) : false
     });
     setShowUserModal(true);
@@ -897,6 +796,9 @@ export default function Administracao() {
       setSavingUser(true);
       setError(null);
 
+      const userAccess = isMasterSession
+        ? userForm
+        : constrainAccessToCompanyModules(userForm, contractedCompany);
       const payload = {
         name: userForm.name?.trim(),
         email: userForm.email?.trim(),
@@ -909,11 +811,11 @@ export default function Administracao() {
         commissionProject36: userForm.commissionProject36 === '' ? null : Number(userForm.commissionProject36),
         commissionProject48: userForm.commissionProject48 === '' ? null : Number(userForm.commissionProject48),
         commissionProject60: userForm.commissionProject60 === '' ? null : Number(userForm.commissionProject60),
-        accessB2B: Boolean(userForm.accessB2B),
-        accessB2G: Boolean(userForm.accessB2G),
-        accessPreSales: Boolean(userForm.accessPreSales),
-        accessManagement: Boolean(userForm.accessManagement),
-        accessAutomation: Boolean(userForm.accessAutomation),
+        accessB2B: Boolean(userAccess.accessB2B),
+        accessB2G: Boolean(userAccess.accessB2G),
+        accessPreSales: Boolean(userAccess.accessPreSales),
+        accessManagement: Boolean(userAccess.accessManagement),
+        accessAutomation: Boolean(userAccess.accessAutomation),
         isCompanyOwner: Boolean(userForm.isCompanyOwner)
       };
 
@@ -1974,7 +1876,8 @@ export default function Administracao() {
   const handleUserRoleChange = (nextRoleValue) => {
     const nextRole = normalizeRole(nextRoleValue);
     setUserForm((prev) => {
-      const access = resolveAccessByRole(nextRole, prev);
+      const resolvedAccess = resolveAccessByRole(nextRole, prev);
+      const access = isMasterSession ? resolvedAccess : constrainAccessToCompanyModules(resolvedAccess, contractedCompany);
       return {
         ...prev,
         role: nextRole,
@@ -1988,12 +1891,24 @@ export default function Administracao() {
     setUserForm((prev) => {
       const role = normalizeRole(prev.role);
       if (['MASTER', 'ADMIN', 'PRE_SALES'].includes(role)) {
-        return { ...prev, ...resolveAccessByRole(role, prev) };
+        const resolvedAccess = resolveAccessByRole(role, prev);
+        const access = isMasterSession ? resolvedAccess : constrainAccessToCompanyModules(resolvedAccess, contractedCompany);
+        return { ...prev, ...access };
       }
 
-      const next = { ...prev, [moduleKey]: Boolean(checked) };
+      const next = isMasterSession
+        ? { ...prev, [moduleKey]: Boolean(checked) }
+        : {
+            ...prev,
+            ...constrainAccessToCompanyModules({ ...prev, [moduleKey]: Boolean(checked) }, contractedCompany)
+          };
       if (!next.accessB2B && !next.accessB2G && !next.accessPreSales && !next.accessManagement && !next.accessAutomation) {
-        next.accessB2B = true;
+        if (isMasterSession) {
+          next.accessB2B = true;
+        } else {
+          const fallbackModule = MODULE_ACCESS_ITEMS.find((item) => contractedCompanyAccess[item.key]);
+          if (fallbackModule) next[fallbackModule.key] = true;
+        }
       }
       return next;
     });
@@ -2114,14 +2029,18 @@ export default function Administracao() {
   }, [regions]);
 
   const logoSrc = resolvePublicUrl(settings.logoUrl);
+  const pageTitle = isAdministrationRoute ? 'Administração' : 'Configurações';
+  const pageDescription = isAdministrationRoute
+    ? 'Administração global de empresas, planos, licenças e aprovações.'
+    : 'Plano contratado, políticas por role e preferências da empresa.';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Configurações</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{pageTitle}</h1>
           <p className="text-gray-600 dark:text-slate-200">
-            Gerencie suas preferências de conta e configurações da empresa.
+            {pageDescription}
           </p>
         </div>
         {activeTab === 'usuarios_acessos' && (
@@ -2628,40 +2547,170 @@ export default function Administracao() {
         </div>
       )}
 
+      {activeTab === 'plano_contratado' && (
+        <div className="crm-card rounded-2xl p-6 space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Plano Contratado</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-200">
+                Consulte o plano ativo da empresa e os módulos liberados para configurar usuários.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadLicensingData}
+              disabled={loadingLicensing}
+              className="crm-btn crm-btn-secondary"
+            >
+              {loadingLicensing ? 'Atualizando...' : 'Atualizar plano'}
+            </button>
+          </div>
+
+          {loadingLicensing ? (
+            <div className="text-sm text-gray-600 dark:text-slate-200">Carregando plano contratado...</div>
+          ) : !contractedCompany ? (
+            <div className="rounded-xl border border-amber-300/40 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+              Nenhuma empresa vinculada a esta sessão. O plano contratado aparecerá aqui após a aprovação pelo MASTER.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/10 p-4">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-300">Empresa</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">{contractedCompany.name || '-'}</div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">{contractedCompany.cnpj || contractedCompany.email || '-'}</div>
+                </div>
+                <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/10 p-4">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-300">Plano</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {contractedCompany.license?.plan?.name || contractedCompany.planName || 'Sem plano ativo'}
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">
+                    {contractedCompany.license?.status || contractedCompany.status || '-'}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/10 p-4">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-300">Assentos</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {contractedCompany.license?.seats ?? contractedCompany.license?.plan?.seatsIncluded ?? '-'}
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">
+                    Usuários cadastrados: {contractedCompany.users?.length ?? contractedCompany.usersCount ?? '-'}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/10 p-4">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-300">Vigência</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {formatDateLabel(contractedCompany.license?.startDate)} até {formatDateLabel(contractedCompany.license?.endDate)}
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">
+                    Pagamento: {contractedCompany.license?.paymentStatus || '-'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Módulos contratados</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+                  {MODULE_ACCESS_ITEMS.map((item) => {
+                    const enabled = Boolean(contractedCompanyAccess[item.key]);
+                    return (
+                      <div
+                        key={item.key}
+                        className={`rounded-xl border p-3 ${
+                          enabled
+                            ? 'border-cyan-300/35 bg-gradient-to-br from-cyan-500/15 via-teal-500/10 to-emerald-500/15'
+                            : 'border-gray-200 bg-gray-50/60 opacity-60 dark:border-slate-700 dark:bg-slate-900/35'
+                        }`}
+                      >
+                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.label}</div>
+                        <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">{item.description}</div>
+                        <div className={`mt-3 text-xs font-semibold ${enabled ? 'text-cyan-700 dark:text-cyan-200' : 'text-gray-500 dark:text-slate-400'}`}>
+                          {enabled ? 'Contratado' : 'Não contratado'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-blue-300/30 bg-blue-50/70 px-4 py-3 text-sm text-blue-900 dark:bg-cyan-500/10 dark:text-cyan-100">
+                <span>Use as políticas por role para conferir o padrão de liberação e ajuste usuários em Usuários e Acessos.</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('politicas_role')}
+                  className="crm-btn crm-btn-primary"
+                >
+                  Ver políticas
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {activeTab === 'politicas_role' && (
         <div className="crm-card rounded-2xl p-6 space-y-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Políticas de Acesso por Role</h2>
-            <p className="text-sm text-gray-600 dark:text-slate-200">
-              Defina o acesso por role dentro dos módulos contratados pela empresa.
-            </p>
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Políticas de Acesso por Role</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-200">
+                Confira quais módulos cada role pode receber dentro do plano contratado.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('usuarios_acessos')}
+              className="crm-btn crm-btn-secondary"
+            >
+              Gerenciar usuários
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {rolePolicyVisibleRoles.map((role) => (
-              <div
-                key={role}
-                className="rounded-2xl border border-dashed border-blue-300/40 dark:border-cyan-400/25 bg-slate-50/70 dark:bg-slate-900/35 p-4 space-y-3"
-              >
-                <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{roleLabel(role)}</div>
-                {ROLE_POLICY_ITEMS.map((item) => {
-                  const checked = Boolean(ROLE_POLICY_MATRIX?.[role]?.[item.key]);
-                  return (
-                    <div key={item.key} className="space-y-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-base font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
-                        <input type="checkbox" checked={checked} readOnly />
+          {loadingLicensing ? (
+            <div className="text-sm text-gray-600 dark:text-slate-200">Carregando políticas do plano...</div>
+          ) : !contractedCompany ? (
+            <div className="rounded-xl border border-amber-300/40 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+              Nenhum plano contratado encontrado para esta empresa.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {rolePolicyVisibleRoles.map((role) => {
+                const roleAccess = constrainAccessToCompanyModules(resolveAccessByRole(role, {}), contractedCompany);
+                return (
+                  <div
+                    key={role}
+                    className="rounded-2xl border border-dashed border-blue-300/40 dark:border-cyan-400/25 bg-slate-50/70 dark:bg-slate-900/35 p-4 space-y-3"
+                  >
+                    <div>
+                      <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{roleLabel(role)}</div>
+                      <div className="mt-1 text-xs text-gray-600 dark:text-slate-300">
+                        Plano: {contractedCompany.license?.plan?.name || contractedCompany.planName || 'Sem plano ativo'}
                       </div>
-                      <div className="text-xs text-gray-600 dark:text-slate-300">{item.description}</div>
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+                    {MODULE_ACCESS_ITEMS.map((item) => {
+                      const contracted = Boolean(contractedCompanyAccess[item.key]);
+                      const checked = Boolean(roleAccess[item.key]);
+                      return (
+                        <div key={item.key} className={`space-y-1 rounded-lg border px-3 py-2 ${contracted ? 'border-cyan-300/25 bg-cyan-500/10' : 'border-gray-200 bg-gray-100/50 opacity-60 dark:border-slate-700 dark:bg-slate-800/40'}`}>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
+                            <input type="checkbox" checked={checked} disabled readOnly />
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-slate-300">
+                            {contracted ? item.description : 'Não contratado neste plano'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="rounded-xl border border-amber-300/40 bg-amber-50/80 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-            A empresa só consegue liberar módulos contratados. Administração global continua exclusiva da role <strong>MASTER</strong>.
+            A empresa só consegue liberar módulos contratados. Administração global de licenças continua exclusiva da role <strong>MASTER</strong>.
           </div>
         </div>
       )}
@@ -3482,23 +3531,21 @@ export default function Administracao() {
           <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-3 space-y-2">
             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acesso por módulo</div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {[
-                ['accessB2B', 'B2B'],
-                ['accessB2G', 'B2G'],
-                ['accessPreSales', 'Pré-Vendas'],
-                ['accessManagement', 'Gestão'],
-                ['accessAutomation', 'Automações']
-              ].map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(userForm[key])}
-                    disabled={['MASTER', 'ADMIN', 'PRE_SALES'].includes(normalizeRole(userForm.role))}
-                    onChange={(e) => handleUserModuleToggle(key, e.target.checked)}
-                  />
-                  {label}
-                </label>
-              ))}
+              {MODULE_ACCESS_ITEMS.map(({ key, label }) => {
+                const contracted = isMasterSession || Boolean(contractedCompanyAccess[key]);
+                return (
+                  <label key={key} className={`flex items-center gap-2 text-sm ${contracted ? 'text-gray-700 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}`}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(userForm[key])}
+                      disabled={!contracted || ['MASTER', 'ADMIN', 'PRE_SALES'].includes(normalizeRole(userForm.role))}
+                      onChange={(e) => handleUserModuleToggle(key, e.target.checked)}
+                    />
+                    {label}
+                    {!contracted && <span className="text-[11px]">(não contratado)</span>}
+                  </label>
+                );
+              })}
             </div>
           </div>
 
@@ -3944,13 +3991,7 @@ export default function Administracao() {
           <div className="rounded-xl border border-gray-200 dark:border-blue-500/20 p-3 space-y-2">
             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acesso por módulo</div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {[
-                ['accessB2B', 'B2B'],
-                ['accessB2G', 'B2G'],
-                ['accessPreSales', 'Pré-Vendas'],
-                ['accessManagement', 'Gestão'],
-                ['accessAutomation', 'Automações']
-              ].map(([key, label]) => {
+              {MODULE_ACCESS_ITEMS.map(({ key, label }) => {
                 const companyAccess = normalizeCompanyModuleAccess(targetCompanyForUser);
                 return (
                   <label key={key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-100">

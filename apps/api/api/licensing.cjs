@@ -632,6 +632,10 @@ router.post('/plans', requireRole(['ADMIN']), async (req, res) => {
 
 router.put('/plans/:id', requireRole(['ADMIN']), async (req, res) => {
   try {
+    if (!isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode editar planos' });
+    }
+
     const id = normalizeString(req.params.id, 120);
     if (!id) return res.status(400).json({ error: 'ID do plano inválido' });
 
@@ -781,8 +785,8 @@ router.put('/companies/:id', requireRole(['ADMIN']), async (req, res) => {
         cnpj: normalizeCnpj(req.body?.cnpj),
         email: normalizeEmail(req.body?.email),
         phone: normalizeString(req.body?.phone, 40),
-        status: COMPANY_STATUS.has(statusInput) ? statusInput : undefined,
-        ...normalizeModuleAccess(req.body, existing),
+        status: isMaster(req.user) && COMPANY_STATUS.has(statusInput) ? statusInput : undefined,
+        ...(isMaster(req.user) ? normalizeModuleAccess(req.body, existing) : {}),
         notes: normalizeString(req.body?.notes, 600)
       },
       include: {
@@ -806,6 +810,10 @@ router.put('/companies/:id', requireRole(['ADMIN']), async (req, res) => {
 
 router.put('/companies/:id/license', requireRole(['ADMIN']), async (req, res) => {
   try {
+    if (!isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode alterar licenças de empresas' });
+    }
+
     const companyId = normalizeString(req.params.id, 120);
     if (!companyId) {
       return res.status(400).json({ error: 'ID da empresa inválido' });
