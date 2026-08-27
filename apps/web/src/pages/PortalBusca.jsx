@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
   MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2,
-  BookmarkPlus, ThumbsUp, ThumbsDown, Tag, Building2
+  BookmarkPlus, ThumbsUp, ThumbsDown, Tag, Building2, ClipboardList
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 
@@ -37,6 +37,7 @@ const FONTES_CONFIG = [
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
+const LICITACOES_GERENCIADAS_KEY = 'b2g_licitacoes_gerenciadas_v1';
 const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.map(fonte => fonte.id);
 
 const FONTES_PAGAS = [
@@ -606,7 +607,16 @@ function Toast({ toasts }) {
 
 // ─── Card de Edital ───────────────────────────────────────────────────────────
 
-function CardEdital({ item, favorito, leadSalvo, salvandoLead, onToggleFavorito, onAbrirSalvarLead }) {
+function CardEdital({
+  item,
+  favorito,
+  leadSalvo,
+  gerenciada,
+  salvandoLead,
+  onToggleFavorito,
+  onToggleGerenciada,
+  onAbrirSalvarLead
+}) {
   const vigente = item.status && !['encerrado', 'cancelado', 'revogado'].includes(item.status.toLowerCase());
 
   return (
@@ -641,14 +651,31 @@ function CardEdital({ item, favorito, leadSalvo, salvandoLead, onToggleFavorito,
             </h3>
           </div>
 
-          {/* Valor */}
-          <div className="text-left md:text-right bg-slate-50 dark:bg-slate-700/40 md:bg-transparent md:dark:bg-transparent p-3 md:p-0 rounded-lg border border-slate-100 dark:border-slate-700 md:border-none shrink-0">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Valor Estimado</p>
-            {item.valor ? (
-              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.valor)}</p>
-            ) : (
-              <p className="text-sm text-slate-400 dark:text-slate-500 italic">Não informado</p>
+          <div className="flex flex-col gap-2 shrink-0">
+            {onToggleGerenciada && (
+              <button
+                onClick={() => onToggleGerenciada(item)}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                  gerenciada
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30'
+                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30'
+                }`}
+                title={gerenciada ? 'Remover de Licitações Gerenciadas' : 'Adicionar em Licitações Gerenciadas'}
+              >
+                {gerenciada ? <CheckCircle size={14} /> : <Plus size={14} />}
+                {gerenciada ? 'Licitação adicionada' : 'Adicionar licitação'}
+              </button>
             )}
+
+            {/* Valor */}
+            <div className="text-left md:text-right bg-slate-50 dark:bg-slate-700/40 md:bg-transparent md:dark:bg-transparent p-3 md:p-0 rounded-lg border border-slate-100 dark:border-slate-700 md:border-none">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Valor Estimado</p>
+              {item.valor ? (
+                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.valor)}</p>
+              ) : (
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic">Não informado</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -886,7 +913,7 @@ function SalvarLeadModal({
 
 export default function PortalBusca() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('busca'); // 'busca' | 'fontes' | 'alertas'
+  const [activeTab, setActiveTab] = useState('busca'); // 'busca' | 'gerenciadas' | 'fontes' | 'alertas'
 
   // Busca
   const [objeto, setObjeto] = useState('');
@@ -943,6 +970,11 @@ export default function PortalBusca() {
     try { return JSON.parse(localStorage.getItem('b2g_favoritos_v2') || '[]'); } catch { return []; }
   });
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
+
+  // Licitações Gerenciadas
+  const [licitacoesGerenciadas, setLicitacoesGerenciadas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LICITACOES_GERENCIADAS_KEY) || '[]'); } catch { return []; }
+  });
 
   // Alertas
   const [alertas, setAlertas] = useState(() => {
@@ -1176,6 +1208,42 @@ export default function PortalBusca() {
   const isFavorito = (item) => favoritos.some(f => f.id === item.id);
 
   const isLeadSalvo = (item) => leadsSalvos.some(id => String(id) === String(item.id));
+
+  const getLicitacaoId = (item) => String(item?.id || item?.numeroControlePNCP || item?.numero || item?.link || '');
+
+  const isLicitacaoGerenciada = (item) => {
+    const id = getLicitacaoId(item);
+    return Boolean(id) && licitacoesGerenciadas.some(licitacao => getLicitacaoId(licitacao) === id);
+  };
+
+  const toggleLicitacaoGerenciada = (item) => {
+    const id = getLicitacaoId(item);
+    if (!id) {
+      showToast('Não foi possível gerenciar', 'Esta licitação não possui identificador válido.', true);
+      return;
+    }
+
+    setLicitacoesGerenciadas(prev => {
+      const existe = prev.some(licitacao => getLicitacaoId(licitacao) === id);
+      const next = existe
+        ? prev.filter(licitacao => getLicitacaoId(licitacao) !== id)
+        : [
+            {
+              ...item,
+              id,
+              gerenciadaEm: new Date().toISOString()
+            },
+            ...prev
+          ];
+
+      localStorage.setItem(LICITACOES_GERENCIADAS_KEY, JSON.stringify(next));
+      showToast(
+        existe ? 'Licitação removida' : 'Licitação adicionada',
+        existe ? 'Removida de Licitações Gerenciadas.' : 'Salva em Licitações Gerenciadas.'
+      );
+      return next;
+    });
+  };
 
   const abrirSalvarLead = (item) => {
     setLeadModalItem(item);
@@ -1443,6 +1511,7 @@ export default function PortalBusca() {
         <div className="flex items-center gap-1 px-4 py-2">
           {[
             { id: 'busca', label: 'Início', icon: <Search size={14} /> },
+            { id: 'gerenciadas', label: `Licitações Gerenciadas (${licitacoesGerenciadas.length})`, icon: <ClipboardList size={14} /> },
             { id: 'fontes', label: 'Fontes Integradas', icon: <Settings size={14} /> },
             { id: 'alertas', label: 'Alertas', icon: <Bell size={14} /> }
           ].map(tab => (
@@ -1721,13 +1790,77 @@ export default function PortalBusca() {
                       favorito={isFavorito(item)}
                       leadSalvo={isLeadSalvo(item)}
                       salvandoLead={salvandoLeadId === item.id}
+                      gerenciada={isLicitacaoGerenciada(item)}
                       onToggleFavorito={toggleFavorito}
+                      onToggleGerenciada={toggleLicitacaoGerenciada}
                       onAbrirSalvarLead={abrirSalvarLead}
                     />
                   ))}
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ABA LICITAÇÕES GERENCIADAS ───────────────────────────────────── */}
+      {activeTab === 'gerenciadas' && (
+        <div className="flex flex-col flex-1 p-4">
+          <div className="max-w-7xl mx-auto w-full">
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                  <ClipboardList size={20} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Licitações Gerenciadas</h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Acompanhe as licitações marcadas nos resultados do Portal de Busca.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setActiveTab('busca'); setMostrarFavoritos(false); }}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                <Search size={15} />
+                Buscar licitações
+              </button>
+            </div>
+
+            {licitacoesGerenciadas.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-16 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800/60">
+                <ClipboardList size={44} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
+                <p className="text-lg font-semibold text-slate-700 dark:text-slate-200">Nenhuma licitação gerenciada</p>
+                <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+                  Use o botão "Adicionar licitação" no cabeçalho de um resultado encontrado.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    {licitacoesGerenciadas.length} licitação(ões) em gerenciamento
+                  </p>
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                    Em acompanhamento
+                  </span>
+                </div>
+                {licitacoesGerenciadas.map(item => (
+                  <CardEdital
+                    key={getLicitacaoId(item)}
+                    item={item}
+                    favorito={isFavorito(item)}
+                    leadSalvo={isLeadSalvo(item)}
+                    gerenciada
+                    salvandoLead={salvandoLeadId === item.id}
+                    onToggleFavorito={toggleFavorito}
+                    onToggleGerenciada={toggleLicitacaoGerenciada}
+                    onAbrirSalvarLead={abrirSalvarLead}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

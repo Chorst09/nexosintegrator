@@ -58,6 +58,13 @@ type SavedProposalEntry = {
   draft: SavedDraft;
 };
 
+type CommercialProposalPresentationViewProps = {
+  initialProposalId?: string | null;
+  initialMode?: 'latest' | 'blank';
+  onSaved?: () => void;
+  onNewProposal?: () => void;
+};
+
 type ShapeMeta = {
   label: string;
   helperText?: string;
@@ -1332,7 +1339,12 @@ const generateProposalId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
-export default function CommercialProposalPresentationView() {
+export default function CommercialProposalPresentationView({
+  initialProposalId = null,
+  initialMode = 'latest',
+  onSaved,
+  onNewProposal
+}: CommercialProposalPresentationViewProps = {}) {
   const previewRef = useRef<HTMLDivElement>(null);
   const templateShapeMapRef = useRef<Record<number, SlideShape[]>>({});
   const templateInvestmentRef = useRef<ParsedInvestmentTable>({
@@ -1578,7 +1590,10 @@ export default function CommercialProposalPresentationView() {
         entries = [...entries].sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
         setSavedProposals(entries);
 
-        const firstEntry = entries[0] ?? null;
+        const firstEntry =
+          initialMode === 'blank'
+            ? null
+            : (initialProposalId ? entries.find(entry => entry.id === initialProposalId) : null) ?? entries[0] ?? null;
         setActiveProposalId(firstEntry?.id ?? null);
         applyDraftToEditor(firstEntry?.draft ?? null);
 
@@ -1594,7 +1609,7 @@ export default function CommercialProposalPresentationView() {
     };
 
     loadTemplate();
-  }, [applyDraftToEditor]);
+  }, [applyDraftToEditor, initialProposalId, initialMode]);
 
   const slide4Descritivo = getShapeText(4, '97');
   const slide4Caracteristicas = parseCaracteristicasValue(getShapeText(4, '102'));
@@ -1765,8 +1780,9 @@ export default function CommercialProposalPresentationView() {
     applyDraftToEditor(null);
     setShowPreview(false);
     window.localStorage.removeItem(STORAGE_KEY);
+    onNewProposal?.();
     setSaveMessage('Modo de nova proposta ativado.');
-  }, [applyDraftToEditor]);
+  }, [applyDraftToEditor, onNewProposal]);
 
   const buildEditedBlob = useCallback(async (): Promise<Blob | null> => {
     if (!pptxBuffer) return null;
@@ -1797,7 +1813,10 @@ export default function CommercialProposalPresentationView() {
 
       let updatedXml = xml;
       (slideShapes[slideNumber] ?? []).forEach(shape => {
-        updatedXml = replaceShapeTextInSlideXml(updatedXml, shape.id, shape.text);
+        const textForPptx = slideNumber === 5 && shape.id === '107'
+          ? `\n${shape.text}`
+          : shape.text;
+        updatedXml = replaceShapeTextInSlideXml(updatedXml, shape.id, textForPptx);
       });
 
       if (slideNumber === 7) {
@@ -1856,6 +1875,7 @@ export default function CommercialProposalPresentationView() {
       }
 
       downloadBlob(blob, 'Proposta Comercial Double (Salva).pptx');
+      onSaved?.();
       setSaveMessage(`Proposta salva com sucesso em ${new Date(savedAt).toLocaleString('pt-BR')}.`);
     } catch (saveError) {
       console.error('Erro ao salvar proposta:', saveError);
@@ -1863,7 +1883,7 @@ export default function CommercialProposalPresentationView() {
     } finally {
       setIsWorking(false);
     }
-  }, [loading, error, pptxBuffer, isWorking, saveDraft, buildEditedBlob, downloadBlob]);
+  }, [loading, error, pptxBuffer, isWorking, saveDraft, buildEditedBlob, downloadBlob, onSaved]);
 
   const handleDownloadEdited = useCallback(async () => {
     if (loading || error || !pptxBuffer || isWorking) return;
@@ -1877,14 +1897,15 @@ export default function CommercialProposalPresentationView() {
       }
 
       downloadBlob(blob, 'Proposta Comercial Double (Editada).pptx');
-      setSaveMessage(`Download realizado com dados atualizados (${new Date(savedAt).toLocaleString('pt-BR')}).`);
+      onSaved?.();
+      setSaveMessage(`Download realizado e proposta salva na lista (${new Date(savedAt).toLocaleString('pt-BR')}).`);
     } catch (downloadError) {
       console.error('Erro ao baixar proposta editada:', downloadError);
       setSaveMessage('Erro ao baixar proposta editada.');
     } finally {
       setIsWorking(false);
     }
-  }, [loading, error, pptxBuffer, isWorking, saveDraft, buildEditedBlob, downloadBlob]);
+  }, [loading, error, pptxBuffer, isWorking, saveDraft, buildEditedBlob, downloadBlob, onSaved]);
 
   const handlePreviewProposal = useCallback(() => {
     if (loading || error || isWorking) return;
@@ -2268,6 +2289,7 @@ export default function CommercialProposalPresentationView() {
             {layout.textShapes.map(shape => {
               const text = getPreviewShapeText(slideNumber, shape.id, shape.text).trim();
               if (!text) return null;
+              const isSlide5Scope = slideNumber === 5 && shape.id === '107';
 
               if (slideNumber === 6 && shape.id === '121' && slide6RenderedPremissas.length > 0) {
                 return (
@@ -2352,7 +2374,7 @@ export default function CommercialProposalPresentationView() {
                     fontStyle: shape.italic ? 'italic' : 'normal',
                     lineHeight: 1.12,
                     color: shape.color || '#4C6584',
-                    padding: '0.2cqw'
+                    padding: isSlide5Scope ? '5.2cqw 0.2cqw 0.2cqw' : '0.2cqw'
                   }}
                 >
                   {text}
