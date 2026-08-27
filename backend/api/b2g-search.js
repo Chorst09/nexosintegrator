@@ -55,6 +55,46 @@ const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
 
+// Executa uma lista de tarefas assíncronas com concorrência limitada.
+// Reduz a sobrecarga em APIs públicas lentas (ex.: PNCP), que ficam mais
+// suscetíveis a timeout/504 quando bombardeadas com requisições paralelas.
+// Quando deadlineMs é informado, novas tarefas deixam de ser agendadas após o
+// prazo (as já em andamento continuam), permitindo retorno parcial.
+async function mapConcurrency(items, limit, fn, { deadlineMs = 0 } = {}) {
+  const results = new Array(items.length);
+  let idx = 0;
+  const deadline = deadlineMs > 0 ? Date.now() + deadlineMs : 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (idx < items.length) {
+      if (deadline && Date.now() > deadline) break;
+      const current = idx++;
+      results[current] = await fn(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// fetch com timeout + retry para erros transitórios de rede/5xx.
+async function fetchWithRetry(url, options = {}, { timeoutMs = 45000, retries = 2 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 const matchObjeto = (texto, objeto) => {
   if (!objeto || objeto.trim().length < 2) return true;
   const haystack = String(texto || '').toLowerCase();
@@ -117,15 +157,14 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
   const dataI = dataInicio ? String(dataInicio).replaceAll('-', '') : diasAtras(30);
   const dataF = dataFim ? String(dataFim).replaceAll('-', '') : hoje();
 
-  // Buscar nas principais modalidades em paralelo
+  // Buscar nas principais modalidades em paralelo (com concorrência limitada)
   const modalidades = [6, 8, 9, 4, 5]; // Pregão, Dispensa, Inexigibilidade, Concorrência, Tomada de Preços
   const ufsTarget = uf ? [uf] : [null];
 
-  const fetchPromises = [];
-
+  const tarefas = [];
   for (const ufTarget of ufsTarget) {
     for (const modCode of modalidades) {
-      fetchPromises.push((async () => {
+      tarefas.push(async () => {
         try {
           const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
           url.searchParams.set('dataInicial', dataI);
@@ -135,11 +174,13 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
           url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
           if (ufTarget) url.searchParams.set('uf', ufTarget);
 
-          const res = await fetch(url.toString(), {
-            headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-            signal: AbortSignal.timeout(20000)
-          });
+          const res = await fetchWithRetry(url.toString(), {
+            headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
+          }, { timeoutMs: 45000, retries: 0 });
 
+          if (res.status === 503 || res.status === 504) {
+            throw new Error('PNCP indisponível no momento (HTTP ' + res.status + ')');
+          }
           if (!res.ok) return [];
 
           const data = await safeJson(res);
@@ -172,13 +213,13 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
           errors.push(`PNCP mod${modCode}: ${err.message}`);
           return [];
         }
-      })());
+      });
     }
   }
 
-  const results = await Promise.allSettled(fetchPromises);
+  const results = await mapConcurrency(tarefas, 2, (fn) => fn(), { deadlineMs: 60000 });
   for (const r of results) {
-    if (r.status === 'fulfilled') resultados.push(...r.value);
+    resultados.push(...(r || []));
   }
 
   return { resultados, errors };
@@ -198,11 +239,13 @@ async function buscarPNCPProposta({ objeto, uf, pagina = 1, tamanhoPagina = 20, 
     url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
     if (uf) url.searchParams.set('uf', uf);
 
-    const res = await fetch(url.toString(), {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-      signal: AbortSignal.timeout(20000)
-    });
+    const res = await fetchWithRetry(url.toString(), {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
+    }, { timeoutMs: 45000, retries: 0 });
 
+    if (res.status === 503 || res.status === 504) {
+      throw new Error('PNCP indisponível no momento (HTTP ' + res.status + ')');
+    }
     if (!res.ok) return { resultados, errors };
 
     const data = await safeJson(res);
@@ -452,23 +495,27 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, 
   }
 
   try {
-    const res = await fetch(CURITIBA_ECOMPRAS_URL, {
+    const res = await fetchWithRetry(CURITIBA_ECOMPRAS_URL, {
       headers: {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.7',
         'Cache-Control': 'no-cache',
         'User-Agent': 'Mozilla/5.0 (compatible; NexosCRM/2.0; +https://e-compras.curitiba.pr.gov.br/)'
-      },
-      signal: AbortSignal.timeout(18000)
-    });
+      }
+    }, { timeoutMs: 18000, retries: 0 });
 
     const html = await res.text().catch(() => '');
-    if (!res.ok) {
-      errors.push(`e-Compras Curitiba: HTTP ${res.status}`);
+    if (res.status === 403 || /Access Denied|permission to access|cdn-cache|edgekey/i.test(html)) {
+      // Portal bloqueia acesso programático (Akamai). Fallback para PNCP (Curitiba).
+      const fallback = await buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina });
+      if (fallback.resultados.length > 0) {
+        return fallback;
+      }
+      errors.push('e-Compras Curitiba: portal bloqueia acesso automatizado (HTTP 403). Verifique manualmente em ' + CURITIBA_ECOMPRAS_URL);
       return { resultados, errors };
     }
-    if (/Access Denied|permission to access/i.test(html)) {
-      errors.push('e-Compras Curitiba: acesso negado pelo portal público');
+    if (!res.ok) {
+      errors.push(`e-Compras Curitiba: HTTP ${res.status}`);
       return { resultados, errors };
     }
 
@@ -501,6 +548,94 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, 
     errors.push(`e-Compras Curitiba: ${err.message}`);
   }
 
+  return { resultados, errors };
+}
+
+// ─── e-Compras Curitiba - Fallback via PNCP ──────────────────────────────────
+// Quando o portal de Curitiba bloqueia acesso programático (Akamai 403),
+// busca no PNCP as publicações cujo órgão esteja no município de Curitiba/PR.
+async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const resultados = [];
+  const errors = [];
+  try {
+    const dataI = dataInicio ? String(dataInicio).replaceAll('-', '') : diasAtras(45);
+    const dataF = dataFim ? String(dataFim).replaceAll('-', '') : hoje();
+    const size = Math.max(20, Math.min(Number(tamanhoPagina) || 20, 100));
+
+    const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
+    url.searchParams.set('dataInicial', dataI);
+    url.searchParams.set('dataFinal', dataF);
+    url.searchParams.set('uf', 'PR');
+    url.searchParams.set('pagina', 1);
+    url.searchParams.set('tamanhoPagina', size);
+
+    let retries = 2;
+    let lastError = null;
+    
+    while (retries >= 0) {
+      try {
+        const res = await fetchWithRetry(url.toString(), {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
+        }, { timeoutMs: 90000, retries: 1 }); // Aumentado para 90s com 1 retry automático
+
+        if (res.status === 503 || res.status === 504) {
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries--;
+            continue;
+          }
+          errors.push('PNCP indisponível no momento (HTTP ' + res.status + ')');
+          return { resultados, errors };
+        }
+        if (!res.ok) {
+          errors.push(`PNCP HTTP ${res.status}`);
+          return { resultados, errors };
+        }
+
+        const data = await safeJson(res);
+        const items = Array.isArray(data?.data) ? data.data : [];
+
+        for (const item of items) {
+          const cidade = String(item.unidadeOrgao?.municipioNome || '').toLowerCase();
+          if (cidade && !cidade.includes('curitiba')) continue;
+          if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto)) continue;
+
+          resultados.push({
+            id: item.numeroControlePNCP || `pncp-curitiba-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+            fonte: 'e-Compras Curitiba (PNCP)',
+            fonteLogo: '🏙️',
+            titulo: item.objetoCompra || 'Sem descrição',
+            orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+            cnpjOrgao: item.orgaoEntidade?.cnpj || '',
+            modalidade: item.modalidadeNome || '',
+            uf: 'PR',
+            municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
+            valor: formatCurrency(item.valorTotalEstimado),
+            dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
+            dataAbertura: item.dataAberturaProposta,
+            dataEncerramento: item.dataEncerramentoProposta,
+            numero: item.numeroCompra || '',
+            ano: item.anoCompra || '',
+            link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+            status: item.situacaoCompraNome || 'Publicado'
+          });
+        }
+        break; // Sucesso, sair do loop
+      } catch (err) {
+        lastError = err;
+        if (retries > 0) {
+          await new Promise(r => setTimeout(r, 1000));
+          retries--;
+        } else {
+          errors.push(`e-Compras Curitiba (PNCP): ${err.message}`);
+          console.error('[Curitiba Fallback] Erro após retries:', err.message);
+        }
+      }
+    }
+  } catch (err) {
+    errors.push(`e-Compras Curitiba (PNCP): ${err.message}`);
+    console.error('[Curitiba Fallback] Erro geral:', err.message);
+  }
   return { resultados, errors };
 }
 
