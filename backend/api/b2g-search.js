@@ -710,6 +710,38 @@ router.get('/fontes', auth, (req, res) => {
 
 // ─── GET /api/b2g-search/curitiba-ecompras ───────────────────────────────────
 
+// 🧪 TESTE TEMPORÁRIO - sem auth
+router.get('/curitiba-ecompras-test', async (req, res) => {
+  try {
+    const { objeto = 'notebook', tamanhoPagina = 5 } = req.query;
+    console.log('[TEST] Iniciando teste e-Compras Curitiba...');
+    
+    const result = await buscarCuritibaECompras({
+      objeto,
+      uf: '',
+      cidade: '',
+      tamanhoPagina: Number(tamanhoPagina),
+      dataInicio: '',
+      dataFim: ''
+    });
+    
+    const data = deduplicar(result.resultados || []);
+    console.log('[TEST] Resultado:', { resultados: data.length, errors: result.errors?.length || 0 });
+    
+    return res.status(200).json({
+      test: true,
+      data,
+      total: data.length,
+      fonte: 'e-Compras Curitiba (TEST)',
+      erros: result.errors,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('[TEST] Erro:', err);
+    return res.status(500).json({ test: true, error: err.message, stack: err.stack });
+  }
+});
+
 router.get('/curitiba-ecompras', auth, async (req, res) => {
   try {
     const {
@@ -721,6 +753,7 @@ router.get('/curitiba-ecompras', auth, async (req, res) => {
       dataFim = ''
     } = req.query;
 
+    console.log('[e-Compras Curitiba] Iniciando busca:', { objeto, uf, cidade, tamanhoPagina });
     const result = await buscarCuritibaECompras({
       objeto,
       uf,
@@ -730,6 +763,11 @@ router.get('/curitiba-ecompras', auth, async (req, res) => {
       dataFim
     });
     const data = deduplicar(result.resultados || []);
+    console.log('[e-Compras Curitiba] Resultado:', { 
+      resultados: data.length, 
+      errors: result.errors?.length || 0,
+      erros: result.errors 
+    });
     
     // ✅ Sempre retornar 200 se função retornou (sucesso, mesmo sem resultados)
     // ❌ 502 apenas se exceção não tratada
