@@ -2528,6 +2528,7 @@ export default function Administracao() {
                   <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
                     {companies.map((company) => {
                       const statusMeta = getCompanyStatusMeta(company.status);
+                      const canApproveCompany = String(company.status || '').toUpperCase() !== 'ACTIVE';
                       return (
                         <tr key={company.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -2547,9 +2548,22 @@ export default function Administracao() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusMeta.className}`}>
-                              {statusMeta.label}
-                            </span>
+                            <div className="flex flex-col items-start gap-2">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusMeta.className}`}>
+                                {statusMeta.label}
+                              </span>
+                              {canApproveCompany && (
+                                <button
+                                  type="button"
+                                  onClick={() => approveCompany(company)}
+                                  disabled={approvingCompanyId === company.id}
+                                  title="Aprovar empresa após conferir módulos e políticas"
+                                  className="inline-flex min-h-9 items-center justify-center rounded-lg border border-emerald-300/40 bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 px-3 py-1.5 text-xs font-semibold text-emerald-50 shadow-lg shadow-cyan-500/10 transition hover:border-emerald-200/70 hover:from-cyan-500/35 hover:to-emerald-500/35 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {approvingCompanyId === company.id ? 'Aprovando...' : 'Aprovar'}
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex max-w-[18rem] flex-wrap gap-1.5">
@@ -2584,7 +2598,7 @@ export default function Administracao() {
                               >
                                 Editar
                               </button>
-                              {String(company.status || '').toUpperCase() !== 'ACTIVE' && (
+                              {canApproveCompany && (
                                 <button
                                   onClick={() => approveCompany(company)}
                                   disabled={approvingCompanyId === company.id}
