@@ -17,6 +17,7 @@ const safeQuery = async (operation, fallback) => {
   try {
     return await operation();
   } catch (error) {
+    console.warn('Dashboard geral: modulo ignorado por erro na consulta:', error?.message || error);
     return fallback;
   }
 };
@@ -144,7 +145,7 @@ const buildGeneralDashboard = async (user = {}) => {
     regionsCount,
     prevendasOportunidades
   ] = await Promise.all([
-    prisma.opportunity.findMany({
+    safeQuery(() => prisma.opportunity.findMany({
       where: {
         ...tenantWhere,
         company: { clientType: 'B2B' },
@@ -153,8 +154,8 @@ const buildGeneralDashboard = async (user = {}) => {
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
-    }),
-    prisma.opportunity.findMany({
+    }), []),
+    safeQuery(() => prisma.opportunity.findMany({
       where: {
         ...tenantWhere,
         OR: [
@@ -166,9 +167,9 @@ const buildGeneralDashboard = async (user = {}) => {
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
-    }),
-    prisma.company.count({ where: { ...tenantWhere, clientType: 'B2B' } }),
-    prisma.company.count({ where: { ...tenantWhere, clientType: 'B2G' } }),
+    }), []),
+    safeQuery(() => prisma.company.count({ where: { ...tenantWhere, clientType: 'B2B' } }), 0),
+    safeQuery(() => prisma.company.count({ where: { ...tenantWhere, clientType: 'B2G' } }), 0),
     tenantCompanyId ? [] : safeQuery(() => prisma.bidNotice.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
       select: { id: true, status: true, estimatedValue: true, createdAt: true, updatedAt: true },
@@ -188,40 +189,40 @@ const buildGeneralDashboard = async (user = {}) => {
       select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),
-    prisma.activity.findMany({
+    safeQuery(() => prisma.activity.findMany({
       where: { ...tenantWhere, OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
       select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
-    }),
-    prisma.product.count({ where: { ...tenantWhere, active: true } }),
-    prisma.user.findMany({
+    }), []),
+    safeQuery(() => prisma.product.count({ where: { ...tenantWhere, active: true } }), 0),
+    safeQuery(() => prisma.user.findMany({
       where: { role: 'SELLER', ...tenantUserRelationWhere },
       select: { id: true, name: true, _count: { select: { opportunities: true } } },
       orderBy: { name: 'asc' }
-    }),
-    prisma.proposal.findMany({
+    }), []),
+    safeQuery(() => prisma.proposal.findMany({
       where: {
         OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }],
         ...(tenantCompanyId ? { opportunity: { tenantCompanyId } } : {})
       },
       select: { id: true, createdAt: true, updatedAt: true }
-    }),
-    prisma.contract.findMany({
+    }), []),
+    safeQuery(() => prisma.contract.findMany({
       where: {
         OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { startDate: { gte: since } }],
         ...(tenantCompanyId ? { company: { tenantCompanyId } } : {})
       },
       select: { id: true, createdAt: true, updatedAt: true, startDate: true }
-    }),
-    prisma.commission.count({ where: tenantCompanyId ? { opportunity: { tenantCompanyId } } : {} }),
-    prisma.salesTarget.count({ where: tenantCompanyId ? { seller: { tenantCompanyId } } : {} }),
-    buildLeadStats('B2B', tenantCompanyId),
-    buildLeadStats('B2G', tenantCompanyId),
-    tenantCompanyId ? 0 : safeQuery(() => prisma.workflow.count(), 0),
+    }), []),
+    safeQuery(() => prisma.commission.count({ where: tenantCompanyId ? { opportunity: { tenantCompanyId } } : {} }), 0),
+    safeQuery(() => prisma.salesTarget.count({ where: tenantCompanyId ? { seller: { tenantCompanyId } } : {} }), 0),
+    safeQuery(() => buildLeadStats('B2B', tenantCompanyId), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
+    safeQuery(() => buildLeadStats('B2G', tenantCompanyId), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
+    tenantCompanyId ? 0 : safeQuery(() => (prisma.workflow || prisma.advancedWorkflow).count(), 0),
     tenantCompanyId ? 0 : safeQuery(() => prisma.automationRule.count(), 0),
-    prisma.notification.count({ where: tenantCompanyId ? { recipient: { tenantCompanyId } } : {} }),
+    safeQuery(() => prisma.notification.count({ where: tenantCompanyId ? { recipient: { tenantCompanyId } } : {} }), 0),
     tenantCompanyId ? 0 : safeQuery(() => prisma.integration.count(), 0),
-    tenantCompanyId ? 0 : prisma.region.count(),
+    tenantCompanyId ? 0 : safeQuery(() => prisma.region.count(), 0),
     tenantCompanyId ? [] : safeQuery(readPreSalesRegistry, [])
   ]);
 

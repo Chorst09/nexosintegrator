@@ -4,6 +4,15 @@ const { authenticateToken, requireRole } = require('../lib/auth.cjs');
 
 const router = express.Router();
 
+const getWorkflowDelegate = () => prisma.workflow || prisma.advancedWorkflow || null;
+const getAutomationRuleDelegate = () => prisma.automationRule || null;
+const emptyPagination = (page, limit) => ({
+  page: parseInt(page),
+  limit: parseInt(limit),
+  total: 0,
+  pages: 0
+});
+
 // ===== WORKFLOWS =====
 
 // Listar workflows
@@ -11,13 +20,24 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { active, trigger, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
+    const workflowDelegate = getWorkflowDelegate();
+
+    if (!workflowDelegate) {
+      return res.json({
+        workflows: [],
+        pagination: emptyPagination(page, limit)
+      });
+    }
 
     const where = {};
-    if (active !== undefined) where.active = active === 'true';
-    if (trigger) where.trigger = trigger;
+    if (active !== undefined) {
+      if (prisma.workflow) where.active = active === 'true';
+      if (prisma.advancedWorkflow) where.isActive = active === 'true';
+    }
+    if (trigger && prisma.workflow) where.trigger = trigger;
 
     const [workflows, total] = await Promise.all([
-      prisma.workflow.findMany({
+      workflowDelegate.findMany({
         where,
         include: {
           _count: {
@@ -28,7 +48,7 @@ router.get('/', authenticateToken, async (req, res) => {
         skip,
         take: parseInt(limit)
       }),
-      prisma.workflow.count({ where })
+      workflowDelegate.count({ where })
     ]);
 
     res.json({
@@ -140,19 +160,27 @@ router.get('/automation-rules', authenticateToken, async (req, res) => {
   try {
     const { type, active, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
+    const automationRuleDelegate = getAutomationRuleDelegate();
+
+    if (!automationRuleDelegate) {
+      return res.json({
+        rules: [],
+        pagination: emptyPagination(page, limit)
+      });
+    }
 
     const where = {};
     if (type) where.type = type;
     if (active !== undefined) where.active = active === 'true';
 
     const [rules, total] = await Promise.all([
-      prisma.automationRule.findMany({
+      automationRuleDelegate.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: parseInt(limit)
       }),
-      prisma.automationRule.count({ where })
+      automationRuleDelegate.count({ where })
     ]);
 
     res.json({

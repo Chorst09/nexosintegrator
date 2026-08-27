@@ -15,7 +15,8 @@ const rangeStartDate = (days = GENERAL_DASHBOARD_DAYS) =>
 const safeQuery = async (operation, fallback) => {
   try {
     return await operation();
-  } catch {
+  } catch (error) {
+    console.warn('Dashboard geral: modulo ignorado por erro na consulta:', error?.message || error);
     return fallback;
   }
 };
@@ -105,7 +106,7 @@ const buildGeneralDashboard = async () => {
     regionsCount,
     prevendasOportunidades
   ] = await Promise.all([
-    prisma.opportunity.findMany({
+    safeQuery(() => prisma.opportunity.findMany({
       where: {
         company: { clientType: 'B2B' },
         b2gStage: null,
@@ -113,8 +114,8 @@ const buildGeneralDashboard = async () => {
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
-    }),
-    prisma.opportunity.findMany({
+    }), []),
+    safeQuery(() => prisma.opportunity.findMany({
       where: {
         OR: [
           { projectClientType: 'B2G' },
@@ -125,9 +126,9 @@ const buildGeneralDashboard = async () => {
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
-    }),
-    prisma.company.count({ where: { clientType: 'B2B' } }),
-    prisma.company.count({ where: { clientType: 'B2G' } }),
+    }), []),
+    safeQuery(() => prisma.company.count({ where: { clientType: 'B2B' } }), 0),
+    safeQuery(() => prisma.company.count({ where: { clientType: 'B2G' } }), 0),
     safeQuery(() => prisma.bidNotice.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
       select: { id: true, status: true, estimatedValue: true, createdAt: true, updatedAt: true },
@@ -144,34 +145,34 @@ const buildGeneralDashboard = async () => {
       select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),
-    prisma.activity.findMany({
+    safeQuery(() => prisma.activity.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
       select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
-    }),
-    prisma.product.count({ where: { active: true } }),
-    prisma.user.findMany({
+    }), []),
+    safeQuery(() => prisma.product.count({ where: { active: true } }), 0),
+    safeQuery(() => prisma.user.findMany({
       where: { role: 'SELLER' },
       select: { id: true, name: true, _count: { select: { opportunities: true } } },
       orderBy: { name: 'asc' }
-    }),
-    prisma.proposal.findMany({
+    }), []),
+    safeQuery(() => prisma.proposal.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
       select: { id: true, createdAt: true, updatedAt: true }
-    }),
-    prisma.contract.findMany({
+    }), []),
+    safeQuery(() => prisma.contract.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { startDate: { gte: since } }] },
       select: { id: true, createdAt: true, updatedAt: true, startDate: true }
-    }),
-    prisma.commission.count(),
-    prisma.salesTarget.count(),
-    buildLeadStats('B2B'),
-    buildLeadStats('B2G'),
-    safeQuery(() => prisma.workflow.count(), 0),
+    }), []),
+    safeQuery(() => prisma.commission.count(), 0),
+    safeQuery(() => prisma.salesTarget.count(), 0),
+    safeQuery(() => buildLeadStats('B2B'), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
+    safeQuery(() => buildLeadStats('B2G'), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
+    safeQuery(() => (prisma.workflow || prisma.advancedWorkflow).count(), 0),
     safeQuery(() => prisma.automationRule.count(), 0),
     safeQuery(() => prisma.notification.count(), 0),
     safeQuery(() => prisma.integration.count(), 0),
-    prisma.region.count(),
+    safeQuery(() => prisma.region.count(), 0),
     safeQuery(readPreSalesRegistry, [])
   ]);
 
