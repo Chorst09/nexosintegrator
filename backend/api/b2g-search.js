@@ -500,61 +500,15 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, 
     return { resultados, errors };
   }
 
-  try {
-    const res = await fetchWithRetry(CURITIBA_ECOMPRAS_URL, {
-      headers: {
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.7',
-        'Cache-Control': 'no-cache',
-        'User-Agent': 'Mozilla/5.0 (compatible; NexosCRM/2.0; +https://e-compras.curitiba.pr.gov.br/)'
-      }
-    }, { timeoutMs: 18000, retries: 0 });
-
-    const html = await res.text().catch(() => '');
-    if (res.status === 403 || /Access Denied|permission to access|cdn-cache|edgekey/i.test(html)) {
-      // Portal bloqueia acesso programático (Akamai). Fallback para PNCP (Curitiba).
-      const fallback = await buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina });
-      // ✅ Retornar fallback sempre, mesmo vazio (não é erro, apenas sem resultados)
-      return {
-        resultados: fallback.resultados,
-        errors: fallback.errors.length > 0 ? fallback.errors : undefined
-      };
-    }
-    if (!res.ok) {
-      errors.push(`e-Compras Curitiba: HTTP ${res.status}`);
-      return { resultados, errors };
-    }
-
-    const novos = getCuritibaSection(html, 'Novos Processos Licitatórios', [
-      'Processos Licitatórios em Recebimento de Propostas',
-      'Processos Licitatórios em Sessão'
-    ]);
-    const recebimento = getCuritibaSection(html, 'Processos Licitatórios em Recebimento de Propostas', [
-      'Processos Licitatórios em Sessão',
-      'Últimas Notícias'
-    ]);
-    const sessao = getCuritibaSection(html, 'Processos Licitatórios em Sessão', [
-      'Últimas Notícias'
-    ]);
-
-    const parsedFromPosition = parseCuritibaRowsByPosition(html);
-    const parsedFromSections = [
-      ...parseCuritibaSection(novos, 'novos'),
-      ...parseCuritibaSection(recebimento, 'recebimento'),
-      ...parseCuritibaSection(sessao, 'sessao')
-    ];
-
-    const parsed = (parsedFromPosition.length > 0 ? parsedFromPosition : parsedFromSections)
-      .filter((item) => matchObjeto(`${item.titulo} ${item.orgao} ${item.numero}`, objeto))
-      .filter((item) => isWithinDateRange(item.dataPublicacao || item.dataAbertura || item.dataEncerramento, dataInicio, dataFim))
-      .slice(0, Math.max(10, Math.min(Number(tamanhoPagina) || 20, 100)));
-
-    resultados.push(...parsed);
-  } catch (err) {
-    errors.push(`e-Compras Curitiba: ${err.message}`);
-  }
-
-  return { resultados, errors };
+  // ⚡ OTIMIZAÇÃO CRÍTICA: Portal e-Compras Curitiba SEMPRE bloqueia (Akamai 403)
+  // Tentar acessar o portal desperdiça 18s + pode causar 502 do Nginx (60s total timeout)
+  // Solução: ir DIRETO para fallback PNCP economiza tempo e evita 502
+  console.log('[e-Compras Curitiba] Usando fallback PNCP direto (portal bloqueado por Akamai)');
+  const fallback = await buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina });
+  return {
+    resultados: fallback.resultados,
+    errors: fallback.errors.length > 0 ? fallback.errors : undefined
+  };
 }
 
 // ─── e-Compras Curitiba - Fallback via PNCP ──────────────────────────────────
