@@ -1625,11 +1625,11 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </button>
         </div>
 
-        <section className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-8 py-10">
+        <section className="rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 px-8 py-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
-              <p className="mt-4 text-3xl text-blue-100">Distribuidor</p>
+              <p className="mt-4 text-3xl text-orange-100">Distribuidor</p>
             </div>
             <span className="w-fit rounded-full bg-emerald-500 px-8 py-4 text-3xl font-semibold text-white">
               {statusLabel}
@@ -1638,9 +1638,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         </section>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <section className="rounded-2xl border border-orange-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-orange-900/5">
             <div className="mb-8 flex items-center gap-4">
-              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400 shadow-lg shadow-orange-500/10">
                 <User className="h-9 w-9" />
               </span>
               <h3 className="text-4xl font-semibold text-white">Informações de Contato</h3>
@@ -1665,9 +1665,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <section className="rounded-2xl border border-orange-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-orange-900/5">
             <div className="mb-8 flex items-center gap-4">
-              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 shadow-lg shadow-amber-500/10">
                 <Package className="h-9 w-9" />
               </span>
               <h3 className="text-4xl font-semibold text-white">Produtos/Serviços</h3>
@@ -1687,7 +1687,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
         <section>
           <div className="mb-6 flex items-center gap-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400 shadow-lg shadow-orange-500/10">
               <Globe2 className="h-9 w-9" />
             </span>
             <h3 className="text-4xl font-semibold text-white">Informações do Portal</h3>
@@ -1710,9 +1710,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+        <section className="rounded-2xl border border-orange-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-orange-900/5">
           <div className="mb-6 flex items-center gap-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 shadow-lg shadow-amber-500/10">
               <Users className="h-9 w-9" />
             </span>
             <h3 className="text-4xl font-semibold text-white">Vendedores Responsáveis</h3>
@@ -1745,7 +1745,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           )}
         </section>
 
-        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+        <section className="rounded-2xl border border-orange-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-orange-900/5">
           <h3 className="text-3xl font-semibold text-white">Observações</h3>
           <p className="mt-5 whitespace-pre-wrap text-xl text-slate-400">{item.observacoes || 'Sem observações.'}</p>
         </section>
@@ -1787,11 +1787,11 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </button>
         </div>
 
-        <section className="rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-500 px-8 py-10">
+        <section className="rounded-2xl bg-gradient-to-r from-cyan-600 to-teal-600 px-8 py-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
-              <p className="mt-4 text-3xl text-sky-100">Fornecedor</p>
+              <p className="mt-4 text-3xl text-cyan-100">Fornecedor</p>
             </div>
             <span className="w-fit rounded-full bg-emerald-500 px-8 py-4 text-3xl font-semibold text-white">
               {statusLabel}
@@ -1801,7 +1801,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
         <section>
           <div className="mb-6 flex items-center gap-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400 shadow-lg shadow-cyan-500/10">
               <Globe2 className="h-9 w-9" />
             </span>
             <h3 className="text-4xl font-semibold text-white">Informações de Portal</h3>
@@ -1825,9 +1825,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         </section>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <section className="rounded-2xl border border-cyan-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-cyan-900/5">
             <div className="mb-8 flex items-center gap-4">
-              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400 shadow-lg shadow-cyan-500/10">
                 <User className="h-9 w-9" />
               </span>
               <h3 className="text-4xl font-semibold text-white">Contato Principal</h3>
@@ -1852,9 +1852,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+          <section className="rounded-2xl border border-cyan-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-cyan-900/5">
             <div className="mb-8 flex items-center gap-4">
-              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+              <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-teal-500/15 text-teal-400 shadow-lg shadow-teal-500/10">
                 <Users className="h-9 w-9" />
               </span>
               <h3 className="text-4xl font-semibold text-white">Contato Cotações</h3>
@@ -1880,9 +1880,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </section>
         </div>
 
-        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+        <section className="rounded-2xl border border-cyan-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-cyan-900/5">
           <div className="mb-8 flex items-center gap-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400 shadow-lg shadow-cyan-500/10">
               <Package className="h-9 w-9" />
             </span>
             <h3 className="text-4xl font-semibold text-white">Produtos/Serviços Oferecidos</h3>
@@ -1890,9 +1890,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           {renderPillList(products, 'Sem produtos/serviços informados.', 'from-sky-500 to-cyan-500')}
         </section>
 
-        <section className="rounded-2xl border border-sky-900/80 bg-[#17283d] p-7">
+        <section className="rounded-2xl border border-cyan-900/30 bg-gradient-to-br from-slate-900/90 to-slate-800/60 p-7 shadow-lg shadow-cyan-900/5">
           <div className="mb-8 flex items-center gap-4">
-            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-teal-500/15 text-teal-400 shadow-lg shadow-teal-500/10">
               <ClipboardList className="h-9 w-9" />
             </span>
             <h3 className="text-4xl font-semibold text-white">Documentos e Procedimentos</h3>
