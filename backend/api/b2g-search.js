@@ -730,7 +730,7 @@ router.get('/curitiba-ecompras', auth, async (req, res) => {
       dataFim
     });
     const data = deduplicar(result.resultados || []);
-    const status = data.length === 0 && result.errors?.length > 0 ? 502 : 200;
+    const status = data.length > 0 ? 200 : (result.errors?.length > 0 ? 200 : 502);
 
     return res.status(status).json({
       data,
