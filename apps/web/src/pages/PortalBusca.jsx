@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
@@ -481,6 +481,39 @@ const deduplicar = (items) => {
   });
 };
 
+const getLicitacaoId = (item) => String(item?.id || item?.numeroControlePNCP || item?.numero || item?.link || '');
+
+const readLocalLicitacoesGerenciadas = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LICITACOES_GERENCIADAS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(item => getLicitacaoId(item)) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalLicitacoesGerenciadas = (items) => {
+  try {
+    localStorage.setItem(LICITACOES_GERENCIADAS_KEY, JSON.stringify(items));
+  } catch {
+    // Cache local é apenas contingência; falhas de storage não impedem a operação principal.
+  }
+};
+
+const mergeLicitacoesGerenciadas = (...lists) => {
+  const map = new Map();
+  lists.flat().forEach(item => {
+    const id = getLicitacaoId(item);
+    if (!id || map.has(id)) return;
+    map.set(id, { ...item, id });
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    const aTs = new Date(a.gerenciadaEm || a.createdAt || 0).getTime() || 0;
+    const bTs = new Date(b.gerenciadaEm || b.createdAt || 0).getTime() || 0;
+    return bTs - aTs;
+  });
+};
+
 const ordenar = (items, ordem) => [...items].sort((a, b) => {
   switch (ordem) {
     case 'data_desc': return new Date(b.dataPublicacao || 0) - new Date(a.dataPublicacao || 0);
@@ -613,6 +646,7 @@ function CardEdital({
   leadSalvo,
   gerenciada,
   salvandoLead,
+  salvandoGerenciada,
   onToggleFavorito,
   onToggleGerenciada,
   onAbrirSalvarLead
@@ -655,15 +689,16 @@ function CardEdital({
             {onToggleGerenciada && (
               <button
                 onClick={() => onToggleGerenciada(item)}
+                disabled={salvandoGerenciada}
                 className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition ${
                   gerenciada
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30'
                     : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30'
-                }`}
+                } disabled:cursor-wait disabled:opacity-70`}
                 title={gerenciada ? 'Remover de Licitações Gerenciadas' : 'Adicionar em Licitações Gerenciadas'}
               >
-                {gerenciada ? <CheckCircle size={14} /> : <Plus size={14} />}
-                {gerenciada ? 'Licitação adicionada' : 'Adicionar licitação'}
+                {salvandoGerenciada ? <Loader2 size={14} className="animate-spin" /> : gerenciada ? <CheckCircle size={14} /> : <Plus size={14} />}
+                {salvandoGerenciada ? 'Salvando...' : gerenciada ? 'Licitação adicionada' : 'Adicionar licitação'}
               </button>
             )}
 
@@ -972,9 +1007,9 @@ export default function PortalBusca() {
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
 
   // Licitações Gerenciadas
-  const [licitacoesGerenciadas, setLicitacoesGerenciadas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LICITACOES_GERENCIADAS_KEY) || '[]'); } catch { return []; }
-  });
+  const [licitacoesGerenciadas, setLicitacoesGerenciadas] = useState(readLocalLicitacoesGerenciadas);
+  const [carregandoGerenciadas, setCarregandoGerenciadas] = useState(false);
+  const [salvandoGerenciadaIds, setSalvandoGerenciadaIds] = useState([]);
 
   // Alertas
   const [alertas, setAlertas] = useState(() => {
@@ -995,6 +1030,71 @@ export default function PortalBusca() {
     setToasts(prev => [...prev, { id, title, text, error }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const carregarLicitacoesGerenciadas = async () => {
+      const locais = readLocalLicitacoesGerenciadas();
+      setCarregandoGerenciadas(true);
+      try {
+        const response = await fetch(buildApiUrl('/b2g/licitacoes-gerenciadas'), {
+          headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || payload?.message || 'Não foi possível carregar licitações gerenciadas.');
+        }
+
+        const payload = await response.json().catch(() => null);
+        const servidor = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+        const idsServidor = new Set(servidor.map(getLicitacaoId).filter(Boolean));
+        const locaisSemServidor = locais.filter(item => !idsServidor.has(getLicitacaoId(item)));
+        const migradas = [];
+        let falhasMigracao = 0;
+
+        for (const item of locaisSemServidor) {
+          try {
+            const id = getLicitacaoId(item);
+            const saveResponse = await fetch(buildApiUrl('/b2g/licitacoes-gerenciadas'), {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ item: { ...item, id } })
+            });
+            if (saveResponse.ok) {
+              const savedPayload = await saveResponse.json().catch(() => null);
+              migradas.push(savedPayload?.data || item);
+            } else {
+              falhasMigracao += 1;
+            }
+          } catch {
+            falhasMigracao += 1;
+          }
+        }
+
+        if (!cancelled) {
+          const next = mergeLicitacoesGerenciadas(servidor, migradas);
+          setLicitacoesGerenciadas(next);
+          saveLocalLicitacoesGerenciadas(next);
+          if (falhasMigracao > 0) {
+            showToast('Algumas licitações não sincronizaram', 'Marque novamente os itens que não aparecerem na lista.', true);
+          }
+        }
+      } catch (error) {
+        if (!cancelled && locais.length > 0) {
+          setLicitacoesGerenciadas(locais);
+          showToast('Licitações em modo local', error.message || 'Não foi possível sincronizar com o servidor.', true);
+        }
+      } finally {
+        if (!cancelled) setCarregandoGerenciadas(false);
+      }
+    };
+
+    carregarLicitacoesGerenciadas();
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   // Filtro local por cidade e vigente (client-side após busca)
   const resultadosFiltrados = resultados.filter(item => {
@@ -1209,40 +1309,76 @@ export default function PortalBusca() {
 
   const isLeadSalvo = (item) => leadsSalvos.some(id => String(id) === String(item.id));
 
-  const getLicitacaoId = (item) => String(item?.id || item?.numeroControlePNCP || item?.numero || item?.link || '');
-
   const isLicitacaoGerenciada = (item) => {
     const id = getLicitacaoId(item);
     return Boolean(id) && licitacoesGerenciadas.some(licitacao => getLicitacaoId(licitacao) === id);
   };
 
-  const toggleLicitacaoGerenciada = (item) => {
+  const isSalvandoGerenciada = (item) => {
+    const id = getLicitacaoId(item);
+    return Boolean(id) && salvandoGerenciadaIds.includes(id);
+  };
+
+  const toggleLicitacaoGerenciada = async (item) => {
     const id = getLicitacaoId(item);
     if (!id) {
       showToast('Não foi possível gerenciar', 'Esta licitação não possui identificador válido.', true);
       return;
     }
 
-    setLicitacoesGerenciadas(prev => {
-      const existe = prev.some(licitacao => getLicitacaoId(licitacao) === id);
-      const next = existe
-        ? prev.filter(licitacao => getLicitacaoId(licitacao) !== id)
-        : [
-            {
-              ...item,
-              id,
-              gerenciadaEm: new Date().toISOString()
-            },
-            ...prev
-          ];
+    const existe = isLicitacaoGerenciada(item);
+    setSalvandoGerenciadaIds(prev => prev.includes(id) ? prev : [...prev, id]);
 
-      localStorage.setItem(LICITACOES_GERENCIADAS_KEY, JSON.stringify(next));
+    try {
+      if (existe) {
+        const response = await fetch(buildApiUrl(`/b2g/licitacoes-gerenciadas/${encodeURIComponent(id)}`), {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || payload?.message || 'Não foi possível remover a licitação.');
+        }
+
+        setLicitacoesGerenciadas(prev => {
+          const next = prev.filter(licitacao => getLicitacaoId(licitacao) !== id);
+          saveLocalLicitacoesGerenciadas(next);
+          return next;
+        });
+      } else {
+        const itemParaSalvar = {
+          ...item,
+          id,
+          gerenciadaEm: new Date().toISOString()
+        };
+        const response = await fetch(buildApiUrl('/b2g/licitacoes-gerenciadas'), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ item: itemParaSalvar })
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || payload?.message || 'Não foi possível salvar a licitação.');
+        }
+
+        const payload = await response.json().catch(() => null);
+        const salvo = payload?.data || itemParaSalvar;
+        setLicitacoesGerenciadas(prev => {
+          const next = mergeLicitacoesGerenciadas([salvo], prev.filter(licitacao => getLicitacaoId(licitacao) !== id));
+          saveLocalLicitacoesGerenciadas(next);
+          return next;
+        });
+      }
+
       showToast(
         existe ? 'Licitação removida' : 'Licitação adicionada',
         existe ? 'Removida de Licitações Gerenciadas.' : 'Salva em Licitações Gerenciadas.'
       );
-      return next;
-    });
+    } catch (error) {
+      showToast('Erro ao salvar licitação', error.message || 'Tente novamente.', true);
+    } finally {
+      setSalvandoGerenciadaIds(prev => prev.filter(itemId => itemId !== id));
+    }
   };
 
   const abrirSalvarLead = (item) => {
@@ -1791,6 +1927,7 @@ export default function PortalBusca() {
                       leadSalvo={isLeadSalvo(item)}
                       salvandoLead={salvandoLeadId === item.id}
                       gerenciada={isLicitacaoGerenciada(item)}
+                      salvandoGerenciada={isSalvandoGerenciada(item)}
                       onToggleFavorito={toggleFavorito}
                       onToggleGerenciada={toggleLicitacaoGerenciada}
                       onAbrirSalvarLead={abrirSalvarLead}
@@ -1815,7 +1952,7 @@ export default function PortalBusca() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Licitações Gerenciadas</h2>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Acompanhe as licitações marcadas nos resultados do Portal de Busca.
+                    {carregandoGerenciadas ? 'Sincronizando licitações marcadas...' : 'Acompanhe as licitações marcadas nos resultados do Portal de Busca.'}
                   </p>
                 </div>
               </div>
@@ -1854,6 +1991,7 @@ export default function PortalBusca() {
                     leadSalvo={isLeadSalvo(item)}
                     gerenciada
                     salvandoLead={salvandoLeadId === item.id}
+                    salvandoGerenciada={isSalvandoGerenciada(item)}
                     onToggleFavorito={toggleFavorito}
                     onToggleGerenciada={toggleLicitacaoGerenciada}
                     onAbrirSalvarLead={abrirSalvarLead}

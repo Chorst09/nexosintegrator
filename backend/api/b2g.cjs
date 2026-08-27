@@ -92,6 +92,8 @@ const upload = multer({
 
 const B2G_DOC_UPLOAD_DIR = path.join(__dirname, '../uploads/b2g-documents');
 const B2G_DOC_INDEX_FILE = path.join(B2G_DOC_UPLOAD_DIR, 'index.json');
+const B2G_MANAGED_BIDS_DIR = path.join(__dirname, '../uploads/b2g-managed-bids');
+const B2G_MANAGED_BIDS_INDEX_FILE = path.join(B2G_MANAGED_BIDS_DIR, 'index.json');
 const B2G_DOC_MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const B2G_DOC_EXPIRING_THRESHOLD_DAYS = 30;
 const B2G_DOC_ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx']);
@@ -230,6 +232,123 @@ const writeB2GRepositoryDocuments = (documents) => {
   fs.writeFileSync(
     B2G_DOC_INDEX_FILE,
     JSON.stringify({ version: 1, documents }, null, 2),
+    'utf8'
+  );
+};
+
+const ensureB2GManagedBidStore = () => {
+  if (!fs.existsSync(B2G_MANAGED_BIDS_DIR)) {
+    fs.mkdirSync(B2G_MANAGED_BIDS_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(B2G_MANAGED_BIDS_INDEX_FILE)) {
+    fs.writeFileSync(B2G_MANAGED_BIDS_INDEX_FILE, JSON.stringify({ version: 1, licitacoes: [] }, null, 2), 'utf8');
+  }
+};
+
+const toManagedText = (value, max = 800) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'object') return null;
+  return cleanText(String(value), max);
+};
+
+const firstManagedText = (...values) => {
+  for (const value of values) {
+    const text = toManagedText(value, 1200);
+    if (text) return text;
+  }
+  return null;
+};
+
+const toManagedDateString = (value) => {
+  const parsed = parseDate(value);
+  if (parsed) return parsed.toISOString();
+  return toManagedText(value, 80);
+};
+
+const resolveManagedBidId = (input = {}) => firstManagedText(
+  input.id,
+  input.numeroControlePNCP,
+  input.numeroCompra,
+  input.numero,
+  input.linkSistemaOrigem,
+  input.link
+);
+
+const getManagedBidScope = (user = {}) => {
+  const tenantCompanyId = getTenantCompanyId(user);
+  const userId = toManagedText(user.userId || user.id, 160);
+  return {
+    tenantCompanyId,
+    userId,
+    scopeKey: tenantCompanyId ? `tenant:${tenantCompanyId}` : `user:${userId || 'default'}`
+  };
+};
+
+const normalizeManagedBid = (input = {}, overrides = {}) => {
+  const merged = { ...input, ...overrides };
+  const id = resolveManagedBidId(merged);
+  const scopeKey = toManagedText(merged.scopeKey, 260);
+  if (!id || !scopeKey) return null;
+
+  const now = new Date().toISOString();
+  const valor = parseNumber(merged.valor ?? merged.valorTotalEstimado);
+  const createdAt = toManagedDateString(merged.createdAt) || now;
+  const updatedAt = toManagedDateString(merged.updatedAt) || now;
+  const gerenciadaEm = toManagedDateString(merged.gerenciadaEm) || createdAt;
+
+  return {
+    id,
+    scopeKey,
+    tenantCompanyId: toManagedText(merged.tenantCompanyId, 160),
+    createdById: toManagedText(merged.createdById, 160),
+    createdByName: toManagedText(merged.createdByName, 180),
+    fonte: firstManagedText(merged.fonte, merged.source) || 'Busca B2G',
+    fonteLogo: toManagedText(merged.fonteLogo, 40) || '',
+    titulo: firstManagedText(merged.titulo, merged.objetoCompra, merged.objeto, merged.descricao) || 'Sem descrição',
+    orgao: firstManagedText(merged.orgao, merged.organization, merged.entidade) || '',
+    modalidade: firstManagedText(merged.modalidade, merged.modalidadeNome, merged.tipo) || '',
+    uf: toManagedText(merged.uf, 2) || '',
+    municipio: firstManagedText(merged.municipio, merged.cidade) || '',
+    valor,
+    dataPublicacao: toManagedDateString(merged.dataPublicacao || merged.dataPublicacaoPncp),
+    dataAbertura: toManagedDateString(merged.dataAbertura || merged.dataAberturaProposta),
+    dataEncerramento: toManagedDateString(merged.dataEncerramento || merged.dataEncerramentoProposta),
+    numero: firstManagedText(merged.numero, merged.numeroCompra) || '',
+    ano: toManagedText(merged.ano, 20) || '',
+    link: firstManagedText(merged.link, merged.linkSistemaOrigem) || '',
+    status: firstManagedText(merged.status, merged.situacao, merged.situacaoCompraNome) || 'Aberto',
+    gerenciadaEm,
+    createdAt,
+    updatedAt
+  };
+};
+
+const readB2GManagedBids = () => {
+  ensureB2GManagedBidStore();
+  try {
+    const raw = fs.readFileSync(B2G_MANAGED_BIDS_INDEX_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed?.licitacoes)
+      ? parsed.licitacoes
+      : Array.isArray(parsed?.items)
+        ? parsed.items
+        : Array.isArray(parsed)
+          ? parsed
+          : [];
+    return list
+      .map((item) => normalizeManagedBid(item))
+      .filter(Boolean);
+  } catch (error) {
+    console.warn('Falha ao ler licitações gerenciadas B2G:', error.message);
+    return [];
+  }
+};
+
+const writeB2GManagedBids = (licitacoes) => {
+  ensureB2GManagedBidStore();
+  fs.writeFileSync(
+    B2G_MANAGED_BIDS_INDEX_FILE,
+    JSON.stringify({ version: 1, licitacoes }, null, 2),
     'utf8'
   );
 };
@@ -1061,6 +1180,87 @@ const createHistory = async ({
     }
   });
 };
+
+router.get('/licitacoes-gerenciadas', requireRole(USER_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const scope = getManagedBidScope(req.user);
+    const rows = readB2GManagedBids()
+      .filter((item) => item.scopeKey === scope.scopeKey)
+      .sort((a, b) => {
+        const aTs = parseDate(a.gerenciadaEm || a.createdAt)?.getTime() || 0;
+        const bTs = parseDate(b.gerenciadaEm || b.createdAt)?.getTime() || 0;
+        return bTs - aTs;
+      });
+
+    return res.json({ data: rows });
+  } catch (error) {
+    console.error('Erro ao listar licitações gerenciadas B2G:', error);
+    return res.status(500).json({ error: 'Erro interno ao listar licitações gerenciadas.' });
+  }
+});
+
+router.post('/licitacoes-gerenciadas', requireRole(USER_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const input = req.body?.item && typeof req.body.item === 'object' ? req.body.item : req.body;
+    const externalId = resolveManagedBidId(input);
+    if (!externalId) {
+      return res.status(400).json({ error: 'Identificador da licitação é obrigatório.' });
+    }
+
+    const scope = getManagedBidScope(req.user);
+    const records = readB2GManagedBids();
+    const existingIndex = records.findIndex((item) => item.scopeKey === scope.scopeKey && item.id === externalId);
+    const existing = existingIndex >= 0 ? records[existingIndex] : null;
+    const now = new Date().toISOString();
+    const nextBid = normalizeManagedBid(input, {
+      id: externalId,
+      scopeKey: scope.scopeKey,
+      tenantCompanyId: scope.tenantCompanyId,
+      createdById: existing?.createdById || scope.userId || null,
+      createdByName: existing?.createdByName || req.user?.name || req.user?.email || null,
+      createdAt: existing?.createdAt || input?.createdAt || now,
+      gerenciadaEm: existing?.gerenciadaEm || input?.gerenciadaEm || now,
+      updatedAt: now
+    });
+
+    if (!nextBid) {
+      return res.status(400).json({ error: 'Dados da licitação são inválidos.' });
+    }
+
+    if (existingIndex >= 0) {
+      records[existingIndex] = nextBid;
+    } else {
+      records.unshift(nextBid);
+    }
+
+    writeB2GManagedBids(records);
+    return res.status(existing ? 200 : 201).json({ data: nextBid });
+  } catch (error) {
+    console.error('Erro ao salvar licitação gerenciada B2G:', error);
+    return res.status(500).json({ error: 'Erro interno ao salvar licitação gerenciada.' });
+  }
+});
+
+router.delete('/licitacoes-gerenciadas/:id', requireRole(USER_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const id = toManagedText(req.params?.id, 1200);
+    if (!id) {
+      return res.status(400).json({ error: 'Identificador da licitação é obrigatório.' });
+    }
+
+    const scope = getManagedBidScope(req.user);
+    const records = readB2GManagedBids();
+    const next = records.filter((item) => !(item.scopeKey === scope.scopeKey && item.id === id));
+    if (next.length !== records.length) {
+      writeB2GManagedBids(next);
+    }
+
+    return res.json({ success: true, removed: records.length - next.length });
+  } catch (error) {
+    console.error('Erro ao remover licitação gerenciada B2G:', error);
+    return res.status(500).json({ error: 'Erro interno ao remover licitação gerenciada.' });
+  }
+});
 
 router.get('/documentos', async (req, res) => {
   try {
