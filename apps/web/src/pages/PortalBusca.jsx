@@ -527,10 +527,18 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, dataInicio, dataFim,
     signal: AbortSignal.timeout(90000)
   });
   const payload = await res.json().catch(() => null);
+  
+  // ✅ Se tiver dados, retornar mesmo que res.ok seja false (fallback PNCP)
+  if (payload?.data && Array.isArray(payload.data) && payload.data.length > 0) {
+    return payload.data;
+  }
+  
+  // ❌ Se não tiver dados E resposta não OK, lançar erro
   if (!res.ok) {
     const message = payload?.erros?.[0] || payload?.error || payload?.message || 'Falha ao buscar no e-Compras Curitiba.';
     throw new Error(message);
   }
+  
   return Array.isArray(payload?.data) ? payload.data : [];
 }
 
