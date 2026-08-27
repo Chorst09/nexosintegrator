@@ -214,6 +214,15 @@ const EDITABLE_SHAPE_IDS: Record<number, string[] | 'ALL'> = {
   8: 'ALL'
 };
 
+const SHAPE_LAYOUT_OVERRIDES: Record<number, Record<string, Partial<Pick<PreviewTextShape, 'x' | 'y' | 'cx' | 'cy'>>>> = {
+  4: {
+    '97': { y: 3250000, cy: 2800000 }
+  },
+  5: {
+    '107': { y: 3000000, cy: 2000000 }
+  }
+};
+
 const SHAPE_META: Record<number, Record<string, ShapeMeta>> = {
   4: {
     '97': {
@@ -956,6 +965,40 @@ const replaceShapeTextInSlideXml = (slideXml: string, shapeId: string, nextText:
   });
 };
 
+const applyShapeLayoutOverrideInSlideXml = (
+  slideXml: string,
+  shapeId: string,
+  override: Partial<Pick<PreviewTextShape, 'x' | 'y' | 'cx' | 'cy'>>
+): string => {
+  let applied = false;
+
+  return slideXml.replace(/<p:sp\b[\s\S]*?<\/p:sp>/g, shapeBlock => {
+    if (applied) return shapeBlock;
+
+    const cNvPrTag = shapeBlock.match(/<p:cNvPr\b[^>]*>/)?.[0];
+    if (!cNvPrTag || getTagAttribute(cNvPrTag, 'id') !== shapeId) return shapeBlock;
+
+    let updatedShape = shapeBlock;
+    if (override.x !== undefined || override.y !== undefined) {
+      updatedShape = updatedShape.replace(/<a:off\b[^>]*\/>/, offTag => {
+        const x = override.x ?? toNumber(getTagAttribute(offTag, 'x'));
+        const y = override.y ?? toNumber(getTagAttribute(offTag, 'y'));
+        return `<a:off x="${x}" y="${y}"/>`;
+      });
+    }
+    if (override.cx !== undefined || override.cy !== undefined) {
+      updatedShape = updatedShape.replace(/<a:ext\b[^>]*\/>/, extTag => {
+        const cx = override.cx ?? toNumber(getTagAttribute(extTag, 'cx'));
+        const cy = override.cy ?? toNumber(getTagAttribute(extTag, 'cy'));
+        return `<a:ext cx="${cx}" cy="${cy}"/>`;
+      });
+    }
+
+    applied = true;
+    return updatedShape;
+  });
+};
+
 const replacePlaceholderTextInSlideXml = (
   slideXml: string,
   placeholderText: string,
@@ -999,15 +1042,18 @@ const replaceCellText = (cellXml: string, nextText: string): string => {
 
 const getTableRowsXml = (tableXml: string): string[] => tableXml.match(/<a:tr\b[\s\S]*?<\/a:tr>/g) ?? [];
 
-const getEditableCellsFromRowXml = (rowXml: string): string[] => rowXml.match(/<a:tc\b[\s\S]*?<\/a:tc>/g) ?? [];
+const TABLE_CELL_REGEX = /<a:tc\b[^>]*\/>|<a:tc\b[\s\S]*?<\/a:tc>/g;
+
+const getEditableCellsFromRowXml = (rowXml: string): string[] => rowXml.match(TABLE_CELL_REGEX) ?? [];
+
+const getTableCellTag = (cellXml: string): string => cellXml.match(/<a:tc\b[^>]*>/)?.[0] ?? cellXml.match(/<a:tc\b[^>]*\/>/)?.[0] ?? '';
+
+const isMergedTableCell = (cellXml: string): boolean => getTagAttribute(getTableCellTag(cellXml), 'hMerge') === '1';
 
 const getVisibleCellIndexesFromRowXml = (rowXml: string): number[] => {
   const cells = getEditableCellsFromRowXml(rowXml);
   return cells
-    .map((cellXml, index) => {
-      const tcTag = cellXml.match(/<a:tc\b[^>]*>/)?.[0] ?? '';
-      return getTagAttribute(tcTag, 'hMerge') === '1' ? -1 : index;
-    })
+    .map((cellXml, index) => (isMergedTableCell(cellXml) ? -1 : index))
     .filter((index): index is number => index >= 0);
 };
 
@@ -1054,9 +1100,10 @@ const findInvestmentSpecialRowIndexes = (rowsXml: string[]): { totalRowIndex: nu
 const replaceTableCellInRowXml = (rowXml: string, cellIndex: number, nextText: string): string => {
   const cells = getEditableCellsFromRowXml(rowXml);
   if (!cells[cellIndex]) return rowXml;
+  if (isMergedTableCell(cells[cellIndex]) || !cells[cellIndex].includes('</a:tc>')) return rowXml;
 
   const updatedCell = replaceCellText(cells[cellIndex], nextText);
-  return replaceNthMatch(rowXml, /<a:tc\b[\s\S]*?<\/a:tc>/g, cellIndex, updatedCell);
+  return replaceNthMatch(rowXml, TABLE_CELL_REGEX, cellIndex, updatedCell);
 };
 
 const ensureInvestmentRowsInSlideXml = (slideXml: string, rows: InvestmentRow[]): string => {
@@ -1153,20 +1200,41 @@ const replaceTableCellInSlideXml = (
   const tableXml = slideXml.match(/<a:tbl>[\s\S]*?<\/a:tbl>/)?.[0];
   if (!tableXml) return slideXml;
 
-  const rowsXml = tableXml.match(/<a:tr\b[\s\S]*?<\/a:tr>/g) ?? [];
+  const rowsXml = getTableRowsXml(tableXml);
   if (!rowsXml[rowIndex]) return slideXml;
 
   const targetRow = rowsXml[rowIndex];
-  const cells = targetRow.match(/<a:tc\b[\s\S]*?<\/a:tc>/g) ?? [];
+  const cells = getEditableCellsFromRowXml(targetRow);
   if (!cells[cellIndex]) return slideXml;
+  if (isMergedTableCell(cells[cellIndex]) || !cells[cellIndex].includes('</a:tc>')) return slideXml;
 
   const updatedCell = replaceCellText(cells[cellIndex], nextText);
-  const updatedRow = replaceNthMatch(targetRow, /<a:tc\b[\s\S]*?<\/a:tc>/g, cellIndex, updatedCell);
+  const updatedRow = replaceNthMatch(targetRow, TABLE_CELL_REGEX, cellIndex, updatedCell);
   const updatedTable = replaceNthMatch(tableXml, /<a:tr\b[\s\S]*?<\/a:tr>/g, rowIndex, updatedRow);
 
   const start = slideXml.indexOf(tableXml);
   if (start < 0) return slideXml;
   return `${slideXml.slice(0, start)}${updatedTable}${slideXml.slice(start + tableXml.length)}`;
+};
+
+const replaceVisibleTableCellInSlideXml = (
+  slideXml: string,
+  rowIndex: number,
+  visibleCellPosition: number,
+  nextText: string
+): string => {
+  const tableXml = slideXml.match(/<a:tbl>[\s\S]*?<\/a:tbl>/)?.[0];
+  if (!tableXml) return slideXml;
+
+  const rowsXml = getTableRowsXml(tableXml);
+  const rowXml = rowsXml[rowIndex];
+  if (!rowXml) return slideXml;
+
+  const visibleIndexes = getVisibleCellIndexesFromRowXml(rowXml);
+  const cellIndex = visibleIndexes[visibleCellPosition];
+  if (cellIndex === undefined) return slideXml;
+
+  return replaceTableCellInSlideXml(slideXml, rowIndex, cellIndex, nextText);
 };
 
 const parseSavedDraft = (rawValue: string | null): SavedDraft | null => {
@@ -1299,6 +1367,11 @@ const formatCurrency = (value: number): string => {
     maximumFractionDigits: 2
   });
   return `R$${formatted}`;
+};
+
+const formatCurrencyText = (value: string): string => {
+  const parsed = parseCurrency(value);
+  return parsed === null ? value : formatCurrency(parsed);
 };
 
 const calculateTotals = (
@@ -1812,11 +1885,13 @@ export default function CommercialProposalPresentationView({
       if (!xml) continue;
 
       let updatedXml = xml;
+      const layoutOverrides = SHAPE_LAYOUT_OVERRIDES[slideNumber] ?? {};
+      Object.entries(layoutOverrides).forEach(([shapeId, override]) => {
+        updatedXml = applyShapeLayoutOverrideInSlideXml(updatedXml, shapeId, override);
+      });
+
       (slideShapes[slideNumber] ?? []).forEach(shape => {
-        const textForPptx = slideNumber === 5 && shape.id === '107'
-          ? `\n${shape.text}`
-          : shape.text;
-        updatedXml = replaceShapeTextInSlideXml(updatedXml, shape.id, textForPptx);
+        updatedXml = replaceShapeTextInSlideXml(updatedXml, shape.id, shape.text);
       });
 
       if (slideNumber === 7) {
@@ -1833,16 +1908,16 @@ export default function CommercialProposalPresentationView({
         rowsToApply.forEach((row, index) => {
           updatedXml = replaceTableCellInSlideXml(updatedXml, index + 1, 0, row.service);
           updatedXml = replaceTableCellInSlideXml(updatedXml, index + 1, 1, row.description);
-          updatedXml = replaceTableCellInSlideXml(updatedXml, index + 1, 2, row.monthly);
-          updatedXml = replaceTableCellInSlideXml(updatedXml, index + 1, 3, row.contract);
+          updatedXml = replaceTableCellInSlideXml(updatedXml, index + 1, 2, formatCurrencyText(row.monthly));
+          updatedXml = replaceTableCellInSlideXml(updatedXml, index + 1, 3, formatCurrencyText(row.contract));
         });
 
         const totalRowIndex = rowsToApply.length + 1;
         const installationRowIndex = rowsToApply.length + 2;
 
-        updatedXml = replaceTableCellInSlideXml(updatedXml, totalRowIndex, 2, investmentTotals.monthly);
-        updatedXml = replaceTableCellInSlideXml(updatedXml, totalRowIndex, 3, investmentTotals.contract);
-        updatedXml = replaceTableCellInSlideXml(updatedXml, installationRowIndex, 2, installationFee);
+        updatedXml = replaceVisibleTableCellInSlideXml(updatedXml, totalRowIndex, 1, investmentTotals.monthly);
+        updatedXml = replaceVisibleTableCellInSlideXml(updatedXml, totalRowIndex, 2, investmentTotals.contract);
+        updatedXml = replaceVisibleTableCellInSlideXml(updatedXml, installationRowIndex, 1, formatCurrencyText(installationFee));
       }
 
       zip.file(`ppt/slides/slide${slideNumber}.xml`, updatedXml);
@@ -2059,8 +2134,8 @@ export default function CommercialProposalPresentationView({
           text: row.description,
           align: 'l'
         });
-        templateCells[monthlyIndex] = cloneCell(templateCells[monthlyIndex], { text: row.monthly, align: 'r' });
-        templateCells[contractIndex] = cloneCell(templateCells[contractIndex], { text: row.contract, align: 'r' });
+        templateCells[monthlyIndex] = cloneCell(templateCells[monthlyIndex], { text: formatCurrencyText(row.monthly), align: 'r' });
+        templateCells[contractIndex] = cloneCell(templateCells[contractIndex], { text: formatCurrencyText(row.contract), align: 'r' });
 
         rows.push({
           height: bodyTemplate?.height ?? 0,
@@ -2122,7 +2197,7 @@ export default function CommercialProposalPresentationView({
         }
         if (valueIndex !== undefined) {
           installationCells[valueIndex] = cloneCell(installationCells[valueIndex], {
-            text: installationFee,
+            text: formatCurrencyText(installationFee),
             align: 'ctr',
             bold: true
           });
@@ -2289,7 +2364,10 @@ export default function CommercialProposalPresentationView({
             {layout.textShapes.map(shape => {
               const text = getPreviewShapeText(slideNumber, shape.id, shape.text).trim();
               if (!text) return null;
-              const isSlide5Scope = slideNumber === 5 && shape.id === '107';
+              const frame = {
+                ...shape,
+                ...(SHAPE_LAYOUT_OVERRIDES[slideNumber]?.[shape.id] ?? {})
+              };
 
               if (slideNumber === 6 && shape.id === '121' && slide6RenderedPremissas.length > 0) {
                 return (
@@ -2297,10 +2375,10 @@ export default function CommercialProposalPresentationView({
                     key={`slide-text-${slideNumber}-${shape.id}`}
                     className="absolute overflow-hidden"
                     style={{
-                      left: toPercent(shape.x, slideSize.cx),
-                      top: toPercent(shape.y, slideSize.cy),
-                      width: toPercent(shape.cx, slideSize.cx),
-                      height: toPercent(shape.cy, slideSize.cy),
+                      left: toPercent(frame.x, slideSize.cx),
+                      top: toPercent(frame.y, slideSize.cy),
+                      width: toPercent(frame.cx, slideSize.cx),
+                      height: toPercent(frame.cy, slideSize.cy),
                       fontFamily: toCssFontFamily(shape.fontFamily),
                       fontSize: toFontSizeCqw(shape.fontSizePt || 14),
                       lineHeight: 1.1,
@@ -2359,10 +2437,10 @@ export default function CommercialProposalPresentationView({
                   key={`slide-text-${slideNumber}-${shape.id}`}
                   className="absolute overflow-hidden whitespace-pre-wrap"
                   style={{
-                    left: toPercent(shape.x, slideSize.cx),
-                    top: toPercent(shape.y, slideSize.cy),
-                    width: toPercent(shape.cx, slideSize.cx),
-                    height: toPercent(shape.cy, slideSize.cy),
+                    left: toPercent(frame.x, slideSize.cx),
+                    top: toPercent(frame.y, slideSize.cy),
+                    width: toPercent(frame.cx, slideSize.cx),
+                    height: toPercent(frame.cy, slideSize.cy),
                     display: 'flex',
                     alignItems: renderVerticalAlign(shape.verticalAlign),
                     justifyContent: 'flex-start',
@@ -2374,7 +2452,7 @@ export default function CommercialProposalPresentationView({
                     fontStyle: shape.italic ? 'italic' : 'normal',
                     lineHeight: 1.12,
                     color: shape.color || '#4C6584',
-                    padding: isSlide5Scope ? '5.2cqw 0.2cqw 0.2cqw' : '0.2cqw'
+                    padding: '0.2cqw'
                   }}
                 >
                   {text}
