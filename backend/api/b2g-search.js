@@ -487,6 +487,12 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, 
   const resultados = [];
   const errors = [];
 
+  // ✅ Validação: objeto obrigatório
+  if (!objeto || String(objeto).trim() === '') {
+    errors.push('e-Compras Curitiba: parâmetro "objeto" é obrigatório');
+    return { resultados, errors };
+  }
+
   if (uf && String(uf).trim().toUpperCase() !== 'PR') {
     return { resultados, errors };
   }
@@ -569,23 +575,30 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
     url.searchParams.set('pagina', 1);
     url.searchParams.set('tamanhoPagina', size);
 
-    let retries = 2;
+    let retries = 1; // Reduzido para 1 retry apenas
     let lastError = null;
     
     while (retries >= 0) {
       try {
         const res = await fetchWithRetry(url.toString(), {
           headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-        }, { timeoutMs: 90000, retries: 1 }); // Aumentado para 90s com 1 retry automático
+        }, { timeoutMs: 15000, retries: 0 }); // ⚡ Reduzido para 15s, sem retry interno
 
+        // Rate limit ou indisponível
+        if (res.status === 429) {
+          errors.push('PNCP: limite de requisições excedido. Tente novamente em alguns instantes.');
+          return { resultados, errors };
+        }
+        
         if (res.status === 503 || res.status === 504) {
           if (retries > 0) {
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 500));
             retries--;
             continue;
           }
           errors.push('PNCP indisponível no momento (HTTP ' + res.status + ')');
           return { resultados, errors };
+        }          return { resultados, errors };
         }
         if (!res.ok) {
           errors.push(`PNCP HTTP ${res.status}`);
