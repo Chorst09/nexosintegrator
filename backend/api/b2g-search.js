@@ -508,11 +508,11 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, 
     if (res.status === 403 || /Access Denied|permission to access|cdn-cache|edgekey/i.test(html)) {
       // Portal bloqueia acesso programático (Akamai). Fallback para PNCP (Curitiba).
       const fallback = await buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina });
-      if (fallback.resultados.length > 0) {
-        return fallback;
-      }
-      errors.push('e-Compras Curitiba: portal bloqueia acesso automatizado (HTTP 403). Verifique manualmente em ' + CURITIBA_ECOMPRAS_URL);
-      return { resultados, errors };
+      // ✅ Retornar fallback sempre, mesmo vazio (não é erro, apenas sem resultados)
+      return {
+        resultados: fallback.resultados,
+        errors: fallback.errors.length > 0 ? fallback.errors : undefined
+      };
     }
     if (!res.ok) {
       errors.push(`e-Compras Curitiba: HTTP ${res.status}`);
@@ -730,9 +730,10 @@ router.get('/curitiba-ecompras', auth, async (req, res) => {
       dataFim
     });
     const data = deduplicar(result.resultados || []);
-    const status = data.length > 0 ? 200 : (result.errors?.length > 0 ? 200 : 502);
-
-    return res.status(status).json({
+    
+    // ✅ Sempre retornar 200 se função retornou (sucesso, mesmo sem resultados)
+    // ❌ 502 apenas se exceção não tratada
+    return res.status(200).json({
       data,
       total: data.length,
       fonte: 'e-Compras Curitiba',
