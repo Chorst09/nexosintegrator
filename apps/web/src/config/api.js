@@ -120,6 +120,7 @@ export const API_ENDPOINTS = {
     updateCompany: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}`,
     approveCompany: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}/approve`,
     companyLicense: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}/license`,
+    companyRolePolicies: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}/role-policies`,
     companyUsers: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}/users`,
     deleteCompany: (companyId) => `${API_BASE_URL}/licensing/companies/${companyId}`,
     permissionsTemplates: `${API_BASE_URL}/licensing/permissions/templates`

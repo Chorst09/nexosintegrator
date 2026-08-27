@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, API_ENDPOINTS, getHeaders } from '../config/api';
 import { CheckCircle2, Lock, Mail, Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../theme/ThemeProvider';
+import { getDefaultRouteForUser } from '../utils/permissions';
 
 const resolvePublicUrl = (maybeRelativeUrl) => {
   if (!maybeRelativeUrl) return null;
@@ -99,7 +100,7 @@ const Login = () => {
         // "A listener indicated an asynchronous response by returning true,
         //  but the message channel closed before a response was received"
         await new Promise((r) => setTimeout(r, 150));
-        return navigate('/dashboard-geral');
+        return navigate(getDefaultRouteForUser(data.user));
       } else {
         setFeedback({ type: 'error', message: data.error || 'Erro ao fazer login' });
       }

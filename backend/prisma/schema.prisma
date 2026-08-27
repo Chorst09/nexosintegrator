@@ -127,6 +127,7 @@ model TenantCompany {
   accessPreSales Boolean          @default(false)
   accessManagement Boolean        @default(false)
   accessAutomation Boolean        @default(false)
+  rolePolicyOverrides Json        @default("{}")
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 

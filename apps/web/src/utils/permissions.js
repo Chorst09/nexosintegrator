@@ -11,8 +11,8 @@ export const ROLES = {
 export const ROLE_POLICY_MODULES = [
   {
     key: 'dashboard',
-    label: 'Painel de Controle',
-    description: 'Visão executiva geral e indicadores do funil.'
+    label: 'Dashboard Geral',
+    description: 'Visão consolidada de todos os módulos e indicadores executivos.'
   },
   {
     key: 'leads',
@@ -63,7 +63,7 @@ export const ROLE_POLICY_MODULES = [
 
 export const ROLE_ACCESS_POLICY = {
   [ROLES.USER]: {
-    dashboard: true,
+    dashboard: false,
     leads: true,
     opportunities: true,
     publicOpportunities: false,
@@ -81,7 +81,7 @@ export const ROLE_ACCESS_POLICY = {
     accessAutomation: false
   },
   [ROLES.PRE_SALES]: {
-    dashboard: true,
+    dashboard: false,
     leads: true,
     opportunities: true,
     publicOpportunities: false,
@@ -197,8 +197,23 @@ export const getUserAccess = (user) => {
   };
 };
 
+export const getUserPermissions = (user) => {
+  if (!user) user = {};
+  const role = toCanonicalRole(user.role);
+  const policy = getRolePolicy(role);
+  return {
+    ...policy,
+    ...(user.permissionOverrides && typeof user.permissionOverrides === 'object' ? user.permissionOverrides : {}),
+    ...(user.permissions && typeof user.permissions === 'object' ? user.permissions : {})
+  };
+};
+
 export const moduleFromPath = (pathname = '') => {
   const path = String(pathname || '').toLowerCase();
+
+  if (path.startsWith('/dashboard-geral')) {
+    return 'DASHBOARD_GERAL';
+  }
 
   if (path.startsWith('/administracao')) {
     return 'ADMINISTRATION';
@@ -260,6 +275,9 @@ export const canAccessModule = (user, moduleName) => {
   const role = toCanonicalRole(user.role);
   const policy = getRolePolicy(role);
   const mod = String(moduleName || '').toUpperCase();
+  if (mod === 'DASHBOARD_GERAL') {
+    return Boolean(getUserPermissions(user).dashboard);
+  }
   if (mod === 'ADMINISTRATION') return Boolean(policy.administration);
   if (mod === 'SETTINGS') {
     return role === ROLES.ADMIN || role === ROLES.MASTER;
@@ -273,6 +291,23 @@ export const canAccessModule = (user, moduleName) => {
   if (mod === 'AUTOMATION' || mod === 'AUTOMACOES') return access.accessAutomation;
 
   return false;
+};
+
+export const getDefaultRouteForUser = (user) => {
+  if (!user) return '/login';
+  const role = toCanonicalRole(user.role);
+
+  if (canAccessModule(user, 'DASHBOARD_GERAL')) return '/dashboard-geral';
+  if (role === ROLES.ADMIN || role === ROLES.MASTER) return '/configuracoes';
+
+  const access = getUserAccess(user);
+  if (access.accessB2B) return '/dashboard';
+  if (access.accessB2G) return '/b2g-dashboard';
+  if (access.accessPreSales) return '/pre-vendas';
+  if (access.accessManagement) return '/projetos';
+  if (access.accessAutomation) return '/automacoes';
+
+  return '/login';
 };
 
 export const normalizeAllowedRoles = (allowedRoles = []) => {

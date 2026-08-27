@@ -47,7 +47,8 @@ const authenticateToken = async (req, res, next) => {
             accessB2G: true,
             accessPreSales: true,
             accessManagement: true,
-            accessAutomation: true
+            accessAutomation: true,
+            rolePolicyOverrides: true
           }
         },
         permissionOverrides: true,
@@ -72,8 +73,16 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const legacyRole = actualRole === 'USER' ? 'SELLER' : actualRole;
-    const access = resolveUserAccess(actualRole, user);
     const tenantAccess = user.tenantCompany;
+    const tenantPolicies =
+      tenantAccess?.rolePolicyOverrides && typeof tenantAccess.rolePolicyOverrides === 'object'
+        ? tenantAccess.rolePolicyOverrides
+        : {};
+    const policyRole = actualRole === 'SELLER' ? 'USER' : actualRole;
+    const rolePolicy = tenantPolicies[policyRole] && typeof tenantPolicies[policyRole] === 'object' ? tenantPolicies[policyRole] : {};
+    const rolePolicyAccess = rolePolicy.moduleAccess && typeof rolePolicy.moduleAccess === 'object' ? rolePolicy.moduleAccess : {};
+    const rolePolicyPermissions = rolePolicy.permissions && typeof rolePolicy.permissions === 'object' ? rolePolicy.permissions : {};
+    const access = resolveUserAccess(actualRole, { ...user, ...rolePolicyAccess });
     const effectiveAccess = isMaster({ actualRole })
       ? access
       : tenantAccess
@@ -102,7 +111,7 @@ const authenticateToken = async (req, res, next) => {
       accessManagement: Boolean(effectiveAccess.accessManagement),
       accessAutomation: Boolean(effectiveAccess.accessAutomation),
       isCompanyOwner: Boolean(user.isCompanyOwner),
-      permissions: getPermissionTemplate(actualRole, user.permissionOverrides || {})
+      permissions: getPermissionTemplate(actualRole, { ...rolePolicyPermissions, ...(user.permissionOverrides || {}) })
     };
 
     return next();

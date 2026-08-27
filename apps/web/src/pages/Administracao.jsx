@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import ModernTable from '../components/ModernTable';
 import Modal from '../components/Modal';
 import { API_BASE_URL, API_ENDPOINTS, buildApiUrl, getAuthHeaders } from '../config/api';
+import { ROLE_POLICY_MODULES, getRolePolicy } from '../utils/permissions';
 
 const resolvePublicUrl = (maybeRelativeUrl) => {
   if (!maybeRelativeUrl) return null;
@@ -74,22 +75,23 @@ const resolveAccessByRole = (role, currentAccess) => {
   if (!currentAccess) currentAccess = {};
   const normalizedRole = normalizeRole(role);
 
-  if (['MASTER', 'ADMIN'].includes(normalizedRole)) {
+  if (normalizedRole === 'MASTER') {
     return { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true };
   }
 
-  if (normalizedRole === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
-  }
+  const defaults = {
+    ADMIN: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+    MANAGER: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+    DIRECTOR: { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false },
+    PRE_SALES: { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false },
+    USER: { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false }
+  }[normalizedRole] || { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
 
-  const accessB2B = currentAccess.accessB2B !== undefined ? Boolean(currentAccess.accessB2B) : true;
-  const accessB2G = currentAccess.accessB2G !== undefined ? Boolean(currentAccess.accessB2G) : true;
-  const accessPreSales = currentAccess.accessPreSales !== undefined ? Boolean(currentAccess.accessPreSales) : false;
-  const accessManagement = currentAccess.accessManagement !== undefined ? Boolean(currentAccess.accessManagement) : false;
-  const accessAutomation = currentAccess.accessAutomation !== undefined ? Boolean(currentAccess.accessAutomation) : false;
-  if (!accessB2B && !accessB2G && !accessPreSales && !accessManagement && !accessAutomation) {
-    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
-  }
+  const accessB2B = currentAccess.accessB2B !== undefined ? Boolean(currentAccess.accessB2B) : defaults.accessB2B;
+  const accessB2G = currentAccess.accessB2G !== undefined ? Boolean(currentAccess.accessB2G) : defaults.accessB2G;
+  const accessPreSales = currentAccess.accessPreSales !== undefined ? Boolean(currentAccess.accessPreSales) : defaults.accessPreSales;
+  const accessManagement = currentAccess.accessManagement !== undefined ? Boolean(currentAccess.accessManagement) : defaults.accessManagement;
+  const accessAutomation = currentAccess.accessAutomation !== undefined ? Boolean(currentAccess.accessAutomation) : defaults.accessAutomation;
 
   return {
     accessB2B,
@@ -162,6 +164,33 @@ const SETTINGS_TABS = [
 ];
 
 const ROLE_POLICY_VISIBLE_ROLES = ['USER', 'PRE_SALES', 'ADMIN', 'MASTER'];
+const ROLE_POLICY_EDITABLE_ROLES = ['USER', 'PRE_SALES', 'ADMIN'];
+
+const ROLE_POLICY_ACCESS_KEYS = MODULE_ACCESS_ITEMS.map((item) => item.key);
+const buildRolePolicyDraft = (role, company) => {
+  const normalizedRole = normalizeRole(role);
+  const stored = company?.rolePolicyOverrides?.[normalizedRole] || {};
+  const moduleAccess = constrainAccessToCompanyModules(
+    {
+      ...resolveAccessByRole(normalizedRole, {}),
+      ...(stored.moduleAccess && typeof stored.moduleAccess === 'object' ? stored.moduleAccess : {})
+    },
+    company
+  );
+  const permissions = {
+    ...getRolePolicy(normalizedRole),
+    ...(stored.permissions && typeof stored.permissions === 'object' ? stored.permissions : {})
+  };
+
+  return { moduleAccess, permissions };
+};
+
+const buildRolePolicyDrafts = (roles, company) => {
+  return roles.reduce((acc, role) => {
+    acc[role] = buildRolePolicyDraft(role, company);
+    return acc;
+  }, {});
+};
 
 const extractCollection = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -215,6 +244,10 @@ const normalizeCompanyForManagement = (company, source = 'licensing', index = 0)
     country: company?.country || null,
     notes: company?.notes || null,
     ...normalizeCompanyModuleAccess(company),
+    rolePolicyOverrides:
+      company?.rolePolicyOverrides && typeof company.rolePolicyOverrides === 'object'
+        ? company.rolePolicyOverrides
+        : {},
     license: company?.license || null,
     createdAt: company?.createdAt || null,
     updatedAt: company?.updatedAt || null
@@ -353,6 +386,8 @@ export default function Administracao() {
     accessAutomation: false
   });
   const [savingCompanyUser, setSavingCompanyUser] = useState(false);
+  const [rolePolicyDrafts, setRolePolicyDrafts] = useState({});
+  const [savingRolePolicies, setSavingRolePolicies] = useState(false);
   const [alertsPrefs, setAlertsPrefs] = useState({
     email: true,
     push: true,
@@ -461,6 +496,15 @@ export default function Administracao() {
     () => normalizeCompanyModuleAccess(contractedCompany || {}),
     [contractedCompany]
   );
+
+  useEffect(() => {
+    if (!contractedCompany) {
+      setRolePolicyDrafts({});
+      return;
+    }
+
+    setRolePolicyDrafts(buildRolePolicyDrafts(rolePolicyVisibleRoles, contractedCompany));
+  }, [contractedCompany, rolePolicyVisibleRoles]);
 
   const resetSessionAndGoToLogin = (message) => {
     localStorage.removeItem('token');
@@ -727,12 +771,10 @@ export default function Administracao() {
   };
 
   const openNewUser = () => {
+    const userRolePolicy = rolePolicyDrafts.USER || buildRolePolicyDraft('USER', contractedCompany);
     const defaultAccess = isMasterSession
-      ? { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: false, accessAutomation: false }
-      : constrainAccessToCompanyModules(
-          { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: false, accessAutomation: false },
-          contractedCompany
-        );
+      ? resolveAccessByRole('USER', userRolePolicy.moduleAccess)
+      : constrainAccessToCompanyModules(userRolePolicy.moduleAccess, contractedCompany);
 
     setEditingUser(null);
     setUserForm({
@@ -1877,7 +1919,10 @@ export default function Administracao() {
     const nextRole = normalizeRole(nextRoleValue);
     setUserForm((prev) => {
       const resolvedAccess = resolveAccessByRole(nextRole, prev);
-      const access = isMasterSession ? resolvedAccess : constrainAccessToCompanyModules(resolvedAccess, contractedCompany);
+      const rolePolicyAccess = rolePolicyDrafts[nextRole]?.moduleAccess || resolvedAccess;
+      const access = isMasterSession
+        ? resolveAccessByRole(nextRole, rolePolicyAccess)
+        : constrainAccessToCompanyModules(rolePolicyAccess, contractedCompany);
       return {
         ...prev,
         role: nextRole,
@@ -1890,7 +1935,7 @@ export default function Administracao() {
   const handleUserModuleToggle = (moduleKey, checked) => {
     setUserForm((prev) => {
       const role = normalizeRole(prev.role);
-      if (['MASTER', 'ADMIN', 'PRE_SALES'].includes(role)) {
+      if (role === 'MASTER') {
         const resolvedAccess = resolveAccessByRole(role, prev);
         const access = isMasterSession ? resolvedAccess : constrainAccessToCompanyModules(resolvedAccess, contractedCompany);
         return { ...prev, ...access };
@@ -1912,6 +1957,94 @@ export default function Administracao() {
       }
       return next;
     });
+  };
+
+  const handleRolePolicyModuleToggle = (role, moduleKey, checked) => {
+    const normalizedRole = normalizeRole(role);
+    if (!ROLE_POLICY_EDITABLE_ROLES.includes(normalizedRole)) return;
+    if (!ROLE_POLICY_ACCESS_KEYS.includes(moduleKey)) return;
+    if (!isMasterSession && !isAdminSession) return;
+    if (!contractedCompanyAccess[moduleKey]) return;
+
+    setRolePolicyDrafts((prev) => {
+      const current = prev[normalizedRole] || buildRolePolicyDraft(normalizedRole, contractedCompany);
+      const nextModuleAccess = constrainAccessToCompanyModules(
+        {
+          ...current.moduleAccess,
+          [moduleKey]: Boolean(checked)
+        },
+        contractedCompany
+      );
+
+      return {
+        ...prev,
+        [normalizedRole]: {
+          ...current,
+          moduleAccess: nextModuleAccess
+        }
+      };
+    });
+  };
+
+  const handleRolePolicyPermissionToggle = (role, permissionKey, checked) => {
+    const normalizedRole = normalizeRole(role);
+    if (!ROLE_POLICY_EDITABLE_ROLES.includes(normalizedRole)) return;
+    if (!ROLE_POLICY_MODULES.some((item) => item.key === permissionKey)) return;
+    if (!isMasterSession && !isAdminSession) return;
+
+    setRolePolicyDrafts((prev) => {
+      const current = prev[normalizedRole] || buildRolePolicyDraft(normalizedRole, contractedCompany);
+      return {
+        ...prev,
+        [normalizedRole]: {
+          ...current,
+          permissions: {
+            ...current.permissions,
+            [permissionKey]: Boolean(checked)
+          }
+        }
+      };
+    });
+  };
+
+  const saveRolePolicies = async () => {
+    if (!contractedCompany?.id) return;
+
+    try {
+      setSavingRolePolicies(true);
+      setError(null);
+
+      const policies = rolePolicyVisibleRoles.reduce((acc, role) => {
+        const normalizedRole = normalizeRole(role);
+        if (!ROLE_POLICY_EDITABLE_ROLES.includes(normalizedRole)) return acc;
+        const draft = rolePolicyDrafts[normalizedRole] || buildRolePolicyDraft(normalizedRole, contractedCompany);
+        acc[normalizedRole] = {
+          moduleAccess: constrainAccessToCompanyModules(draft.moduleAccess, contractedCompany),
+          permissions: ROLE_POLICY_MODULES.reduce((permissions, item) => {
+            permissions[item.key] = Boolean(draft.permissions?.[item.key]);
+            return permissions;
+          }, {})
+        };
+        return acc;
+      }, {});
+
+      const res = await fetch(API_ENDPOINTS.licensing.companyRolePolicies(contractedCompany.id), {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ policies })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Erro ao salvar políticas: ${res.status}`);
+      }
+
+      await Promise.all([loadLicensingData(), loadAll()]);
+    } catch (e) {
+      console.error(e);
+      setError(e.message || 'Erro ao salvar políticas por role');
+    } finally {
+      setSavingRolePolicies(false);
+    }
   };
 
   const handleCompanyUserRoleChange = (nextRoleValue) => {
@@ -2655,16 +2788,26 @@ export default function Administracao() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Políticas de Acesso por Role</h2>
               <p className="text-sm text-gray-600 dark:text-slate-200">
-                Confira quais módulos cada role pode receber dentro do plano contratado.
+                Defina permissões e módulos por role dentro do plano contratado pela empresa.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('usuarios_acessos')}
-              className="crm-btn crm-btn-secondary"
-            >
-              Gerenciar usuários
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('usuarios_acessos')}
+                className="crm-btn crm-btn-secondary"
+              >
+                Gerenciar usuários
+              </button>
+              <button
+                type="button"
+                onClick={saveRolePolicies}
+                disabled={savingRolePolicies || !contractedCompany}
+                className="crm-btn crm-btn-primary disabled:opacity-60"
+              >
+                {savingRolePolicies ? 'Salvando...' : 'Salvar políticas'}
+              </button>
+            </div>
           </div>
 
           {loadingLicensing ? (
@@ -2676,7 +2819,10 @@ export default function Administracao() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               {rolePolicyVisibleRoles.map((role) => {
-                const roleAccess = constrainAccessToCompanyModules(resolveAccessByRole(role, {}), contractedCompany);
+                const normalizedRole = normalizeRole(role);
+                const editableRole = ROLE_POLICY_EDITABLE_ROLES.includes(normalizedRole);
+                const rolePolicy = rolePolicyDrafts[normalizedRole] || buildRolePolicyDraft(normalizedRole, contractedCompany);
+                const roleAccess = constrainAccessToCompanyModules(rolePolicy.moduleAccess, contractedCompany);
                 return (
                   <div
                     key={role}
@@ -2688,6 +2834,33 @@ export default function Administracao() {
                         Plano: {contractedCompany.license?.plan?.name || contractedCompany.planName || 'Sem plano ativo'}
                       </div>
                     </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-200">Permissões</div>
+                      {ROLE_POLICY_MODULES.map((item) => {
+                        const checked = Boolean(rolePolicy.permissions?.[item.key]);
+                        return (
+                          <label
+                            key={item.key}
+                            className={`block space-y-1 rounded-lg border px-3 py-2 ${editableRole ? 'border-cyan-300/25 bg-cyan-500/10' : 'border-gray-200 bg-gray-100/50 opacity-60 dark:border-slate-700 dark:bg-slate-800/40'}`}
+                          >
+                            <span className="flex items-start justify-between gap-3">
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={!editableRole}
+                                onChange={(e) => handleRolePolicyPermissionToggle(normalizedRole, item.key, e.target.checked)}
+                              />
+                            </span>
+                            <span className="block text-xs text-gray-600 dark:text-slate-300">{item.description}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-cyan-700 dark:text-cyan-200">Módulos Contratados</div>
                     {MODULE_ACCESS_ITEMS.map((item) => {
                       const contracted = Boolean(contractedCompanyAccess[item.key]);
                       const checked = Boolean(roleAccess[item.key]);
@@ -2695,7 +2868,12 @@ export default function Administracao() {
                         <div key={item.key} className={`space-y-1 rounded-lg border px-3 py-2 ${contracted ? 'border-cyan-300/25 bg-cyan-500/10' : 'border-gray-200 bg-gray-100/50 opacity-60 dark:border-slate-700 dark:bg-slate-800/40'}`}>
                           <div className="flex items-center justify-between gap-3">
                             <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
-                            <input type="checkbox" checked={checked} disabled readOnly />
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!editableRole || !contracted}
+                              onChange={(e) => handleRolePolicyModuleToggle(normalizedRole, item.key, e.target.checked)}
+                            />
                           </div>
                           <div className="text-xs text-gray-600 dark:text-slate-300">
                             {contracted ? item.description : 'Não contratado neste plano'}
@@ -2703,6 +2881,7 @@ export default function Administracao() {
                         </div>
                       );
                     })}
+                    </div>
                   </div>
                 );
               })}
@@ -3538,7 +3717,7 @@ export default function Administracao() {
                     <input
                       type="checkbox"
                       checked={Boolean(userForm[key])}
-                      disabled={!contracted || ['MASTER', 'ADMIN', 'PRE_SALES'].includes(normalizeRole(userForm.role))}
+                      disabled={!contracted || normalizeRole(userForm.role) === 'MASTER'}
                       onChange={(e) => handleUserModuleToggle(key, e.target.checked)}
                     />
                     {label}

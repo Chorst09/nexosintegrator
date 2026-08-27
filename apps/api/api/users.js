@@ -13,24 +13,23 @@ const isMaster = (reqUser = {}) => normalizeRole(reqUser.actualRole || reqUser.r
 
 const resolveUserAccess = (role, input = {}) => {
   const r = normalizeRole(role);
-  if (r === 'MASTER' || r === 'ADMIN' || r === 'MANAGER') {
+  if (r === 'MASTER') {
     return { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true };
   }
-  if (r === 'DIRECTOR') {
-    return { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false };
-  }
-  if (r === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
-  }
 
-  const accessB2B = input.accessB2B !== undefined ? Boolean(input.accessB2B) : true;
-  const accessB2G = input.accessB2G !== undefined ? Boolean(input.accessB2G) : false;
-  const accessPreSales = input.accessPreSales !== undefined ? Boolean(input.accessPreSales) : false;
-  const accessManagement = input.accessManagement !== undefined ? Boolean(input.accessManagement) : false;
-  const accessAutomation = input.accessAutomation !== undefined ? Boolean(input.accessAutomation) : false;
-  if (!accessB2B && !accessB2G && !accessPreSales && !accessManagement && !accessAutomation) {
-    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
-  }
+  const defaults = {
+    ADMIN: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+    MANAGER: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
+    DIRECTOR: { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false },
+    PRE_SALES: { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false },
+    USER: { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false }
+  }[r] || { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
+
+  const accessB2B = input.accessB2B !== undefined ? Boolean(input.accessB2B) : defaults.accessB2B;
+  const accessB2G = input.accessB2G !== undefined ? Boolean(input.accessB2G) : defaults.accessB2G;
+  const accessPreSales = input.accessPreSales !== undefined ? Boolean(input.accessPreSales) : defaults.accessPreSales;
+  const accessManagement = input.accessManagement !== undefined ? Boolean(input.accessManagement) : defaults.accessManagement;
+  const accessAutomation = input.accessAutomation !== undefined ? Boolean(input.accessAutomation) : defaults.accessAutomation;
 
   return {
     accessB2B,
@@ -63,7 +62,7 @@ const constrainAccessToTenant = (access, tenantCompany) => {
 const resolveStoredUserAccess = (role, user = {}) => {
   const normalizedRole = normalizeRole(role);
   const defaultAccess = resolveUserAccess(normalizedRole, user);
-  if (!['ADMIN', 'MANAGER', 'DIRECTOR'].includes(normalizedRole)) return defaultAccess;
+  if (normalizedRole === 'MASTER') return defaultAccess;
 
   return {
     accessB2B: user.accessB2B !== undefined && user.accessB2B !== null ? Boolean(user.accessB2B) : defaultAccess.accessB2B,

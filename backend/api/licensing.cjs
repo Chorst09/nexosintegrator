@@ -165,6 +165,51 @@ const constrainAccessToTenant = (access = {}, tenantCompany = {}) => ({
   accessAutomation: Boolean(access.accessAutomation && tenantCompany.accessAutomation)
 });
 
+const ROLE_POLICY_EDITABLE_ROLES = new Set(['USER', 'PRE_SALES', 'ADMIN']);
+const ROLE_POLICY_ACCESS_KEYS = ['accessB2B', 'accessB2G', 'accessPreSales', 'accessManagement', 'accessAutomation'];
+const ROLE_POLICY_PERMISSION_KEYS = [
+  'dashboard',
+  'leads',
+  'opportunities',
+  'publicOpportunities',
+  'ownOpportunitiesOnly',
+  'manufacturerRegistry',
+  'documentation',
+  'strategicReports',
+  'management',
+  'automation'
+];
+
+const sanitizeRolePolicyOverrides = (policies = {}, tenantCompany = {}) => {
+  if (!policies || typeof policies !== 'object') return {};
+
+  return Object.entries(policies).reduce((acc, [roleValue, draft]) => {
+    const role = normalizeRole(roleValue);
+    if (!ROLE_POLICY_EDITABLE_ROLES.has(role) || !draft || typeof draft !== 'object') return acc;
+
+    const moduleInput = draft.moduleAccess && typeof draft.moduleAccess === 'object' ? draft.moduleAccess : {};
+    const moduleDefaults = resolveUserAccess(role, {});
+    const moduleAccess = constrainAccessToTenant(
+      ROLE_POLICY_ACCESS_KEYS.reduce((next, key) => {
+        next[key] = moduleInput[key] !== undefined ? Boolean(moduleInput[key]) : Boolean(moduleDefaults[key]);
+        return next;
+      }, {}),
+      tenantCompany
+    );
+
+    const permissionInput = draft.permissions && typeof draft.permissions === 'object' ? draft.permissions : {};
+    const permissions = ROLE_POLICY_PERMISSION_KEYS.reduce((next, key) => {
+      next[key] = permissionInput[key] !== undefined
+        ? Boolean(permissionInput[key])
+        : Boolean(getPermissionTemplate(role)[key]);
+      return next;
+    }, {});
+
+    acc[role] = { moduleAccess, permissions };
+    return acc;
+  }, {});
+};
+
 const toPublicPlan = (plan) => ({
   id: plan.id,
   code: plan.code,
@@ -272,6 +317,10 @@ const mapCompanyWithLicense = (company) => {
     accessPreSales: Boolean(company.accessPreSales),
     accessManagement: Boolean(company.accessManagement),
     accessAutomation: Boolean(company.accessAutomation),
+    rolePolicyOverrides:
+      company.rolePolicyOverrides && typeof company.rolePolicyOverrides === 'object'
+        ? company.rolePolicyOverrides
+        : {},
     usersCount: company.users?.length || 0,
     adminsCount: (company.users || []).filter((user) => normalizeRole(user.role) === 'ADMIN').length,
     users: (company.users || []).map((user) => {
@@ -809,6 +858,66 @@ router.put('/companies/:id', requireRole(['ADMIN']), async (req, res) => {
       return res.status(409).json({ error: 'CNPJ já cadastrado em outra empresa' });
     }
     return res.status(500).json({ error: 'Erro ao editar empresa' });
+  }
+});
+
+router.put('/companies/:id/role-policies', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) return res.status(400).json({ error: 'ID da empresa inválido' });
+
+    if (!ensureTenantAccess(req, companyId)) {
+      return res.status(403).json({ error: 'Sem permissão para alterar políticas desta empresa' });
+    }
+
+    const tenantCompany = await prisma.tenantCompany.findUnique({ where: { id: companyId } });
+    if (!tenantCompany) return res.status(404).json({ error: 'Empresa não encontrada' });
+
+    const rolePolicyOverrides = sanitizeRolePolicyOverrides(
+      req.body?.policies || req.body?.rolePolicyOverrides || {},
+      tenantCompany
+    );
+
+    const company = await prisma.$transaction(async (tx) => {
+      await tx.tenantCompany.update({
+        where: { id: companyId },
+        data: { rolePolicyOverrides }
+      });
+
+      for (const [role, policy] of Object.entries(rolePolicyOverrides)) {
+        const roleWhere = role === 'USER' ? { in: ['USER', 'SELLER'] } : role;
+        await tx.user.updateMany({
+          where: {
+            tenantCompanyId: companyId,
+            role: roleWhere
+          },
+          data: {
+            accessB2B: policy.moduleAccess.accessB2B,
+            accessB2G: policy.moduleAccess.accessB2G,
+            accessPreSales: policy.moduleAccess.accessPreSales,
+            accessManagement: policy.moduleAccess.accessManagement,
+            accessAutomation: policy.moduleAccess.accessAutomation,
+            permissionOverrides: policy.permissions
+          }
+        });
+      }
+
+      return tx.tenantCompany.findUnique({
+        where: { id: companyId },
+        include: {
+          users: true,
+          licenses: {
+            include: { plan: true },
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      });
+    });
+
+    return res.json({ data: mapCompanyWithLicense(company) });
+  } catch (error) {
+    console.error('Erro ao salvar políticas por role:', error);
+    return res.status(500).json({ error: 'Erro ao salvar políticas por role' });
   }
 });
 

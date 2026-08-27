@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL, API_ENDPOINTS, getAuthHeaders } from '../config/api';
-import { getUserAccess, normalizeRole, ROLES, isMaster } from '../utils/permissions';
+import { canAccessModule, getUserAccess, normalizeRole, ROLES, isMaster } from '../utils/permissions';
 
 const SIDEBAR_SCROLL_KEY = 'crm-sidebar-scroll-top';
 
@@ -261,6 +261,10 @@ export default function Sidebar({
           return role === ROLES.MASTER ? section : null;
         }
 
+        if (section.id === 'geral') {
+          return canAccessModule(user, 'DASHBOARD_GERAL') ? section : null;
+        }
+
         if (section.id === 'configuracao') {
           const items = section.items.filter((item) => {
             // ADMIN and MASTER can see settings
@@ -278,7 +282,6 @@ export default function Sidebar({
 
         // USER_B2B: somente seção B2B (vendas)
         if (role === ROLES.USER_B2B) {
-          if (section.id === 'geral') return section;
           if (section.id === 'vendas') {
             return {
               ...section,
@@ -292,14 +295,12 @@ export default function Sidebar({
 
         // USER_B2G: somente seção B2G
         if (role === ROLES.USER_B2G) {
-          if (section.id === 'geral') return section;
           if (section.id === 'b2g') return section;
           return null;
         }
 
         // Logic for USER and SELLER roles.
         if (role === ROLES.USER || role === ROLES.SELLER) {
-          if (section.id === 'geral') return section;
           if (section.id === 'vendas' && access.accessB2B) {
             return {
               ...section,

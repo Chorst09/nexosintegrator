@@ -26,8 +26,16 @@ const isMasterEmail = (value) => getMasterEmails().has(normalizeEmail(value));
 
 const sanitizeUserPayload = (user = {}) => {
   const role = normalizeRole(user.role);
-  const access = resolveUserAccess(role, user);
   const tenantAccess = user.tenantCompany;
+  const tenantPolicies =
+    tenantAccess?.rolePolicyOverrides && typeof tenantAccess.rolePolicyOverrides === 'object'
+      ? tenantAccess.rolePolicyOverrides
+      : {};
+  const policyRole = role === 'SELLER' ? 'USER' : role;
+  const rolePolicy = tenantPolicies[policyRole] && typeof tenantPolicies[policyRole] === 'object' ? tenantPolicies[policyRole] : {};
+  const rolePolicyAccess = rolePolicy.moduleAccess && typeof rolePolicy.moduleAccess === 'object' ? rolePolicy.moduleAccess : {};
+  const rolePolicyPermissions = rolePolicy.permissions && typeof rolePolicy.permissions === 'object' ? rolePolicy.permissions : {};
+  const access = resolveUserAccess(role, { ...user, ...rolePolicyAccess });
   const effectiveAccess = isMaster({ actualRole: role })
     ? access
     : tenantAccess
@@ -53,7 +61,7 @@ const sanitizeUserPayload = (user = {}) => {
     accessManagement: effectiveAccess.accessManagement,
     accessAutomation: effectiveAccess.accessAutomation,
     isCompanyOwner: Boolean(user.isCompanyOwner),
-    permissions: getPermissionTemplate(role, user.permissionOverrides || {}),
+    permissions: getPermissionTemplate(role, { ...rolePolicyPermissions, ...(user.permissionOverrides || {}) }),
     createdAt: user.createdAt || null
   };
 };
@@ -99,7 +107,8 @@ router.post('/login', async (req, res) => {
               accessB2G: true,
               accessPreSales: true,
               accessManagement: true,
-              accessAutomation: true
+              accessAutomation: true,
+              rolePolicyOverrides: true
             }
           },
           permissionOverrides: true,
@@ -255,7 +264,8 @@ router.post('/register', async (req, res) => {
             accessB2G: true,
             accessPreSales: true,
             accessManagement: true,
-            accessAutomation: true
+            accessAutomation: true,
+            rolePolicyOverrides: true
           }
         },
         isCompanyOwner: true,
@@ -367,7 +377,8 @@ router.get('/me', authenticateToken, async (req, res) => {
             accessB2G: true,
             accessPreSales: true,
             accessManagement: true,
-            accessAutomation: true
+            accessAutomation: true,
+            rolePolicyOverrides: true
           }
         },
         isCompanyOwner: true,
@@ -534,7 +545,8 @@ router.post('/users', authenticateToken, requireRole(['ADMIN']), async (req, res
             accessB2G: true,
             accessPreSales: true,
             accessManagement: true,
-            accessAutomation: true
+            accessAutomation: true,
+            rolePolicyOverrides: true
           }
         },
         isCompanyOwner: true,
@@ -665,7 +677,8 @@ router.put('/users/:id', authenticateToken, requireRole(['ADMIN']), async (req, 
             accessB2G: true,
             accessPreSales: true,
             accessManagement: true,
-            accessAutomation: true
+            accessAutomation: true,
+            rolePolicyOverrides: true
           }
         },
         isCompanyOwner: true,

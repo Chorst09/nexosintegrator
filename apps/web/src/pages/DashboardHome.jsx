@@ -26,6 +26,7 @@ import {
   Rocket
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
+import { getDefaultRouteForUser } from '../utils/permissions';
 
 
 export default function DashboardHome() {
@@ -36,9 +37,13 @@ export default function DashboardHome() {
     const userRaw = localStorage.getItem('user');
     const token = localStorage.getItem('token');
     
-    // Se já estiver logado, redireciona para o dashboard geral
+    // Se já estiver logado, redireciona para a primeira área permitida.
     if (userRaw && token) {
-      navigate('/dashboard-geral');
+      try {
+        navigate(getDefaultRouteForUser(JSON.parse(userRaw)));
+      } catch {
+        navigate('/login');
+      }
     }
   }, [navigate]);
 

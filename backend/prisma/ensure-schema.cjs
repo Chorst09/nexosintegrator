@@ -90,6 +90,7 @@ async function main() {
       "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
       "accessManagement" BOOLEAN NOT NULL DEFAULT false,
       "accessAutomation" BOOLEAN NOT NULL DEFAULT false,
+      "rolePolicyOverrides" JSONB NOT NULL DEFAULT '{}'::jsonb,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -140,7 +141,8 @@ async function main() {
       ADD COLUMN IF NOT EXISTS "accessB2G" BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "accessPreSales" BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "accessManagement" BOOLEAN NOT NULL DEFAULT false,
-      ADD COLUMN IF NOT EXISTS "accessAutomation" BOOLEAN NOT NULL DEFAULT false;
+      ADD COLUMN IF NOT EXISTS "accessAutomation" BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "rolePolicyOverrides" JSONB NOT NULL DEFAULT '{}'::jsonb;
   `);
 
   await prisma.$executeRawUnsafe(`

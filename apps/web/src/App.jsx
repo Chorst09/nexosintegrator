@@ -43,7 +43,7 @@ import Checkout from './pages/Checkout';
 import Setup from './pages/Setup';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleGuard from './components/RoleGuard';
-import { ROLES, getUserAccess, normalizeRole } from './utils/permissions';
+import { ROLES, getDefaultRouteForUser } from './utils/permissions';
 
 const Projetos = lazy(() => import('./pages/Projetos'));
 
@@ -55,6 +55,18 @@ function B2GRouteScreen() {
       <B2GEditais />
     </ErrorBoundary>
   );
+}
+
+function DefaultRedirect() {
+  let user = null;
+  try {
+    const userRaw = localStorage.getItem('user');
+    user = userRaw ? JSON.parse(userRaw) : null;
+  } catch {
+    user = null;
+  }
+
+  return <Navigate to={getDefaultRouteForUser(user)} replace />;
 }
 
 export default function App() {
@@ -103,7 +115,14 @@ export default function App() {
 
           <Route path="dashboard-modernized" element={<DashboardModernized />} />
 
-          <Route path="dashboard-geral" element={<DashboardGeral />} />
+          <Route
+            path="dashboard-geral"
+            element={
+              <RoleGuard allowedRoles={[ROLES.MASTER, ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER, ROLES.SELLER, ROLES.USER, ROLES.PRE_SALES]}>
+                <DashboardGeral />
+              </RoleGuard>
+            }
+          />
 
           <Route
             path="dashboard-b2b"
@@ -484,7 +503,7 @@ export default function App() {
             }
           />
 
-          <Route path="*" element={<Navigate to="/dashboard-geral" replace />} />
+          <Route path="*" element={<DefaultRedirect />} />
         </Route>
       </Routes>
     </BrowserRouter>

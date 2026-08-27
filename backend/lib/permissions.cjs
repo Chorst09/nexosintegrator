@@ -38,7 +38,7 @@ const ROLE_PERMISSION_TEMPLATES = {
     relatoriosEstrategicos: true,
     historico: true,
     precificacao: true,
-    administracaoLicenciamento: true,
+    administracaoLicenciamento: false,
     administracaoUsuarios: true,
     billing: true,
     integrations: true,
@@ -46,7 +46,7 @@ const ROLE_PERMISSION_TEMPLATES = {
     automacoes: true
   },
   USER: {
-    dashboard: true,
+    dashboard: false,
     leads: true,
     oportunidades: true,
     buscaOportunidadesPublicas: true,
@@ -64,7 +64,7 @@ const ROLE_PERMISSION_TEMPLATES = {
     automacoes: false
   },
   PRE_SALES: {
-    dashboard: true,
+    dashboard: false,
     leads: true,
     oportunidades: true,
     buscaOportunidadesPublicas: false,
@@ -118,7 +118,7 @@ const ROLE_PERMISSION_TEMPLATES = {
     automacoes: false
   },
   SELLER: {
-    dashboard: true,
+    dashboard: false,
     leads: true,
     oportunidades: true,
     buscaOportunidadesPublicas: true,
@@ -153,12 +153,8 @@ function resolveUserAccess(role, inputAccess = {}) {
   const normalizedRole = normalizeRole(role);
   const base = getRoleAccessDefaults(normalizedRole);
 
-  if (normalizedRole === 'MASTER' || normalizedRole === 'ADMIN') {
+  if (normalizedRole === 'MASTER') {
     return { ...base };
-  }
-
-  if (normalizedRole === 'PRE_SALES') {
-    return { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false };
   }
 
   const accessB2B = inputAccess.accessB2B !== undefined ? Boolean(inputAccess.accessB2B) : base.accessB2B;
@@ -166,11 +162,6 @@ function resolveUserAccess(role, inputAccess = {}) {
   const accessPreSales = inputAccess.accessPreSales !== undefined ? Boolean(inputAccess.accessPreSales) : base.accessPreSales;
   const accessManagement = inputAccess.accessManagement !== undefined ? Boolean(inputAccess.accessManagement) : base.accessManagement;
   const accessAutomation = inputAccess.accessAutomation !== undefined ? Boolean(inputAccess.accessAutomation) : base.accessAutomation;
-
-  // Usuario USER precisa ter ao menos um modulo ativo
-  if (normalizedRole === 'USER' && !accessB2B && !accessB2G) {
-    return { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement, accessAutomation };
-  }
 
   return {
     accessB2B,
@@ -220,9 +211,26 @@ function getPermissionTemplate(role, overrides = {}) {
 
   if (!overrides || typeof overrides !== 'object') return { ...base };
 
+  const normalizedOverrides = { ...overrides };
+  const aliases = {
+    opportunities: 'oportunidades',
+    publicOpportunities: 'buscaOportunidadesPublicas',
+    ownOpportunitiesOnly: 'somenteSuasOportunidades',
+    manufacturerRegistry: 'registroNoFabricante',
+    documentation: 'documentacao',
+    strategicReports: 'relatoriosEstrategicos',
+    management: 'gestao',
+    automation: 'automacoes'
+  };
+  Object.entries(aliases).forEach(([source, target]) => {
+    if (Object.prototype.hasOwnProperty.call(normalizedOverrides, source)) {
+      normalizedOverrides[target] = Boolean(normalizedOverrides[source]);
+    }
+  });
+
   return {
     ...base,
-    ...overrides
+    ...normalizedOverrides
   };
 }
 
