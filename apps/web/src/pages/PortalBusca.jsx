@@ -33,12 +33,13 @@ const FONTES_CONFIG = [
   { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️' },
   { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋' },
   { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢' },
+  { id: 'curitiba-ecompras', nome: 'e-Compras Curitiba', descricao: 'Portal de Compras Eletrônicas do Município de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️', defaultActive: false },
   { id: 'conlicitacao', portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎', integrada: true }
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
 const LICITACOES_GERENCIADAS_KEY = 'b2g_licitacoes_gerenciadas_v1';
-const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.map(fonte => fonte.id);
+const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.filter(fonte => fonte.defaultActive !== false).map(fonte => fonte.id);
 
 const FONTES_PAGAS = [
   { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' },
@@ -460,6 +461,27 @@ async function buscarPregoes({ objeto, uf, dataInicio, tamanhoPagina = 20 }) {
   } catch { return []; }
 }
 
+async function buscarCuritibaECompras({ objeto, uf, cidade, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const url = new URL(buildApiUrl('/b2g-search/curitiba-ecompras'), window.location.origin);
+  url.searchParams.set('objeto', objeto || '');
+  url.searchParams.set('uf', uf || '');
+  url.searchParams.set('cidade', cidade || '');
+  url.searchParams.set('dataInicio', dataInicio || '');
+  url.searchParams.set('dataFim', dataFim || '');
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina || 20), 100)));
+
+  const res = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+    signal: AbortSignal.timeout(22000)
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = payload?.erros?.[0] || payload?.error || payload?.message || 'Falha ao buscar no e-Compras Curitiba.';
+    throw new Error(message);
+  }
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
 
 const formatCurrency = (value) => {
@@ -533,6 +555,7 @@ const getFonteBadgeClass = (fonte) => {
     'Contratações Lei 14.133': 'bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-700',
     'Atas de Registro de Preço': 'bg-indigo-100 text-indigo-800 border border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700',
     'Pregões (SIASG)': 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700',
+    'e-Compras Curitiba': 'bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-700',
     'BLL': 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
     'BNC': 'bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
     'ConLicitação': 'bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700',
@@ -1193,6 +1216,9 @@ export default function PortalBusca() {
       if (fontesAtivas.includes('pregoes')) {
         promises.push(executarFonte('Pregões', buscarPregoes(params)));
       }
+      if (fontesAtivas.includes('curitiba-ecompras')) {
+        promises.push(executarFonte('e-Compras Curitiba', buscarCuritibaECompras(params)));
+      }
       if (fontesAtivas.includes('conlicitacao')) {
         const fonteConlicitacao = fontesIntegradas.find(fonte => fonte.portal === 'conlicitacao') || FONTES_CONFIG.find(fonte => fonte.id === 'conlicitacao');
         promises.push(executarFonte('ConLicitação', buscarFonteIntegrada(fonteConlicitacao, params)));
@@ -1279,7 +1305,7 @@ export default function PortalBusca() {
     setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
     setCategoriasProdutoTI([]);
     setProdutoCustom('');
-    setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
+    setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false && f.defaultActive !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
   };
 

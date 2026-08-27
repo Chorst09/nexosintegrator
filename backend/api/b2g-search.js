@@ -62,6 +62,50 @@ const matchObjeto = (texto, objeto) => {
   return termos.length === 0 || termos.some(t => haystack.includes(t));
 };
 
+const decodeHtmlEntities = (value = '') => String(value)
+  .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+  .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&amp;/gi, '&')
+  .replace(/&quot;/gi, '"')
+  .replace(/&#39;/g, "'")
+  .replace(/&lt;/gi, '<')
+  .replace(/&gt;/gi, '>');
+
+const cleanHtmlText = (value = '') => decodeHtmlEntities(String(value)
+  .replace(/<img\b[^>]*\balt=["']([^"']*)["'][^>]*>/gi, ' $1 ')
+  .replace(/<img\b[^>]*\btitle=["']([^"']*)["'][^>]*>/gi, ' $1 ')
+  .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+  .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<br\s*\/?>/gi, ' ')
+  .replace(/<[^>]+>/g, ' '))
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const normalizeDateText = (value) => {
+  if (!value) return null;
+  const text = cleanHtmlText(value);
+  const match = text.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!match) return null;
+  const [, dd, mm, yyyy, hh = '00', min = '00', ss = '00'] = match;
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`;
+};
+
+const isWithinDateRange = (dateValue, dataInicio, dataFim) => {
+  if (!dateValue) return true;
+  const ts = new Date(dateValue).getTime();
+  if (!Number.isFinite(ts)) return true;
+  if (dataInicio) {
+    const startTs = new Date(`${String(dataInicio).slice(0, 10)}T00:00:00`).getTime();
+    if (Number.isFinite(startTs) && ts < startTs) return false;
+  }
+  if (dataFim) {
+    const endTs = new Date(`${String(dataFim).slice(0, 10)}T23:59:59`).getTime();
+    if (Number.isFinite(endTs) && ts > endTs) return false;
+  }
+  return true;
+};
+
 // ─── PNCP - Publicações ───────────────────────────────────────────────────────
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
@@ -268,6 +312,198 @@ async function buscarComprasNet({ objeto, uf, pagina = 1, tamanhoPagina = 20, da
   return { resultados, errors };
 }
 
+// ─── e-Compras Curitiba ──────────────────────────────────────────────────────
+
+const CURITIBA_ECOMPRAS_URL = 'https://e-compras.curitiba.pr.gov.br/';
+
+const getCuritibaSection = (html, startLabel, endLabels = []) => {
+  const start = html.indexOf(startLabel);
+  if (start < 0) return '';
+  const nextIndexes = endLabels
+    .map((label) => html.indexOf(label, start + startLabel.length))
+    .filter((index) => index > start);
+  const end = nextIndexes.length > 0 ? Math.min(...nextIndexes) : html.length;
+  return html.slice(start, end);
+};
+
+const extractTableRows = (html) => String(html || '').match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+
+const extractTableCells = (rowHtml) => {
+  const cells = String(rowHtml || '').match(/<t[dh]\b[\s\S]*?<\/t[dh]>/gi) || [];
+  return cells.map((cell) => cleanHtmlText(cell));
+};
+
+const extractRowHref = (rowHtml) => {
+  const match = String(rowHtml || '').match(/\bhref\s*=\s*["']([^"']+)["']/i);
+  if (!match) return CURITIBA_ECOMPRAS_URL;
+  const href = decodeHtmlEntities(match[1]).trim();
+  if (!href || /^javascript:/i.test(href) || href === '#') return CURITIBA_ECOMPRAS_URL;
+  try {
+    return new URL(href, CURITIBA_ECOMPRAS_URL).toString();
+  } catch {
+    return CURITIBA_ECOMPRAS_URL;
+  }
+};
+
+const resolveCuritibaModalidade = (identificacao) => {
+  const code = String(identificacao || '').trim().match(/^([A-Z]{2,4})\b/)?.[1] || '';
+  const map = {
+    PE: 'Pregão Eletrônico',
+    DE: 'Dispensa Eletrônica',
+    CE: 'Concorrência Eletrônica',
+    LE: 'Leilão Eletrônico'
+  };
+  return map[code] || code || 'Processo Licitatório';
+};
+
+const resolveCuritibaOrgao = (identificacao) => {
+  const match = String(identificacao || '').trim().match(/^[A-Z]{2,4}\s+\d+\/\d{4}\s+(.+)$/);
+  return match?.[1]?.trim() ? `Prefeitura Municipal de Curitiba - ${match[1].trim()}` : 'Prefeitura Municipal de Curitiba';
+};
+
+const resolveCuritibaNumero = (identificacao) => (
+  String(identificacao || '').match(/\b\d+\/\d{4}\b/)?.[0] || ''
+);
+
+const normalizeCuritibaBid = ({ cells, rowHtml, sectionType }) => {
+  if (!Array.isArray(cells) || cells.length < 3) return null;
+
+  const isSession = sectionType === 'sessao';
+  const identificacao = cells[0];
+  if (!/\b[A-Z]{2,4}\s+\d+\/\d{4}\b/.test(identificacao)) return null;
+
+  const titulo = isSession ? cells[1] : cells[2];
+  const dateText = isSession ? cells[2] : cells[1];
+  const parsedDate = normalizeDateText(dateText);
+  const numero = resolveCuritibaNumero(identificacao);
+  const statusMap = {
+    novos: 'Publicado',
+    recebimento: 'Recebendo propostas',
+    sessao: 'Em sessão'
+  };
+
+  return {
+    id: `curitiba-ecompras-${identificacao.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    fonte: 'e-Compras Curitiba',
+    fonteLogo: '🏙️',
+    titulo: titulo || 'Sem descrição',
+    orgao: resolveCuritibaOrgao(identificacao),
+    cnpjOrgao: '',
+    modalidade: resolveCuritibaModalidade(identificacao),
+    uf: 'PR',
+    municipio: 'Curitiba',
+    valor: null,
+    dataPublicacao: sectionType === 'novos' ? parsedDate : null,
+    dataAbertura: sectionType === 'novos' ? parsedDate : null,
+    dataEncerramento: sectionType === 'recebimento' || isSession ? parsedDate : null,
+    numero,
+    ano: numero.split('/')[1] || '',
+    numeroControlePNCP: '',
+    link: extractRowHref(rowHtml),
+    status: statusMap[sectionType] || 'Publicado'
+  };
+};
+
+const parseCuritibaSection = (sectionHtml, sectionType) => extractTableRows(sectionHtml)
+  .map((rowHtml) => normalizeCuritibaBid({
+    cells: extractTableCells(rowHtml),
+    rowHtml,
+    sectionType
+  }))
+  .filter(Boolean);
+
+const parseCuritibaRowsByPosition = (html) => {
+  const source = String(html || '');
+  const mainStart = source.indexOf('Este é o Portal de Compras Eletrônicas');
+  const safeStart = mainStart >= 0 ? mainStart : 0;
+  const recebimentoIndex = source.indexOf('Processos Licitatórios em Recebimento de Propostas', safeStart);
+  const sessaoIndex = source.indexOf('Processos Licitatórios em Sessão', recebimentoIndex > -1 ? recebimentoIndex : safeStart);
+  const ultimasNoticiasIndex = source.indexOf('Últimas Notícias', sessaoIndex > -1 ? sessaoIndex : safeStart);
+
+  return Array.from(source.matchAll(/<tr\b[\s\S]*?<\/tr>/gi))
+    .map((match) => {
+      const index = match.index || 0;
+      if (index < safeStart) return null;
+      if (ultimasNoticiasIndex > -1 && index > ultimasNoticiasIndex) return null;
+
+      const sectionType =
+        recebimentoIndex > -1 && index >= recebimentoIndex
+          ? (sessaoIndex > -1 && index >= sessaoIndex ? 'sessao' : 'recebimento')
+          : 'novos';
+
+      return normalizeCuritibaBid({
+        cells: extractTableCells(match[0]),
+        rowHtml: match[0],
+        sectionType
+      });
+    })
+    .filter(Boolean);
+};
+
+async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, dataInicio, dataFim }) {
+  const resultados = [];
+  const errors = [];
+
+  if (uf && String(uf).trim().toUpperCase() !== 'PR') {
+    return { resultados, errors };
+  }
+  if (cidade && !String(cidade).toLowerCase().includes('curitiba')) {
+    return { resultados, errors };
+  }
+
+  try {
+    const res = await fetch(CURITIBA_ECOMPRAS_URL, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.7',
+        'Cache-Control': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (compatible; NexosCRM/2.0; +https://e-compras.curitiba.pr.gov.br/)'
+      },
+      signal: AbortSignal.timeout(18000)
+    });
+
+    const html = await res.text().catch(() => '');
+    if (!res.ok) {
+      errors.push(`e-Compras Curitiba: HTTP ${res.status}`);
+      return { resultados, errors };
+    }
+    if (/Access Denied|permission to access/i.test(html)) {
+      errors.push('e-Compras Curitiba: acesso negado pelo portal público');
+      return { resultados, errors };
+    }
+
+    const novos = getCuritibaSection(html, 'Novos Processos Licitatórios', [
+      'Processos Licitatórios em Recebimento de Propostas',
+      'Processos Licitatórios em Sessão'
+    ]);
+    const recebimento = getCuritibaSection(html, 'Processos Licitatórios em Recebimento de Propostas', [
+      'Processos Licitatórios em Sessão',
+      'Últimas Notícias'
+    ]);
+    const sessao = getCuritibaSection(html, 'Processos Licitatórios em Sessão', [
+      'Últimas Notícias'
+    ]);
+
+    const parsedFromPosition = parseCuritibaRowsByPosition(html);
+    const parsedFromSections = [
+      ...parseCuritibaSection(novos, 'novos'),
+      ...parseCuritibaSection(recebimento, 'recebimento'),
+      ...parseCuritibaSection(sessao, 'sessao')
+    ];
+
+    const parsed = (parsedFromPosition.length > 0 ? parsedFromPosition : parsedFromSections)
+      .filter((item) => matchObjeto(`${item.titulo} ${item.orgao} ${item.numero}`, objeto))
+      .filter((item) => isWithinDateRange(item.dataPublicacao || item.dataAbertura || item.dataEncerramento, dataInicio, dataFim))
+      .slice(0, Math.max(10, Math.min(Number(tamanhoPagina) || 20, 100)));
+
+    resultados.push(...parsed);
+  } catch (err) {
+    errors.push(`e-Compras Curitiba: ${err.message}`);
+  }
+
+  return { resultados, errors };
+}
+
 // ─── Deduplicação ─────────────────────────────────────────────────────────────
 
 function deduplicar(items) {
@@ -323,9 +559,55 @@ router.get('/fontes', auth, (req, res) => {
         tipo: 'federal',
         status: 'ativo',
         url: 'https://comprasnet.gov.br'
+      },
+      {
+        id: 'curitiba-ecompras',
+        nome: 'e-Compras Curitiba',
+        descricao: 'Portal de Compras Eletrônicas do Município de Curitiba',
+        logo: '🏙️',
+        tipo: 'municipal',
+        status: 'ativo',
+        url: CURITIBA_ECOMPRAS_URL
       }
     ]
   });
+});
+
+// ─── GET /api/b2g-search/curitiba-ecompras ───────────────────────────────────
+
+router.get('/curitiba-ecompras', auth, async (req, res) => {
+  try {
+    const {
+      objeto = '',
+      uf = '',
+      cidade = '',
+      tamanhoPagina = 20,
+      dataInicio = '',
+      dataFim = ''
+    } = req.query;
+
+    const result = await buscarCuritibaECompras({
+      objeto,
+      uf,
+      cidade,
+      tamanhoPagina: Number(tamanhoPagina),
+      dataInicio,
+      dataFim
+    });
+    const data = deduplicar(result.resultados || []);
+    const status = data.length === 0 && result.errors?.length > 0 ? 502 : 200;
+
+    return res.status(status).json({
+      data,
+      total: data.length,
+      fonte: 'e-Compras Curitiba',
+      erros: result.errors?.length ? result.errors : undefined,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('[b2g-search] Erro e-Compras Curitiba:', err);
+    return res.status(500).json({ error: 'Erro ao buscar no e-Compras Curitiba', data: [], total: 0 });
+  }
 });
 
 // ─── GET /api/b2g-search/search ───────────────────────────────────────────────
@@ -340,7 +622,8 @@ router.get('/search', auth, async (req, res) => {
     dataFim = '',
     fontes = 'pncp,comprasnet',
     ordem = 'data_desc',
-    incluirPropostas = 'true'
+    incluirPropostas = 'true',
+    cidade = ''
   } = req.query;
 
   const fontesAtivas = String(fontes).toLowerCase().split(',').map(f => f.trim());
@@ -366,6 +649,13 @@ router.get('/search', auth, async (req, res) => {
       promises.push(
         buscarComprasNet({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
           .catch(err => ({ resultados: [], errors: [`ComprasNet: ${err.message}`] }))
+      );
+    }
+
+    if (fontesAtivas.includes('curitiba-ecompras') || fontesAtivas.includes('curitiba') || fontesAtivas.includes('ecompras')) {
+      promises.push(
+        buscarCuritibaECompras({ objeto, uf, cidade, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
+          .catch(err => ({ resultados: [], errors: [`e-Compras Curitiba: ${err.message}`] }))
       );
     }
 
