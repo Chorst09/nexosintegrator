@@ -48,6 +48,7 @@ const authenticateToken = async (req, res, next) => {
         accessAutomation: true,
         tenantCompany: {
           select: {
+            status: true,
             accessB2B: true,
             accessB2G: true,
             accessPreSales: true,
@@ -65,6 +66,17 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const actualRole = normalizeRole(user.role);
+    if (!isMaster({ actualRole }) && user.tenantCompany && user.tenantCompany.status !== 'ACTIVE') {
+      const statusMessages = {
+        PROSPECT: 'Empresa aguardando aprovação do usuário MASTER',
+        SUSPENDED: 'Empresa suspensa. Entre em contato com o suporte.',
+        CANCELED: 'Empresa cancelada. Entre em contato com o suporte.'
+      };
+      return res.status(403).json({
+        error: statusMessages[user.tenantCompany.status] || 'Empresa não está liberada para acesso'
+      });
+    }
+
     const legacyRole = actualRole === 'USER' ? 'SELLER' : actualRole;
     const access = resolveUserAccess(actualRole, user);
     const tenantAccess = user.tenantCompany;

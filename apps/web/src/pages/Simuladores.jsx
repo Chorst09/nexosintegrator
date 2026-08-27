@@ -226,7 +226,7 @@ export default function Simuladores() {
         </aside>
 
         {/* ── Conteúdo Principal ── */}
-        <main className="flex-1 overflow-auto">
+        <main className="precificacao-module flex-1 overflow-auto">
           <Suspense fallback={LOADING}>
             {renderContent()}
           </Suspense>

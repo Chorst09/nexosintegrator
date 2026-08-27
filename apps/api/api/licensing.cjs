@@ -146,6 +146,17 @@ const normalizeModuleAccess = (body = {}, fallback = {}) => {
   };
 };
 
+const moduleAccessFromPlan = (plan = {}, overrides = {}) => {
+  const features = plan.features && typeof plan.features === 'object' ? plan.features : {};
+  return normalizeModuleAccess(overrides, {
+    accessB2B: Boolean(features.b2b),
+    accessB2G: Boolean(features.b2g),
+    accessPreSales: Boolean(features.preSales),
+    accessManagement: Boolean(features.management),
+    accessAutomation: Boolean(features.automation)
+  });
+};
+
 const constrainAccessToTenant = (access = {}, tenantCompany = {}) => ({
   accessB2B: Boolean(access.accessB2B && tenantCompany.accessB2B),
   accessB2G: Boolean(access.accessB2G && tenantCompany.accessB2G),
@@ -402,13 +413,8 @@ router.post('/public/checkout/confirm', async (req, res) => {
     const startDate = normalizeDate(req.body?.startDate) || new Date();
     const endDate = normalizeDate(req.body?.endDate) || calculateEndDate(startDate, plan.billingCycle);
     const seats = normalizeInt(req.body?.seats) || plan.seatsIncluded || 1;
-    const moduleAccess = normalizeModuleAccess(req.body?.company, {
-      accessB2B: true,
-      accessB2G: true,
-      accessPreSales: true,
-      accessManagement: true,
-      accessAutomation: true
-    });
+    const moduleAccess = moduleAccessFromPlan(plan, req.body?.company);
+    const reviewNote = `Cadastro via checkout aguardando aprovação do MASTER em ${new Date().toISOString()}`;
 
     const result = await prisma.$transaction(async (tx) => {
       let tenantCompany = null;
@@ -430,8 +436,9 @@ router.post('/public/checkout/confirm', async (req, res) => {
             cnpj: companyCnpj,
             email: companyEmail,
             phone: companyPhone,
-            status: 'ACTIVE',
-            ...moduleAccess
+            status: 'PROSPECT',
+            ...moduleAccess,
+            notes: [tenantCompany.notes, reviewNote].filter(Boolean).join('\n')
           }
         });
       } else {
@@ -442,9 +449,9 @@ router.post('/public/checkout/confirm', async (req, res) => {
             cnpj: companyCnpj,
             email: companyEmail,
             phone: companyPhone,
-            status: 'ACTIVE',
+            status: 'PROSPECT',
             ...moduleAccess,
-            notes: `Provisionado automaticamente pelo checkout publico em ${new Date().toISOString()}`
+            notes: reviewNote
           }
         });
       }
@@ -463,7 +470,7 @@ router.post('/public/checkout/confirm', async (req, res) => {
         data: {
           tenantCompanyId: tenantCompany.id,
           planId: plan.id,
-          status: 'ACTIVE',
+          status: 'PENDING',
           seats,
           startDate,
           endDate,
@@ -543,7 +550,8 @@ router.post('/public/checkout/confirm', async (req, res) => {
           password: adminPasswordInput ? null : passwordToUse
         },
         next: {
-          loginUrl: '/login'
+          loginUrl: '/login',
+          status: 'AWAITING_MASTER_APPROVAL'
         }
       }
     });
@@ -880,6 +888,121 @@ router.put('/companies/:id/license', requireRole(['ADMIN']), async (req, res) =>
       return res.status(409).json({ error: 'paymentReference já utilizada' });
     }
     return res.status(500).json({ error: 'Erro ao salvar licença da empresa' });
+  }
+});
+
+router.post('/companies/:id/approve', requireRole(['ADMIN']), async (req, res) => {
+  try {
+    if (!isMaster(req.user)) {
+      return res.status(403).json({ error: 'Somente MASTER pode aprovar empresas' });
+    }
+
+    const companyId = normalizeString(req.params.id, 120);
+    if (!companyId) {
+      return res.status(400).json({ error: 'ID da empresa inválido' });
+    }
+
+    const approved = await prisma.$transaction(async (tx) => {
+      const company = await tx.tenantCompany.findUnique({
+        where: { id: companyId },
+        include: {
+          users: true,
+          licenses: {
+            include: { plan: true },
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      });
+
+      if (!company) {
+        const notFound = new Error('Empresa não encontrada');
+        notFound.statusCode = 404;
+        throw notFound;
+      }
+
+      const licenseToActivate =
+        company.licenses.find((license) => license.status === 'PENDING' && license.paymentStatus === 'CONFIRMED') ||
+        company.licenses.find((license) => license.paymentStatus === 'CONFIRMED') ||
+        company.licenses[0] ||
+        null;
+
+      if (!licenseToActivate) {
+        const noLicense = new Error('Cadastre ou confirme uma licença antes de aprovar a empresa');
+        noLicense.statusCode = 400;
+        throw noLicense;
+      }
+
+      await tx.companyLicense.updateMany({
+        where: {
+          tenantCompanyId: companyId,
+          status: 'ACTIVE',
+          id: { not: licenseToActivate.id }
+        },
+        data: { status: 'EXPIRED' }
+      });
+
+      await tx.companyLicense.update({
+        where: { id: licenseToActivate.id },
+        data: {
+          status: 'ACTIVE',
+          paymentStatus: licenseToActivate.paymentStatus === 'CONFIRMED' ? 'CONFIRMED' : licenseToActivate.paymentStatus,
+          paymentConfirmedAt: licenseToActivate.paymentConfirmedAt || new Date()
+        }
+      });
+
+      await tx.user.updateMany({
+        where: {
+          tenantCompanyId: companyId,
+          role: { in: ['ADMIN', 'MASTER'] }
+        },
+        data: {
+          accessB2B: Boolean(company.accessB2B),
+          accessB2G: Boolean(company.accessB2G),
+          accessPreSales: Boolean(company.accessPreSales),
+          accessManagement: Boolean(company.accessManagement),
+          accessAutomation: Boolean(company.accessAutomation)
+        }
+      });
+
+      await tx.user.updateMany({
+        where: {
+          tenantCompanyId: companyId,
+          role: { notIn: ['ADMIN', 'MASTER'] }
+        },
+        data: {
+          accessB2B: Boolean(company.accessB2B),
+          accessB2G: Boolean(company.accessB2G),
+          accessPreSales: Boolean(company.accessPreSales),
+          accessManagement: false,
+          accessAutomation: false
+        }
+      });
+
+      const approvalNote = `Empresa aprovada por ${req.user.email || req.user.name || 'MASTER'} em ${new Date().toISOString()}`;
+      await tx.tenantCompany.update({
+        where: { id: companyId },
+        data: {
+          status: 'ACTIVE',
+          notes: [company.notes, approvalNote].filter(Boolean).join('\n')
+        }
+      });
+
+      return tx.tenantCompany.findUnique({
+        where: { id: companyId },
+        include: {
+          users: true,
+          licenses: {
+            include: { plan: true },
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      });
+    });
+
+    return res.json({ data: mapCompanyWithLicense(approved) });
+  } catch (error) {
+    console.error('Erro ao aprovar empresa:', error);
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Erro ao aprovar empresa' });
   }
 });
 

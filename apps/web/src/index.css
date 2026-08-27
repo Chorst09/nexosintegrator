@@ -528,8 +528,81 @@ h4 {
 }
 
 .precificacao-module .bg-amber-50,
-.precificacao-module .bg-amber-50\/30 {
-  background: rgb(245 158 11 / 0.14);
+.precificacao-module .bg-amber-50\/30,
+.precificacao-module .bg-orange-50,
+.precificacao-module .bg-orange-500\/15,
+.precificacao-module .bg-orange-500\/20,
+.precificacao-module .bg-orange-500\/30,
+.precificacao-module .bg-orange-900\/20,
+.precificacao-module .bg-amber-900\/30,
+.precificacao-module .bg-amber-900\/40,
+.precificacao-module .bg-yellow-900\/30 {
+  background: linear-gradient(
+    135deg,
+    rgb(34 211 238 / 0.18) 0%,
+    rgb(20 184 166 / 0.13) 48%,
+    rgb(16 185 129 / 0.16) 100%
+  );
+  box-shadow: inset 0 1px 0 rgb(103 232 249 / 0.22);
+}
+
+.precificacao-module .from-orange-600,
+.precificacao-module .from-orange-900\/30,
+.precificacao-module .from-orange-950\/80,
+.precificacao-module .from-amber-900\/30,
+.precificacao-module .from-amber-900\/40 {
+  --tw-gradient-from: rgb(34 211 238 / 0.26) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(34 211 238 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(20 184 166 / 0.18), rgb(16 185 129 / 0.22);
+}
+
+.precificacao-module .to-orange-800,
+.precificacao-module .to-orange-900\/40,
+.precificacao-module .to-orange-900\/60,
+.precificacao-module .to-yellow-800\/20,
+.precificacao-module .to-yellow-800\/30 {
+  --tw-gradient-to: rgb(16 185 129 / 0.24) var(--tw-gradient-to-position);
+}
+
+.precificacao-module .border-amber-300,
+.precificacao-module .border-amber-500\/30,
+.precificacao-module .border-amber-500\/40,
+.precificacao-module .border-orange-200,
+.precificacao-module .border-orange-300,
+.precificacao-module .border-orange-500\/30,
+.precificacao-module .border-orange-500\/50,
+.precificacao-module .border-orange-500\/60,
+.precificacao-module .border-orange-600,
+.precificacao-module .border-yellow-500\/30 {
+  border-color: rgb(103 232 249 / 0.42);
+}
+
+.precificacao-module .text-amber-100,
+.precificacao-module .text-amber-200,
+.precificacao-module .text-amber-300,
+.precificacao-module .text-amber-800,
+.precificacao-module .text-orange-300,
+.precificacao-module .text-orange-400,
+.precificacao-module .text-orange-600,
+.precificacao-module .text-orange-700,
+.precificacao-module .text-orange-800 {
+  color: rgb(165 243 252);
+}
+
+.precificacao-module .focus\:border-orange-400:focus,
+.precificacao-module .focus\:border-orange-500:focus {
+  border-color: rgb(103 232 249 / 0.72);
+}
+
+.precificacao-module .focus\:ring-orange-400\/20:focus,
+.precificacao-module .focus\:ring-orange-500:focus {
+  --tw-ring-color: rgb(34 211 238 / 0.22);
+}
+
+.precificacao-module .hover\:shadow-orange-500\/20:hover,
+.precificacao-module .hover\:shadow-orange-500\/25:hover {
+  --tw-shadow-color: rgb(34 211 238 / 0.22);
+  --tw-shadow: var(--tw-shadow-colored);
 }
 
 .precificacao-module .bg-emerald-50,

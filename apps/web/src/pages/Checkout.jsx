@@ -29,6 +29,7 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [confirmingReturn, setConfirmingReturn] = useState(false);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
   const [preferenceId, setPreferenceId] = useState(null);
   const [adminForm, setAdminForm] = useState({
     name: '',
@@ -282,8 +283,7 @@ export default function Checkout() {
         }
 
         clearPendingCheckout();
-        const loginEmail = encodeURIComponent(String(pendingAdmin.email || '').trim().toLowerCase());
-        navigate(`/login?checkout=success${loginEmail ? `&email=${loginEmail}` : ''}`);
+        setAwaitingApproval(true);
       } catch (err) {
         setError(err.message || 'Erro ao confirmar pagamento');
       } finally {
@@ -452,16 +452,10 @@ export default function Checkout() {
           
           clearPendingCheckout();
           
-          const loginEmail = encodeURIComponent(String(adminForm.email || '').trim().toLowerCase());
-          
           // Mostrar mensagem de sucesso antes de redirecionar
           setError('');
           setLoading(false);
-          
-          // Aguardar um pouco para o usuário ver a mensagem
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          navigate(`/login?checkout=success${loginEmail ? `&email=${loginEmail}` : ''}`);
+          setAwaitingApproval(true);
           return;
           
         } catch (simError) {
@@ -555,7 +549,26 @@ export default function Checkout() {
 
           {/* Formulário */}
           <div className="lg:col-span-2">
-            {step === 1 && (
+            {awaitingApproval && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-[var(--crm-border)] p-8">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-300" />
+                </div>
+                <h2 className="mt-6 text-2xl font-bold text-[var(--crm-ink)]">Cadastro recebido</h2>
+                <p className="mt-2 text-[var(--crm-muted)]">
+                  Seu pagamento foi confirmado e a empresa foi enviada para revisão. O acesso será liberado após o usuário MASTER conferir os módulos e aprovar a empresa.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  className="mt-8 crm-btn crm-btn-secondary"
+                >
+                  Ir para login
+                </button>
+              </div>
+            )}
+
+            {!awaitingApproval && step === 1 && (
               <form onSubmit={handleSubmitStep1} className="bg-white dark:bg-slate-900 rounded-2xl border border-[var(--crm-border)] p-8">
                 <h2 className="text-2xl font-bold text-[var(--crm-ink)]">Dados da Empresa</h2>
                 <p className="mt-2 text-[var(--crm-muted)]">Preencha os dados para continuar</p>
@@ -800,11 +813,11 @@ export default function Checkout() {
               </form>
             )}
 
-            {step === 2 && (
+            {!awaitingApproval && step === 2 && (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-[var(--crm-border)] p-8">
                 <h2 className="text-2xl font-bold text-[var(--crm-ink)]">Pagamento</h2>
                 <p className="mt-2 text-[var(--crm-muted)]">
-                  {confirmingReturn ? 'Pagamento aprovado. Confirmando sua conta...' : 'Finalize sua assinatura'}
+                  {confirmingReturn ? 'Pagamento aprovado. Enviando cadastro para aprovação...' : 'Finalize sua assinatura'}
                 </p>
                 
                 {error && (

@@ -3673,7 +3673,7 @@ export default function Calculadoras({
                     <button
                       type="button"
                       onClick={() => openProposal(proposal, { keepModalOpen: true })}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 text-sm font-semibold text-amber-100 hover:bg-amber-500/25"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-cyan-300/40 bg-gradient-to-br from-cyan-500/20 via-teal-500/10 to-emerald-500/20 px-3 text-sm font-semibold text-cyan-100 shadow-inner shadow-cyan-300/10 hover:border-cyan-200/60 hover:from-cyan-500/25 hover:to-emerald-500/25"
                     >
                       <Pencil className="w-4 h-4" />
                       Editar
@@ -4857,7 +4857,7 @@ export default function Calculadoras({
                       <p className="text-sm text-slate-400">
                         Campos de impostos e bases por regime tributário. Reforma tributária: use regimes com IBS/CBS/IS.
                       </p>
-                      <p className="text-xs text-amber-300/90 mt-1">
+                      <p className="text-xs text-cyan-200/90 mt-1">
                         Referência oficial de transição: 2026 com CBS 0,9% e IBS 0,1%. Alíquotas cheias devem ser parametrizadas.
                       </p>
                     </div>

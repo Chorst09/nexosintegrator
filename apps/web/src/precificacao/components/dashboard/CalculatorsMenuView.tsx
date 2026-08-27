@@ -21,7 +21,7 @@ const CalculatorCard = ({ title, description, icon, calculatorId, color, onNavig
     'border-l-green-500': 'from-green-600 to-green-800',
     'border-l-teal-500': 'from-teal-600 to-teal-800',
     'border-l-cyan-500': 'from-cyan-600 to-cyan-800',
-    'border-l-orange-500': 'from-orange-600 to-orange-800',
+    'border-l-system-gradient': 'from-cyan-400/70 via-teal-400/50 to-emerald-500/60',
   };
 
   const hoverShadowMap: { [key: string]: string } = {
@@ -30,7 +30,7 @@ const CalculatorCard = ({ title, description, icon, calculatorId, color, onNavig
     'border-l-green-500': 'hover:shadow-green-500/25',
     'border-l-teal-500': 'hover:shadow-teal-500/25',
     'border-l-cyan-500': 'hover:shadow-cyan-500/25',
-    'border-l-orange-500': 'hover:shadow-orange-500/25',
+    'border-l-system-gradient': 'hover:shadow-cyan-500/25',
   };
 
   const gradient = gradientMap[color] || 'from-blue-600 to-blue-800';
@@ -129,9 +129,9 @@ const CalculatorsMenuView = ({ onNavigateToCalculator }: CalculatorsMenuViewProp
           <CalculatorCard
             title="Rede Man/MPLS Radio"
             description="Calcule valores para internet via rádio"
-            icon={<Wifi className="w-5 h-5 text-orange-500" />}
+            icon={<Wifi className="w-5 h-5 text-cyan-200" />}
             calculatorId="calculator-internet-man-radio"
-            color="border-l-orange-500"
+            color="border-l-system-gradient"
             onNavigate={onNavigateToCalculator}
           />
           <CalculatorCard

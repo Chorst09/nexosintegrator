@@ -12,6 +12,58 @@ const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY || process.e
 const MERCADO_PAGO_WEBHOOK_TOKEN = process.env.MERCADO_PAGO_WEBHOOK_TOKEN || process.env.MERCADOPAGO_WEBHOOK_SECRET || '';
 const FORCE_SIMULATED_PAYMENT = process.env.FORCE_SIMULATED_PAYMENT === 'true';
 
+function moduleAccessByCheckoutPlan(planId) {
+  const normalized = String(planId || '').trim().toLowerCase();
+  return {
+    accessB2B: normalized === 'b2b' || normalized === 'completo',
+    accessB2G: normalized === 'b2g' || normalized === 'completo',
+    accessPreSales: normalized === 'presales' || normalized === 'completo',
+    accessManagement: normalized === 'completo',
+    accessAutomation: normalized === 'completo'
+  };
+}
+
+async function ensureCheckoutLicensePlan(db, subscription) {
+  const access = moduleAccessByCheckoutPlan(subscription.planId);
+  const code = `CHECKOUT_${String(subscription.planId || 'completo').trim().toUpperCase()}`;
+  return db.licensePlan.upsert({
+    where: { code },
+    create: {
+      code,
+      name: subscription.planName || 'Plano Checkout',
+      description: 'Plano originado no checkout público',
+      billingCycle: 'MONTHLY',
+      price: Number(subscription.price) || 0,
+      currency: 'BRL',
+      seatsIncluded: subscription.planId === 'completo' ? 10 : 5,
+      sortOrder: 90,
+      features: {
+        b2b: access.accessB2B,
+        b2g: access.accessB2G,
+        preSales: access.accessPreSales,
+        management: access.accessManagement,
+        automation: access.accessAutomation,
+        integrations: access.accessAutomation,
+        supportLevel: subscription.planId === 'completo' ? 'priority' : 'standard'
+      }
+    },
+    update: {
+      name: subscription.planName || 'Plano Checkout',
+      price: Number(subscription.price) || 0,
+      isActive: true,
+      features: {
+        b2b: access.accessB2B,
+        b2g: access.accessB2G,
+        preSales: access.accessPreSales,
+        management: access.accessManagement,
+        automation: access.accessAutomation,
+        integrations: access.accessAutomation,
+        supportLevel: subscription.planId === 'completo' ? 'priority' : 'standard'
+      }
+    }
+  });
+}
+
 /**
  * POST /api/checkout/create-preference
  * Criar preferência de pagamento no Mercado Pago
@@ -446,6 +498,8 @@ router.post('/setup-admin', async (req, res) => {
       return res.status(404).json({ error: 'Empresa não encontrada' });
     }
 
+    const access = moduleAccessByCheckoutPlan(subscription.planId);
+
     // Criar usuário admin
     const hashedPassword = await bcrypt.hash(password, 10);
     
@@ -457,9 +511,11 @@ router.post('/setup-admin', async (req, res) => {
         role: 'ADMIN',
         tenantCompanyId: company.id,
         isCompanyOwner: true,
-        accessB2B: true,
-        accessB2G: true,
-        accessPreSales: true,
+        accessB2B: Boolean(access.accessB2B && company.accessB2B),
+        accessB2G: Boolean(access.accessB2G && company.accessB2G),
+        accessPreSales: Boolean(access.accessPreSales && company.accessPreSales),
+        accessManagement: Boolean(access.accessManagement && company.accessManagement),
+        accessAutomation: Boolean(access.accessAutomation && company.accessAutomation),
         quota: 999999
       }
     });
@@ -507,14 +563,39 @@ async function createCompanyAndAdmin(subscription) {
       };
     }
 
-    // Criar empresa
+    const access = moduleAccessByCheckoutPlan(subscription.planId);
+
+    // Criar empresa aguardando revisão e aprovação do usuário MASTER
     const company = await prisma.tenantCompany.create({
       data: {
         name: subscription.companyName,
         cnpj: subscription.document,
         email: subscription.email,
         phone: subscription.phone,
-        status: 'ACTIVE'
+        status: 'PROSPECT',
+        ...access,
+        notes: `Cadastro via checkout aguardando aprovação do MASTER em ${new Date().toISOString()}`
+      }
+    });
+
+    const plan = await ensureCheckoutLicensePlan(prisma, subscription);
+    const paymentReference =
+      subscription.paymentData?.paymentId ||
+      subscription.paymentData?.preferenceId ||
+      subscription.id;
+    await prisma.companyLicense.create({
+      data: {
+        tenantCompanyId: company.id,
+        planId: plan.id,
+        status: 'PENDING',
+        seats: subscription.planId === 'completo' ? 10 : 5,
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        priceAtPurchase: Number(subscription.price) || plan.price || 0,
+        notes: `Assinatura (${subscription.planName}) via checkout público aguardando aprovação`,
+        paymentReference: `CHECKOUT-${paymentReference}`,
+        paymentStatus: 'CONFIRMED',
+        paymentConfirmedAt: new Date()
       }
     });
 

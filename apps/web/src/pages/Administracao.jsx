@@ -359,8 +359,8 @@ const getCompanyStatusMeta = (status) => {
 
   if (normalized === 'PROSPECT') {
     return {
-      label: 'Prospect',
-      className: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
+      label: 'Aguardando aprovação',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/70 dark:text-amber-100'
     };
   }
 
@@ -382,6 +382,27 @@ const getCompanyStatusMeta = (status) => {
     label: normalized || 'Indefinido',
     className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
   };
+};
+
+const DEFAULT_COMPANY_FORM = {
+  companyName: '',
+  document: '',
+  email: '',
+  phone: '',
+  responsibleName: '',
+  responsibleEmail: '',
+  responsiblePhone: '',
+  adminName: '',
+  adminEmail: '',
+  adminPassword: '',
+  adminConfirmPassword: '',
+  planCode: 'MENSAL',
+  status: 'PROSPECT',
+  accessB2B: true,
+  accessB2G: false,
+  accessPreSales: false,
+  accessManagement: false,
+  accessAutomation: false
 };
 
 const formatDateLabel = (value) => {
@@ -433,20 +454,7 @@ export default function Administracao() {
   const [licensingCompanies, setLicensingCompanies] = useState([]);
   const [loadingLicensing, setLoadingLicensing] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
-  const [companyForm, setCompanyForm] = useState({
-    name: '',
-    legalName: '',
-    cnpj: '',
-    email: '',
-    phone: '',
-    status: 'PROSPECT',
-    notes: '',
-    accessB2B: true,
-    accessB2G: false,
-    accessPreSales: false,
-    accessManagement: false,
-    accessAutomation: false
-  });
+  const [companyForm, setCompanyForm] = useState({ ...DEFAULT_COMPANY_FORM });
   const [savingCompany, setSavingCompany] = useState(false);
   const [licenseDrafts, setLicenseDrafts] = useState({});
   const [savingLicenseFor, setSavingLicenseFor] = useState(null);
@@ -491,7 +499,7 @@ export default function Administracao() {
     cnpj: '',
     email: '',
     phone: '',
-    status: 'ACTIVE',
+    status: 'PROSPECT',
     segment: '',
     notes: '',
     accessB2B: true,
@@ -501,6 +509,7 @@ export default function Administracao() {
     accessAutomation: false
   });
   const [savingCompanyEdit, setSavingCompanyEdit] = useState(false);
+  const [approvingCompanyId, setApprovingCompanyId] = useState(null);
   const [savingSecurity, setSavingSecurity] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
@@ -1613,20 +1622,7 @@ export default function Administracao() {
   };
 
   const openNewCompany = () => {
-    setCompanyForm({
-      name: '',
-      legalName: '',
-      cnpj: '',
-      email: '',
-      phone: '',
-      status: 'PROSPECT',
-      notes: '',
-      accessB2B: true,
-      accessB2G: false,
-      accessPreSales: false,
-      accessManagement: false,
-      accessAutomation: false
-    });
+    setCompanyForm({ ...DEFAULT_COMPANY_FORM });
     setShowCompanyModal(true);
   };
 
@@ -1671,7 +1667,7 @@ export default function Administracao() {
         throw new Error('As senhas do administrador não conferem');
       }
 
-      // Usar a API de confirmação de checkout para criar empresa + licença + usuário admin
+      // Usar a API de confirmação de checkout para criar empresa, licença e usuário admin pendentes de aprovação.
       const payload = {
         paymentId: 'MANUAL-' + Date.now(),
         paymentReference: 'MANUAL-' + Date.now(),
@@ -1712,32 +1708,13 @@ export default function Administracao() {
       console.log('✅ Empresa criada com sucesso:', data);
 
       setShowCompanyModal(false);
-      setCompanyForm({
-        companyName: '',
-        document: '',
-        email: '',
-        phone: '',
-        responsibleName: '',
-        responsibleEmail: '',
-        responsiblePhone: '',
-        adminName: '',
-        adminEmail: '',
-        adminPassword: '',
-        adminConfirmPassword: '',
-        planCode: 'MENSAL',
-        status: 'ACTIVE',
-        accessB2B: true,
-        accessB2G: false,
-        accessPreSales: false,
-        accessManagement: false,
-        accessAutomation: false
-      });
+      setCompanyForm({ ...DEFAULT_COMPANY_FORM });
 
       // Recarregar lista de empresas
       await loadManagementCompanies();
       
       // Mostrar mensagem de sucesso
-      alert(`Empresa "${companyForm.companyName}" criada com sucesso!\n\nUsuário Admin:\nEmail: ${companyForm.adminEmail}\nSenha: ${companyForm.adminPassword}\n\nO usuário já pode fazer login no sistema.`);
+      alert(`Empresa "${companyForm.companyName}" cadastrada e aguardando aprovação do MASTER.\n\nUsuário Admin:\nEmail: ${companyForm.adminEmail}\nSenha: ${companyForm.adminPassword}\n\nConfira módulos e políticas de acesso em Gestão de Empresas antes de aprovar.`);
       
     } catch (e) {
       console.error('❌ Erro ao criar empresa:', e);
@@ -1798,6 +1775,36 @@ export default function Administracao() {
       setError(e.message || 'Erro ao salvar licença');
     } finally {
       setSavingLicenseFor(null);
+    }
+  };
+
+  const approveCompany = async (company) => {
+    if (!company?.id) return;
+    const modules = companyModuleBadges(company).join(', ') || 'nenhum módulo';
+    const confirmed = window.confirm(
+      `Aprovar a empresa "${company.name}"?\n\nConfira antes de aprovar:\n- Plano: ${company.planName || 'Sem plano'}\n- Módulos liberados: ${modules}\n- Políticas de acesso conforme a compra\n\nApós aprovar, o admin da empresa poderá acessar o sistema.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setApprovingCompanyId(company.id);
+      setError(null);
+
+      const res = await fetch(API_ENDPOINTS.licensing.approveCompany(company.id), {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Erro ao aprovar empresa: ${res.status}`);
+
+      await Promise.all([loadLicensingData(), loadManagementCompanies()]);
+    } catch (e) {
+      console.error(e);
+      setError(e.message || 'Erro ao aprovar empresa');
+    } finally {
+      setApprovingCompanyId(null);
     }
   };
 
@@ -2453,33 +2460,14 @@ export default function Administracao() {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gestão de Empresas</h2>
                   <p className="text-sm text-gray-600 dark:text-slate-200 mt-1">
-                    Gerencie as empresas compradoras do software, licenças, módulos contratados e administradores.
+                    Empresas compradoras entram aqui para revisão. Confira plano, módulos e políticas antes de aprovar o acesso.
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
                       setShowCompanyModal(true);
-                      setCompanyForm({
-                        companyName: '',
-                        document: '',
-                        email: '',
-                        phone: '',
-                        responsibleName: '',
-                        responsibleEmail: '',
-                        responsiblePhone: '',
-                        adminName: '',
-                        adminEmail: '',
-                        adminPassword: '',
-                        adminConfirmPassword: '',
-                        planCode: 'MENSAL',
-                        status: 'ACTIVE',
-                        accessB2B: true,
-                        accessB2G: false,
-                        accessPreSales: false,
-                        accessManagement: false,
-                        accessAutomation: false
-                    });
+                      setCompanyForm({ ...DEFAULT_COMPANY_FORM });
                   }}
                   className="crm-btn crm-btn-primary"
                 >
@@ -2596,6 +2584,16 @@ export default function Administracao() {
                               >
                                 Editar
                               </button>
+                              {String(company.status || '').toUpperCase() !== 'ACTIVE' && (
+                                <button
+                                  onClick={() => approveCompany(company)}
+                                  disabled={approvingCompanyId === company.id}
+                                  title="Aprovar empresa após conferir módulos e políticas"
+                                  className="text-emerald-600 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300 dark:hover:text-emerald-200"
+                                >
+                                  {approvingCompanyId === company.id ? 'Aprovando...' : 'Aprovar'}
+                                </button>
+                              )}
                               <button
                                 onClick={() => deleteCompany(company)}
                                 className="text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
@@ -3260,7 +3258,7 @@ export default function Administracao() {
               >
                 <option value="ACTIVE">Ativa</option>
                 <option value="LEAD">Lead</option>
-                <option value="PROSPECT">Prospect</option>
+                <option value="PROSPECT">Aguardando aprovação</option>
                 <option value="SUSPENDED">Suspensa</option>
                 <option value="CANCELED">Cancelada</option>
                 <option value="INACTIVE">Inativa</option>
@@ -3766,7 +3764,7 @@ export default function Administracao() {
           <div className="space-y-4 pt-4 border-t">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Usuário Administrador</h3>
             <p className="text-sm text-gray-600 dark:text-slate-300">
-              Este usuário será criado automaticamente com acesso total ao sistema.
+              Este usuário será criado, mas só poderá acessar após aprovação da empresa pelo MASTER.
             </p>
             
             <div>
@@ -3846,8 +3844,8 @@ export default function Administracao() {
                   onChange={(e) => setCompanyForm((prev) => ({ ...prev, status: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                 >
+                  <option value="PROSPECT">Aguardando aprovação</option>
                   <option value="ACTIVE">Ativa</option>
-                  <option value="PROSPECT">Prospect</option>
                   <option value="SUSPENDED">Suspensa</option>
                   <option value="CANCELED">Cancelada</option>
                 </select>
@@ -3868,7 +3866,7 @@ export default function Administracao() {
               disabled={savingCompany}
               className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50"
             >
-              {savingCompany ? 'Criando empresa...' : 'Criar Empresa e Usuário Admin'}
+              {savingCompany ? 'Criando empresa...' : 'Cadastrar Empresa para Aprovação'}
             </button>
           </div>
         </form>

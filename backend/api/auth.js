@@ -79,6 +79,7 @@ router.post('/login', async (req, res) => {
           accessAutomation: true,
           tenantCompany: {
             select: {
+              status: true,
               accessB2B: true,
               accessB2G: true,
               accessPreSales: true,
@@ -113,6 +114,18 @@ router.post('/login', async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const actualRole = normalizeRole(user.role);
+    if (!isMaster({ actualRole }) && user.tenantCompany && user.tenantCompany.status !== 'ACTIVE') {
+      const statusMessages = {
+        PROSPECT: 'Empresa aguardando aprovação do usuário MASTER',
+        SUSPENDED: 'Empresa suspensa. Entre em contato com o suporte.',
+        CANCELED: 'Empresa cancelada. Entre em contato com o suporte.'
+      };
+      return res.status(403).json({
+        error: statusMessages[user.tenantCompany.status] || 'Empresa não está liberada para acesso'
+      });
     }
 
     // Gerar token JWT
