@@ -598,8 +598,8 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
           }
           errors.push('PNCP indisponível no momento (HTTP ' + res.status + ')');
           return { resultados, errors };
-        }          return { resultados, errors };
         }
+        
         if (!res.ok) {
           errors.push(`PNCP HTTP ${res.status}`);
           return { resultados, errors };
