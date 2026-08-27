@@ -144,7 +144,8 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
   const modalidades = [6, 8, 9, 4, 5]; // Pregão, Dispensa, Inexigibilidade, Concorrência, Tomada de Preços
   const resultados = [];
 
-  const fetches = modalidades.map(async (mod) => {
+  // Buscar modalidades em sequência com timeout aumentado e retry
+  for (const mod of modalidades) {
     try {
       const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
       url.searchParams.set('dataInicial', dataI);
@@ -154,41 +155,67 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
       url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
       if (uf) url.searchParams.set('uf', uf);
 
-      const res = await fetch(url.toString(), {
-        headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-        signal: AbortSignal.timeout(15000)
-      });
-      if (!res.ok) return [];
-      const data = await res.json().catch(() => null);
-      const items = Array.isArray(data?.data) ? data.data : [];
-      return items
-        .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
-        .map(item => ({
-          id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
-          fonte: 'PNCP',
-          fonteLogo: '🏛️',
-          titulo: item.objetoCompra || 'Sem descrição',
-          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-          modalidade: item.modalidadeNome || '',
-          uf: item.unidadeOrgao?.ufSigla || uf || '',
-          municipio: item.unidadeOrgao?.municipioNome || '',
-          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
-          dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
-          dataAbertura: item.dataAberturaProposta,
-          dataEncerramento: item.dataEncerramentoProposta,
-          numero: item.numeroCompra || '',
-          ano: item.anoCompra || '',
-          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-          status: item.situacaoCompraNome || 'Publicado',
-          situacaoCodigo: item.codigoSituacaoCompra
-        }));
-    } catch { return []; }
-  });
-
-  const results = await Promise.allSettled(fetches);
-  for (const r of results) {
-    if (r.status === 'fulfilled') resultados.push(...r.value);
+      let retries = 2;
+      let lastError = null;
+      
+      while (retries >= 0) {
+        try {
+          const res = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
+            signal: AbortSignal.timeout(120000) // Timeout aumentado para 120s
+          });
+          
+          if (!res.ok) {
+            if (retries > 0) {
+              await new Promise(r => setTimeout(r, 1000)); // Aguardar 1s antes de retry
+              retries--;
+              continue;
+            }
+            break;
+          }
+          
+          const data = await res.json().catch(() => null);
+          const items = Array.isArray(data?.data) ? data.data : [];
+          const filtered = items
+            .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+            .map(item => ({
+              id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+              fonte: 'PNCP',
+              fonteLogo: '🏛️',
+              titulo: item.objetoCompra || 'Sem descrição',
+              orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+              modalidade: item.modalidadeNome || '',
+              uf: item.unidadeOrgao?.ufSigla || uf || '',
+              municipio: item.unidadeOrgao?.municipioNome || '',
+              valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+              dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
+              dataAbertura: item.dataAberturaProposta,
+              dataEncerramento: item.dataEncerramentoProposta,
+              numero: item.numeroCompra || '',
+              ano: item.anoCompra || '',
+              link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+              status: item.situacaoCompraNome || 'Publicado',
+              situacaoCodigo: item.codigoSituacaoCompra
+            }));
+          
+          resultados.push(...filtered);
+          break; // Sucesso, sair do loop de retries
+        } catch (err) {
+          lastError = err;
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries--;
+          } else {
+            console.warn(`⚠️ PNCP mod ${mod} falhou após retries:`, err.message);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`⚠️ PNCP mod ${mod} erro:`, err.message);
+    }
   }
+  
   return resultados;
 }
 
@@ -201,35 +228,60 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
     url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
     if (uf) url.searchParams.set('uf', uf);
 
-    const res = await fetch(url.toString(), {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!res.ok) return [];
-    const data = await res.json().catch(() => null);
-    const items = Array.isArray(data?.data) ? data.data : [];
-    return items
-      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
-      .map(item => ({
-        id: `pncp-prop-${item.numeroControlePNCP || item.anoCompra + item.numeroCompra + item.orgaoEntidade?.cnpj}`,
-        fonte: 'PNCP',
-        fonteLogo: '🏛️',
-        titulo: item.objetoCompra || 'Sem descrição',
-        orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-        modalidade: item.modalidadeNome || '',
-        uf: item.unidadeOrgao?.ufSigla || uf || '',
-        municipio: item.unidadeOrgao?.municipioNome || '',
-        valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
-        dataPublicacao: item.dataPublicacaoPncp,
-        dataAbertura: item.dataAberturaProposta,
-        dataEncerramento: item.dataEncerramentoProposta,
-        numero: item.numeroCompra || '',
-        ano: item.anoCompra || '',
-        link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-        status: 'Em proposta',
-        situacaoCodigo: item.codigoSituacaoCompra
-      }));
-  } catch { return []; }
+    let retries = 2;
+    while (retries >= 0) {
+      try {
+        const res = await fetch(url.toString(), {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
+          signal: AbortSignal.timeout(120000) // Timeout aumentado para 120s
+        });
+        
+        if (!res.ok) {
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries--;
+            continue;
+          }
+          return [];
+        }
+        
+        const data = await res.json().catch(() => null);
+        const items = Array.isArray(data?.data) ? data.data : [];
+        return items
+          .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+          .map(item => ({
+            id: `pncp-prop-${item.numeroControlePNCP || item.anoCompra + item.numeroCompra + item.orgaoEntidade?.cnpj}`,
+            fonte: 'PNCP',
+            fonteLogo: '🏛️',
+            titulo: item.objetoCompra || 'Sem descrição',
+            orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+            modalidade: item.modalidadeNome || '',
+            uf: item.unidadeOrgao?.ufSigla || uf || '',
+            municipio: item.unidadeOrgao?.municipioNome || '',
+            valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+            dataPublicacao: item.dataPublicacaoPncp,
+            dataAbertura: item.dataAberturaProposta,
+            dataEncerramento: item.dataEncerramentoProposta,
+            numero: item.numeroCompra || '',
+            ano: item.anoCompra || '',
+            link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+            status: 'Em proposta',
+            situacaoCodigo: item.codigoSituacaoCompra
+          }));
+      } catch (err) {
+        if (retries > 0) {
+          await new Promise(r => setTimeout(r, 1000));
+          retries--;
+        } else {
+          console.warn('⚠️ PNCP Proposta falhou após retries:', err.message);
+          return [];
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ PNCP Proposta erro:', err.message);
+    return [];
+  }
 }
 
 async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20, incluirPropostas = true }) {
@@ -244,7 +296,7 @@ async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina 
 
   const res = await fetch(url.toString(), {
     headers: getAuthHeaders(),
-    signal: AbortSignal.timeout(22000)
+    signal: AbortSignal.timeout(90000)
   });
   if (!res.ok) {
     const publicacoes = await buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina });
@@ -290,7 +342,7 @@ async function buscarComprasGovProxy(tipo, params) {
 
   const res = await fetch(url.toString(), {
     headers: { 'Accept': 'application/json' },
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(70000)
   });
   if (!res.ok) return [];
   const payload = await res.json().catch(() => null);
@@ -472,7 +524,7 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, dataInicio, dataFim,
 
   const res = await fetch(url.toString(), {
     headers: getAuthHeaders(),
-    signal: AbortSignal.timeout(22000)
+    signal: AbortSignal.timeout(90000)
   });
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
