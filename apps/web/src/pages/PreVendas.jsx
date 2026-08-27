@@ -24,7 +24,11 @@ import {
   RefreshCcw,
   X,
   CheckSquare,
-  Maximize2
+  Maximize2,
+  Mail,
+  MapPin,
+  Tags,
+  Globe2
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -141,6 +145,139 @@ const DOUGHNUT_OPTIONS = {
 };
 
 const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+const partnerTone = {
+  distributor: {
+    Icon: Network,
+    label: 'Distribuidor',
+    ring: '#18c8df',
+    topBar: 'from-orange-400/55 via-cyan-300/50 to-emerald-400/35',
+    glow: 'from-cyan-500/22 via-teal-500/12 to-emerald-500/12',
+    hover: 'hover:border-cyan-300/60 hover:shadow-cyan-500/20',
+    iconBox: 'border-cyan-300/35 bg-cyan-400/12 text-cyan-100',
+    title: 'group-hover:text-cyan-100',
+    chip: 'border-cyan-300/20 bg-cyan-400/10 text-cyan-100'
+  },
+  supplier: {
+    Icon: Package,
+    label: 'Fornecedor',
+    ring: '#18c8df',
+    topBar: 'from-orange-400/55 via-cyan-300/50 to-emerald-400/35',
+    glow: 'from-cyan-500/22 via-emerald-500/12 to-yellow-500/12',
+    hover: 'hover:border-cyan-300/60 hover:shadow-cyan-500/20',
+    iconBox: 'border-cyan-300/35 bg-cyan-400/12 text-cyan-100',
+    title: 'group-hover:text-cyan-100',
+    chip: 'border-cyan-300/20 bg-cyan-400/10 text-cyan-100'
+  }
+};
+
+const normalizeTextList = (...values) => {
+  const source = values.find((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    return String(value || '').trim();
+  });
+  if (!source) return '';
+  if (Array.isArray(source)) return source.filter(Boolean).join(', ');
+  return String(source).split(/[;,]/).map((item) => item.trim()).filter(Boolean).join(', ');
+};
+
+const PartnerRegistryCard = ({ item, type = 'distributor' }) => {
+  const tone = partnerTone[type] || partnerTone.distributor;
+  const Icon = tone.Icon;
+  const isActive = item.ativo !== false && item.status !== 'INATIVO';
+  const name = item.nome || item.name || tone.label;
+  const location = [item.cidade || item.city, item.estado || item.uf].filter(Boolean).join(' / ');
+  const contact = item.email || item.telefone || item.phone || item.contato || item.contatoPrincipal || '';
+  const category = normalizeTextList(
+    item.categoria,
+    item.segmento,
+    item.tipo,
+    item.categorias,
+    item.categoriasText,
+    item.produtosServicos,
+    item.produtosServicosText,
+    item.produtosPrincipais,
+    item.produtosPrincipaisText,
+    item.marcas,
+    item.marcasText
+  );
+  const portal = item.site || item.portalUrl || item.ecommerceUrl || item.portalPartnerUrl || '';
+  const completion = isActive ? 158 : 84;
+
+  return (
+    <div className={`crm-gradient-glass group min-h-[230px] rounded-lg p-5 ${tone.hover}`}>
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${tone.topBar}`} />
+      <div className={`absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br ${tone.glow} blur-3xl transition-opacity duration-300 group-hover:opacity-100`} />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_0%,rgba(255,255,255,0.08),transparent_34%),linear-gradient(145deg,rgba(255,255,255,0.07),transparent_42%)]" />
+
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+              <svg className="absolute h-16 w-16 -rotate-90" viewBox="0 0 64 64" aria-hidden="true">
+                <circle cx="32" cy="32" r="27" stroke="rgba(51,65,85,0.82)" strokeWidth="7" fill="none" />
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="27"
+                  stroke={tone.ring}
+                  strokeWidth="7"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={`${completion} 170`}
+                  className="drop-shadow-[0_0_14px_rgba(255,122,0,0.28)] transition-all duration-500"
+                />
+              </svg>
+              <div className={`crm-gradient-icon relative flex h-10 w-10 items-center justify-center rounded-lg ${tone.iconBox}`}>
+                <Icon className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${type === 'supplier' ? 'text-cyan-200/80' : 'text-teal-200/80'}`}>
+                {tone.label}
+              </p>
+              <h4 className={`mt-1 truncate text-lg font-bold text-white transition-colors ${tone.title}`}>{name}</h4>
+            </div>
+          </div>
+
+          <span className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
+            isActive
+              ? 'border-emerald-400/35 bg-emerald-400/14 text-emerald-200'
+              : 'border-slate-500/35 bg-slate-500/14 text-slate-300'
+          }`}>
+            {isActive ? 'Ativo' : 'Inativo'}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-2.5 text-xs text-slate-300">
+          <div className="flex min-w-0 items-center gap-2">
+            <MapPin className="h-4 w-4 shrink-0 text-slate-500" />
+            <span className="truncate">{location || 'Localização não informada'}</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <Mail className="h-4 w-4 shrink-0 text-slate-500" />
+            <span className="truncate">{contact || 'Contato não informado'}</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <Tags className="h-4 w-4 shrink-0 text-slate-500" />
+            <span className="truncate">{category || 'Categoria não informada'}</span>
+          </div>
+        </div>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+          <span className={`max-w-[68%] truncate rounded-full border px-3 py-1.5 text-[11px] font-semibold ${tone.chip}`}>
+            {category || 'Base homologada'}
+          </span>
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+            <Globe2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[92px] truncate">{portal ? 'Portal ativo' : 'Sem portal'}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function PreVendas() {
   const navigate = useNavigate();
@@ -1457,56 +1594,9 @@ export default function PreVendas() {
                 <p className="py-8 text-center text-sm text-slate-400">Nenhum distribuidor cadastrado.</p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {distribuidores.slice(0, 9).map((item) => {
-                    const isActive = item.ativo !== false && item.status !== 'INATIVO';
-                    return (
-                      <div key={item.id || item.nome} className="group relative overflow-hidden rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-800/40 p-4 transition-all duration-300 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/10">
-                        {/* Gradiente de fundo decorativo */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
-                        
-                        <div className="relative">
-                          {/* Header com ícone e badge */}
-                          <div className="mb-3 flex items-start justify-between gap-2">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400 transition-colors duration-300 group-hover:bg-orange-500/20">
-                              <Network className="h-5 w-5" />
-                            </div>
-                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-                              isActive 
-                                ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                                : 'bg-slate-600/20 text-slate-400 border border-slate-600/20'
-                            }`}>
-                              {isActive ? 'Ativo' : 'Inativo'}
-                            </span>
-                          </div>
-                          
-                          {/* Conteúdo */}
-                          <h4 className="mb-2 truncate text-base font-semibold text-white transition-colors duration-300 group-hover:text-orange-300">
-                            {item.nome || item.name || 'Distribuidor'}
-                          </h4>
-                          
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              <span className="truncate">
-                                {item.cidade || item.city || 'Cidade não informada'}
-                                {item.estado || item.uf ? ` / ${item.estado || item.uf}` : ''}
-                              </span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              <span className="truncate">{item.email || item.telefone || item.phone || 'Contato não informado'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {distribuidores.slice(0, 9).map((item) => (
+                    <PartnerRegistryCard key={item.id || item.nome} item={item} type="distributor" />
+                  ))}
                 </div>
               )}
             </div>
@@ -1539,52 +1629,9 @@ export default function PreVendas() {
                 <p className="py-8 text-center text-sm text-slate-400">Nenhum fornecedor cadastrado.</p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {fornecedores.slice(0, 9).map((item) => {
-                    const isActive = item.ativo !== false && item.status !== 'INATIVO';
-                    return (
-                      <div key={item.id || item.nome} className="group relative overflow-hidden rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 to-slate-800/40 p-4 transition-all duration-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/10">
-                        {/* Gradiente de fundo decorativo */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
-                        
-                        <div className="relative">
-                          {/* Header com ícone e badge */}
-                          <div className="mb-3 flex items-start justify-between gap-2">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400 transition-colors duration-300 group-hover:bg-cyan-500/20">
-                              <Package className="h-5 w-5" />
-                            </div>
-                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-                              isActive 
-                                ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
-                                : 'bg-slate-600/20 text-slate-400 border border-slate-600/20'
-                            }`}>
-                              {isActive ? 'Ativo' : 'Inativo'}
-                            </span>
-                          </div>
-                          
-                          {/* Conteúdo */}
-                          <h4 className="mb-2 truncate text-base font-semibold text-white transition-colors duration-300 group-hover:text-cyan-300">
-                            {item.nome || item.name || 'Fornecedor'}
-                          </h4>
-                          
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                              </svg>
-                              <span className="truncate">{item.categoria || item.segmento || item.tipo || 'Categoria não informada'}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              <span className="truncate">{item.email || item.telefone || item.phone || 'Contato não informado'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {fornecedores.slice(0, 9).map((item) => (
+                    <PartnerRegistryCard key={item.id || item.nome} item={item} type="supplier" />
+                  ))}
                 </div>
               )}
             </div>

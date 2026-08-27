@@ -1546,7 +1546,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
     </div>
   );
 
-  const renderPillList = (items, emptyText, className = 'from-blue-500 to-violet-600') => {
+  const renderPillList = (items, emptyText, className = 'from-orange-500/45 via-cyan-400/35 to-emerald-400/30') => {
     const values = Array.isArray(items) ? items.filter(Boolean) : [];
     if (values.length === 0) {
       return <p className="text-base text-slate-400">{emptyText}</p>;
@@ -1557,7 +1557,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         {values.map((item) => (
           <span
             key={item}
-            className={`rounded-full bg-gradient-to-r ${className} px-4 py-2 text-sm font-semibold text-white`}
+            className={`rounded-full border border-white/10 bg-gradient-to-r ${className} px-4 py-2 text-sm font-semibold text-white backdrop-blur-md`}
           >
             {item}
           </span>
@@ -1566,28 +1566,32 @@ export default function PrevendasCadastros({ forcedTab = null }) {
     );
   };
 
-  const renderPortalCard = ({ title, url, login, icon: Icon, accentClass }) => (
-    <div className="rounded-xl border border-slate-200/70 bg-slate-300/70 p-6 text-slate-100">
-      <div className={`mb-6 flex items-center gap-3 text-3xl font-bold ${accentClass}`}>
-        <Icon className="h-8 w-8" />
-        <span>{title}</span>
-      </div>
+  const renderPortalCard = ({ title, url, login, icon: Icon }) => (
+    <div className="crm-gradient-glass group min-h-[220px] rounded-lg p-6 text-slate-100">
+      <div className="relative z-10">
+        <div className="mb-7 flex items-center gap-4 text-3xl font-bold text-cyan-50">
+          <span className="crm-gradient-icon flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-white">
+            <Icon className="h-7 w-7" />
+          </span>
+          <span>{title}</span>
+        </div>
       {url ? (
         <a
           href={url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 break-all text-xl font-bold text-blue-700 hover:text-blue-500"
+          className="inline-flex items-center gap-2 break-all text-xl font-bold text-cyan-100 hover:text-white"
         >
           {url}
           <ExternalLink className="h-4 w-4 shrink-0" />
         </a>
       ) : (
-        <p className="text-xl font-semibold text-slate-600">URL não informada.</p>
+        <p className="text-xl font-semibold text-slate-300">URL não informada.</p>
       )}
-      <p className="mt-6 text-lg text-white">
-        <span className="font-bold">Usuário:</span> {login || '-'}
-      </p>
+        <p className="mt-8 text-lg text-white">
+          <span className="font-bold">Usuário:</span> {login || '-'}
+        </p>
+      </div>
     </div>
   );
 
@@ -1625,13 +1629,13 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </button>
         </div>
 
-        <section className="rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 px-8 py-10">
+        <section className="crm-gradient-hero rounded-2xl px-8 py-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
-              <p className="mt-4 text-3xl text-orange-100">Distribuidor</p>
+              <p className="mt-4 text-3xl text-cyan-50">Distribuidor</p>
             </div>
-            <span className="w-fit rounded-full bg-emerald-500 px-8 py-4 text-3xl font-semibold text-white">
+            <span className="w-fit rounded-full border border-emerald-200/25 bg-emerald-400/24 px-8 py-4 text-3xl font-semibold text-white shadow-[0_18px_44px_-24px_rgba(16,185,129,0.75)] backdrop-blur-md">
               {statusLabel}
             </span>
           </div>
@@ -1639,16 +1643,16 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Card Informações de Contato - Estilo B2G Dashboard */}
-          <section className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 transition-all hover:border-orange-500/30 hover:shadow-xl hover:shadow-orange-500/10">
+          <section className="crm-gradient-section group rounded-2xl p-6">
             {/* Gradiente decorativo de fundo */}
-            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-orange-500/20 to-amber-500/10 blur-3xl"></div>
+            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-400/20 to-teal-400/10 blur-3xl"></div>
             
             <div className="relative">
               <div className="mb-6 flex items-center gap-4">
                 {/* Ícone circular com gradiente */}
                 <div className="relative flex h-16 w-16 items-center justify-center">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 opacity-20 blur-md"></div>
-                  <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-600">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400 to-teal-500 opacity-20 blur-md"></div>
+                  <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                     <User className="h-7 w-7 text-white" />
                   </div>
                 </div>
@@ -1656,17 +1660,17 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               </div>
               
               <div className="space-y-5">
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="text-sm font-medium text-slate-400">Contato Principal</p>
                   <p className="mt-1 text-xl font-bold text-white">{contactName}</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-400">
                     <Mail className="h-4 w-4" /> Email
                   </p>
                   <p className="mt-1 break-all text-lg font-semibold text-white">{item.email || '-'}</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-400">
                     <Phone className="h-4 w-4" /> Telefone
                   </p>
@@ -1677,16 +1681,16 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </section>
 
           {/* Card Produtos/Serviços - Estilo B2G Dashboard */}
-          <section className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 transition-all hover:border-amber-500/30 hover:shadow-xl hover:shadow-amber-500/10">
+          <section className="crm-gradient-section group rounded-2xl p-6">
             {/* Gradiente decorativo de fundo */}
-            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-amber-500/20 to-yellow-500/10 blur-3xl"></div>
+            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-teal-400/20 to-emerald-400/10 blur-3xl"></div>
             
             <div className="relative">
               <div className="mb-6 flex items-center gap-4">
                 {/* Ícone circular com gradiente */}
                 <div className="relative flex h-16 w-16 items-center justify-center">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-500 to-yellow-600 opacity-20 blur-md"></div>
-                  <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-yellow-600">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 opacity-20 blur-md"></div>
+                  <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                     <Package className="h-7 w-7 text-white" />
                   </div>
                 </div>
@@ -1694,11 +1698,11 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               </div>
               
               <div className="space-y-5">
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="mb-3 text-sm font-medium text-slate-400">Marcas</p>
                   {renderPillList(brands, 'Sem marcas informadas.')}
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="mb-3 text-sm font-medium text-slate-400">Produtos Principais</p>
                   {renderPillList(item.produtosPrincipais, 'Sem produtos principais informados.')}
                 </div>
@@ -1707,15 +1711,15 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </section>
         </div>
 
-        <section className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+        <section className="crm-gradient-section rounded-2xl p-6">
           {/* Gradiente decorativo */}
-          <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-orange-500/15 to-amber-500/10 blur-3xl"></div>
+          <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-400/15 to-teal-400/10 blur-3xl"></div>
           
           <div className="relative">
             <div className="mb-6 flex items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 opacity-20 blur-md"></div>
-                <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-amber-600">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400 to-teal-500 opacity-20 blur-md"></div>
+                <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                   <Globe2 className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -1727,27 +1731,27 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               url: item.portalUrl,
               login: item.portalLogin,
               icon: Link2,
-              accentClass: 'text-blue-800'
+              accentClass: 'text-cyan-50'
             })}
             {renderPortalCard({
               title: 'E-commerce',
               url: item.ecommerceUrl,
               login: item.ecommerceLogin,
               icon: ShoppingCart,
-              accentClass: 'text-violet-700'
+              accentClass: 'text-teal-50'
             })}
           </div>
           </div>
         </section>
 
-        <section className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-          <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-amber-500/15 to-yellow-500/10 blur-3xl"></div>
+        <section className="crm-gradient-section group rounded-2xl p-6">
+          <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-teal-400/15 to-emerald-400/10 blur-3xl"></div>
           
           <div className="relative">
             <div className="mb-6 flex items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-500 to-yellow-600 opacity-20 blur-md"></div>
-                <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-yellow-600">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 opacity-20 blur-md"></div>
+                <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                   <Users className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -1761,9 +1765,9 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               {sellers.map((seller, index) => {
                 const sellerTag = seller.marca || seller.area || seller.produto || seller.tipo || '';
                 return (
-                  <div key={`${seller.nome || 'seller'}-${index}`} className="rounded-xl border-l-4 border-blue-500 bg-[#1c2d43] p-7">
+                  <div key={`${seller.nome || 'seller'}-${index}`} className="crm-gradient-field rounded-xl border-l-4 border-cyan-300/45 p-7">
                     {sellerTag && (
-                      <span className="mb-5 inline-flex rounded-full bg-sky-300 px-5 py-2 text-lg font-semibold text-slate-900">
+                      <span className="mb-5 inline-flex rounded-full border border-cyan-200/20 bg-cyan-300/18 px-5 py-2 text-lg font-semibold text-cyan-50 backdrop-blur-md">
                         {sellerTag}
                       </span>
                     )}
@@ -1782,7 +1786,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-7">
+        <section className="crm-gradient-section rounded-2xl p-7">
           <h3 className="text-2xl font-bold text-white">Observações</h3>
           <p className="mt-5 whitespace-pre-wrap text-lg text-slate-400">{item.observacoes || 'Sem observações.'}</p>
         </section>
@@ -1824,26 +1828,26 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </button>
         </div>
 
-        <section className="rounded-2xl bg-gradient-to-r from-cyan-600 to-teal-600 px-8 py-10">
+        <section className="crm-gradient-hero rounded-2xl px-8 py-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
               <p className="mt-4 text-3xl text-cyan-100">Fornecedor</p>
             </div>
-            <span className="w-fit rounded-full bg-emerald-500 px-8 py-4 text-3xl font-semibold text-white">
+            <span className="w-fit rounded-full border border-emerald-200/25 bg-emerald-400/24 px-8 py-4 text-3xl font-semibold text-white shadow-[0_18px_44px_-24px_rgba(16,185,129,0.75)] backdrop-blur-md">
               {statusLabel}
             </span>
           </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+        <section className="crm-gradient-section rounded-2xl p-6">
           <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-500/15 to-teal-500/10 blur-3xl"></div>
           
           <div className="relative">
             <div className="mb-6 flex items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 opacity-20 blur-md"></div>
-                <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-teal-600">
+                <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                   <Globe2 className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -1870,14 +1874,14 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Card Contato Principal - Estilo B2G Dashboard */}
-          <section className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 transition-all hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/10">
+          <section className="crm-gradient-section group rounded-2xl p-6">
             <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-500/20 to-teal-500/10 blur-3xl"></div>
             
             <div className="relative">
               <div className="mb-6 flex items-center gap-4">
                 <div className="relative flex h-16 w-16 items-center justify-center">
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 opacity-20 blur-md"></div>
-                  <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-teal-600">
+                  <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                     <User className="h-7 w-7 text-white" />
                   </div>
                 </div>
@@ -1885,17 +1889,17 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               </div>
               
               <div className="space-y-5">
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="text-sm font-medium text-slate-400">Nome</p>
                   <p className="mt-1 text-xl font-bold text-white">{item.contatoPrincipal || item.contato || '-'}</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-400">
                     <Mail className="h-4 w-4" /> Email
                   </p>
                   <p className="mt-1 break-all text-lg font-semibold text-white">{item.emailContatoPrincipal || item.email || '-'}</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-400">
                     <Phone className="h-4 w-4" /> Telefone
                   </p>
@@ -1906,14 +1910,14 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </section>
 
           {/* Card Contato Cotações - Estilo B2G Dashboard */}
-          <section className="group relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 transition-all hover:border-teal-500/30 hover:shadow-xl hover:shadow-teal-500/10">
+          <section className="crm-gradient-section group rounded-2xl p-6">
             <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-teal-500/20 to-emerald-500/10 blur-3xl"></div>
             
             <div className="relative">
               <div className="mb-6 flex items-center gap-4">
                 <div className="relative flex h-16 w-16 items-center justify-center">
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 opacity-20 blur-md"></div>
-                  <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600">
+                  <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                     <Users className="h-7 w-7 text-white" />
                   </div>
                 </div>
@@ -1921,17 +1925,17 @@ export default function PrevendasCadastros({ forcedTab = null }) {
               </div>
               
               <div className="space-y-5">
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="text-sm font-medium text-slate-400">Nome</p>
                   <p className="mt-1 text-xl font-bold text-white">{item.contatoCotacoes || '-'}</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-400">
                     <Mail className="h-4 w-4" /> Email
                   </p>
                   <p className="mt-1 break-all text-lg font-semibold text-white">{item.emailContatoCotacoes || '-'}</p>
                 </div>
-                <div className="rounded-lg bg-slate-800/50 p-4">
+                <div className="crm-gradient-field rounded-lg p-4">
                   <p className="flex items-center gap-2 text-sm font-medium text-slate-400">
                     <Phone className="h-4 w-4" /> Telefone
                   </p>
@@ -1942,33 +1946,33 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </section>
         </div>
 
-        <section className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+        <section className="crm-gradient-section rounded-2xl p-6">
           <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-cyan-500/15 to-teal-500/10 blur-3xl"></div>
           
           <div className="relative">
             <div className="mb-6 flex items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 opacity-20 blur-md"></div>
-                <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-teal-600">
+                <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                   <Package className="h-7 w-7 text-white" />
                 </div>
               </div>
               <h3 className="text-2xl font-bold text-white">Produtos/Serviços Oferecidos</h3>
             </div>
-            <div className="rounded-lg bg-slate-800/50 p-4">
-              {renderPillList(products, 'Sem produtos/serviços informados.', 'from-sky-500 to-cyan-500')}
+            <div className="crm-gradient-field rounded-lg p-4">
+              {renderPillList(products, 'Sem produtos/serviços informados.', 'from-orange-500/45 via-cyan-400/35 to-emerald-400/30')}
             </div>
           </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+        <section className="crm-gradient-section rounded-2xl p-6">
           <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-teal-500/15 to-emerald-500/10 blur-3xl"></div>
           
           <div className="relative">
             <div className="mb-6 flex items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 opacity-20 blur-md"></div>
-                <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600">
+                <div className="crm-gradient-icon relative flex h-14 w-14 items-center justify-center rounded-full">
                   <ClipboardList className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -2001,7 +2005,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-7">
+        <section className="crm-gradient-section rounded-2xl p-7">
           <h3 className="text-2xl font-bold text-white">Observações</h3>
           <p className="mt-5 whitespace-pre-wrap text-lg text-slate-400">{item.observacoes || 'Sem observações.'}</p>
         </section>
@@ -2017,7 +2021,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
     return (
       <div className="space-y-3">
         {activeRows.map((item) => (
-          <div key={item.id} className="rounded-xl border border-slate-600/40 bg-[#102540] p-4">
+          <div key={item.id} className="crm-gradient-glass rounded-xl p-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -2046,7 +2050,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
                     {item.categorias.map((categoria) => (
                       <span
                         key={`${item.id}-${categoria}`}
-                        className="rounded-full border border-sky-500/40 bg-sky-500/20 px-2 py-0.5 text-[11px] text-sky-100"
+                        className="rounded-full border border-cyan-300/25 bg-cyan-300/12 px-2 py-0.5 text-[11px] text-cyan-100"
                       >
                         {categoria}
                       </span>
@@ -2110,7 +2114,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
           const validity = getValidityInfo(item.dataValidade);
 
           return (
-            <div key={item.id} className="rounded-xl border border-slate-600/40 bg-[#102540] p-4">
+            <div key={item.id} className="crm-gradient-glass rounded-xl p-4">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
