@@ -58,12 +58,20 @@ const PNCP_HEADERS = {
 
 const pncpCache = new Map();
 const PNCP_CACHE_TTL_MS = 5 * 60 * 1000;
+const PNCP_STALE_TTL_MS = 30 * 60 * 1000;
+const PNCP_CIRCUIT_OPEN_MS = 2 * 60 * 1000;
+let pncpCircuitOpenUntil = 0;
 
 const isPNCPRateLimitText = (text) => /limite de requisi[cç][oõ]es|support id|requisi[cç][oõ]es excedido/i.test(String(text || ''));
+const isPNCPTransientError = (message = '') => /aborted|abort|timeout|time.?out|limitou|indispon[ií]vel|HTTP 429|HTTP 503|HTTP 504|resposta inv[aá]lida/i.test(String(message || ''));
+const isPNCPCircuitOpen = () => Date.now() < pncpCircuitOpenUntil;
+const openPNCPCircuit = () => {
+  pncpCircuitOpenUntil = Math.max(pncpCircuitOpenUntil, Date.now() + PNCP_CIRCUIT_OPEN_MS);
+};
 
-const readCache = (key) => {
+const readCache = (key, maxAgeMs = PNCP_CACHE_TTL_MS) => {
   const cached = pncpCache.get(key);
-  if (!cached || Date.now() - cached.createdAt > PNCP_CACHE_TTL_MS) return null;
+  if (!cached || Date.now() - cached.createdAt > maxAgeMs) return null;
   return cached.data;
 };
 
@@ -77,15 +85,28 @@ const fetchPNCPItems = async (url, label) => {
   const cached = readCache(key);
   if (cached) return { data: cached, erro: null };
 
+  if (isPNCPCircuitOpen()) {
+    const stale = readCache(key, PNCP_STALE_TTL_MS);
+    if (stale) return { data: stale, erro: null };
+    return { data: [], erro: `${label}: PNCP temporariamente indisponivel; usando fallback oficial` };
+  }
+
   try {
     const response = await fetchWithRetry(key, { headers: PNCP_HEADERS }, { timeoutMs: 8000, retries: 0 });
-    if (response.status === 429) return { data: [], erro: `${label}: PNCP limitou requisições` };
-    if (response.status === 503 || response.status === 504) return { data: [], erro: `${label}: PNCP indisponível no momento` };
+    if (response.status === 429) {
+      openPNCPCircuit();
+      return { data: [], erro: `${label}: PNCP limitou requisições` };
+    }
+    if (response.status === 503 || response.status === 504) {
+      openPNCPCircuit();
+      return { data: [], erro: `${label}: PNCP indisponível no momento` };
+    }
     if (!response.ok) return { data: [], erro: `${label}: HTTP ${response.status}` };
 
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
       const text = await response.text().catch(() => '');
+      if (isPNCPRateLimitText(text)) openPNCPCircuit();
       return {
         data: [],
         erro: isPNCPRateLimitText(text)
@@ -99,6 +120,9 @@ const fetchPNCPItems = async (url, label) => {
     writeCache(key, data);
     return { data, erro: null };
   } catch (error) {
+    if (isPNCPTransientError(error.message)) openPNCPCircuit();
+    const stale = readCache(key, PNCP_STALE_TTL_MS);
+    if (stale) return { data: stale, erro: null };
     return { data: [], erro: `${label}: ${error.message || 'falha na consulta'}` };
   }
 };

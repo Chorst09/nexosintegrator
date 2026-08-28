@@ -9,6 +9,7 @@
     "build": "npm run build:web",
     "build:web": "cd apps/web && npm run build",
     "install:all": "npm install && cd apps/web && npm install && cd ../api && npm install",
+    "test:b2g-fontes": "cd backend && npm run test:b2g-fontes",
     "prisma:generate": "cd apps/api && npx prisma generate",
     "prisma:migrate": "cd apps/api && npx prisma migrate deploy",
     "prisma:studio": "cd apps/api && npx prisma studio"

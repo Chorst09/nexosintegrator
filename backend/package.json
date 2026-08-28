@@ -6,6 +6,7 @@
     "start": "node server.js",
     "build": "echo 'No build step required for Node.js'",
     "test": "jest",
+    "test:b2g-fontes": "node scripts/test-b2g-fontes.mjs",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext js --fix",
     "db:generate": "prisma generate",

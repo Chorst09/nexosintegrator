@@ -83,7 +83,9 @@ const PNCP_HEADERS = {
 
 const PNCP_CACHE_TTL_MS = 5 * 60 * 1000;
 const PNCP_STALE_TTL_MS = 30 * 60 * 1000;
+const PNCP_CIRCUIT_OPEN_MS = 2 * 60 * 1000;
 const pncpCache = new Map();
+let pncpCircuitOpenUntil = 0;
 
 const clampNumber = (value, min, max, fallback = min) => {
   const parsed = Number(value);
@@ -92,6 +94,11 @@ const clampNumber = (value, min, max, fallback = min) => {
 };
 
 const isPNCPRateLimitText = (text) => /limite de requisi[cç][oõ]es|support id|requisi[cç][oõ]es excedido/i.test(String(text || ''));
+const isPNCPTransientError = (message = '') => /aborted|abort|timeout|time.?out|limitou|indispon[ií]vel|HTTP 429|HTTP 503|HTTP 504|n[aã]o JSON/i.test(String(message || ''));
+const isPNCPCircuitOpen = () => Date.now() < pncpCircuitOpenUntil;
+const openPNCPCircuit = () => {
+  pncpCircuitOpenUntil = Math.max(pncpCircuitOpenUntil, Date.now() + PNCP_CIRCUIT_OPEN_MS);
+};
 
 const getPNCPCache = (key, maxAgeMs) => {
   const cached = pncpCache.get(key);
@@ -111,6 +118,12 @@ async function fetchPNCPItems(url, label, { timeoutMs = 9000 } = {}) {
   const cacheKey = url.toString();
   const fresh = getPNCPCache(cacheKey, PNCP_CACHE_TTL_MS);
   if (fresh) return fresh;
+
+  if (isPNCPCircuitOpen()) {
+    const stale = getPNCPCache(cacheKey, PNCP_STALE_TTL_MS);
+    if (stale) return stale;
+    throw new Error(`${label}: PNCP temporariamente indisponivel; usando fallback oficial.`);
+  }
 
   try {
     const res = await fetchWithRetry(cacheKey, {
@@ -141,6 +154,7 @@ async function fetchPNCPItems(url, label, { timeoutMs = 9000 } = {}) {
     setPNCPCache(cacheKey, items);
     return items;
   } catch (err) {
+    if (isPNCPTransientError(err.message)) openPNCPCircuit();
     const stale = getPNCPCache(cacheKey, PNCP_STALE_TTL_MS);
     if (stale) return stale;
     throw new Error(`${label}: ${err.message || 'falha na consulta'}`);
@@ -799,27 +813,7 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
         url.searchParams.set('pagina', pagina);
         url.searchParams.set('tamanhoPagina', requestSize);
 
-        const res = await fetchWithRetry(url.toString(), {
-          headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-        }, { timeoutMs: 8000, retries: 0 });
-
-        if (res.status === 429) {
-          errors.push('PNCP: limite de requisições excedido. Tente novamente em alguns instantes.');
-          break;
-        }
-        
-        if (res.status === 503 || res.status === 504) {
-          errors.push('PNCP indisponível no momento (HTTP ' + res.status + ')');
-          break;
-        }
-        
-        if (!res.ok) {
-          errors.push(`PNCP HTTP ${res.status}`);
-          break;
-        }
-
-        const data = await safeJson(res);
-        const items = Array.isArray(data?.data) ? data.data : [];
+        const items = await fetchPNCPItems(url, `e-Compras Curitiba PNCP pagina ${pagina}`, { timeoutMs: 8000 });
 
         for (const item of items) {
           const cidade = String(item.unidadeOrgao?.municipioNome || '').toLowerCase();
