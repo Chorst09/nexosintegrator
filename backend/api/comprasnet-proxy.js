@@ -2,7 +2,7 @@
  * Compras.gov.br Proxy - Backend
  * 
  * Utiliza PNCP (pncp.gov.br) como fonte de dados.
- * A API legada dadosabertos.compras.gov.br nao retorna mais dados.
+ * Usa o modulo novo de Dados Abertos como fallback quando o PNCP oscila.
  *
  * Parâmetros: tipo=licitacao|dispensas|contratacoes14133|arp|pregoes (padrão: licitacao)
  * Retorna: { data, total, erro }
@@ -12,6 +12,7 @@ const express = require('express');
 const router = express.Router();
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
+const DADOS_ABERTOS_CONTRATACOES_URL = 'https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133';
 
 const diasAtras = (dias) => {
   const d = new Date();
@@ -24,6 +25,13 @@ const hoje = () => new Date().toISOString().slice(0, 10);
 const toPNCPDate = (dateStr) => {
   if (!dateStr) return null;
   return String(dateStr).replace(/-/g, '').slice(0, 8);
+};
+
+const toISODate = (dateStr) => {
+  if (!dateStr) return null;
+  const compact = String(dateStr).replace(/-/g, '').slice(0, 8);
+  if (!/^\d{8}$/.test(compact)) return null;
+  return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
 };
 
 const clamp = (n, min, max) => Math.max(min, Math.min(Number(n) || min, max));
@@ -104,14 +112,106 @@ const MODALIDADES = {
   pregoes: [6]
 };
 
+const DADOS_ABERTOS_MODALIDADES = {
+  licitacao: [5, 6],
+  dispensas: [6],
+  contratacoes14133: [5, 6],
+  arp: [5],
+  pregoes: [5]
+};
+
+const toDadosAbertosDate = (value, fallback) => toISODate(value || fallback) || toISODate(fallback);
+
+const normalizeDadosAbertosToPNCP = (item) => ({
+  numeroControlePNCP: item.numeroControlePNCP || '',
+  orgaoEntidade: {
+    cnpj: item.orgaoEntidadeCnpj || '',
+    razaoSocial: item.orgaoEntidadeRazaoSocial || ''
+  },
+  unidadeOrgao: {
+    ufSigla: item.unidadeOrgaoUfSigla || '',
+    municipioNome: item.unidadeOrgaoMunicipioNome || '',
+    nomeUnidade: item.unidadeOrgaoNomeUnidade || ''
+  },
+  anoCompra: item.anoCompraPncp || '',
+  sequencialCompra: item.sequencialCompraPncp || '',
+  numeroCompra: item.numeroCompra || '',
+  modalidadeNome: item.modalidadeNome || '',
+  valorTotalEstimado: item.valorTotalEstimado,
+  dataPublicacaoPncp: item.dataPublicacaoPncp || null,
+  dataAberturaProposta: item.dataAberturaPropostaPncp || null,
+  dataEncerramentoProposta: item.dataEncerramentoPropostaPncp || null,
+  objetoCompra: item.objetoCompra || '',
+  informacaoComplementar: item.informacaoComplementar || '',
+  linkSistemaOrigem: item.idCompra
+    ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${item.idCompra}`
+    : null,
+  situacaoCompraNome: item.situacaoCompraNomePncp || 'Divulgada no PNCP',
+  codigoSituacaoCompra: item.situacaoCompraIdPncp
+});
+
+const fetchDadosAbertosContratacoes = async ({ tipo, qs, dataInicio, dataFim, page, size }) => {
+  const fallbackInicio = !dataInicio && !dataFim ? diasAtras(365) : diasAtras(30);
+  const dataI = toDadosAbertosDate(dataInicio, fallbackInicio);
+  const dataF = toDadosAbertosDate(dataFim, hoje());
+  const modalidades = DADOS_ABERTOS_MODALIDADES[tipo] || DADOS_ABERTOS_MODALIDADES.licitacao;
+  const data = [];
+  const erros = [];
+
+  for (const codigoModalidade of modalidades) {
+    if (data.length >= size) break;
+
+    const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
+    url.searchParams.set('pagina', String(page));
+    url.searchParams.set('tamanhoPagina', String(Math.max(10, Math.min(size, 500))));
+    url.searchParams.set('dataPublicacaoPncpInicial', dataI);
+    url.searchParams.set('dataPublicacaoPncpFinal', dataF);
+    url.searchParams.set('codigoModalidade', String(codigoModalidade));
+    if (qs.uf) url.searchParams.set('unidadeOrgaoUfSigla', qs.uf);
+
+    const key = url.toString();
+    const cached = readCache(key);
+    if (cached) {
+      data.push(...cached);
+      continue;
+    }
+
+    try {
+      const response = await fetchWithRetry(key, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'NexosCRM/2.0'
+        }
+      }, { timeoutMs: 15000, retries: 0 });
+
+      if (!response.ok) {
+        const text = String(await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 120);
+        erros.push(`Dados Abertos modalidade ${codigoModalidade}: HTTP ${response.status}${text ? ` - ${text}` : ''}`);
+        continue;
+      }
+
+      const payload = await response.json().catch(() => null);
+      const rows = Array.isArray(payload?.resultado) ? payload.resultado.map(normalizeDadosAbertosToPNCP) : [];
+      writeCache(key, rows);
+      data.push(...rows);
+    } catch (err) {
+      erros.push(`Dados Abertos modalidade ${codigoModalidade}: ${err.message || 'falha na consulta'}`);
+    }
+  }
+
+  return { data: data.slice(0, size), erros };
+};
+
 router.get('/', async (req, res) => {
   const qs = req.query;
   const tipo = qs.tipo || 'licitacao';
   const modalidades = MODALIDADES[tipo] || MODALIDADES.licitacao;
 
   try {
-    const dataInicio = qs.dataInicio || diasAtras(30);
-    const dataFim = qs.dataFim || hoje();
+    const dataInicioParam = String(qs.dataInicio || '').trim();
+    const dataFimParam = String(qs.dataFim || '').trim();
+    const dataInicio = dataInicioParam || diasAtras(30);
+    const dataFim = dataFimParam || hoje();
     const dataI = toPNCPDate(dataInicio);
     const dataF = toPNCPDate(dataFim);
     const size = clamp(qs.tamanhoPagina, 10, 50);
@@ -146,6 +246,26 @@ router.get('/', async (req, res) => {
       }
 
       if (allResults.length >= size) break;
+    }
+
+    if (allResults.length === 0) {
+      const fallback = await fetchDadosAbertosContratacoes({
+        tipo,
+        qs,
+        dataInicio: dataInicioParam,
+        dataFim: dataFimParam,
+        page,
+        size
+      });
+      if (fallback.erros.length > 0) erros.push(...fallback.erros);
+
+      for (const row of fallback.data || []) {
+        const key = row.numeroControlePNCP || `${row.anoCompra}-${row.numeroCompra}-${row.orgaoEntidade?.cnpj}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allResults.push(row);
+        if (allResults.length >= size) break;
+      }
     }
 
     return res.json({
