@@ -505,38 +505,62 @@ async function buscarComprasNet({ objeto, uf, pagina = 1, tamanhoPagina = 20, da
       signal: AbortSignal.timeout(15000)
     });
 
-    if (!res.ok) return { resultados, errors: [`ComprasNet: HTTP ${res.status}`] };
+    if (!res.ok) {
+      errors.push(`ComprasNet legado: HTTP ${res.status}`);
+    } else {
+      const data = await safeJson(res);
+      const items = Array.isArray(data?.resultado) ? data.resultado : [];
 
-    const data = await safeJson(res);
-    const items = Array.isArray(data?.resultado) ? data.resultado : [];
+      for (const item of items) {
+        const itemUf = extractUfFromAddress(item.endereco_entrega_edital) || uf || '';
+        if (uf && itemUf !== uf) continue;
+        if (!matchObjeto(`${item.objeto} ${item.informacoes_gerais}`, objeto)) continue;
 
-    for (const item of items) {
-      const itemUf = extractUfFromAddress(item.endereco_entrega_edital) || uf || '';
-      if (uf && itemUf !== uf) continue;
-      if (!matchObjeto(`${item.objeto} ${item.informacoes_gerais}`, objeto)) continue;
-
-      resultados.push({
-        id: `comprasnet-${item.id_compra || item.identificador || Math.random()}`,
-        fonte: 'ComprasNet',
-        fonteLogo: '🇧🇷',
-        titulo: item.objeto || 'Sem descrição',
-        orgao: item.nome_orgao || `UASG ${item.uasg || ''}`.trim(),
-        cnpjOrgao: '',
-        modalidade: item.nome_modalidade || '',
-        uf: itemUf,
-        municipio: extractMunicipioFromAddress(item.endereco_entrega_edital),
-        valor: formatCurrency(item.valor_estimado_total || item.valor_homologado_total),
-        dataPublicacao: item.data_publicacao || null,
-        dataAbertura: item.data_abertura_proposta || null,
-        dataEncerramento: null,
-        numero: String(item.numero_aviso || ''),
-        ano: String(item.id_compra || '').slice(-4),
-        link: item.linkSistemaOrigem || `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes`,
-        status: item.situacao_aviso || 'Publicado'
-      });
+        resultados.push({
+          id: `comprasnet-${item.id_compra || item.identificador || Math.random()}`,
+          fonte: 'ComprasNet',
+          fonteLogo: '🇧🇷',
+          titulo: item.objeto || 'Sem descrição',
+          orgao: item.nome_orgao || `UASG ${item.uasg || ''}`.trim(),
+          cnpjOrgao: '',
+          modalidade: item.nome_modalidade || '',
+          uf: itemUf,
+          municipio: extractMunicipioFromAddress(item.endereco_entrega_edital),
+          valor: formatCurrency(item.valor_estimado_total || item.valor_homologado_total),
+          dataPublicacao: item.data_publicacao || null,
+          dataAbertura: item.data_abertura_proposta || null,
+          dataEncerramento: null,
+          numero: String(item.numero_aviso || ''),
+          ano: String(item.id_compra || '').slice(-4),
+          link: item.linkSistemaOrigem || `https://www.gov.br/compras/pt-br/acesso-a-informacao/consulta-licitacoes`,
+          status: item.situacao_aviso || 'Publicado'
+        });
+      }
     }
   } catch (err) {
-    errors.push(`ComprasNet: ${err.message}`);
+    errors.push(`ComprasNet legado: ${err.message}`);
+  }
+
+  if (resultados.length === 0) {
+    const fallback = await buscarPNCPDadosAbertos({
+      objeto,
+      uf,
+      pagina,
+      tamanhoPagina,
+      dataInicio,
+      dataFim,
+      modalidades: DADOS_ABERTOS_PNCP_MODALIDADES.licitacao
+    });
+
+    resultados.push(...(fallback.resultados || []).map(item => ({
+      ...item,
+      fonte: 'ComprasNet',
+      fonteLogo: '🇧🇷'
+    })));
+
+    if (fallback.errors?.length) {
+      errors.push(...fallback.errors);
+    }
   }
 
   return { resultados, errors };
@@ -904,16 +928,84 @@ async function buscarTransparenciaCuritiba({ objeto, uf, cidade, dataInicio, dat
 
 // ─── Portal da Transparência Federal - API oficial da CGU ────────────────────
 
-async function buscarPortalTransparenciaFederal({ objeto, dataInicio, dataFim, tamanhoPagina = 20, codigoOrgao = '' }) {
+async function buscarPortalTransparenciaFederalFallback({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const resultados = [];
+  const errors = [];
+  const limit = clampNumber(tamanhoPagina, 10, 50, 20);
+  const requestSize = Math.min(Math.max(limit * 5, 50), 500);
+  const fallbackInicio = !dataInicio && !dataFim ? diasAtras(365) : diasAtras(30);
+  const dataI = toDadosAbertosDate(dataInicio, fallbackInicio);
+  const dataF = toDadosAbertosDate(dataFim, hoje());
+
+  for (const codigoModalidade of DADOS_ABERTOS_PNCP_MODALIDADES.licitacao) {
+    if (resultados.length >= limit) break;
+
+    try {
+      const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
+      url.searchParams.set('pagina', '1');
+      url.searchParams.set('tamanhoPagina', String(requestSize));
+      url.searchParams.set('dataPublicacaoPncpInicial', dataI);
+      url.searchParams.set('dataPublicacaoPncpFinal', dataF);
+      url.searchParams.set('codigoModalidade', String(codigoModalidade));
+      if (uf) url.searchParams.set('unidadeOrgaoUfSigla', uf);
+
+      const res = await fetchWithRetry(url.toString(), {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'NexosCRM/2.0'
+        }
+      }, { timeoutMs: 15000, retries: 0 });
+
+      if (!res.ok) {
+        errors.push(`Portal Transparência Federal fallback: HTTP ${res.status}`);
+        continue;
+      }
+
+      const payload = await safeJson(res);
+      const items = Array.isArray(payload?.resultado) ? payload.resultado : [];
+
+      for (const item of items) {
+        if (item.orgaoEntidadeEsferaId !== 'F') continue;
+        if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidadeRazaoSocial} ${item.unidadeOrgaoNomeUnidade}`, objeto)) continue;
+
+        resultados.push({
+          id: item.numeroControlePNCP || `transparencia-federal-${item.idCompra || item.anoCompraPncp || ''}-${item.numeroCompra || ''}`,
+          fonte: 'Portal Transparência Federal',
+          fonteLogo: '🔎',
+          titulo: item.objetoCompra || 'Licitação federal',
+          orgao: item.orgaoEntidadeRazaoSocial || item.unidadeOrgaoNomeUnidade || '',
+          cnpjOrgao: item.orgaoEntidadeCnpj || '',
+          modalidade: item.modalidadeNome || '',
+          uf: item.unidadeOrgaoUfSigla || uf || '',
+          municipio: item.unidadeOrgaoMunicipioNome || '',
+          valor: formatCurrency(item.valorTotalEstimado),
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaPropostaPncp || null,
+          dataEncerramento: item.dataEncerramentoPropostaPncp || null,
+          numero: item.numeroCompra || '',
+          ano: item.anoCompraPncp || '',
+          numeroControlePNCP: item.numeroControlePNCP || '',
+          link: pncpLink(item.orgaoEntidadeCnpj, item.anoCompraPncp, item.sequencialCompraPncp),
+          status: item.situacaoCompraNomePncp || 'Divulgada no PNCP'
+        });
+
+        if (resultados.length >= limit) break;
+      }
+    } catch (err) {
+      errors.push(`Portal Transparência Federal fallback: ${err.message || 'falha na consulta'}`);
+    }
+  }
+
+  return { resultados, errors };
+}
+
+async function buscarPortalTransparenciaFederal({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20, codigoOrgao = '' }) {
   const resultados = [];
   const token = String(process.env.PORTAL_TRANSPARENCIA_TOKEN || process.env.PORTAL_TRANSPARENCIA_API_KEY || '').trim();
   const orgao = String(codigoOrgao || process.env.PORTAL_TRANSPARENCIA_CODIGO_ORGAO || '').trim();
 
   if (!token) {
-    return {
-      resultados,
-      errors: ['Portal Transparência Federal: configure PORTAL_TRANSPARENCIA_TOKEN para ativar a API oficial.']
-    };
+    return buscarPortalTransparenciaFederalFallback({ objeto, uf, dataInicio, dataFim, tamanhoPagina });
   }
 
   if (!orgao) {
@@ -1183,7 +1275,7 @@ router.get('/search', auth, async (req, res) => {
 
     if (fontesAtivas.includes('transparencia-federal')) {
       promises.push(
-        buscarPortalTransparenciaFederal({ objeto, dataInicio, dataFim, tamanhoPagina: Number(tamanhoPagina), codigoOrgao })
+        buscarPortalTransparenciaFederal({ objeto, uf, dataInicio, dataFim, tamanhoPagina: Number(tamanhoPagina), codigoOrgao })
           .catch(err => ({ resultados: [], errors: [`Portal Transparência Federal: ${err.message}`] }))
       );
     }

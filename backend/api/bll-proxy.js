@@ -6,6 +6,7 @@ const router = express.Router();
 const BLL_BASE = 'https://bll.org.br';
 const CONLICITACAO_API_BASE = 'https://consultaonline.conlicitacao.com.br';
 const CONLICITACAO_APP_BASE = 'https://consulteonline.conlicitacao.com.br';
+const SUPPORTED_PORTALS = new Set(['bll']);
 
 let bllToken = null;
 let bllTokenExpiry = 0;
@@ -478,6 +479,16 @@ async function buscarBLL({ objeto = '', uf = '', tamanhoPagina = 20, headers = {
 
 router.get('/', async (req, res) => {
   const portal = String(req.query.portal || 'bll').toLowerCase();
+  if (!SUPPORTED_PORTALS.has(portal)) {
+    return res.status(400).json({
+      data: [],
+      total: 0,
+      portal: portal.toUpperCase(),
+      autenticado: false,
+      erro: 'Fonte integrada não suportada nesta versão. Use BLL Compras.'
+    });
+  }
+
   const credentials = getCredentials(portal, req.headers);
   const configured = Boolean(credentials.email && credentials.password);
 

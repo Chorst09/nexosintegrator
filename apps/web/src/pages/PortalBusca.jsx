@@ -43,8 +43,7 @@ const LICITACOES_GERENCIADAS_KEY = 'b2g_licitacoes_gerenciadas_v1';
 const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.filter(fonte => fonte.defaultActive !== false).map(fonte => fonte.id);
 
 const FONTES_PAGAS = [
-  { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' },
-  { portal: 'bnc', nome: 'BNC Compras', descricao: 'Banco Nacional de Compras', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🏦' }
+  { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' }
 ];
 
 const PORTAIS_INTEGRADOS_SUPORTADOS = new Set(FONTES_PAGAS.map(fonte => fonte.portal));

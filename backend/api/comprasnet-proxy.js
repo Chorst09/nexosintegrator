@@ -143,6 +143,7 @@ const normalizeDadosAbertosToPNCP = (item) => ({
   dataEncerramentoProposta: item.dataEncerramentoPropostaPncp || null,
   objetoCompra: item.objetoCompra || '',
   informacaoComplementar: item.informacaoComplementar || '',
+  srp: Boolean(item.srp),
   linkSistemaOrigem: item.idCompra
     ? `https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=${item.idCompra}`
     : null,
@@ -155,6 +156,7 @@ const fetchDadosAbertosContratacoes = async ({ tipo, qs, dataInicio, dataFim, pa
   const dataI = toDadosAbertosDate(dataInicio, fallbackInicio);
   const dataF = toDadosAbertosDate(dataFim, hoje());
   const modalidades = DADOS_ABERTOS_MODALIDADES[tipo] || DADOS_ABERTOS_MODALIDADES.licitacao;
+  const requestSize = tipo === 'arp' ? Math.min(Math.max(size * 5, 50), 500) : size;
   const data = [];
   const erros = [];
 
@@ -163,7 +165,7 @@ const fetchDadosAbertosContratacoes = async ({ tipo, qs, dataInicio, dataFim, pa
 
     const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
     url.searchParams.set('pagina', String(page));
-    url.searchParams.set('tamanhoPagina', String(Math.max(10, Math.min(size, 500))));
+    url.searchParams.set('tamanhoPagina', String(Math.max(10, Math.min(requestSize, 500))));
     url.searchParams.set('dataPublicacaoPncpInicial', dataI);
     url.searchParams.set('dataPublicacaoPncpFinal', dataF);
     url.searchParams.set('codigoModalidade', String(codigoModalidade));
@@ -191,7 +193,11 @@ const fetchDadosAbertosContratacoes = async ({ tipo, qs, dataInicio, dataFim, pa
       }
 
       const payload = await response.json().catch(() => null);
-      const rows = Array.isArray(payload?.resultado) ? payload.resultado.map(normalizeDadosAbertosToPNCP) : [];
+      const rows = Array.isArray(payload?.resultado)
+        ? payload.resultado
+          .filter(item => tipo !== 'arp' || item.srp === true)
+          .map(normalizeDadosAbertosToPNCP)
+        : [];
       writeCache(key, rows);
       data.push(...rows);
     } catch (err) {
@@ -223,13 +229,14 @@ router.get('/', async (req, res) => {
       ? [null, ...modalidades]
       : modalidades;
     const seen = new Set();
+    const pncpRequestSize = tipo === 'arp' ? Math.min(Math.max(size * 5, 50), 100) : size;
 
     for (const mod of consultas) {
       const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
       url.searchParams.set('dataInicial', dataI);
       url.searchParams.set('dataFinal', dataF);
       url.searchParams.set('pagina', page);
-      url.searchParams.set('tamanhoPagina', size);
+      url.searchParams.set('tamanhoPagina', pncpRequestSize);
       if (mod) url.searchParams.set('codigoModalidadeContratacao', mod);
       if (qs.uf) url.searchParams.set('uf', qs.uf);
 
@@ -238,6 +245,7 @@ router.get('/', async (req, res) => {
       if (item.erro) erros.push(item.erro);
 
       for (const row of item.data || []) {
+        if (tipo === 'arp' && row.srp !== true) continue;
         const key = row.numeroControlePNCP || `${row.anoCompra}-${row.numeroCompra}-${row.orgaoEntidade?.cnpj}`;
         if (seen.has(key)) continue;
         seen.add(key);
