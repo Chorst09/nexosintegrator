@@ -28,7 +28,7 @@ const toPNCPDate = (dateStr) => {
 
 const clamp = (n, min, max) => Math.max(min, Math.min(Number(n) || min, max));
 
-const fetchWithRetry = async (url, options = {}, { timeoutMs = 45000, retries = 1 } = {}) => {
+const fetchWithRetry = async (url, options = {}, { timeoutMs = 12000, retries = 0 } = {}) => {
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -106,7 +106,7 @@ router.get('/', async (req, res) => {
       }
     });
 
-    const settled = await mapConcurrency(tarefas, 2, (fn) => fn());
+    const settled = await mapConcurrency(tarefas, modalidades.length, (fn) => fn());
     const allResults = [];
     const erros = [];
 

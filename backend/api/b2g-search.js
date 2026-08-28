@@ -176,7 +176,7 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
 
           const res = await fetchWithRetry(url.toString(), {
             headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-          }, { timeoutMs: 45000, retries: 0 });
+          }, { timeoutMs: 12000, retries: 0 });
 
           if (res.status === 503 || res.status === 504) {
             throw new Error('PNCP indisponível no momento (HTTP ' + res.status + ')');
@@ -217,7 +217,7 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
     }
   }
 
-  const results = await mapConcurrency(tarefas, 2, (fn) => fn(), { deadlineMs: 60000 });
+  const results = await mapConcurrency(tarefas, tarefas.length, (fn) => fn(), { deadlineMs: 22000 });
   for (const r of results) {
     resultados.push(...(r || []));
   }
@@ -241,7 +241,7 @@ async function buscarPNCPProposta({ objeto, uf, pagina = 1, tamanhoPagina = 20, 
 
     const res = await fetchWithRetry(url.toString(), {
       headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-    }, { timeoutMs: 45000, retries: 0 });
+    }, { timeoutMs: 12000, retries: 0 });
 
     if (res.status === 503 || res.status === 504) {
       throw new Error('PNCP indisponível no momento (HTTP ' + res.status + ')');
