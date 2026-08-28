@@ -122,9 +122,25 @@ const enforceRolePolicies = (req, res, next) => {
   const p = req.path || '/';
   const role = normalizeRole(req.user.actualRole || req.user.role);
   const requestedClientType = String(req.query?.clientType || '').trim().toUpperCase();
+  const dashboardType = String(req.query?.type || '').trim().toLowerCase();
 
   // MASTER tem acesso total ao sistema, mas queries devem filtrar por tenantCompanyId
   if (isMaster(req.user) || role === 'ADMIN') return next();
+
+  if (p.startsWith('/dashboard') && dashboardType === 'general') {
+    const hasAnyModuleAccess =
+      canAccessModule(req.user, 'B2B') ||
+      canAccessModule(req.user, 'B2G') ||
+      canAccessModule(req.user, 'PRE_SALES') ||
+      canAccessModule(req.user, 'GESTAO') ||
+      canAccessModule(req.user, 'AUTOMATION');
+
+    if (!hasAnyModuleAccess && !req.user.permissions?.dashboard) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    return next();
+  }
 
   const isAdminAreaPath = p.startsWith('/administracao') || p.startsWith('/licensing');
   if (isAdminAreaPath) {

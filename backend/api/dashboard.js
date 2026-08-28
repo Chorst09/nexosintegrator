@@ -13,6 +13,10 @@ const countRows = (count) => Array.from({ length: Math.max(0, toNumber(count)) }
 const rangeStartDate = (days = GENERAL_DASHBOARD_DAYS) =>
   new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+const touchedSinceWhere = (since) => ({
+  OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }]
+});
+
 const safeQuery = async (operation, fallback) => {
   try {
     return await operation();
@@ -150,7 +154,7 @@ const buildGeneralDashboard = async (user = {}) => {
         ...tenantWhere,
         company: { clientType: 'B2B' },
         b2gStage: null,
-        createdAt: { gte: since }
+        ...touchedSinceWhere(since)
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
@@ -158,12 +162,16 @@ const buildGeneralDashboard = async (user = {}) => {
     safeQuery(() => prisma.opportunity.findMany({
       where: {
         ...tenantWhere,
-        OR: [
-          { projectClientType: 'B2G' },
-          { b2gStage: { not: null } },
-          { company: { clientType: 'B2G' } }
-        ],
-        createdAt: { gte: since }
+        AND: [
+          {
+            OR: [
+              { projectClientType: 'B2G' },
+              { b2gStage: { not: null } },
+              { company: { clientType: 'B2G' } }
+            ]
+          },
+          touchedSinceWhere(since)
+        ]
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
@@ -176,7 +184,7 @@ const buildGeneralDashboard = async (user = {}) => {
       orderBy: { updatedAt: 'desc' }
     }), []),
     safeQuery(() => prisma.preSalesRequest.findMany({
-      where: { createdAt: { gte: since }, ...(tenantCompanyId ? { solicitante: { tenantCompanyId } } : {}) },
+      where: { ...touchedSinceWhere(since), ...(tenantCompanyId ? { solicitante: { tenantCompanyId } } : {}) },
       select: { id: true, status: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),

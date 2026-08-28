@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { getTenantCompanyId } from '../lib/tenantScope.js';
 
 const GENERAL_DASHBOARD_DAYS = 180;
 
@@ -12,6 +13,10 @@ const countRows = (count) => Array.from({ length: Math.max(0, toNumber(count)) }
 const rangeStartDate = (days = GENERAL_DASHBOARD_DAYS) =>
   new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+const touchedSinceWhere = (since) => ({
+  OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }]
+});
+
 const safeQuery = async (operation, fallback) => {
   try {
     return await operation();
@@ -21,17 +26,18 @@ const safeQuery = async (operation, fallback) => {
   }
 };
 
-const leadStatsWhere = (clientType) => ({
+const leadStatsWhere = (clientType, tenantCompanyId = null) => ({
   clientType,
-  status: { not: 'INACTIVE' }
+  status: { not: 'INACTIVE' },
+  ...(tenantCompanyId ? { tenantCompanyId } : {})
 });
 
-const buildLeadStats = async (clientType) => {
+const buildLeadStats = async (clientType, tenantCompanyId = null) => {
   const [hotLeads, warmLeads, coldLeads, lowPriority] = await Promise.all([
-    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 80, lte: 100 } } }),
-    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 60, lte: 79 } } }),
-    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 40, lte: 59 } } }),
-    prisma.company.count({ where: { ...leadStatsWhere(clientType), leadScore: { gte: 0, lte: 39 } } })
+    prisma.company.count({ where: { ...leadStatsWhere(clientType, tenantCompanyId), leadScore: { gte: 80, lte: 100 } } }),
+    prisma.company.count({ where: { ...leadStatsWhere(clientType, tenantCompanyId), leadScore: { gte: 60, lte: 79 } } }),
+    prisma.company.count({ where: { ...leadStatsWhere(clientType, tenantCompanyId), leadScore: { gte: 40, lte: 59 } } }),
+    prisma.company.count({ where: { ...leadStatsWhere(clientType, tenantCompanyId), leadScore: { gte: 0, lte: 39 } } })
   ]);
 
   return {
@@ -65,8 +71,45 @@ const buildModuleHealth = (items) =>
     error: null
   }));
 
-const buildGeneralDashboard = async () => {
+const mergeRelationWhere = (where = {}, relationName, relationWhere = {}) => ({
+  ...where,
+  [relationName]: {
+    ...(
+      where[relationName] && typeof where[relationName] === 'object' && !Array.isArray(where[relationName])
+        ? where[relationName]
+        : {}
+    ),
+    ...relationWhere
+  }
+});
+
+const groupRevenueByMonth = (rows = [], dateField = 'actualCloseDate') => {
+  const byMonth = new Map();
+  for (const row of rows) {
+    const dateValue = row?.[dateField];
+    if (!dateValue) continue;
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) continue;
+
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const previous = byMonth.get(key) || { month: new Date(date.getFullYear(), date.getMonth(), 1), revenue: 0, deals: 0 };
+    previous.revenue += Number(row.value || 0);
+    previous.deals += 1;
+    byMonth.set(key, previous);
+  }
+
+  return [...byMonth.values()].sort((a, b) => a.month - b.month);
+};
+
+const buildGeneralDashboard = async (user = {}) => {
   const since = rangeStartDate();
+  const tenantCompanyId = getTenantCompanyId(user);
+  const tenantWhere = tenantCompanyId ? { tenantCompanyId } : {};
+  const tenantUsers = tenantCompanyId
+    ? await prisma.user.findMany({ where: { tenantCompanyId }, select: { id: true } })
+    : [];
+  const tenantUserIds = tenantUsers.map((item) => item.id);
+  const tenantUserRelationWhere = tenantCompanyId ? { tenantCompanyId } : {};
   const opportunitySelect = {
     id: true,
     value: true,
@@ -108,72 +151,87 @@ const buildGeneralDashboard = async () => {
   ] = await Promise.all([
     safeQuery(() => prisma.opportunity.findMany({
       where: {
+        ...tenantWhere,
         company: { clientType: 'B2B' },
         b2gStage: null,
-        createdAt: { gte: since }
+        ...touchedSinceWhere(since)
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
     }), []),
     safeQuery(() => prisma.opportunity.findMany({
       where: {
-        OR: [
-          { projectClientType: 'B2G' },
-          { b2gStage: { not: null } },
-          { company: { clientType: 'B2G' } }
-        ],
-        createdAt: { gte: since }
+        ...tenantWhere,
+        AND: [
+          {
+            OR: [
+              { projectClientType: 'B2G' },
+              { b2gStage: { not: null } },
+              { company: { clientType: 'B2G' } }
+            ]
+          },
+          touchedSinceWhere(since)
+        ]
       },
       select: opportunitySelect,
       orderBy: { updatedAt: 'desc' }
     }), []),
-    safeQuery(() => prisma.company.count({ where: { clientType: 'B2B' } }), 0),
-    safeQuery(() => prisma.company.count({ where: { clientType: 'B2G' } }), 0),
-    safeQuery(() => prisma.bidNotice.findMany({
+    safeQuery(() => prisma.company.count({ where: { ...tenantWhere, clientType: 'B2B' } }), 0),
+    safeQuery(() => prisma.company.count({ where: { ...tenantWhere, clientType: 'B2G' } }), 0),
+    tenantCompanyId ? [] : safeQuery(() => prisma.bidNotice.findMany({
       where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
       select: { id: true, status: true, estimatedValue: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),
     safeQuery(() => prisma.preSalesRequest.findMany({
-      where: { createdAt: { gte: since } },
+      where: { ...touchedSinceWhere(since), ...(tenantCompanyId ? { solicitante: { tenantCompanyId } } : {}) },
       select: { id: true, status: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),
-    safeQuery(() => prisma.preSalesRequest.count(), 0),
+    safeQuery(() => prisma.preSalesRequest.count({ where: tenantCompanyId ? { solicitante: { tenantCompanyId } } : {} }), 0),
     safeQuery(() => prisma.preSalesPoc.findMany({
-      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
+      where: {
+        OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }],
+        ...(tenantCompanyId ? { createdById: { in: tenantUserIds } } : {})
+      },
       select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),
     safeQuery(() => prisma.activity.findMany({
-      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
+      where: { ...tenantWhere, OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { dueDate: { gte: since } }] },
       select: { id: true, status: true, dueDate: true, createdAt: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' }
     }), []),
-    safeQuery(() => prisma.product.count({ where: { active: true } }), 0),
+    safeQuery(() => prisma.product.count({ where: { ...tenantWhere, active: true } }), 0),
     safeQuery(() => prisma.user.findMany({
-      where: { role: 'SELLER' },
+      where: { role: 'SELLER', ...tenantUserRelationWhere },
       select: { id: true, name: true, _count: { select: { opportunities: true } } },
       orderBy: { name: 'asc' }
     }), []),
     safeQuery(() => prisma.proposal.findMany({
-      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }] },
+      where: {
+        OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }],
+        ...(tenantCompanyId ? { opportunity: { tenantCompanyId } } : {})
+      },
       select: { id: true, createdAt: true, updatedAt: true }
     }), []),
     safeQuery(() => prisma.contract.findMany({
-      where: { OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { startDate: { gte: since } }] },
+      where: {
+        OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }, { startDate: { gte: since } }],
+        ...(tenantCompanyId ? { company: { tenantCompanyId } } : {})
+      },
       select: { id: true, createdAt: true, updatedAt: true, startDate: true }
     }), []),
-    safeQuery(() => prisma.commission.count(), 0),
-    safeQuery(() => prisma.salesTarget.count(), 0),
-    safeQuery(() => buildLeadStats('B2B'), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
-    safeQuery(() => buildLeadStats('B2G'), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
-    safeQuery(() => (prisma.workflow || prisma.advancedWorkflow).count(), 0),
-    safeQuery(() => prisma.automationRule.count(), 0),
-    safeQuery(() => prisma.notification.count(), 0),
-    safeQuery(() => prisma.integration.count(), 0),
-    safeQuery(() => prisma.region.count(), 0),
-    safeQuery(readPreSalesRegistry, [])
+    safeQuery(() => prisma.commission.count({ where: tenantCompanyId ? { opportunity: { tenantCompanyId } } : {} }), 0),
+    safeQuery(() => prisma.salesTarget.count({ where: tenantCompanyId ? { seller: { tenantCompanyId } } : {} }), 0),
+    safeQuery(() => buildLeadStats('B2B', tenantCompanyId), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
+    safeQuery(() => buildLeadStats('B2G', tenantCompanyId), { hotLeads: 0, warmLeads: 0, coldLeads: 0, lowPriority: 0, total: 0 }),
+    tenantCompanyId ? 0 : safeQuery(() => (prisma.workflow || prisma.advancedWorkflow).count(), 0),
+    tenantCompanyId ? 0 : safeQuery(() => prisma.automationRule.count(), 0),
+    safeQuery(() => prisma.notification.count({ where: tenantCompanyId ? { recipient: { tenantCompanyId } } : {} }), 0),
+    tenantCompanyId ? 0 : safeQuery(() => prisma.integration.count(), 0),
+    tenantCompanyId ? 0 : safeQuery(() => prisma.region.count(), 0),
+    tenantCompanyId ? [] : safeQuery(readPreSalesRegistry, [])
   ]);
 
   const data = {
@@ -232,15 +290,24 @@ const buildGeneralDashboard = async () => {
 
 export default async function handler(req) {
   if (req.method === 'GET') {
-    const { type = 'executive', userId, period = '6' } = req.query || {};
+    const { type = 'executive', userId, period = '6', ownerId, temperature: tempFilter } = req.query || {};
+    const tenantCompanyId = getTenantCompanyId(req.user);
+    const withOpportunityTenant = (where = {}) => tenantCompanyId ? { ...where, tenantCompanyId } : where;
+    const withCompanyTenant = (where = {}) => tenantCompanyId ? { ...where, tenantCompanyId } : where;
+    const withActivityTenant = (where = {}) => tenantCompanyId ? { ...where, tenantCompanyId } : where;
+    const withUserTenant = (where = {}) => tenantCompanyId ? { ...where, tenantCompanyId } : where;
+    const withOpportunityRelationTenant = (where = {}) =>
+      tenantCompanyId ? mergeRelationWhere(where, 'opportunity', { tenantCompanyId }) : where;
 
     try {
       if (type === 'general') {
-        return Response.json(await buildGeneralDashboard());
+        return Response.json(await buildGeneralDashboard(req.user));
       }
 
       if (type === 'executive') {
         // Dashboard Executivo
+        const monthsBack = parseInt(period);
+        const revenueStartDate = new Date(Date.now() - (Number.isFinite(monthsBack) ? monthsBack : 6) * 30 * 24 * 60 * 60 * 1000);
         const [
           totalCompanies,
           totalOpportunities,
@@ -254,32 +321,32 @@ export default async function handler(req) {
           totalProposals,
           totalCommissions
         ] = await Promise.all([
-          prisma.company.count(),
-          prisma.opportunity.count({ where: { stage: { notIn: ['WON', 'LOST'] } } }),
-          prisma.opportunity.count({ where: { stage: 'WON' } }),
-          prisma.opportunity.count({ where: { stage: 'LOST' } }),
+          prisma.company.count({ where: withCompanyTenant() }),
+          prisma.opportunity.count({ where: withOpportunityTenant({ stage: { notIn: ['WON', 'LOST'] } }) }),
+          prisma.opportunity.count({ where: withOpportunityTenant({ stage: 'WON' }) }),
+          prisma.opportunity.count({ where: withOpportunityTenant({ stage: 'LOST' }) }),
           prisma.opportunity.aggregate({
-            where: { stage: { notIn: ['WON', 'LOST'] } },
+            where: withOpportunityTenant({ stage: { notIn: ['WON', 'LOST'] } }),
             _sum: { value: true }
           }),
           prisma.opportunity.aggregate({
-            where: { stage: 'WON' },
+            where: withOpportunityTenant({ stage: 'WON' }),
             _sum: { value: true }
           }),
           prisma.opportunity.aggregate({
-            where: { stage: 'WON' },
+            where: withOpportunityTenant({ stage: 'WON' }),
             _avg: { value: true }
           }),
-          prisma.activity.count(),
+          prisma.activity.count({ where: withActivityTenant() }),
           prisma.activity.count({
-            where: {
+            where: withActivityTenant({
               dueDate: { lt: new Date() },
               status: { notIn: ['COMPLETED', 'CANCELLED'] }
-            }
+            })
           }),
-          prisma.proposal.count(),
+          prisma.proposal.count({ where: withOpportunityRelationTenant() }),
           prisma.commission.aggregate({
-            where: { status: 'APPROVED' },
+            where: withOpportunityRelationTenant({ status: 'APPROVED' }),
             _sum: { amount: true }
           })
         ]);
@@ -291,6 +358,7 @@ export default async function handler(req) {
         // Funil por etapa
         const funnelData = await prisma.opportunity.groupBy({
           by: ['stage'],
+          where: withOpportunityTenant(),
           _count: { stage: true },
           _sum: { value: true },
           orderBy: {
@@ -298,35 +366,24 @@ export default async function handler(req) {
           }
         });
 
-        // Receita mensal (últimos X meses)
-        const execMonthsBack = parseInt(period) || 6;
-        const execStartDate = new Date(Date.now() - execMonthsBack * 30 * 24 * 60 * 60 * 1000);
-        const execRevenueRows = await prisma.opportunity.findMany({
-          where: {
+        const monthlyRevenueRows = await prisma.opportunity.findMany({
+          where: withOpportunityTenant({
             stage: 'WON',
-            actualCloseDate: { gte: execStartDate, not: null }
-          },
+            actualCloseDate: {
+              gte: revenueStartDate,
+              not: null
+            }
+          }),
           select: {
             actualCloseDate: true,
             value: true
           }
         });
-        const execByMonth = new Map();
-        for (const opp of execRevenueRows) {
-          if (!opp.actualCloseDate) continue;
-          const d = new Date(opp.actualCloseDate);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          const prev = execByMonth.get(key) || { month: new Date(d.getFullYear(), d.getMonth(), 1), revenue: 0, deals: 0 };
-          prev.revenue += opp.value || 0;
-          prev.deals += 1;
-          execByMonth.set(key, prev);
-        }
-        const monthlyRevenue = [...execByMonth.values()].sort((a, b) => a.month - b.month);
 
         // Performance por vendedor
         const sellerPerformance = await prisma.opportunity.groupBy({
           by: ['ownerId'],
-          where: { stage: 'WON' },
+          where: withOpportunityTenant({ stage: 'WON' }),
           _count: { ownerId: true },
           _sum: { value: true }
         });
@@ -334,7 +391,7 @@ export default async function handler(req) {
         // Buscar nomes dos vendedores
         const sellerIds = sellerPerformance.map(s => s.ownerId);
         const sellers = await prisma.user.findMany({
-          where: { id: { in: sellerIds } },
+          where: withUserTenant({ id: { in: sellerIds } }),
           select: { id: true, name: true }
         });
 
@@ -352,17 +409,17 @@ export default async function handler(req) {
         const leadSources = await prisma.opportunity.groupBy({
           by: ['source'],
           _count: { source: true },
-          where: { source: { not: null } }
+          where: withOpportunityTenant({ source: { not: null } })
         });
 
         // Motivos de perda
         const lossReasons = await prisma.opportunity.groupBy({
           by: ['lossReason'],
           _count: { lossReason: true },
-          where: { 
+          where: withOpportunityTenant({
             stage: 'LOST',
             lossReason: { not: null }
-          }
+          })
         });
 
         return Response.json({
@@ -382,7 +439,11 @@ export default async function handler(req) {
           },
           charts: {
             funnel: funnelData,
-            monthlyRevenue,
+            monthlyRevenue: groupRevenueByMonth(monthlyRevenueRows).map(m => ({
+              month: m.month,
+              revenue: m.revenue,
+              deals: m.deals
+            })),
             sellerPerformance: sellerData,
             leadSources,
             lossReasons
@@ -392,9 +453,6 @@ export default async function handler(req) {
 
       if (type === 'b2b') {
         // Dashboard B2B com filtros
-        const { ownerId, temperature, period = '6' } = req.query || {};
-
-        // Parse do periodo: '30d' -> 1 mes, 'month' -> 1 mes, 'quarter' -> 3, etc.
         const parsePeriod = (p) => {
           if (!p) return 6;
           const num = parseInt(p);
@@ -418,7 +476,7 @@ export default async function handler(req) {
 
         const b2bOpportunityFilter = { b2gStage: null };
 
-        const baseWhere = { ...b2bOpportunityFilter, company: { clientType: 'B2B' }, ...dateFilter };
+        const baseWhere = withOpportunityTenant({ ...b2bOpportunityFilter, company: { clientType: 'B2B' }, ...dateFilter });
         if (ownerId) baseWhere.ownerId = ownerId;
 
         // Mapear temperatura para faixas de probabilidade
@@ -430,31 +488,28 @@ export default async function handler(req) {
           '100': { gte: 76, lte: 100 }
         };
 
-        // whereClause inclui temperatura (para KPIs e lista de oportunidades)
         const whereClause = { ...baseWhere };
-        if (temperature && temperatureRange[temperature]) {
+        if (tempFilter && temperatureRange[tempFilter]) {
           whereClause.probability = {
-            gte: temperatureRange[temperature].gte,
-            lte: temperatureRange[temperature].lte
+            gte: temperatureRange[tempFilter].gte,
+            lte: temperatureRange[tempFilter].lte
           };
         }
 
-        // chartsWhere acompanha os filtros do dashboard para manter funil e graficos sincronizados
         const chartsWhere = { ...whereClause };
 
-        // Contagens por temperatura respeitam periodo e gerente, sem travar na temperatura selecionada
         const temperatureCountWhere = { ...baseWhere };
-        const monthlyRevenueWhere = {
+        const monthlyRevenueWhere = withOpportunityTenant({
           ...b2bOpportunityFilter,
           stage: 'WON',
           company: { clientType: 'B2B' },
           updatedAt: { gte: revenueStartDate }
-        };
+        });
         if (ownerId) monthlyRevenueWhere.ownerId = ownerId;
-        if (temperature && temperatureRange[temperature]) {
+        if (tempFilter && temperatureRange[tempFilter]) {
           monthlyRevenueWhere.probability = {
-            gte: temperatureRange[temperature].gte,
-            lte: temperatureRange[temperature].lte
+            gte: temperatureRange[tempFilter].gte,
+            lte: temperatureRange[tempFilter].lte
           };
         }
 
@@ -472,7 +527,7 @@ export default async function handler(req) {
           opportunities,
           monthlyRevenue
         ] = await Promise.all([
-          prisma.company.count({ where: { clientType: 'B2B' } }),
+          prisma.company.count({ where: withCompanyTenant({ clientType: 'B2B' }) }),
           prisma.opportunity.count({ where: { ...whereClause } }),
           prisma.opportunity.count({ where: { ...whereClause, stage: 'WON' } }),
           prisma.opportunity.count({ where: { ...whereClause, stage: 'LOST' } }),
@@ -521,7 +576,7 @@ export default async function handler(req) {
           })
         ]);
 
-        // Contagens por temperatura do recorte atual de periodo/gerente
+        // Contagens por temperatura
         const allProbabilities = await prisma.opportunity.groupBy({
           by: ['probability'],
           where: { ...temperatureCountWhere },
@@ -536,10 +591,9 @@ export default async function handler(req) {
           100: allProbabilities.filter(s => s.probability >= 76 && s.probability <= 100).reduce((sum, s) => sum + s._count.probability, 0)
         };
 
-        // Nomes dos vendedores
         const sellerIds = sellerPerformance.map(s => s.ownerId);
         const sellers = await prisma.user.findMany({
-          where: { id: { in: sellerIds } },
+          where: withUserTenant({ id: { in: sellerIds } }),
           select: { id: true, name: true }
         });
 
@@ -561,9 +615,8 @@ export default async function handler(req) {
           ? (wonOpportunities / (wonOpportunities + lostOpportunities)) * 100
           : 0;
 
-        // Forecast: projecao baseada no pipeline mensalizado
         const avgMonthlyWon = Array.isArray(monthlyRevenue) && monthlyRevenue.length > 0
-          ? monthlyRevenue.reduce((s, m) => s + parseFloat(m.revenue || 0), 0) / monthlyRevenue.length
+          ? monthlyRevenue.reduce((s, m) => s + parseFloat(m.value || 0), 0) / monthlyRevenue.length
           : 0;
         const forecastMonths = [];
         const today = new Date();
@@ -613,6 +666,15 @@ export default async function handler(req) {
       }
 
       if (type === 'seller' && userId) {
+        const selectedSeller = await prisma.user.findFirst({
+          where: withUserTenant({ id: userId }),
+          select: { id: true }
+        });
+
+        if (!selectedSeller) {
+          return Response.json({ error: 'Vendedor não encontrado ou fora da empresa atual' }, { status: 403 });
+        }
+
         // Dashboard do Vendedor
         const [
           myOpportunities,
@@ -622,30 +684,30 @@ export default async function handler(req) {
           myProposals
         ] = await Promise.all([
           prisma.opportunity.findMany({
-            where: { ownerId: userId, stage: { not: 'LOST' } },
+            where: withOpportunityTenant({ ownerId: userId, stage: { not: 'LOST' } }),
             include: { company: true }
           }),
           prisma.activity.findMany({
-            where: { 
+            where: withActivityTenant({
               assignedToId: userId,
               status: { in: ['PENDING', 'IN_PROGRESS'] }
-            },
+            }),
             include: { company: true, opportunity: true },
             orderBy: { dueDate: 'asc' },
             take: 10
           }),
           prisma.commission.aggregate({
-            where: { sellerId: userId, status: 'APPROVED' },
+            where: withOpportunityRelationTenant({ sellerId: userId, status: 'APPROVED' }),
             _sum: { amount: true }
           }),
-          prisma.user.findUnique({
-            where: { id: userId },
+          prisma.user.findFirst({
+            where: withUserTenant({ id: userId }),
             select: { quota: true }
           }),
           prisma.proposal.count({
-            where: {
+            where: withOpportunityRelationTenant({
               opportunity: { ownerId: userId }
-            }
+            })
           })
         ]);
 
@@ -681,26 +743,27 @@ export default async function handler(req) {
             by: ['ownerId'],
             _count: { ownerId: true },
             _sum: { value: true },
-            where: { stage: { notIn: ['LOST'] } }
+            where: withOpportunityTenant({ stage: { notIn: ['LOST'] } })
           }),
           prisma.opportunity.groupBy({
             by: ['stage'],
+            where: withOpportunityTenant(),
             _count: { stage: true },
             _sum: { value: true }
           }),
           prisma.activity.count({
-            where: {
+            where: withActivityTenant({
               dueDate: { lt: new Date() },
               status: { notIn: ['COMPLETED', 'CANCELLED'] }
-            }
+            })
           }),
           prisma.opportunity.groupBy({
             by: ['source'],
             _count: { source: true },
-            where: { 
+            where: withOpportunityTenant({
               source: { not: null },
               stage: 'WON'
-            }
+            })
           })
         ]);
 
