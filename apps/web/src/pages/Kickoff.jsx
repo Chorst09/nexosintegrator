@@ -247,6 +247,8 @@ Ficou acordado que os próximos acompanhamentos serão conduzidos conforme a gov
 
 const Kickoff = () => {
   const [searchParams] = useSearchParams();
+  const companyIdFilter = searchParams.get('companyId') || '';
+  const meetingIdParam = searchParams.get('meetingId') || '';
   const [meetings, setMeetings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -268,6 +270,7 @@ const Kickoff = () => {
       if (statusFilter) params.set('status', statusFilter);
       if (phaseFilter) params.set('phase', phaseFilter);
       if (searchTerm) params.set('search', searchTerm);
+      if (companyIdFilter) params.set('companyId', companyIdFilter);
       params.set('limit', '100');
 
       const [meetingsRes, statsRes] = await Promise.all([
@@ -293,7 +296,7 @@ const Kickoff = () => {
 
   useEffect(() => {
     fetchData();
-  }, [statusFilter, phaseFilter, searchTerm]);
+  }, [statusFilter, phaseFilter, searchTerm, companyIdFilter]);
 
   useEffect(() => {
     if (searchParams.get('openCreate') !== '1' || searchParams.get('from') !== 'project') return;
@@ -330,6 +333,11 @@ const Kickoff = () => {
       console.error('Erro ao carregar detalhes:', error);
     }
   };
+
+  useEffect(() => {
+    if (!meetingIdParam || detailMeeting?.id === meetingIdParam) return;
+    openDetail({ id: meetingIdParam });
+  }, [meetingIdParam, detailMeeting?.id]);
 
   const openEdit = (meeting) => {
     setEditingMeeting(meeting);

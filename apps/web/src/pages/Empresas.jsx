@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Building2, Flame, Plus, Sparkles, Users, Mail, Phone, MapPin, Globe, FileText, Target, Calendar, Paperclip, User, FileSignature, Download, Trash2, Upload } from 'lucide-react';
+import { Building2, Flame, Plus, Sparkles, Users, Mail, Phone, MapPin, Globe, FileText, Target, Calendar, Paperclip, User, FileSignature, Download, Trash2, Upload, Rocket, Clock, ClipboardList } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
 import AnimatedStats from '../components/AnimatedStats';
@@ -44,6 +44,40 @@ const STATUS_LABELS = {
   ACTIVE: 'Ativo',
   INACTIVE: 'Inativo',
   CHURNED: 'Perdido'
+};
+
+const KICKOFF_PHASE_LABELS = {
+  ENTENDIMENTO_OPORTUNIDADE: 'Entendimento da Oportunidade',
+  APRESENTACAO_PROPOSTA: 'Apresentação de Propostas',
+  FECHAMENTO_PROJETO: 'Fechamento de Projeto',
+  ALINHAMENTO_INTERNO: 'Alinhamento Interno',
+  ALINHAMENTO_EXTERNO: 'Alinhamento Externo (Kickoff)'
+};
+
+const KICKOFF_STATUS = {
+  AGENDADA: {
+    label: 'Agendada',
+    className: 'bg-blue-500/10 text-blue-700 dark:text-blue-200'
+  },
+  REALIZADA: {
+    label: 'Realizada',
+    className: 'bg-green-500/10 text-green-700 dark:text-green-200'
+  },
+  CANCELADA: {
+    label: 'Cancelada',
+    className: 'bg-red-500/10 text-red-700 dark:text-red-200'
+  },
+  REAGENDADA: {
+    label: 'Reagendada',
+    className: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-200'
+  }
+};
+
+const formatKickoffDate = (date, startTime, endTime) => {
+  if (!date) return 'Sem data definida';
+  const day = new Date(date).toLocaleDateString('pt-BR');
+  const time = [startTime, endTime].filter(Boolean).join(' - ');
+  return time ? `${day} • ${time}` : day;
 };
 
 const StatusPill = ({ status }) => {
@@ -115,6 +149,9 @@ export default function Empresas({ clientType = 'B2B' }) {
   const [docUploading, setDocUploading] = useState(false);
   const [viewDocFiles, setViewDocFiles] = useState([]);
   const [viewDocUploading, setViewDocUploading] = useState(false);
+  const [companyKickoffs, setCompanyKickoffs] = useState([]);
+  const [companyKickoffsLoading, setCompanyKickoffsLoading] = useState(false);
+  const [companyKickoffsError, setCompanyKickoffsError] = useState('');
   const [formData, setFormData] = useState(() => initialFormData(pageClientType));
 
   const empresasArray = Array.isArray(empresas) ? empresas : [];
@@ -165,6 +202,32 @@ export default function Empresas({ clientType = 'B2B' }) {
       }
     } catch (error) {
       console.error('Erro ao carregar detalhes da empresa:', error);
+    }
+  };
+
+  const fetchCompanyKickoffs = async (companyId) => {
+    if (!companyId) return;
+
+    try {
+      setCompanyKickoffsLoading(true);
+      setCompanyKickoffsError('');
+      const params = new URLSearchParams({ companyId, limit: '100' });
+      const response = await fetch(buildApiUrl(`/kickoff/meetings?${params.toString()}`), {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao carregar histórico de Kickoff');
+      }
+
+      const data = await response.json();
+      setCompanyKickoffs(Array.isArray(data?.meetings) ? data.meetings : []);
+    } catch (error) {
+      console.error('Erro ao carregar kickoff da empresa:', error);
+      setCompanyKickoffs([]);
+      setCompanyKickoffsError(error?.message || 'Erro ao carregar histórico de Kickoff');
+    } finally {
+      setCompanyKickoffsLoading(false);
     }
   };
 
@@ -443,9 +506,14 @@ export default function Empresas({ clientType = 'B2B' }) {
   const openView = async (company) => {
     setViewingCompany(company);
     setActiveTab('cadastro');
+    setCompanyKickoffs([]);
+    setCompanyKickoffsError('');
     setShowViewModal(true);
     
-    await fetchCompanyDetails(company.id);
+    await Promise.all([
+      fetchCompanyDetails(company.id),
+      fetchCompanyKickoffs(company.id)
+    ]);
   };
 
   const closeViewModal = () => {
@@ -455,6 +523,9 @@ export default function Empresas({ clientType = 'B2B' }) {
     setActiveTab('cadastro');
     setViewDocFiles([]);
     setViewDocUploading(false);
+    setCompanyKickoffs([]);
+    setCompanyKickoffsLoading(false);
+    setCompanyKickoffsError('');
   };
 
   const openContractFromCompany = (contractId) => {
@@ -473,6 +544,18 @@ export default function Empresas({ clientType = 'B2B' }) {
     if (!activityId) return;
     closeViewModal();
     navigate(`/atividades?activityId=${activityId}`);
+  };
+
+  const openKickoffFromCompany = (meetingId) => {
+    const companyId = viewingCompany?.id;
+    closeViewModal();
+
+    if (meetingId) {
+      navigate(`/kickoff?meetingId=${encodeURIComponent(meetingId)}`);
+      return;
+    }
+
+    navigate(companyId ? `/kickoff?companyId=${encodeURIComponent(companyId)}` : '/kickoff');
   };
 
   const handleViewDocUpload = async () => {
@@ -971,6 +1054,7 @@ export default function Empresas({ clientType = 'B2B' }) {
                   { id: 'oportunidades', label: 'Oportunidades', icon: Target },
                   { id: 'contratos', label: 'Contratos', icon: FileSignature },
                   { id: 'atividades', label: 'Atividades', icon: Calendar },
+                  { id: 'kickoff', label: 'Kickoff', icon: Rocket },
                   { id: 'documentos', label: 'Documentos', icon: Paperclip }
                 ].map((tab) => {
                   const Icon = tab.icon;
@@ -1370,6 +1454,129 @@ export default function Empresas({ clientType = 'B2B' }) {
                     <div className="text-center py-12">
                       <Calendar className="w-12 h-12 text-[var(--crm-muted)] mx-auto mb-3 opacity-50" />
                       <p className="text-sm text-[var(--crm-muted)]">Nenhuma atividade cadastrada</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Aba Kickoff */}
+              {activeTab === 'kickoff' && (
+                <div className="space-y-4">
+                  <div className="crm-panel-muted p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-bold text-[var(--crm-ink)]">
+                          Histórico de Kickoff {isGovernmentMode ? 'do órgão' : 'da empresa'}
+                        </div>
+                        <div className="text-xs text-[var(--crm-muted)]">
+                          Reuniões vinculadas a oportunidades e projetos deste cadastro.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openKickoffFromCompany()}
+                        className="crm-btn crm-btn-secondary px-4 py-2 text-sm"
+                      >
+                        <Rocket className="w-4 h-4" />
+                        Abrir módulo
+                      </button>
+                    </div>
+                  </div>
+
+                  {companyKickoffsLoading ? (
+                    <div className="flex justify-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--crm-accent)]"></div>
+                    </div>
+                  ) : companyKickoffsError ? (
+                    <div className="text-center py-12">
+                      <Rocket className="w-12 h-12 text-[var(--crm-muted)] mx-auto mb-3 opacity-50" />
+                      <p className="text-sm font-semibold text-[var(--crm-ink)]">Não foi possível carregar o Kickoff</p>
+                      <p className="text-xs text-[var(--crm-muted)] mt-1">{companyKickoffsError}</p>
+                    </div>
+                  ) : companyKickoffs.length > 0 ? (
+                    companyKickoffs.map((meeting) => {
+                      const kickoffStatus = KICKOFF_STATUS[meeting.status] || {
+                        label: meeting.status || 'Sem status',
+                        className: 'bg-slate-500/10 text-slate-700 dark:text-slate-200'
+                      };
+
+                      return (
+                        <div key={meeting.id} className="crm-panel-muted p-4">
+                          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
+                                <span className="text-sm font-bold text-[var(--crm-ink)]">
+                                  {meeting.title || meeting.number || 'Reunião de Kickoff'}
+                                </span>
+                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${kickoffStatus.className}`}>
+                                  {kickoffStatus.label}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1.5 text-xs text-[var(--crm-muted)]">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>{formatKickoffDate(meeting.scheduledDate, meeting.startTime, meeting.endTime)}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <ClipboardList className="w-3.5 h-3.5" />
+                                  <span>{KICKOFF_PHASE_LABELS[meeting.phase] || meeting.phase || 'Fase não definida'}</span>
+                                </div>
+                                {meeting.opportunity && (
+                                  <div className="flex items-center gap-2">
+                                    <Target className="w-3.5 h-3.5" />
+                                    <span className="truncate">
+                                      {meeting.opportunity.number ? `${meeting.opportunity.number} • ` : ''}
+                                      {meeting.opportunity.title || 'Oportunidade sem título'}
+                                    </span>
+                                  </div>
+                                )}
+                                {meeting.owner?.name && (
+                                  <div className="flex items-center gap-2">
+                                    <User className="w-3.5 h-3.5" />
+                                    <span>{meeting.owner.name}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => openKickoffFromCompany(meeting.id)}
+                              className="crm-btn crm-btn-ghost px-3 py-2 text-xs self-start"
+                            >
+                              <Rocket className="w-4 h-4" />
+                              Ver Kickoff
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                            <div className="rounded-xl bg-black/5 dark:bg-white/5 border border-[color:var(--crm-border)] p-3">
+                              <div className="text-lg font-extrabold text-[var(--crm-ink)]">{meeting._count?.participants ?? 0}</div>
+                              <div className="text-[11px] text-[var(--crm-muted)]">Participantes</div>
+                            </div>
+                            <div className="rounded-xl bg-black/5 dark:bg-white/5 border border-[color:var(--crm-border)] p-3">
+                              <div className="text-lg font-extrabold text-[var(--crm-ink)]">{meeting._count?.agendaItems ?? 0}</div>
+                              <div className="text-[11px] text-[var(--crm-muted)]">Agenda</div>
+                            </div>
+                            <div className="rounded-xl bg-black/5 dark:bg-white/5 border border-[color:var(--crm-border)] p-3">
+                              <div className="text-lg font-extrabold text-[var(--crm-ink)]">{meeting._count?.checklistItems ?? 0}</div>
+                              <div className="text-[11px] text-[var(--crm-muted)]">Checklist</div>
+                            </div>
+                            <div className="rounded-xl bg-black/5 dark:bg-white/5 border border-[color:var(--crm-border)] p-3">
+                              <div className="text-lg font-extrabold text-[var(--crm-ink)]">{meeting._count?.actionItems ?? 0}</div>
+                              <div className="text-[11px] text-[var(--crm-muted)]">Ações</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-12">
+                      <Rocket className="w-12 h-12 text-[var(--crm-muted)] mx-auto mb-3 opacity-50" />
+                      <p className="text-sm text-[var(--crm-muted)]">
+                        Nenhum kickoff vinculado a {isGovernmentMode ? 'este órgão' : 'esta empresa'}
+                      </p>
                     </div>
                   )}
                 </div>
