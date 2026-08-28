@@ -1,0 +1,13 @@
+Backup de producao da versao v3
+
+Data: 2026-08-28 14:07:56 -03:00
+
+Servidor: 209.50.241.25
+
+Diretorio: /opt/nexoscrm-backups/v3-20260828-140756
+
+Atalho: /opt/nexoscrm-backups/v3-latest
+
+Conteudo: app.tar.gz, database.sql.gz, uploads.tar.gz, docker-ps.txt, docker-compose.resolved.yml e SHA256SUMS.
+
+Validacoes: npm run build OK; backend Jest 2 suites/7 testes OK; smoke B2G em producao 13/13 OK.
