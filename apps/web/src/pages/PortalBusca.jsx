@@ -28,7 +28,7 @@ const ESTADOS_BR = [
 
 const FONTES_CONFIG = [
   { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
-  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Licitações do Compras.gov.br (SIASG / Lei 8.666)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' },
+  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Licitações do Compras.gov.br (SIASG / Lei 8.666)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷', defaultActive: false },
   { id: 'transparencia-curitiba', nome: 'Transparência Curitiba', descricao: 'Licitações e contratações do Portal da Transparência de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️' },
   { id: 'transparencia-federal', nome: 'Portal Transparência Federal', descricao: 'Licitações do Poder Executivo Federal via API oficial da CGU', metodo: 'API com token', sync: 'Sob demanda', icon: '🔎', defaultActive: false },
   { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄', defaultActive: false },
@@ -123,7 +123,7 @@ const diasAtras = (n) => {
 };
 // Data máxima com dados reais no PNCP (ajuste conforme necessário)
 const dataFimPadrao = () => hoje();
-const dataInicioPadrao = () => diasAtras(365);
+const dataInicioPadrao = () => diasAtras(30);
 const toISODate = (s) => {
   if (!s) return null;
   const str = String(s).replaceAll('-', '').slice(0, 8);
@@ -140,7 +140,7 @@ const matchObjeto = (texto, objeto) => {
 async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
   const dataI = dataInicio ? dataInicio.replaceAll('-', '') : dataInicioPadrao();
   const dataF = dataFim ? dataFim.replaceAll('-', '') : dataFimPadrao();
-  const modalidades = [6, 8, 9, 4, 5]; // Pregão, Dispensa, Inexigibilidade, Concorrência, Tomada de Preços
+  const modalidades = [6]; // Pregão eletrônico é a modalidade com maior volume no PNCP.
   const resultados = [];
 
   // Buscar modalidades em sequência com timeout aumentado e retry
@@ -161,7 +161,7 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
         try {
           const res = await fetch(url.toString(), {
             headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-            signal: AbortSignal.timeout(25000)
+            signal: AbortSignal.timeout(12000)
           });
           
           if (!res.ok) {
@@ -187,7 +187,7 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
               uf: item.unidadeOrgao?.ufSigla || uf || '',
               municipio: item.unidadeOrgao?.municipioNome || '',
               valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
-              dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
+              dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
               dataAbertura: item.dataAberturaProposta,
               dataEncerramento: item.dataEncerramentoProposta,
               numero: item.numeroCompra || '',
@@ -232,7 +232,7 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
       try {
         const res = await fetch(url.toString(), {
           headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-          signal: AbortSignal.timeout(25000)
+          signal: AbortSignal.timeout(12000)
         });
         
         if (!res.ok) {
@@ -307,6 +307,7 @@ async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina 
   const data = Array.isArray(payload?.data) ? payload.data : [];
   if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
     console.debug('PNCP retornou sem resultados nesta consulta:', payload.erros.slice(0, 2).join('; '));
+    throw new Error(payload.erros.slice(0, 2).join('; '));
   }
   return data;
 }

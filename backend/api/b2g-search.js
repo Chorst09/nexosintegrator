@@ -55,26 +55,6 @@ const safeJson = async (res) => {
   try { return await res.json(); } catch { return null; }
 };
 
-// Executa uma lista de tarefas assíncronas com concorrência limitada.
-// Reduz a sobrecarga em APIs públicas lentas (ex.: PNCP), que ficam mais
-// suscetíveis a timeout/504 quando bombardeadas com requisições paralelas.
-// Quando deadlineMs é informado, novas tarefas deixam de ser agendadas após o
-// prazo (as já em andamento continuam), permitindo retorno parcial.
-async function mapConcurrency(items, limit, fn, { deadlineMs = 0 } = {}) {
-  const results = new Array(items.length);
-  let idx = 0;
-  const deadline = deadlineMs > 0 ? Date.now() + deadlineMs : 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (idx < items.length) {
-      if (deadline && Date.now() > deadline) break;
-      const current = idx++;
-      results[current] = await fn(items[current], current);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
 // fetch com timeout + retry para erros transitórios de rede/5xx.
 async function fetchWithRetry(url, options = {}, { timeoutMs = 45000, retries = 2 } = {}) {
   let lastErr;
@@ -93,6 +73,78 @@ async function fetchWithRetry(url, options = {}, { timeoutMs = 45000, retries = 
     }
   }
   throw lastErr;
+}
+
+const PNCP_HEADERS = {
+  Accept: 'application/json',
+  'Accept-Language': 'pt-BR,pt;q=0.9',
+  'User-Agent': 'Mozilla/5.0 (compatible; NexosCRM/2.0)'
+};
+
+const PNCP_CACHE_TTL_MS = 5 * 60 * 1000;
+const PNCP_STALE_TTL_MS = 30 * 60 * 1000;
+const pncpCache = new Map();
+
+const clampNumber = (value, min, max, fallback = min) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(parsed, max));
+};
+
+const isPNCPRateLimitText = (text) => /limite de requisi[cç][oõ]es|support id|requisi[cç][oõ]es excedido/i.test(String(text || ''));
+
+const getPNCPCache = (key, maxAgeMs) => {
+  const cached = pncpCache.get(key);
+  if (!cached || Date.now() - cached.createdAt > maxAgeMs) return null;
+  return cached.data;
+};
+
+const setPNCPCache = (key, data) => {
+  pncpCache.set(key, { createdAt: Date.now(), data });
+  if (pncpCache.size > 120) {
+    const oldest = pncpCache.keys().next().value;
+    pncpCache.delete(oldest);
+  }
+};
+
+async function fetchPNCPItems(url, label, { timeoutMs = 9000 } = {}) {
+  const cacheKey = url.toString();
+  const fresh = getPNCPCache(cacheKey, PNCP_CACHE_TTL_MS);
+  if (fresh) return fresh;
+
+  try {
+    const res = await fetchWithRetry(cacheKey, {
+      headers: PNCP_HEADERS
+    }, { timeoutMs, retries: 0 });
+
+    if (res.status === 429) {
+      throw new Error('PNCP limitou requisições. Aguarde alguns instantes e tente novamente.');
+    }
+    if (res.status === 503 || res.status === 504) {
+      throw new Error('PNCP indisponível no momento.');
+    }
+    if (!res.ok) {
+      throw new Error(`PNCP HTTP ${res.status}.`);
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await res.text().catch(() => '');
+      if (isPNCPRateLimitText(text)) {
+        throw new Error('PNCP limitou requisições. Aguarde alguns instantes e tente novamente.');
+      }
+      throw new Error('PNCP retornou uma resposta não JSON.');
+    }
+
+    const data = await safeJson(res);
+    const items = Array.isArray(data?.data) ? data.data : [];
+    setPNCPCache(cacheKey, items);
+    return items;
+  } catch (err) {
+    const stale = getPNCPCache(cacheKey, PNCP_STALE_TTL_MS);
+    if (stale) return stale;
+    throw new Error(`${label}: ${err.message || 'falha na consulta'}`);
+  }
 }
 
 const matchObjeto = (texto, objeto) => {
@@ -191,73 +243,61 @@ const sourceId = (...parts) => parts
 async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20, dataInicio, dataFim }) {
   const resultados = [];
   const errors = [];
-
   const dataI = dataInicio ? String(dataInicio).replaceAll('-', '') : diasAtras(30);
   const dataF = dataFim ? String(dataFim).replaceAll('-', '') : hoje();
+  const limit = clampNumber(tamanhoPagina, 10, 50, 20);
+  const page = clampNumber(pagina, 1, 500, 1);
+  const startedAt = Date.now();
 
-  // Buscar nas principais modalidades em paralelo (com concorrência limitada)
-  const modalidades = [6, 8, 9, 4, 5]; // Pregão, Dispensa, Inexigibilidade, Concorrência, Tomada de Preços
-  const ufsTarget = uf ? [uf] : [null];
+  const normalize = (items, label) => items
+    .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidade?.razaoSocial}`, objeto))
+    .map(item => ({
+      id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+      fonte: 'PNCP',
+      fonteLogo: '🏛️',
+      titulo: item.objetoCompra || 'Sem descrição',
+      orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+      cnpjOrgao: item.orgaoEntidade?.cnpj || '',
+      modalidade: item.modalidadeNome || label || '',
+      uf: item.unidadeOrgao?.ufSigla || uf || '',
+      municipio: item.unidadeOrgao?.municipioNome || '',
+      valor: formatCurrency(item.valorTotalEstimado),
+      dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
+      dataAbertura: item.dataAberturaProposta,
+      dataEncerramento: item.dataEncerramentoProposta,
+      numero: item.numeroCompra || '',
+      ano: item.anoCompra || '',
+      numeroControlePNCP: item.numeroControlePNCP || '',
+      link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+      status: item.situacaoCompraNome || 'Publicado',
+      situacaoCodigo: item.codigoSituacaoCompra
+    }));
 
-  const tarefas = [];
-  for (const ufTarget of ufsTarget) {
-    for (const modCode of modalidades) {
-      tarefas.push(async () => {
-        try {
-          const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
-          url.searchParams.set('dataInicial', dataI);
-          url.searchParams.set('dataFinal', dataF);
-          url.searchParams.set('codigoModalidadeContratacao', modCode);
-          url.searchParams.set('pagina', pagina);
-          url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
-          if (ufTarget) url.searchParams.set('uf', ufTarget);
+  const fetchPublicacao = async ({ modCode = '' } = {}) => {
+    const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
+    url.searchParams.set('dataInicial', dataI);
+    url.searchParams.set('dataFinal', dataF);
+    url.searchParams.set('pagina', page);
+    url.searchParams.set('tamanhoPagina', limit);
+    if (modCode) url.searchParams.set('codigoModalidadeContratacao', modCode);
+    if (uf) url.searchParams.set('uf', uf);
 
-          const res = await fetchWithRetry(url.toString(), {
-            headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-          }, { timeoutMs: 12000, retries: 0 });
+    const label = modCode ? `PNCP modalidade ${modCode}` : 'PNCP publicações';
+    const items = await fetchPNCPItems(url, label, { timeoutMs: 8000 });
+    return normalize(items, label);
+  };
 
-          if (res.status === 503 || res.status === 504) {
-            throw new Error('PNCP indisponível no momento (HTTP ' + res.status + ')');
-          }
-          if (!res.ok) return [];
+  const consultas = [{ modCode: '' }];
+  const modalidadesPrioritarias = objeto?.trim() || uf ? [6] : [];
+  modalidadesPrioritarias.forEach(modCode => consultas.push({ modCode }));
 
-          const data = await safeJson(res);
-          const items = Array.isArray(data?.data) ? data.data : [];
-
-          return items
-            .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
-            .map(item => ({
-              id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
-              fonte: 'PNCP',
-              fonteLogo: '🏛️',
-              titulo: item.objetoCompra || 'Sem descrição',
-              orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-              cnpjOrgao: item.orgaoEntidade?.cnpj || '',
-              modalidade: item.modalidadeNome || '',
-              uf: item.unidadeOrgao?.ufSigla || ufTarget || '',
-              municipio: item.unidadeOrgao?.municipioNome || '',
-              valor: formatCurrency(item.valorTotalEstimado),
-              dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
-              dataAbertura: item.dataAberturaProposta,
-              dataEncerramento: item.dataEncerramentoProposta,
-              numero: item.numeroCompra || '',
-              ano: item.anoCompra || '',
-              numeroControlePNCP: item.numeroControlePNCP || '',
-              link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-              status: item.situacaoCompraNome || 'Publicado',
-              situacaoCodigo: item.codigoSituacaoCompra
-            }));
-        } catch (err) {
-          errors.push(`PNCP mod${modCode}: ${err.message}`);
-          return [];
-        }
-      });
+  for (const consulta of consultas) {
+    if (resultados.length >= limit || Date.now() - startedAt > 17000) break;
+    try {
+      resultados.push(...await fetchPublicacao(consulta));
+    } catch (err) {
+      errors.push(err.message);
     }
-  }
-
-  const results = await mapConcurrency(tarefas, tarefas.length, (fn) => fn(), { deadlineMs: 22000 });
-  for (const r of results) {
-    resultados.push(...(r || []));
   }
 
   return { resultados, errors };
@@ -277,17 +317,7 @@ async function buscarPNCPProposta({ objeto, uf, pagina = 1, tamanhoPagina = 20, 
     url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
     if (uf) url.searchParams.set('uf', uf);
 
-    const res = await fetchWithRetry(url.toString(), {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-    }, { timeoutMs: 12000, retries: 0 });
-
-    if (res.status === 503 || res.status === 504) {
-      throw new Error('PNCP indisponível no momento (HTTP ' + res.status + ')');
-    }
-    if (!res.ok) return { resultados, errors };
-
-    const data = await safeJson(res);
-    const items = Array.isArray(data?.data) ? data.data : [];
+    const items = await fetchPNCPItems(url, 'PNCP propostas', { timeoutMs: 8000 });
 
     for (const item of items) {
       if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto)) continue;
@@ -316,6 +346,21 @@ async function buscarPNCPProposta({ objeto, uf, pagina = 1, tamanhoPagina = 20, 
     }
   } catch (err) {
     errors.push(`PNCP Proposta: ${err.message}`);
+  }
+
+  return { resultados, errors };
+}
+
+async function buscarPNCPAgregado({ objeto, uf, pagina = 1, tamanhoPagina = 20, dataInicio, dataFim, incluirPropostas = true }) {
+  const publicacoes = await buscarPNCPPublicacao({ objeto, uf, pagina, tamanhoPagina, dataInicio, dataFim });
+  const resultados = [...(publicacoes.resultados || [])];
+  const errors = [...(publicacoes.errors || [])];
+  const limit = clampNumber(tamanhoPagina, 10, 50, 20);
+
+  if (incluirPropostas && resultados.length === 0 && errors.length === 0) {
+    const propostas = await buscarPNCPProposta({ objeto, uf, pagina, tamanhoPagina: limit - resultados.length, dataInicio, dataFim });
+    resultados.push(...(propostas.resultados || []));
+    errors.push(...(propostas.errors || []));
   }
 
   return { resultados, errors };
@@ -664,7 +709,7 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
             uf: 'PR',
             municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
             valor: formatCurrency(item.valorTotalEstimado),
-            dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
+            dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
             dataAbertura: item.dataAberturaProposta,
             dataEncerramento: item.dataEncerramentoProposta,
             numero: item.numeroCompra || '',
@@ -1005,16 +1050,17 @@ router.get('/search', auth, async (req, res) => {
 
     if (fontesAtivas.includes('pncp')) {
       promises.push(
-        buscarPNCPPublicacao({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
-          .catch(err => ({ resultados: [], errors: [`PNCP Publicação: ${err.message}`] }))
+        buscarPNCPAgregado({
+          objeto,
+          uf,
+          pagina: Number(pagina),
+          tamanhoPagina: Number(tamanhoPagina),
+          dataInicio,
+          dataFim,
+          incluirPropostas: incluirPropostas === 'true'
+        })
+          .catch(err => ({ resultados: [], errors: [`PNCP: ${err.message}`] }))
       );
-
-      if (incluirPropostas === 'true') {
-        promises.push(
-          buscarPNCPProposta({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
-            .catch(err => ({ resultados: [], errors: [`PNCP Proposta: ${err.message}`] }))
-        );
-      }
     }
 
     if (fontesAtivas.includes('comprasnet')) {
