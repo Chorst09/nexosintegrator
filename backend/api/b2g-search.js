@@ -522,30 +522,85 @@ const parseCuritibaRowsByPosition = (html) => {
 };
 
 async function buscarCuritibaECompras({ objeto, uf, cidade, tamanhoPagina = 20, dataInicio, dataFim }) {
-  const resultados = [];
-  const errors = [];
-
-  // ✅ Validação: objeto obrigatório
-  if (!objeto || String(objeto).trim() === '') {
-    errors.push('e-Compras Curitiba: parâmetro "objeto" é obrigatório');
-    return { resultados, errors };
-  }
+  const limit = Math.max(10, Math.min(Number(tamanhoPagina) || 20, 100));
+  const diagnostics = [];
 
   if (uf && String(uf).trim().toUpperCase() !== 'PR') {
-    return { resultados, errors };
+    return { resultados: [], errors: [] };
   }
   if (cidade && !String(cidade).toLowerCase().includes('curitiba')) {
-    return { resultados, errors };
+    return { resultados: [], errors: [] };
   }
 
-  // ⚡ OTIMIZAÇÃO CRÍTICA: Portal e-Compras Curitiba SEMPRE bloqueia (Akamai 403)
-  // Tentar acessar o portal desperdiça 18s + pode causar 502 do Nginx (60s total timeout)
-  // Solução: ir DIRETO para fallback PNCP economiza tempo e evita 502
-  console.log('[e-Compras Curitiba] Usando fallback PNCP direto (portal bloqueado por Akamai)');
-  const fallback = await buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina });
+  try {
+    const res = await fetchWithRetry(CURITIBA_ECOMPRAS_URL, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; NexosCRM/2.0)'
+      }
+    }, { timeoutMs: 8000, retries: 0 });
+
+    if (res.ok) {
+      const html = await res.text();
+      if (/Access Denied|edgesuite|akamai/i.test(html)) {
+        diagnostics.push('Portal e-Compras bloqueou acesso programático.');
+      } else {
+        const data = deduplicar(parseCuritibaRowsByPosition(html))
+          .filter(item => matchObjeto(`${item.titulo} ${item.orgao} ${item.modalidade} ${item.numero}`, objeto))
+          .filter(item => isWithinDateRange(item.dataPublicacao || item.dataAbertura || item.dataEncerramento, dataInicio, dataFim))
+          .slice(0, limit);
+
+        if (data.length > 0) {
+          return { resultados: data, errors: [] };
+        }
+      }
+    } else {
+      diagnostics.push(`Portal e-Compras HTTP ${res.status}.`);
+    }
+  } catch (err) {
+    diagnostics.push(`Portal e-Compras indisponível: ${err.message}`);
+  }
+
+  const transparencia = await buscarTransparenciaCuritiba({
+    objeto,
+    uf: 'PR',
+    cidade: 'Curitiba',
+    dataInicio,
+    dataFim,
+    tamanhoPagina: limit
+  });
+
+  if (transparencia.resultados?.length > 0) {
+    return {
+      resultados: transparencia.resultados.slice(0, limit).map(item => ({
+        ...item,
+        fonte: 'e-Compras Curitiba',
+        fonteLogo: '🏙️'
+      })),
+      errors: []
+    };
+  }
+
+  const fallback = await buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanhoPagina: limit });
+  if (fallback.resultados?.length > 0) {
+    return {
+      resultados: fallback.resultados.slice(0, limit).map(item => ({
+        ...item,
+        fonte: 'e-Compras Curitiba',
+        fonteLogo: '🏙️'
+      })),
+      errors: []
+    };
+  }
+
   return {
-    resultados: fallback.resultados,
-    errors: fallback.errors.length > 0 ? fallback.errors : undefined
+    resultados: [],
+    errors: [
+      ...diagnostics,
+      ...(transparencia.errors || []),
+      ...(fallback.errors || [])
+    ].slice(0, 3)
   };
 }
 
@@ -558,43 +613,36 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
   try {
     const dataI = dataInicio ? String(dataInicio).replaceAll('-', '') : diasAtras(45);
     const dataF = dataFim ? String(dataFim).replaceAll('-', '') : hoje();
-    const size = Math.max(20, Math.min(Number(tamanhoPagina) || 20, 100));
+    const limit = Math.max(10, Math.min(Number(tamanhoPagina) || 20, 100));
+    const requestSize = Math.max(50, limit);
+    const maxPages = 3;
 
-    const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
-    url.searchParams.set('dataInicial', dataI);
-    url.searchParams.set('dataFinal', dataF);
-    url.searchParams.set('uf', 'PR');
-    url.searchParams.set('pagina', 1);
-    url.searchParams.set('tamanhoPagina', size);
-
-    let retries = 1; // Reduzido para 1 retry apenas
-    let lastError = null;
-    
-    while (retries >= 0) {
+    for (let pagina = 1; pagina <= maxPages && resultados.length < limit; pagina += 1) {
       try {
+        const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
+        url.searchParams.set('dataInicial', dataI);
+        url.searchParams.set('dataFinal', dataF);
+        url.searchParams.set('uf', 'PR');
+        url.searchParams.set('pagina', pagina);
+        url.searchParams.set('tamanhoPagina', requestSize);
+
         const res = await fetchWithRetry(url.toString(), {
           headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' }
-        }, { timeoutMs: 15000, retries: 0 }); // ⚡ Reduzido para 15s, sem retry interno
+        }, { timeoutMs: 8000, retries: 0 });
 
-        // Rate limit ou indisponível
         if (res.status === 429) {
           errors.push('PNCP: limite de requisições excedido. Tente novamente em alguns instantes.');
-          return { resultados, errors };
+          break;
         }
         
         if (res.status === 503 || res.status === 504) {
-          if (retries > 0) {
-            await new Promise(r => setTimeout(r, 500));
-            retries--;
-            continue;
-          }
           errors.push('PNCP indisponível no momento (HTTP ' + res.status + ')');
-          return { resultados, errors };
+          break;
         }
         
         if (!res.ok) {
           errors.push(`PNCP HTTP ${res.status}`);
-          return { resultados, errors };
+          break;
         }
 
         const data = await safeJson(res);
@@ -624,22 +672,16 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
             link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
             status: item.situacaoCompraNome || 'Publicado'
           });
+
+          if (resultados.length >= limit) break;
         }
-        break; // Sucesso, sair do loop
       } catch (err) {
-        lastError = err;
-        if (retries > 0) {
-          await new Promise(r => setTimeout(r, 1000));
-          retries--;
-        } else {
-          errors.push(`e-Compras Curitiba (PNCP): ${err.message}`);
-          console.error('[Curitiba Fallback] Erro após retries:', err.message);
-        }
+        errors.push(`e-Compras Curitiba (PNCP página ${pagina}): ${err.message}`);
+        break;
       }
     }
   } catch (err) {
     errors.push(`e-Compras Curitiba (PNCP): ${err.message}`);
-    console.error('[Curitiba Fallback] Erro geral:', err.message);
   }
   return { resultados, errors };
 }

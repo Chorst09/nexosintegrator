@@ -35,8 +35,7 @@ const FONTES_CONFIG = [
   { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️', defaultActive: false },
   { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋', defaultActive: false },
   { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢', defaultActive: false },
-  { id: 'curitiba-ecompras', nome: 'e-Compras Curitiba', descricao: 'Portal de Compras Eletrônicas do Município de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️', defaultActive: false },
-  { id: 'conlicitacao', portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎', integrada: true }
+  { id: 'curitiba-ecompras', nome: 'e-Compras Curitiba', descricao: 'Portal de Compras Eletrônicas do Município de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️', defaultActive: false }
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
@@ -45,17 +44,29 @@ const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.filter(fonte => fonte.defaultActive !
 
 const FONTES_PAGAS = [
   { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' },
-  { portal: 'bnc', nome: 'BNC Compras', descricao: 'Banco Nacional de Compras', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🏦' },
-  { portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎' }
+  { portal: 'bnc', nome: 'BNC Compras', descricao: 'Banco Nacional de Compras', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🏦' }
 ];
 
+const PORTAIS_INTEGRADOS_SUPORTADOS = new Set(FONTES_PAGAS.map(fonte => fonte.portal));
+
 const novaFonteForm = () => ({
-  portal: 'conlicitacao',
-  nome: 'ConLicitação',
+  portal: 'bll',
+  nome: 'BLL Compras',
   usuario: '',
   senha: '',
   ativa: true
 });
+
+const readFontesIntegradas = () => {
+  try {
+    const fontes = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
+    return Array.isArray(fontes)
+      ? fontes.filter(fonte => PORTAIS_INTEGRADOS_SUPORTADOS.has(fonte.portal))
+      : [];
+  } catch {
+    return [];
+  }
+};
 
 const ORDENS = [
   { value: 'data_desc', label: 'Mais recentes primeiro' },
@@ -63,20 +74,6 @@ const ORDENS = [
   { value: 'valor_desc', label: 'Maior valor primeiro' },
   { value: 'valor_asc', label: 'Menor valor primeiro' },
   { value: 'abertura_asc', label: 'Abertura mais próxima' }
-];
-
-const MODALIDADES_CONLICITACAO = [
-  { id: '', nome: 'Todas as modalidades' },
-  { id: 10, nome: 'Pregão Eletrônico' },
-  { id: 11, nome: 'Pregão Presencial' },
-  { id: 4, nome: 'Concorrência' },
-  { id: 7, nome: 'Dispensa de Licitação' },
-  { id: 13, nome: 'Tomada de Preço' },
-  { id: 6, nome: 'Convite' },
-  { id: 8, nome: 'Leilão' },
-  { id: 1, nome: 'Audiência Pública' },
-  { id: 2, nome: 'Compra Eletrônica' },
-  { id: 12, nome: 'RDC' }
 ];
 
 const CATEGORIAS_PRODUTO_TI = [
@@ -339,7 +336,6 @@ async function buscarComprasGovProxy(tipo, params) {
   if (params.dataInicio) url.searchParams.set('dataInicio', params.dataInicio);
   if (params.dataFim) url.searchParams.set('dataFim', params.dataFim);
   if (params.uf) url.searchParams.set('uf', params.uf);
-  if (params.modalidadeId) url.searchParams.set('modalidadeId', params.modalidadeId);
   url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(params.tamanhoPagina || 20), 500)));
 
   const res = await fetch(url.toString(), {
@@ -649,13 +645,11 @@ const getFonteBadgeClass = (fonte) => {
     'e-Compras Curitiba': 'bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-700',
     'BLL': 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
     'BNC': 'bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
-    'ConLicitação': 'bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700',
   };
   return map[fonte] || 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
 };
 
 const getFonteDisplayName = (fonte) => {
-  if (fonte.portal === 'conlicitacao') return 'ConLicitação';
   return String(fonte.nome || fonte.portal || '').replace(' Compras', '').toUpperCase();
 };
 
@@ -694,8 +688,7 @@ const normalizePortalItem = (item, fonte) => ({
 });
 
 async function buscarFonteIntegrada(fonte, params) {
-  const permiteCredencialServidor = fonte.portal === 'conlicitacao';
-  if (!permiteCredencialServidor && (!fonte.usuario || !fonte.senha)) return [];
+  if (!fonte.usuario || !fonte.senha) return [];
 
   const url = new URL(buildApiUrl('/bll-proxy'), window.location.origin);
   url.searchParams.set('portal', fonte.portal);
@@ -711,16 +704,13 @@ async function buscarFonteIntegrada(fonte, params) {
   url.searchParams.set('comEdital', params.comEdital ? 'true' : '');
   url.searchParams.set('comMonitoramentoChat', params.comMonitoramentoChat ? 'true' : '');
   url.searchParams.set('numeroEdital', params.numeroEdital || '');
-  url.searchParams.set('numeroConlicitacao', params.numeroConlicitacao || '');
-  url.searchParams.set('modalidadeId', params.modalidadeId || '');
   url.searchParams.set('tamanhoPagina', params.tamanhoPagina || 20);
   if (fonte.portal !== 'bll') url.searchParams.set('useScraper', 'true');
 
-  const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
   const res = await fetch(url.toString(), {
     headers: {
-      [`x-${headerPrefix}-email`]: fonte.usuario || '',
-      [`x-${headerPrefix}-password`]: fonte.senha || ''
+      [`x-${fonte.portal}-email`]: fonte.usuario || '',
+      [`x-${fonte.portal}-password`]: fonte.senha || ''
     },
     signal: AbortSignal.timeout(18000)
   });
@@ -1073,8 +1063,6 @@ export default function PortalBusca() {
   const [comEdital, setComEdital] = useState(false);
   const [comMonitoramentoChat, setComMonitoramentoChat] = useState(false);
   const [numeroEdital, setNumeroEdital] = useState('');
-  const [numeroConlicitacao, setNumeroConlicitacao] = useState('');
-  const [modalidadeId, setModalidadeId] = useState('');
   const [ordem, setOrdem] = useState('data_desc');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -1082,8 +1070,8 @@ export default function PortalBusca() {
   const [dataPrazoFim, setDataPrazoFim] = useState('');
   const [fontesAtivas, setFontesAtivas] = useState(() => {
     try {
-      const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
-      return [...FONTES_PADRAO_ATIVAS, ...integradas.filter(f => f.ativa !== false && f.portal !== 'conlicitacao').map(f => f.id)];
+      const integradas = readFontesIntegradas();
+      return [...FONTES_PADRAO_ATIVAS, ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
     } catch {
       return FONTES_PADRAO_ATIVAS;
     }
@@ -1093,7 +1081,7 @@ export default function PortalBusca() {
   const [produtoCustom, setProdutoCustom] = useState('');
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [fontesIntegradas, setFontesIntegradas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]'); } catch { return []; }
+    try { return readFontesIntegradas(); } catch { return []; }
   });
   const [modalFonteAberto, setModalFonteAberto] = useState(false);
   const [fonteForm, setFonteForm] = useState(novaFonteForm);
@@ -1135,7 +1123,7 @@ export default function PortalBusca() {
   const [toasts, setToasts] = useState([]);
 
   const fontesDisponiveis = useMemo(
-    () => [...FONTES_CONFIG, ...fontesIntegradas.filter(fonte => fonte.portal !== 'conlicitacao')],
+    () => [...FONTES_CONFIG, ...fontesIntegradas.filter(fonte => PORTAIS_INTEGRADOS_SUPORTADOS.has(fonte.portal))],
     [fontesIntegradas]
   );
 
@@ -1144,6 +1132,14 @@ export default function PortalBusca() {
     setToasts(prev => [...prev, { id, title, text, error }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(FONTES_STORAGE_KEY, JSON.stringify(fontesIntegradas));
+    setFontesAtivas(prev => {
+      const next = prev.filter(id => fontesDisponiveis.some(fonte => fonte.id === id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [fontesDisponiveis, fontesIntegradas]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1247,9 +1243,7 @@ export default function PortalBusca() {
       dataFim,
       dataPrazoInicio,
       dataPrazoFim,
-      numeroEdital,
-      numeroConlicitacao,
-      modalidadeId
+      numeroEdital
     ].some(value => String(value || '').trim());
 
     if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0 && !produtoCustom.trim()) {
@@ -1283,8 +1277,6 @@ export default function PortalBusca() {
         comEdital,
         comMonitoramentoChat,
         numeroEdital,
-        numeroConlicitacao,
-        modalidadeId,
         tamanhoPagina: 50
       };
 
@@ -1316,12 +1308,8 @@ export default function PortalBusca() {
       if (fontesAtivas.includes('curitiba-ecompras')) {
         promises.push(executarFonte('e-Compras Curitiba', buscarCuritibaECompras(params)));
       }
-      if (fontesAtivas.includes('conlicitacao')) {
-        const fonteConlicitacao = fontesIntegradas.find(fonte => fonte.portal === 'conlicitacao') || FONTES_CONFIG.find(fonte => fonte.id === 'conlicitacao');
-        promises.push(executarFonte('ConLicitação', buscarFonteIntegrada(fonteConlicitacao, params)));
-      }
       fontesIntegradas
-        .filter(fonte => fonte.ativa && fonte.portal !== 'conlicitacao' && fontesAtivas.includes(fonte.id))
+        .filter(fonte => fonte.ativa && PORTAIS_INTEGRADOS_SUPORTADOS.has(fonte.portal) && fontesAtivas.includes(fonte.id))
         .forEach(fonte => promises.push(executarFonte(getFonteDisplayName(fonte), buscarFonteIntegrada(fonte, params))));
 
       if (promises.length === 0) {
@@ -1382,8 +1370,6 @@ export default function PortalBusca() {
     comEdital,
     comMonitoramentoChat,
     numeroEdital,
-    numeroConlicitacao,
-    modalidadeId,
     ordem,
     incluirPropostas,
     fontesAtivas,
@@ -1398,7 +1384,7 @@ export default function PortalBusca() {
   const limparFiltros = () => {
     setObjeto(''); setUf(''); setCidade('');
     setApenasVigentes(false); setBuscaExata(false); setComEdital(false); setComMonitoramentoChat(false);
-    setNumeroEdital(''); setNumeroConlicitacao(''); setModalidadeId('');
+    setNumeroEdital('');
     setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
     setCategoriasProdutoTI([]);
     setProdutoCustom('');
@@ -1673,11 +1659,10 @@ export default function PortalBusca() {
       const url = new URL(buildApiUrl('/bll-proxy'), window.location.origin);
       url.searchParams.set('portal', fonte.portal);
       url.searchParams.set('action', 'login');
-      const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
       const res = await fetch(url.toString(), {
         headers: {
-          [`x-${headerPrefix}-email`]: fonte.usuario,
-          [`x-${headerPrefix}-password`]: fonte.senha
+          [`x-${fonte.portal}-email`]: fonte.usuario,
+          [`x-${fonte.portal}-password`]: fonte.senha
         },
         signal: AbortSignal.timeout(15000)
       });
@@ -1876,7 +1861,7 @@ export default function PortalBusca() {
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
-                      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">ConLicitações</p>
+                      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Portais autenticados</p>
                       <div className="flex flex-wrap gap-2">
                         {[
                           { label: 'Busca exata', checked: buscaExata, onChange: setBuscaExata },
@@ -1892,22 +1877,10 @@ export default function PortalBusca() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.2fr]">
+                  <div className="grid gap-3">
                     <div>
                       <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Nº edital</label>
                       <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">ConLicitação</label>
-                      <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Modalidade</label>
-                      <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-                        {MODALIDADES_CONLICITACAO.map(modalidade => (
-                          <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
-                        ))}
-                      </select>
                     </div>
                   </div>
 
@@ -2178,7 +2151,7 @@ export default function PortalBusca() {
             >
               <Plus size={32} className="mb-2" />
               <span className="font-medium text-sm">Adicionar Nova Fonte</span>
-              <span className="text-xs mt-1 text-center">BLL, BNC, ConLicitação</span>
+              <span className="text-xs mt-1 text-center">BLL e BNC</span>
             </button>
           </div>
         </div>
