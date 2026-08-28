@@ -741,6 +741,86 @@ h4 {
   background: rgb(var(--crm-surface-rgb) / 0.96);
 }
 
+.precificacao-module .proposal-view,
+.dark .precificacao-module .proposal-view,
+.dark .precificacao-module .proposal-view.bg-white {
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.28) !important;
+}
+
+.precificacao-module .proposal-view :where(h1, h2, h3, h4, p, span, strong, td, th, label),
+.dark .precificacao-module .proposal-view :where(h1, h2, h3, h4, p, span, strong, td, th, label) {
+  color: inherit;
+}
+
+.precificacao-module .proposal-view .text-gray-900,
+.precificacao-module .proposal-view .text-black,
+.dark .precificacao-module .proposal-view .text-gray-900,
+.dark .precificacao-module .proposal-view .text-black {
+  color: #111827 !important;
+}
+
+.precificacao-module .proposal-view .text-gray-700,
+.precificacao-module .proposal-view .text-gray-600,
+.precificacao-module .proposal-view .text-gray-500,
+.dark .precificacao-module .proposal-view .text-gray-700,
+.dark .precificacao-module .proposal-view .text-gray-600,
+.dark .precificacao-module .proposal-view .text-gray-500 {
+  color: #4b5563 !important;
+}
+
+.precificacao-module .proposal-view .bg-slate-800,
+.dark .precificacao-module .proposal-view .bg-slate-800 {
+  background: #1f2937 !important;
+  color: #f8fafc !important;
+}
+
+.precificacao-module .proposal-view .bg-slate-800 :where(h1, h2, h3, h4, p, span, strong, td, th, label),
+.dark .precificacao-module .proposal-view .bg-slate-800 :where(h1, h2, h3, h4, p, span, strong, td, th, label) {
+  color: inherit;
+}
+
+.precificacao-module .proposal-view .text-white,
+.dark .precificacao-module .proposal-view .text-white {
+  color: #ffffff !important;
+}
+
+.precificacao-module .proposal-view .text-green-700,
+.dark .precificacao-module .proposal-view .text-green-700 {
+  color: #15803d !important;
+}
+
+.precificacao-module .proposal-view table,
+.dark .precificacao-module .proposal-view table {
+  color: #111827;
+}
+
+.precificacao-module .proposal-view button,
+.dark .precificacao-module .proposal-view button {
+  color: inherit;
+}
+
+.precificacao-module .proposal-view button.bg-blue-600,
+.dark .precificacao-module .proposal-view button.bg-blue-600 {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+}
+
+.precificacao-module .proposal-view button.bg-blue-600:hover,
+.dark .precificacao-module .proposal-view button.bg-blue-600:hover {
+  background: #1d4ed8 !important;
+}
+
+.precificacao-module .proposal-view button[class*="border"],
+.dark .precificacao-module .proposal-view button[class*="border"] {
+  border-color: #d1d5db !important;
+}
+
 .dark .precificacao-module {
   --prec-card-bg: rgb(var(--crm-surface-rgb) / 0.96);
   --prec-card-muted: rgb(var(--crm-surface-2-rgb) / 0.78);

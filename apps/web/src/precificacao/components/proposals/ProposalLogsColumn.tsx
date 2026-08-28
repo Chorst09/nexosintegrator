@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ProposalLogsModal } from './ProposalLogsModal'
 import { Clock } from 'lucide-react'
+import { getCRMAuthHeaders } from '@/config/api'
 
 interface ProposalLogsColumnProps {
   proposalId: string
@@ -27,7 +28,15 @@ export function ProposalLogsColumn({
   const fetchLogsInfo = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/proposals/${proposalId}/logs/summary`)
+      const response = await fetch(`/api/proposals/${proposalId}/logs/summary`, {
+        headers: getCRMAuthHeaders(),
+      })
+
+      if (response.status === 404) {
+        setLogsCount(0)
+        setLastAction(null)
+        return
+      }
 
       if (response.ok) {
         const data = await response.json()

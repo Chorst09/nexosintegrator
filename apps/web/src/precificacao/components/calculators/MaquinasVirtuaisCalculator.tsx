@@ -1463,9 +1463,7 @@ const MaquinasVirtuaisCalculator = ({ onBackToDashboard, initialProposalId }: Ma
             try {
                 const response = await fetch(`/api/simulator/proposals/${proposalId}`, {
                     method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: getCRMAuthHeaders(),
                 });
 
                 if (response.ok) {

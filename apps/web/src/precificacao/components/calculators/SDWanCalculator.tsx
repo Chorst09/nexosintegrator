@@ -772,6 +772,7 @@ export default function SDWanCalculator({ onBackToDashboard, initialProposalId }
     try {
       const response = await fetch(`/api/simulator/proposals/${proposalId}`, {
         method: 'DELETE',
+        headers: getCRMAuthHeaders(),
       })
 
       if (response.ok) {

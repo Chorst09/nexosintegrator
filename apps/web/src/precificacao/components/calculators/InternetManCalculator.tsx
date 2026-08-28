@@ -1679,9 +1679,7 @@ const InternetManCalculator: React.FC<InternetManCalculatorProps> = ({ onBackToD
             try {
                 const response = await fetch(`/api/simulator/proposals/${id}`, {
                     method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: getCRMAuthHeaders(),
                 });
 
                 if (response.ok) {

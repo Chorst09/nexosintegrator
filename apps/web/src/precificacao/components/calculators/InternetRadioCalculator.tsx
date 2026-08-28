@@ -1535,9 +1535,7 @@ const InternetRadioCalculator: React.FC<InternetRadioCalculatorProps> = ({ onBac
             try {
                 const response = await fetch(`/api/simulator/proposals/${id}`, {
                     method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: getCRMAuthHeaders(),
                 });
 
                 if (response.ok) {

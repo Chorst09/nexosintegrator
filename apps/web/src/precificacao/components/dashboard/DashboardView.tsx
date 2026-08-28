@@ -4,8 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Proposal, Partner } from '@/lib/types';
 import ProposalsView from '@/components/proposals/ProposalsView';
-import StatCard from './StatCard';
-import { Phone, Server, Wifi, Radio, TrendingUp, PieChart as PieChartIcon, Target, Maximize2, Minimize2, Loader2, RefreshCcw } from 'lucide-react';
+import { Phone, Server, Wifi, Radio, TrendingUp, Target, Maximize2, Minimize2, Loader2, RefreshCcw } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -38,48 +37,64 @@ const BUSINESS_TYPE_LABELS: Record<string, string> = {
 
 const FUNNEL_LAYER_STYLE = [
   {
-    key: 'lead_generation',
-    label: 'Geração de Leads',
-    gradient: 'from-[#ff6f0f] to-[#ff9d17]',
-    shadow: 'shadow-[0_0_24px_rgba(255,111,15,0.42)]',
+    key: 'simulations',
+    label: 'Simulações',
+    color: '#0ea5e9',
+    edge: '#38bdf8',
+    temperatures: [0, 25],
   },
   {
-    key: 'qualify',
-    label: 'Qualificar Leads',
-    gradient: 'from-[#2384ff] to-[#20d4f5]',
-    shadow: 'shadow-[0_0_24px_rgba(32,212,245,0.32)]',
+    key: 'qualification',
+    label: 'Qualificação',
+    color: '#2563eb',
+    edge: '#60a5fa',
+    temperatures: [25],
   },
   {
-    key: 'evaluate',
-    label: 'Avaliar Desafios / Problemas',
-    gradient: 'from-[#20d4f5] to-[#14a9e8]',
-    shadow: 'shadow-[0_0_24px_rgba(32,212,245,0.3)]',
+    key: 'diagnosis',
+    label: 'Diagnóstico Técnico',
+    color: '#0f9f8f',
+    edge: '#2dd4bf',
+    temperatures: [50],
   },
   {
-    key: 'solve',
-    label: 'Solucionar Problemas',
-    gradient: 'from-[#ffb21a] to-[#ff6f0f]',
-    shadow: 'shadow-[0_0_24px_rgba(255,178,26,0.28)]',
+    key: 'proposal',
+    label: 'Proposta Gerada',
+    color: '#f59e0b',
+    edge: '#fbbf24',
+    temperatures: [50, 75],
   },
   {
-    key: 'convert',
-    label: 'Converter',
-    gradient: 'from-[#18d97c] to-[#10b968]',
-    shadow: 'shadow-[0_0_24px_rgba(24,217,124,0.3)]',
+    key: 'negotiation',
+    label: 'Negociação',
+    color: '#ea580c',
+    edge: '#fb923c',
+    temperatures: [75],
   },
   {
-    key: 'close',
-    label: 'Fechar',
-    gradient: 'from-[#835cff] to-[#2384ff]',
-    shadow: 'shadow-[0_0_24px_rgba(131,92,255,0.3)]',
+    key: 'won',
+    label: 'Aprovadas',
+    color: '#16a34a',
+    edge: '#4ade80',
+    temperatures: [100],
+  },
+  {
+    key: 'lost',
+    label: 'Perdidas',
+    color: '#64748b',
+    edge: '#94a3b8',
+    temperatures: [0],
   },
 ] as const;
 
-const FORECAST_GAUGE_COLORS = ['#ff436d', '#ff6f0f', '#ffb21a', '#20d4f5', '#18d97c'] as const;
-const FORECAST_GAUGE_RADIUS = 64;
-const FORECAST_GAUGE_ARC_PATH = `M 26 82 A ${FORECAST_GAUGE_RADIUS} ${FORECAST_GAUGE_RADIUS} 0 0 1 154 82`;
-const FORECAST_GAUGE_ARC_LENGTH = Math.PI * FORECAST_GAUGE_RADIUS;
-const FORECAST_GAUGE_SEGMENT_LENGTH = FORECAST_GAUGE_ARC_LENGTH / FORECAST_GAUGE_COLORS.length;
+const TEMPERATURE_LEVELS = [
+  { value: 0, label: 'Frio / rascunho', color: '#ff436d' },
+  { value: 25, label: 'Cotação inicial', color: '#fff176' },
+  { value: 50, label: 'Qualificada', color: '#4ade80' },
+  { value: 75, label: 'Quente / em proposta', color: '#20d4f5' },
+  { value: 100, label: 'Aprovada / fechada', color: '#a855f7' },
+] as const;
+
 const FORECAST_STEP_LEVELS = [0, 25, 50, 75, 100] as const;
 
 const formatCurrencyCompact = (value: number) =>
@@ -224,6 +239,14 @@ const snapToForecastStep = (percent: number) =>
     FORECAST_STEP_LEVELS[0]
   );
 
+const getEffectiveForecastTemperature = (proposal: Proposal): number => {
+  const statusWeight = getForecastWeightPercent(proposal.status);
+  if (statusWeight === 0 || statusWeight === 75 || statusWeight === 100) return statusWeight;
+
+  const explicitTemperature = getForecastTemperatureFromProposal(proposal);
+  return explicitTemperature !== undefined ? snapToForecastStep(explicitTemperature) : statusWeight;
+};
+
 const classifyFunnelStage = (status: string): 'previstos' | 'fechados' | 'perdidos' => {
   const normalizedStatus = (status || '').trim().toLowerCase();
 
@@ -278,9 +301,8 @@ const DashboardView = () => {
       }
 
       if (selectedTemperature !== 'all') {
-        const explicitTemperature = getForecastTemperatureFromProposal(proposal);
-        const proposalTemperature = explicitTemperature !== undefined ? explicitTemperature : getForecastWeightPercent(proposal.status);
-        if (String(proposalTemperature) !== selectedTemperature) return false;
+        const selectedTemperatureValue = Number(selectedTemperature);
+        if (getEffectiveForecastTemperature(proposal) !== selectedTemperatureValue) return false;
       }
 
       return true;
@@ -438,33 +460,38 @@ const DashboardView = () => {
   }, [filteredMonthProposals]);
 
   const funnelVisualData = useMemo(() => {
-    const previstos = salesFunnelData.find((item) => item.key === 'previstos')?.value || 0;
+    const total = filteredMonthProposals.length;
+    const countByMinimumTemperature = (minimum: number) =>
+      filteredMonthProposals.filter((proposal) => classifyFunnelStage(proposal.status) === 'previstos' && getEffectiveForecastTemperature(proposal) >= minimum).length;
     const fechados = salesFunnelData.find((item) => item.key === 'fechados')?.value || 0;
-    const topo = Math.max(previstos, fechados, 1);
+    const perdidos = salesFunnelData.find((item) => item.key === 'perdidos')?.value || 0;
 
-    const s6 = fechados;
-    const s5 = Math.max(s6, Math.round(topo * 0.14));
-    const s4 = Math.max(s5, Math.round(topo * 0.27));
-    const s3 = Math.max(s4, Math.round(topo * 0.4));
-    const s2 = Math.max(s3, Math.round(topo * 0.62));
-    const s1 = Math.max(s2, topo);
-
-    const values = [s1, s2, s3, s4, s5, s6];
-    const widths = [100, 92, 84, 76, 68, 60];
+    const values = [
+      total,
+      countByMinimumTemperature(25),
+      countByMinimumTemperature(50),
+      Math.max(countByMinimumTemperature(50), fechados),
+      countByMinimumTemperature(75),
+      fechados,
+      perdidos,
+    ];
+    const widths = [100, 91, 82, 72, 62, 50, 36];
+    const base = Math.max(total, 1);
 
     return FUNNEL_LAYER_STYLE.map((stage, index) => ({
       ...stage,
       value: values[index],
+      percent: (values[index] / base) * 100,
       width: widths[index],
     }));
-  }, [salesFunnelData]);
+  }, [filteredMonthProposals, salesFunnelData]);
 
   const funnelSummary = useMemo(() => {
-    const previstos = salesFunnelData.find((item) => item.key === 'previstos')?.value || 0;
+    const previstos = filteredMonthProposals.length;
     const fechados = salesFunnelData.find((item) => item.key === 'fechados')?.value || 0;
     const conversion = previstos > 0 ? (fechados / previstos) * 100 : 0;
     return { previstos, fechados, conversion };
-  }, [salesFunnelData]);
+  }, [filteredMonthProposals.length, salesFunnelData]);
 
   const monthlyFunnelBoard = useMemo(() => {
     const isRenewal = (status: string) => ['renovacao', 'renovado', 'renovada'].includes(normalizeStatus(status));
@@ -483,8 +510,7 @@ const DashboardView = () => {
 
     const weightedForecast = all.reduce(
       (acc, proposal) => {
-        const explicitTemperature = getForecastTemperatureFromProposal(proposal);
-        const weight = (explicitTemperature !== undefined ? explicitTemperature : getForecastWeightPercent(proposal.status)) / 100;
+        const weight = getEffectiveForecastTemperature(proposal) / 100;
 
         acc.value += (proposal.value || 0) * weight;
         acc.qty += weight;
@@ -515,32 +541,19 @@ const DashboardView = () => {
     };
   }, [filteredMonthProposals]);
 
-  const salesForecastChartData = useMemo(() => {
-    const newSales = monthlyFunnelBoard.bottom[0];
-    const renewals = monthlyFunnelBoard.bottom[2];
-    const lost = monthlyFunnelBoard.bottom[3];
-    const forecast = monthlyFunnelBoard.top[2];
-
-    return [
-      { key: 'new-sales', label: 'Novas', fullLabel: 'Vendas novas assinadas', value: newSales?.amount || 0, qty: newSales?.qty || 0, color: '#18d97c' },
-      { key: 'renewals', label: 'Renovações', fullLabel: 'Renovações assinadas', value: renewals?.amount || 0, qty: renewals?.qty || 0, color: '#ffb21a' },
-      { key: 'lost', label: 'Perdidos', fullLabel: 'Projetos perdidos', value: -(lost?.amount || 0), qty: lost?.qty || 0, color: '#ff436d' },
-      { key: 'forecast', label: 'Forecast', fullLabel: 'Forecast final', value: forecast?.amount || 0, qty: forecast?.qty || 0, color: '#20d4f5' },
-    ];
-  }, [monthlyFunnelBoard]);
-
   const forecastGaugePercent = useMemo(
     () => Math.max(0, Math.min(monthlyFunnelBoard.forecastPercent, 100)),
     [monthlyFunnelBoard.forecastPercent]
   );
 
-  const forecastGaugeNeedle = useMemo(() => {
-    const theta = Math.PI - (forecastGaugePercent / 100) * Math.PI;
-    return {
-      x: 90 + 52 * Math.cos(theta),
-      y: 82 - 52 * Math.sin(theta),
-    };
-  }, [forecastGaugePercent]);
+  const selectedTemperatureValue = selectedTemperature === 'all' ? null : Number(selectedTemperature);
+  const visualTemperaturePercent = selectedTemperatureValue === null
+    ? forecastGaugePercent
+    : Math.max(0, Math.min(selectedTemperatureValue, 100));
+  const visualTemperatureLevel = TEMPERATURE_LEVELS
+    .slice()
+    .reverse()
+    .find((level) => visualTemperaturePercent >= level.value) || TEMPERATURE_LEVELS[0];
 
   useEffect(() => {
     const animationTimer = setTimeout(() => setDashboardReady(true), 120);
@@ -1052,197 +1065,205 @@ const DashboardView = () => {
         ))}
       </div>
 
-      {/* ── FORECAST GAUGE + FUNIL ── */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
+      {/* ── FUNIL + TEMPERATURA ── */}
+      <div
+        className="anim-card overflow-hidden rounded-lg border shadow-[0_24px_60px_-36px_rgba(0,0,0,0.95)]"
+        style={{
+          ...simulatorPanelStyle,
+          animationDelay: "140ms",
+          background:
+            'radial-gradient(circle at 18% 16%, rgba(32,212,245,0.18), transparent 34%), radial-gradient(circle at 78% 12%, rgba(255,111,15,0.14), transparent 32%), linear-gradient(135deg, rgba(18,31,54,0.98) 0%, rgba(9,14,27,0.98) 48%, rgba(14,25,48,0.98) 100%)',
+        }}
+      >
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="relative min-h-[400px] overflow-hidden px-5 py-6 md:px-8">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(150deg,rgba(14,165,233,0.10),transparent_38%,rgba(245,158,11,0.08)_72%,transparent)]" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.06] to-transparent" />
+            <div className="relative z-10 mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ff6f0f]">Simulator Funnel</p>
+                <h3 className="text-xl font-black uppercase leading-tight text-[#f4f7fb] md:text-2xl">Funil de Simulações Estratégico</h3>
+                <p className="mt-1 text-sm font-semibold text-[#8f9caf]">Da calculadora aberta até a proposta aprovada</p>
+              </div>
+              <div className="rounded-lg border border-[#ff6f0f40] bg-[#ff6f0f12] p-2.5">
+                <Target className="h-5 w-5 text-[#ff6f0f]" />
+              </div>
+            </div>
 
-        {/* GAUGE VELOCÍMETRO */}
-        <div className="anim-card flex flex-col items-center gap-4 rounded-lg border p-6 shadow-[0_24px_60px_-36px_rgba(0,0,0,0.95)]" style={{ ...simulatorPanelStyle, animationDelay: "120ms" }}>
-          <div className="w-full">
-            <p className="mb-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#20d4f5]">Indicador Forecast</p>
-            <p className="text-xl font-black uppercase text-[#f4f7fb]">Temperatura do Funil</p>
-          </div>
+            <div className="relative z-10 mx-auto flex max-w-[610px] flex-col items-center pt-2">
+              {selectedTemperatureValue !== null && (
+                <div
+                  className="mb-3 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em]"
+                  style={{
+                    borderColor: visualTemperatureLevel.color,
+                    color: visualTemperatureLevel.color,
+                    background: 'rgba(3,8,18,0.72)',
+                    boxShadow: `0 0 22px ${visualTemperatureLevel.color}44`,
+                  }}
+                >
+                  Temp. {visualTemperaturePercent}%
+                </div>
+              )}
+              {funnelVisualData.map((item, index) => {
+                const layerHeight = index === 0 ? 52 : 48;
+                const textTone = item.key === 'proposal' ? '#172033' : '#ffffff';
+                const isTemperatureFiltered = selectedTemperatureValue !== null;
+                const isHighlighted = isTemperatureFiltered && item.temperatures.includes(selectedTemperatureValue);
+                const stageOpacity = isTemperatureFiltered && !isHighlighted ? 0.34 : 1;
+                const selectedGlow = visualTemperatureLevel.color;
 
-          {/* Gauge SVG - estilo velocímetro */}
-          <div className="relative flex items-center justify-center w-full">
-            <svg viewBox="0 0 220 130" className="w-full max-w-[280px] drop-shadow-2xl">
-              <defs>
-                <filter id="gaugeShadow">
-                  <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000" floodOpacity="0.5"/>
-                </filter>
-                <filter id="needleGlow">
-                  <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#fff" floodOpacity="0.6"/>
-                </filter>
-                <radialGradient id="gaugeBase" cx="50%" cy="100%" r="80%">
-                  <stop offset="0%" stopColor="#17233b"/>
-                  <stop offset="100%" stopColor="#080d19"/>
-                </radialGradient>
-                <linearGradient id="gaugeTrack" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#ff436d"/>
-                  <stop offset="25%" stopColor="#ff6f0f"/>
-                  <stop offset="50%" stopColor="#ffb21a"/>
-                  <stop offset="75%" stopColor="#20d4f5"/>
-                  <stop offset="100%" stopColor="#18d97c"/>
-                </linearGradient>
-              </defs>
-
-              {/* Fundo arredondado */}
-              <rect x="5" y="5" width="210" height="120" rx="16" fill="url(#gaugeBase)" filter="url(#gaugeShadow)"/>
-              <rect x="5" y="5" width="210" height="120" rx="16" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
-
-              {/* Reflexo superior */}
-              <ellipse cx="110" cy="20" rx="70" ry="10" fill="rgba(255,255,255,0.06)"/>
-
-              {/* Track de fundo (cinza) */}
-              <path d="M 30 105 A 80 80 0 0 1 190 105" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="18" strokeLinecap="round"/>
-
-              {/* Track colorido com gradiente */}
-              <path d="M 30 105 A 80 80 0 0 1 190 105" fill="none" stroke="url(#gaugeTrack)" strokeWidth="14" strokeLinecap="round" opacity="0.9"/>
-
-              {/* Segmentos com cores sólidas por faixa */}
-              {[
-                { color: "#ff436d", dash: 50.3, offset: 0 },
-                { color: "#ff6f0f", dash: 50.3, offset: -50.3 },
-                { color: "#ffb21a", dash: 50.3, offset: -100.5 },
-                { color: "#20d4f5", dash: 50.3, offset: -150.8 },
-                { color: "#18d97c", dash: 50.3, offset: -201.1 },
-              ].map((seg, i) => (
-                <path key={i}
-                  d="M 30 105 A 80 80 0 0 1 190 105"
-                  fill="none"
-                  stroke={seg.color}
-                  strokeWidth="13"
-                  strokeLinecap="butt"
-                  strokeDasharray={`${seg.dash} 251.3`}
-                  strokeDashoffset={seg.offset}
-                />
-              ))}
-
-              {/* Marcações */}
-              {[0, 25, 50, 75, 100].map((pct, i) => {
-                const angle = -180 + (pct / 100) * 180;
-                const rad = (angle * Math.PI) / 180;
-                const cx = 110 + 80 * Math.cos(rad);
-                const cy = 105 + 80 * Math.sin(rad);
-                const ix = 110 + 68 * Math.cos(rad);
-                const iy = 105 + 68 * Math.sin(rad);
-                const tx = 110 + 56 * Math.cos(rad);
-                const ty = 105 + 56 * Math.sin(rad);
                 return (
-                  <g key={pct}>
-                    <line x1={ix} y1={iy} x2={cx} y2={cy} stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/>
-                    <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.7)" fontSize="8" fontWeight="600">{pct}%</text>
-                  </g>
+                  <div
+                    key={item.key}
+                    className="-mt-1.5 first:mt-0 w-full transition-all duration-500"
+                    style={{
+                      maxWidth: `${item.width}%`,
+                      opacity: stageOpacity,
+                      filter: isHighlighted
+                        ? `drop-shadow(0 0 10px ${selectedGlow}) drop-shadow(0 12px 18px ${selectedGlow}66)`
+                        : `drop-shadow(0 12px 14px ${item.color}24)`,
+                    }}
+                  >
+                    <div
+                      className="relative mx-auto"
+                      style={{ height: layerHeight }}
+                    >
+                      <div
+                        className="absolute inset-x-0 top-0 h-[27px] rounded-[50%] border"
+                        style={{
+                          background: `linear-gradient(180deg, ${item.edge} 0%, ${item.color} 72%)`,
+                          borderColor: isHighlighted ? selectedGlow : `${item.edge}cc`,
+                          boxShadow: isHighlighted
+                            ? `inset 0 3px 0 rgba(255,255,255,0.32), inset 0 -10px 18px rgba(2,6,18,0.2), 0 0 0 2px ${selectedGlow}88`
+                            : `inset 0 3px 0 rgba(255,255,255,0.28), inset 0 -10px 18px rgba(2,6,18,0.2)`,
+                        }}
+                      />
+                      <div
+                        className="absolute left-[5%] right-[5%] top-[13px] h-[27px]"
+                        style={{
+                          clipPath: 'polygon(0 0, 100% 0, 88% 100%, 12% 100%)',
+                          background: isHighlighted
+                            ? `linear-gradient(90deg, ${adjustHexColor(selectedGlow, -0.24)} 0%, ${selectedGlow} 48%, ${adjustHexColor(item.color, -0.18)} 100%)`
+                            : `linear-gradient(90deg, ${adjustHexColor(item.color, -0.22)} 0%, ${item.color} 50%, ${adjustHexColor(item.color, -0.28)} 100%)`,
+                          boxShadow: 'inset 0 -14px 18px rgba(2,6,18,0.26)',
+                        }}
+                      />
+                      <div
+                        className="absolute left-[11%] right-[11%] top-[16px] h-[11px] rounded-[50%]"
+                        style={{
+                          background: `linear-gradient(180deg, rgba(255,255,255,0.38), ${item.edge}88 70%, transparent)`,
+                        }}
+                      />
+                      {isHighlighted && (
+                        <div
+                          className="absolute -inset-x-2 top-[-2px] h-[34px] rounded-[50%] border"
+                          style={{
+                            borderColor: `${selectedGlow}dd`,
+                            boxShadow: `0 0 18px ${selectedGlow}77`,
+                          }}
+                        />
+                      )}
+                      <div className="absolute inset-x-4 top-[15px] flex flex-col items-center justify-center text-center leading-tight" style={{ color: textTone }}>
+                        <span className="max-w-full truncate text-sm font-black md:text-base">{item.label}</span>
+                        <span className="text-xs font-black md:text-sm">
+                          {item.value} - {item.percent.toFixed(1).replace('.', ',')}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
-
-              {/* Agulha */}
-              {(() => {
-                const angle = -180 + (forecastGaugePercent / 100) * 180;
-                const rad = (angle * Math.PI) / 180;
-                const tx = 110 + 72 * Math.cos(rad);
-                const ty = 105 + 72 * Math.sin(rad);
-                return (
-                  <g filter="url(#needleGlow)">
-                    <line x1="110" y1="105" x2={tx} y2={ty} stroke="white" strokeWidth="3" strokeLinecap="round"/>
-                    <circle cx="110" cy="105" r="6" fill="white"/>
-                    <circle cx="110" cy="105" r="3" fill="#0a1525"/>
-                  </g>
-                );
-              })()}
-
-              {/* Valor central */}
-              <rect x="75" y="108" width="70" height="20" rx="6" fill="rgba(0,0,0,0.5)"/>
-              <text x="110" y="121" textAnchor="middle" fill="white" fontSize="11" fontWeight="700">
-                {forecastGaugePercent.toFixed(1).replace(".", ",")}%
-              </text>
-            </svg>
-          </div>
-
-          {/* Resumo forecast */}
-          <div className="w-full grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-[#ff6f0f40] bg-[#ff6f0f12] px-3 py-2.5 text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#8f9caf]">Forecast Final</p>
-              <p className="text-lg font-black text-[#ffb21a]">{formatCurrencyCompact(monthlyFunnelBoard.top[2]?.amount || 0)}</p>
             </div>
-            <div className="rounded-lg border border-[#20d4f540] bg-[#20d4f512] px-3 py-2.5 text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#8f9caf]">Taxa Prevista</p>
-              <p className="text-lg font-black text-[#20d4f5]">{monthlyFunnelBoard.forecastPercent.toFixed(1)}%</p>
-            </div>
-          </div>
+          </section>
 
-          {/* Gráfico de barras forecast */}
-          <div className="w-full h-48">
-            <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-[#8f9caf]">Projeção Comercial</p>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salesForecastChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <defs>
-                  {salesForecastChartData.map(item => (
-                    <linearGradient key={item.key} id={`fcBar-${item.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={adjustHexColor(item.color, 0.2)} stopOpacity={0.95}/>
-                      <stop offset="100%" stopColor={adjustHexColor(item.color, -0.2)} stopOpacity={0.9}/>
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(82,96,124,0.22)" vertical={false}/>
-                <XAxis dataKey="label" stroke="#8f9caf" tickLine={false} axisLine={false} fontSize={10}/>
-                <YAxis stroke="#8f9caf" tickLine={false} axisLine={false} tickFormatter={v => formatCurrencyCompact(Math.abs(Number(v)))} fontSize={9}/>
-                <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v: number | string) => [formatCurrencyCompact(Math.abs(Number(v))), "Projetado"]}/>
-                <Bar dataKey="value" radius={[8, 8, 2, 2]} animationDuration={1000}>
-                  {salesForecastChartData.map(item => <Cell key={item.key} fill={`url(#fcBar-${item.key})`}/>)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* FUNIL DE VENDAS ESTRATÉGICO */}
-        <div className="anim-card rounded-lg border p-6 shadow-[0_24px_60px_-36px_rgba(0,0,0,0.95)]" style={{ ...simulatorPanelStyle, animationDelay: "160ms" }}>
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#ff6f0f]">Sales Funnel</p>
-              <h3 className="text-2xl font-black uppercase text-[#f4f7fb]">Funil de Vendas Estratégico</h3>
-              <p className="mt-1 text-sm font-semibold text-[#8f9caf]">Jornada completa do lead até o fechamento</p>
-            </div>
-            <div className="rounded-lg border border-[#ff6f0f40] bg-[#ff6f0f12] p-2.5">
-              <Target className="h-5 w-5 text-[#ff6f0f]"/>
-            </div>
-          </div>
-
-          {/* Barras do funil - estilo print 2 */}
-          <div className="space-y-2.5 max-w-2xl mx-auto">
-            {funnelVisualData.map((item, idx) => (
-              <div key={item.key} className="transition-all duration-500 mx-auto" style={{ width: `${item.width}%` }}>
-                <div className={`rounded-xl bg-gradient-to-r ${item.gradient} px-5 py-3 ${item.shadow} relative overflow-hidden`}>
-                  <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.15)_0%,transparent_60%)]"/>
-                  <div className="relative flex items-center justify-between">
-                    <span className="text-sm font-bold text-white">{item.label}</span>
-                    <span className="text-2xl font-extrabold text-white leading-none">{item.value}</span>
+          <aside className="relative border-t border-[#344159] px-5 py-6 xl:border-l xl:border-t-0">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_52%_22%,rgba(168,85,247,0.12),transparent_36%),linear-gradient(180deg,rgba(15,23,42,0.34),rgba(5,9,20,0.2))]" />
+            <div className="relative z-10 flex h-full min-h-[400px] items-center justify-center gap-5">
+              <div className="relative flex h-[330px] w-[74px] flex-col items-center">
+                <div className="relative h-[258px] w-[46px] rounded-full border-[6px] border-[#94a3b8] bg-[#1a2436] shadow-[inset_0_0_0_5px_rgba(7,11,22,0.88),0_16px_28px_rgba(0,0,0,0.42)]">
+                  <div className="absolute inset-x-[13px] bottom-4 top-5 overflow-hidden rounded-full bg-[#4b5563]">
+                    <div
+                      className="absolute inset-x-0 bottom-0 rounded-full"
+                      style={{
+                        height: `${Math.max(visualTemperaturePercent, 4)}%`,
+                        background: `linear-gradient(0deg, ${adjustHexColor(visualTemperatureLevel.color, -0.35)} 0%, ${visualTemperatureLevel.color} 62%, ${adjustHexColor(visualTemperatureLevel.color, 0.32)} 100%)`,
+                        boxShadow: `0 0 18px ${visualTemperatureLevel.color}bf`,
+                      }}
+                    />
+                    <div className="absolute left-1 top-4 h-[82%] w-1 rounded-full bg-white/35 blur-[1px]" />
+                  </div>
+                </div>
+                <div className="-mt-3 flex h-[92px] w-[92px] items-center justify-center rounded-full border-[7px] border-[#94a3b8] bg-[#1a2436] shadow-[inset_0_0_0_5px_rgba(7,11,22,0.88),0_16px_28px_rgba(0,0,0,0.48)]">
+                  <div
+                    className="relative h-[56px] w-[56px] overflow-hidden rounded-full"
+                    style={{
+                      background: `radial-gradient(circle at 36% 30%, ${adjustHexColor(visualTemperatureLevel.color, 0.38)} 0%, ${visualTemperatureLevel.color} 42%, ${adjustHexColor(visualTemperatureLevel.color, -0.45)} 100%)`,
+                      boxShadow: `0 0 22px ${visualTemperatureLevel.color}aa`,
+                    }}
+                  >
+                    <div className="absolute left-4 top-2 h-4 w-6 rotate-[-28deg] rounded-full bg-white/55 blur-[1px]" />
+                    <div className="absolute inset-x-2 bottom-2 h-5 rounded-full bg-black/18" />
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
 
-          {/* Ícone central */}
-          <div className="flex justify-center my-4">
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-[#3d4960] bg-[#101827]">
-              <div className="absolute h-9 w-9 rounded-full border border-[#3d4960]"/>
-              <div className="absolute h-5 w-5 rounded-full border border-[#526078]"/>
-              <div className="h-3 w-3 rounded-full bg-[#ff6f0f] shadow-[0_0_14px_rgba(255,111,15,0.9)]"/>
+              <div className="min-w-0">
+                <div className="mb-5">
+                  <h4 className="text-xl font-black leading-tight text-[#f4f7fb]">Temperatura das Calculadoras</h4>
+                  <p className="mt-1 text-base font-semibold" style={{ color: visualTemperatureLevel.color }}>
+                    {visualTemperaturePercent.toFixed(1)}% {selectedTemperatureValue === null ? 'atual' : 'selecionada'}
+                  </p>
+                </div>
+                <div className="space-y-5">
+                  {TEMPERATURE_LEVELS.map((level) => {
+                    const isActive = selectedTemperatureValue === level.value || (selectedTemperatureValue === null && visualTemperatureLevel.value === level.value);
+                    return (
+                    <div
+                      key={level.value}
+                      className="flex items-center gap-3 rounded-md px-2 py-1 transition-all"
+                      style={{
+                        background: isActive ? `${level.color}18` : 'transparent',
+                        boxShadow: isActive ? `0 0 18px ${level.color}30` : 'none',
+                      }}
+                    >
+                      <span
+                        className="h-1 w-7 rounded-full"
+                        style={{
+                          backgroundColor: level.color,
+                          boxShadow: isActive ? `0 0 12px ${level.color}` : 'none',
+                        }}
+                      />
+                      <span className="text-sm font-semibold" style={{ color: isActive ? '#ffffff' : '#d7deea' }}>
+                        <b className="font-black text-white">{level.value}%</b> - {level.label}
+                      </span>
+                    </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-[#ff6f0f40] bg-[#ff6f0f12] px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#8f9caf]">Forecast Final</p>
+                    <p className="text-lg font-black text-[#ffb21a]">{formatCurrencyCompact(monthlyFunnelBoard.top[2]?.amount || 0)}</p>
+                  </div>
+                  <div className="rounded-lg border border-[#20d4f540] bg-[#20d4f512] px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#8f9caf]">Qtd. Prevista</p>
+                    <p className="text-lg font-black text-[#20d4f5]">{monthlyFunnelBoard.top[2]?.qty || 0}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </aside>
+        </div>
 
-          {/* Stats do funil */}
-          <div className="grid grid-cols-3 gap-3 mt-2">
+        <div className="border-t border-[#344159] p-5">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-lg border border-[#2384ff40] bg-[#2384ff12] px-4 py-3 text-center">
               <p className="text-3xl font-black text-[#2384ff]">{funnelSummary.previstos}</p>
-              <p className="mt-1 text-xs font-bold text-[#8f9caf]">Leads no Funil</p>
+              <p className="mt-1 text-xs font-bold text-[#8f9caf]">Simulações no Funil</p>
             </div>
             <div className="rounded-lg border border-[#20d4f540] bg-[#20d4f512] px-4 py-3 text-center">
               <p className="text-3xl font-black text-[#20d4f5]">{funnelSummary.fechados}</p>
-              <p className="mt-1 text-xs font-bold text-[#8f9caf]">Vendas Concluídas</p>
+              <p className="mt-1 text-xs font-bold text-[#8f9caf]">Propostas Aprovadas</p>
             </div>
             <div className="rounded-lg border border-[#18d97c40] bg-[#18d97c12] px-4 py-3 text-center">
               <p className="text-3xl font-black text-[#18d97c]">{funnelSummary.conversion.toFixed(1)}%</p>

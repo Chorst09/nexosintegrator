@@ -19,6 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Clock, User, ArrowRight, Loader2 } from 'lucide-react'
+import { getCRMAuthHeaders } from '@/config/api'
 
 interface ProposalLog {
   id: string
@@ -65,7 +66,14 @@ export function ProposalLogsModal({
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/proposals/${proposalId}/logs`)
+      const response = await fetch(`/api/proposals/${proposalId}/logs`, {
+        headers: getCRMAuthHeaders(),
+      })
+
+      if (response.status === 404) {
+        setLogs([])
+        return
+      }
 
       if (!response.ok) {
         throw new Error('Erro ao carregar logs')

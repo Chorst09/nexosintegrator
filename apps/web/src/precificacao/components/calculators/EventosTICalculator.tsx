@@ -549,6 +549,7 @@ export default function EventosTICalculator({ onBackToDashboard, initialProposal
     try {
       const response = await fetch(`/api/simulator/proposals/${proposalId}`, {
         method: 'DELETE',
+        headers: getCRMAuthHeaders(),
       })
 
       if (response.ok) {

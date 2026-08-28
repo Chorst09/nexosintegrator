@@ -1326,9 +1326,7 @@ const InternetOKv2Calculator: React.FC<InternetOKv2CalculatorProps> = ({ onBackT
             try {
                 const response = await fetch(`/api/simulator/proposals/${id}`, {
                     method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: getCRMAuthHeaders(),
                 });
 
                 if (response.ok) {

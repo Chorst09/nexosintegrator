@@ -43,6 +43,14 @@ router.get('/types', authenticateToken, async (req, res) => {
   });
 });
 
+router.get('/:id/logs/summary', authenticateToken, async (req, res) => {
+  res.json({ count: 0, lastAction: null });
+});
+
+router.get('/:id/logs', authenticateToken, async (req, res) => {
+  res.json({ logs: [] });
+});
+
 // Listar propostas
 router.get('/', authenticateToken, async (req, res) => {
   try {
