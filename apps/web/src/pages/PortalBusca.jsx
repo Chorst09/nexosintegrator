@@ -307,7 +307,7 @@ async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina 
   const payload = await res.json().catch(() => null);
   const data = Array.isArray(payload?.data) ? payload.data : [];
   if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
-    throw new Error(payload.erros.slice(0, 2).join('; '));
+    console.warn('PNCP retornou sem resultados:', payload.erros.slice(0, 2).join('; '));
   }
   return data;
 }

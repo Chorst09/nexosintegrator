@@ -28,6 +28,33 @@ const toPNCPDate = (dateStr) => {
 
 const clamp = (n, min, max) => Math.max(min, Math.min(Number(n) || min, max));
 
+const fetchWithRetry = async (url, options = {}, { timeoutMs = 45000, retries = 1 } = {}) => {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+};
+
+async function mapConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (idx < items.length) {
+      const current = idx++;
+      results[current] = await fn(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 // Modalidades PNCP compatíveis com cada tipo de busca
 const MODALIDADES = {
   licitacao: [6, 8, 9, 4, 5],
@@ -50,7 +77,7 @@ router.get('/', async (req, res) => {
     const size = clamp(qs.tamanhoPagina, 10, 50);
     const page = clamp(qs.pagina, 1, 500);
 
-    const requests = modalidades.map(async (mod) => {
+    const tarefas = modalidades.map((mod) => async () => {
       try {
         const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
         url.searchParams.set('dataInicial', dataI);
@@ -60,11 +87,13 @@ router.get('/', async (req, res) => {
         url.searchParams.set('tamanhoPagina', size);
         if (qs.uf) url.searchParams.set('uf', qs.uf);
 
-        const response = await fetch(url.toString(), {
-          headers: { Accept: 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-          signal: AbortSignal.timeout(15000)
+        const response = await fetchWithRetry(url.toString(), {
+          headers: { Accept: 'application/json', 'User-Agent': 'NexosCRM/2.0' }
         });
 
+        if (response.status === 503 || response.status === 504) {
+          return { data: [], erro: `Modalidade ${mod}: PNCP indisponível no momento` };
+        }
         if (!response.ok) return { data: [], erro: `Modalidade ${mod}: HTTP ${response.status}` };
 
         const data = await response.json().catch(() => null);
@@ -77,17 +106,13 @@ router.get('/', async (req, res) => {
       }
     });
 
-    const settled = await Promise.allSettled(requests);
+    const settled = await mapConcurrency(tarefas, 2, (fn) => fn());
     const allResults = [];
     const erros = [];
 
     for (const item of settled) {
-      if (item.status === 'fulfilled') {
-        allResults.push(...item.value.data);
-        if (item.value.erro) erros.push(item.value.erro);
-      } else {
-        erros.push(item.reason?.message || 'Falha desconhecida');
-      }
+      if (item && item.data) allResults.push(...item.data);
+      if (item && item.erro) erros.push(item.erro);
     }
 
     return res.json({
