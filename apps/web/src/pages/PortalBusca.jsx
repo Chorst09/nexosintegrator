@@ -29,10 +29,12 @@ const ESTADOS_BR = [
 const FONTES_CONFIG = [
   { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
   { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Licitações do Compras.gov.br (SIASG / Lei 8.666)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' },
-  { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄' },
-  { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️' },
-  { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋' },
-  { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢' },
+  { id: 'transparencia-curitiba', nome: 'Transparência Curitiba', descricao: 'Licitações e contratações do Portal da Transparência de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️' },
+  { id: 'transparencia-federal', nome: 'Portal Transparência Federal', descricao: 'Licitações do Poder Executivo Federal via API oficial da CGU', metodo: 'API com token', sync: 'Sob demanda', icon: '🔎', defaultActive: false },
+  { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄', defaultActive: false },
+  { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️', defaultActive: false },
+  { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋', defaultActive: false },
+  { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢', defaultActive: false },
   { id: 'curitiba-ecompras', nome: 'e-Compras Curitiba', descricao: 'Portal de Compras Eletrônicas do Município de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️', defaultActive: false },
   { id: 'conlicitacao', portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎', integrada: true }
 ];
@@ -155,14 +157,14 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
       url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
       if (uf) url.searchParams.set('uf', uf);
 
-      let retries = 2;
+      let retries = 0;
       let lastError = null;
       
       while (retries >= 0) {
         try {
           const res = await fetch(url.toString(), {
             headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-            signal: AbortSignal.timeout(120000) // Timeout aumentado para 120s
+            signal: AbortSignal.timeout(25000)
           });
           
           if (!res.ok) {
@@ -228,12 +230,12 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
     url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
     if (uf) url.searchParams.set('uf', uf);
 
-    let retries = 2;
+    let retries = 0;
     while (retries >= 0) {
       try {
         const res = await fetch(url.toString(), {
           headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-          signal: AbortSignal.timeout(120000) // Timeout aumentado para 120s
+          signal: AbortSignal.timeout(25000)
         });
         
         if (!res.ok) {
@@ -296,7 +298,7 @@ async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina 
 
   const res = await fetch(url.toString(), {
     headers: getAuthHeaders(),
-    signal: AbortSignal.timeout(90000)
+    signal: AbortSignal.timeout(30000)
   });
   if (!res.ok) {
     const publicacoes = await buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina });
@@ -307,7 +309,7 @@ async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina 
   const payload = await res.json().catch(() => null);
   const data = Array.isArray(payload?.data) ? payload.data : [];
   if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
-    console.warn('PNCP retornou sem resultados:', payload.erros.slice(0, 2).join('; '));
+    console.debug('PNCP retornou sem resultados nesta consulta:', payload.erros.slice(0, 2).join('; '));
   }
   return data;
 }
@@ -524,7 +526,7 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, dataInicio, dataFim,
 
   const res = await fetch(url.toString(), {
     headers: getAuthHeaders(),
-    signal: AbortSignal.timeout(90000)
+    signal: AbortSignal.timeout(30000)
   });
   const payload = await res.json().catch(() => null);
   
@@ -540,6 +542,35 @@ async function buscarCuritibaECompras({ objeto, uf, cidade, dataInicio, dataFim,
   }
   
   return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+async function buscarFonteB2GSearch(fonte, params) {
+  const url = new URL(buildApiUrl('/b2g-search/search'), window.location.origin);
+  url.searchParams.set('fontes', fonte);
+  url.searchParams.set('objeto', params.objeto || '');
+  url.searchParams.set('uf', params.uf || '');
+  url.searchParams.set('cidade', params.cidade || '');
+  url.searchParams.set('dataInicio', params.dataInicio || '');
+  url.searchParams.set('dataFim', params.dataFim || '');
+  url.searchParams.set('ordem', params.ordem || 'data_desc');
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(params.tamanhoPagina || 50), 100)));
+
+  const res = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+    signal: AbortSignal.timeout(30000)
+  });
+  const payload = await res.json().catch(() => null);
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+
+  if (!res.ok && data.length === 0) {
+    throw new Error(payload?.error || payload?.message || `Falha ao buscar em ${fonte}`);
+  }
+
+  if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
+    console.debug(`${fonte} retornou sem resultados nesta consulta:`, payload.erros.slice(0, 2).join('; '));
+  }
+
+  return data;
 }
 
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
@@ -1263,6 +1294,12 @@ export default function PortalBusca() {
       }
       if (fontesAtivas.includes('comprasnet')) {
         promises.push(executarFonte('ComprasNet', buscarComprasNet(params)));
+      }
+      if (fontesAtivas.includes('transparencia-curitiba')) {
+        promises.push(executarFonte('Transparência Curitiba', buscarFonteB2GSearch('transparencia-curitiba', { ...params, ordem })));
+      }
+      if (fontesAtivas.includes('transparencia-federal')) {
+        promises.push(executarFonte('Portal Transparência Federal', buscarFonteB2GSearch('transparencia-federal', { ...params, ordem })));
       }
       if (fontesAtivas.includes('dispensas')) {
         promises.push(executarFonte('Dispensas', buscarComprasGovDispensas(params)));

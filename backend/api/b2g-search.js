@@ -149,6 +149,44 @@ const isWithinDateRange = (dateValue, dataInicio, dataFim) => {
 // ─── PNCP - Publicações ───────────────────────────────────────────────────────
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
+const PORTAL_TRANSPARENCIA_API_BASE = 'https://api.portaldatransparencia.gov.br/api-de-dados';
+const TRANSPARENCIA_CURITIBA_URL = 'https://www.transparencia.curitiba.pr.gov.br/sgp/licitacoes.aspx';
+
+const toBRDate = (value) => {
+  if (!value) return '';
+  const clean = String(value).slice(0, 10);
+  const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  const compact = String(value).replaceAll('-', '').slice(0, 8);
+  if (/^\d{8}$/.test(compact)) return `${compact.slice(6, 8)}/${compact.slice(4, 6)}/${compact.slice(0, 4)}`;
+  return String(value);
+};
+
+const parseBRMoney = (value) => {
+  const raw = cleanHtmlText(value).replace(/[^\d,.-]/g, '');
+  if (!raw) return null;
+  const normalized = raw.replace(/\./g, '').replace(',', '.');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+};
+
+const firstText = (...values) => {
+  for (const value of values) {
+    if (value == null) continue;
+    const candidate = typeof value === 'object'
+      ? value.nome || value.descricao || value.razaoSocial || value.codigo || ''
+      : value;
+    const text = cleanHtmlText(candidate || '');
+    if (text) return text;
+  }
+  return '';
+};
+
+const sourceId = (...parts) => parts
+  .map((part) => cleanHtmlText(part || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+  .filter(Boolean)
+  .join('-')
+  .slice(0, 180);
 
 async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20, dataInicio, dataFim }) {
   const resultados = [];
@@ -606,6 +644,156 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
   return { resultados, errors };
 }
 
+// ─── Transparência Curitiba - Licitações e contratações ──────────────────────
+
+async function buscarTransparenciaCuritiba({ objeto, uf, cidade, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const resultados = [];
+  const errors = [];
+
+  if (uf && String(uf).toUpperCase() !== 'PR') return { resultados, errors };
+  if (cidade && !String(cidade).toLowerCase().includes('curitiba')) return { resultados, errors };
+
+  try {
+    const res = await fetchWithRetry(TRANSPARENCIA_CURITIBA_URL, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'NexosCRM/2.0'
+      }
+    }, { timeoutMs: 12000, retries: 0 });
+
+    if (!res.ok) {
+      return { resultados, errors: [`Transparência Curitiba: HTTP ${res.status}`] };
+    }
+
+    const html = await res.text();
+    const table = html.match(/<table[^>]*id=["']cphMasterPrincipal_gdvLicitacao["'][\s\S]*?<\/table>/i)?.[0] || '';
+    const rowRegex = /<tr\b[^>]*class=["'][^"']*grid_(?:Row|AlternatingRow)[^"']*["'][^>]*>([\s\S]*?)<\/tr>/gi;
+    const rows = [...table.matchAll(rowRegex)];
+    const limit = Math.max(10, Math.min(Number(tamanhoPagina) || 20, 100));
+
+    for (const [, rowHtml] of rows) {
+      const cells = [...rowHtml.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cleanHtmlText(cell[1]));
+      if (cells.length < 9) continue;
+
+      const [numero, modalidade, orgao, titulo, valorText, local, dataPublicacaoText, protocolo, status] = cells;
+      const dataPublicacao = normalizeDateText(dataPublicacaoText);
+
+      if (!matchObjeto(`${titulo} ${orgao} ${modalidade} ${protocolo}`, objeto)) continue;
+      if (!isWithinDateRange(dataPublicacao, dataInicio, dataFim)) continue;
+
+      resultados.push({
+        id: `transparencia-curitiba-${sourceId(numero, protocolo, orgao)}`,
+        fonte: 'Transparência Curitiba',
+        fonteLogo: '🏙️',
+        titulo: titulo || 'Licitação sem descrição',
+        orgao,
+        modalidade,
+        uf: 'PR',
+        municipio: 'Curitiba',
+        valor: parseBRMoney(valorText),
+        dataPublicacao,
+        dataAbertura: null,
+        dataEncerramento: null,
+        numero,
+        ano: String(numero).match(/\b(20\d{2})\b/)?.[1] || '',
+        protocolo,
+        link: TRANSPARENCIA_CURITIBA_URL,
+        status,
+        local
+      });
+
+      if (resultados.length >= limit) break;
+    }
+
+    return { resultados, errors };
+  } catch (err) {
+    return { resultados, errors: [`Transparência Curitiba: ${err.message}`] };
+  }
+}
+
+// ─── Portal da Transparência Federal - API oficial da CGU ────────────────────
+
+async function buscarPortalTransparenciaFederal({ objeto, dataInicio, dataFim, tamanhoPagina = 20, codigoOrgao = '' }) {
+  const resultados = [];
+  const token = String(process.env.PORTAL_TRANSPARENCIA_TOKEN || process.env.PORTAL_TRANSPARENCIA_API_KEY || '').trim();
+  const orgao = String(codigoOrgao || process.env.PORTAL_TRANSPARENCIA_CODIGO_ORGAO || '').trim();
+
+  if (!token) {
+    return {
+      resultados,
+      errors: ['Portal Transparência Federal: configure PORTAL_TRANSPARENCIA_TOKEN para ativar a API oficial.']
+    };
+  }
+
+  if (!orgao) {
+    return {
+      resultados,
+      errors: ['Portal Transparência Federal: informe codigoOrgao ou configure PORTAL_TRANSPARENCIA_CODIGO_ORGAO.']
+    };
+  }
+
+  try {
+    const url = new URL(`${PORTAL_TRANSPARENCIA_API_BASE}/licitacoes`);
+    url.searchParams.set('codigoOrgao', orgao);
+    url.searchParams.set('pagina', '1');
+    url.searchParams.set('dataInicial', toBRDate(dataInicio || diasAtras(30)));
+    url.searchParams.set('dataFinal', toBRDate(dataFim || hoje()));
+
+    const res = await fetchWithRetry(url.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'NexosCRM/2.0',
+        'chave-api-dados': token
+      }
+    }, { timeoutMs: 12000, retries: 0 });
+
+    if (!res.ok) {
+      return { resultados, errors: [`Portal Transparência Federal: HTTP ${res.status}`] };
+    }
+
+    const data = await safeJson(res);
+    const items = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+
+    for (const item of items.slice(0, Math.max(10, Math.min(Number(tamanhoPagina) || 20, 100)))) {
+      const titulo = firstText(item.objeto, item.descricaoObjeto, item.objetoLicitacao, item.descricao, item.resumo);
+      const orgaoNome = firstText(
+        item.orgao?.nome,
+        item.orgaoVinculado?.nome,
+        item.unidadeGestora?.nome,
+        item.unidadeGestora,
+        item.nomeOrgao
+      );
+      const modalidade = firstText(item.modalidadeLicitacao?.descricao, item.modalidade?.descricao, item.modalidade);
+      const dataAbertura = firstText(item.dataAbertura, item.dataResultadoCompra, item.dataPublicacao);
+
+      if (!matchObjeto(`${titulo} ${orgaoNome} ${modalidade}`, objeto)) continue;
+
+      resultados.push({
+        id: `transparencia-federal-${item.id || sourceId(item.numero, item.numeroLicitacao, orgaoNome, titulo)}`,
+        fonte: 'Portal Transparência Federal',
+        fonteLogo: '🔎',
+        titulo: titulo || 'Licitação federal',
+        orgao: orgaoNome,
+        modalidade,
+        uf: '',
+        municipio: '',
+        valor: formatCurrency(item.valor || item.valorLicitacao || item.valorTotal || item.valorEstimado),
+        dataPublicacao: normalizeDateText(dataAbertura) || dataAbertura || null,
+        dataAbertura: normalizeDateText(dataAbertura) || dataAbertura || null,
+        dataEncerramento: null,
+        numero: firstText(item.numero, item.numeroLicitacao),
+        ano: firstText(item.ano, item.anoLicitacao),
+        link: 'https://portaldatransparencia.gov.br/licitacoes/consulta',
+        status: firstText(item.situacaoCompra, item.situacao, item.status)
+      });
+    }
+
+    return { resultados, errors: [] };
+  } catch (err) {
+    return { resultados, errors: [`Portal Transparência Federal: ${err.message}`] };
+  }
+}
+
 // ─── Deduplicação ─────────────────────────────────────────────────────────────
 
 function deduplicar(items) {
@@ -764,7 +952,8 @@ router.get('/search', auth, async (req, res) => {
     fontes = 'pncp,comprasnet',
     ordem = 'data_desc',
     incluirPropostas = 'true',
-    cidade = ''
+    cidade = '',
+    codigoOrgao = ''
   } = req.query;
 
   const fontesAtivas = String(fontes).toLowerCase().split(',').map(f => f.trim());
@@ -790,6 +979,20 @@ router.get('/search', auth, async (req, res) => {
       promises.push(
         buscarComprasNet({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
           .catch(err => ({ resultados: [], errors: [`ComprasNet: ${err.message}`] }))
+      );
+    }
+
+    if (fontesAtivas.includes('transparencia-curitiba')) {
+      promises.push(
+        buscarTransparenciaCuritiba({ objeto, uf, cidade, tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
+          .catch(err => ({ resultados: [], errors: [`Transparência Curitiba: ${err.message}`] }))
+      );
+    }
+
+    if (fontesAtivas.includes('transparencia-federal')) {
+      promises.push(
+        buscarPortalTransparenciaFederal({ objeto, dataInicio, dataFim, tamanhoPagina: Number(tamanhoPagina), codigoOrgao })
+          .catch(err => ({ resultados: [], errors: [`Portal Transparência Federal: ${err.message}`] }))
       );
     }
 
