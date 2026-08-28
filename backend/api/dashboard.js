@@ -116,7 +116,7 @@ const buildGeneralDashboard = async (user = {}) => {
     description: true,
     projectType: true,
     projectMonths: true,
-    projectClientType: true,
+    number: true,
     stage: true,
     b2gStage: true,
     createdAt: true,
@@ -165,8 +165,8 @@ const buildGeneralDashboard = async (user = {}) => {
         AND: [
           {
             OR: [
-              { projectClientType: 'B2G' },
               { b2gStage: { not: null } },
+              { number: { startsWith: 'B2G-' } },
               { company: { clientType: 'B2G' } }
             ]
           },
