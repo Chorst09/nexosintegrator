@@ -97,6 +97,30 @@ const generateOpportunityNumber = async (tx, clientType = 'B2B') => {
   return `${prefix}${String(latestSequence + 1).padStart(5, '0')}`;
 };
 
+const generateAvailableOpportunityNumber = async (tx, clientType = 'B2B') => {
+  const type = normalizeClientType(clientType) || 'B2B';
+  const year = new Date().getFullYear();
+  const prefix = `${type}-${year}-`;
+  const opportunities = await tx.opportunity.findMany({
+    where: { number: { startsWith: prefix } },
+    select: { number: true }
+  });
+  const usedSequences = new Set(
+    opportunities
+      .map((item) => Number(String(item.number || '').slice(prefix.length)))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  );
+
+  let sequence = 1;
+  while (usedSequences.has(sequence)) sequence += 1;
+
+  return `${prefix}${String(sequence).padStart(5, '0')}`;
+};
+
+const isUniqueOpportunityNumberError = (error) => {
+  return error?.code === 'P2002' && Array.isArray(error?.meta?.target) && error.meta.target.includes('number');
+};
+
 const isSchemaDriftError = (error) => {
   return error?.code === 'P2021' || error?.code === 'P2022';
 };
@@ -344,8 +368,7 @@ export default async function handler(req) {
       : resolveStageDecisionLossReason(stageDecisionDetails);
     
     const opportunity = await prisma.$transaction(async (tx) => {
-      const number = body.number || await generateOpportunityNumber(tx, clientType);
-      const created = await tx.opportunity.create({
+      const createOpportunity = async (number) => tx.opportunity.create({
         data: {
           number,
           title: body.title,
@@ -386,6 +409,14 @@ export default async function handler(req) {
           }
         }
       });
+      const number = body.number || await generateOpportunityNumber(tx, clientType);
+      let created;
+      try {
+        created = await createOpportunity(number);
+      } catch (error) {
+        if (body.number || !isUniqueOpportunityNumberError(error)) throw error;
+        created = await createOpportunity(await generateAvailableOpportunityNumber(tx, clientType));
+      }
 
       if (created.stage === 'WON') {
         await syncWonOpportunityCommission(tx, created);
