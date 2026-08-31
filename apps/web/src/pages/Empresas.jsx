@@ -30,6 +30,25 @@ const initialFormData = (clientType = 'B2B') => ({
   purchasesContact: { name: '', email: '', phone: '', position: 'Compras' }
 });
 
+const buildPrefilledFormData = (clientType, params) => {
+  const data = initialFormData(clientType);
+  const name = params.get('name') || '';
+  const email = params.get('email') || '';
+  const phone = params.get('phone') || '';
+  const contact = params.get('contact') || '';
+
+  return {
+    ...data,
+    name,
+    contacts: [{
+      ...data.contacts[0],
+      name: contact,
+      email,
+      phone
+    }]
+  };
+};
+
 const SIZE_LABELS = {
   MICRO: 'Micro',
   SMALL: 'Pequena',
@@ -351,7 +370,7 @@ export default function Empresas({ clientType = 'B2B' }) {
 
   const openCreate = () => {
     setEditingCompany(null);
-    setFormData(initialFormData(pageClientType));
+    setFormData(buildPrefilledFormData(pageClientType, searchParams));
     setDocFiles([]);
     setShowForm(true);
   };

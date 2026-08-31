@@ -1,11 +1,22 @@
 
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ClientData, AccountManagerData } from '@/lib/types'; // Importar tipos centralizados
-import { getCRMAuthHeaders } from '@/config/api';
+import { buildApiUrl, getCRMAuthHeaders } from '@/config/api';
+
+type Company = {
+    id: string;
+    name?: string;
+    contacts?: Array<{
+        name?: string;
+        email?: string;
+        phone?: string;
+        isPrimary?: boolean;
+    }>;
+};
 
 interface ClientManagerFormProps {
     clientData: ClientData;
@@ -28,6 +39,10 @@ export function ClientManagerForm({
     title = "Nova Proposta",
     subtitle = "Preencha os dados do cliente e gerente de contas."
 }: ClientManagerFormProps) {
+    const [companies, setCompanies] = useState<Company[]>([]);
+    const [loadingCompanies, setLoadingCompanies] = useState(false);
+    const [clientPickerOpen, setClientPickerOpen] = useState(false);
+
     const handleContinue = () => {
         if (!clientData.name || !clientData.email || !accountManagerData.name || !accountManagerData.email) {
             alert('Preencha os campos obrigatórios marcados com *');
@@ -35,6 +50,75 @@ export function ClientManagerForm({
         }
         onContinue();
     };
+
+    const selectCompany = (company: Company) => {
+        const primaryContact = Array.isArray(company.contacts)
+            ? company.contacts.find(contact => contact.isPrimary) || company.contacts[0]
+            : null;
+
+        onClientDataChange({
+            ...clientData,
+            name: company.name || clientData.name,
+            contact: primaryContact?.name || clientData.contact || '',
+            email: primaryContact?.email || clientData.email || '',
+            phone: primaryContact?.phone || clientData.phone || ''
+        });
+        setClientPickerOpen(false);
+    };
+
+    const openCompanyRegister = () => {
+        const params = new URLSearchParams({
+            openForm: '1',
+            clientType: 'B2B',
+            name: clientData.name || '',
+            email: clientData.email || '',
+            phone: clientData.phone || '',
+            contact: clientData.contact || '',
+            returnTo: `${window.location.pathname}${window.location.search}`
+        });
+        window.location.href = `/empresas?${params.toString()}`;
+    };
+
+    const loadCompanies = async () => {
+        try {
+            setLoadingCompanies(true);
+            const response = await fetch(buildApiUrl('/companies?clientType=B2B'), {
+                headers: getCRMAuthHeaders()
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            setCompanies(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Erro ao carregar empresas B2B:', error);
+        } finally {
+            setLoadingCompanies(false);
+        }
+    };
+
+    useEffect(() => {
+        loadCompanies();
+    }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const companyId = params.get('companyId');
+        if (!companyId || companies.length === 0) return;
+
+        const company = companies.find(item => item.id === companyId);
+        if (!company) return;
+        selectCompany(company);
+        params.delete('companyId');
+        const nextSearch = params.toString();
+        window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+    }, [companies]);
+
+    const filteredCompanies = useMemo(() => {
+        const term = clientData.name.trim().toLowerCase();
+        if (!term) return companies.slice(0, 8);
+        return companies
+            .filter(company => String(company.name || '').toLowerCase().includes(term))
+            .slice(0, 8);
+    }, [companies, clientData.name]);
 
     return (
         <div className="container mx-auto p-6 bg-slate-950 text-white min-h-screen">
@@ -52,14 +136,62 @@ export function ClientManagerForm({
                     <CardContent className="space-y-4">
                         <div>
                             <Label htmlFor="client-name">Nome do Cliente *</Label>
-                            <Input
-                                id="client-name"
-                                value={clientData.name}
-                                onChange={(e) => onClientDataChange({ ...clientData, name: e.target.value })}
-                                className="bg-slate-800 border-slate-700 text-white"
-                                placeholder="Nome completo do cliente"
-                                required
-                            />
+                            <div className="relative">
+                                <Input
+                                    id="client-name"
+                                    value={clientData.name}
+                                    onFocus={() => setClientPickerOpen(true)}
+                                    onClick={() => setClientPickerOpen(true)}
+                                    onChange={(e) => {
+                                        onClientDataChange({ ...clientData, name: e.target.value });
+                                        setClientPickerOpen(true);
+                                    }}
+                                    onBlur={() => window.setTimeout(() => setClientPickerOpen(false), 180)}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="Pesquisar ou cadastrar cliente"
+                                    required
+                                />
+                                {clientPickerOpen && (
+                                    <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-md border border-slate-700 bg-slate-900 shadow-xl">
+                                        <div className="max-h-64 overflow-y-auto py-1">
+                                            {loadingCompanies ? (
+                                                <div className="px-3 py-2 text-sm text-slate-400">Carregando empresas...</div>
+                                            ) : filteredCompanies.length > 0 ? (
+                                                filteredCompanies.map(company => {
+                                                    const primaryContact = Array.isArray(company.contacts)
+                                                        ? company.contacts.find(contact => contact.isPrimary) || company.contacts[0]
+                                                        : null;
+                                                    return (
+                                                        <button
+                                                            key={company.id}
+                                                            type="button"
+                                                            onMouseDown={(event) => event.preventDefault()}
+                                                            onClick={() => selectCompany(company)}
+                                                            className="block w-full px-3 py-2 text-left hover:bg-slate-800"
+                                                        >
+                                                            <span className="block text-sm font-semibold text-white">{company.name || 'Empresa sem nome'}</span>
+                                                            <span className="block text-xs text-slate-400">
+                                                                {[primaryContact?.name, primaryContact?.email, primaryContact?.phone].filter(Boolean).join(' - ') || 'Sem contato cadastrado'}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-3 py-2 text-sm text-slate-400">Nenhuma empresa encontrada.</div>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onMouseDown={(event) => event.preventDefault()}
+                                            onClick={openCompanyRegister}
+                                            className="flex w-full items-center justify-between border-t border-slate-700 px-3 py-2 text-left text-sm font-semibold text-blue-300 hover:bg-slate-800"
+                                        >
+                                            Cadastrar novo cliente em B2B - Empresas
+                                            <span>+</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <Label htmlFor="client-contact">Contato do Cliente</Label>
