@@ -7,6 +7,14 @@ const prisma = new PrismaClient();
 
 const getWorkflowDelegate = () => prisma.workflow || prisma.advancedWorkflow || null;
 const getAutomationRuleDelegate = () => prisma.automationRule || null;
+const getAutomationRuleOrderBy = () => {
+  const fields = prisma.automationRule?.fields;
+
+  if (fields?.createdAt) return { createdAt: 'desc' };
+  if (fields?.lastRun) return { lastRun: { sort: 'desc', nulls: 'last' } };
+  if (fields?.name) return { name: 'asc' };
+  return undefined;
+};
 const emptyPagination = (page, limit) => ({
   page: parseInt(page),
   limit: parseInt(limit),
@@ -174,10 +182,11 @@ router.get('/automation-rules', authenticateToken, async (req, res) => {
     if (type) where.type = type;
     if (active !== undefined) where.active = active === 'true';
 
+    const orderBy = getAutomationRuleOrderBy();
     const [rules, total] = await Promise.all([
       automationRuleDelegate.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        ...(orderBy ? { orderBy } : {}),
         skip,
         take: parseInt(limit)
       }),

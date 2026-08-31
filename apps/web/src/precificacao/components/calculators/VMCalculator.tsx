@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCRMAuthHeaders } from '@/config/api';
+import { ConvertToB2BOpportunityButton } from '@/components/proposals/ConvertToB2BOpportunityButton';
 
 interface VMConfig {
   id: string;
@@ -608,6 +609,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                                 >
                                   <Edit className="h-4 w-4 mr-2" /> Editar
                                 </Button>
+                                <ConvertToB2BOpportunityButton proposal={proposal} />
                                 <Button
                                   variant="destructive"
                                   size="sm"

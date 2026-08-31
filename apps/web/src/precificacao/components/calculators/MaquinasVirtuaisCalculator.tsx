@@ -14,6 +14,7 @@ import CommissionTablesUnified from './CommissionTablesUnified';
 import { ProposalApprovalRequestButton } from '@/components/proposals/ProposalApprovalRequestButton';
 import { ProposalStatusBadge } from '@/components/proposals/ProposalStatusBadge';
 import { ProposalApprovalInfo } from '@/components/proposals/ProposalApprovalInfo';
+import { ConvertToB2BOpportunityButton } from '@/components/proposals/ConvertToB2BOpportunityButton';
 import { useCommissions, getChannelIndicatorCommissionRate, getChannelInfluencerCommissionRate, getChannelSellerCommissionRate, getSellerCommissionRate, getDirectorCommissionRate } from '@/hooks/use-commissions';
 import { generateNextProposalId } from '@/lib/proposal-id-generator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -2393,6 +2394,7 @@ const MaquinasVirtuaisCalculator = ({ onBackToDashboard, initialProposalId }: Ma
                                                             >
                                                                 <Edit className="h-4 w-4 mr-2" /> Editar
                                                             </Button>
+                                                            <ConvertToB2BOpportunityButton proposal={p} />
                                                             <Button
                                                                 variant="destructive"
                                                                 size="sm"

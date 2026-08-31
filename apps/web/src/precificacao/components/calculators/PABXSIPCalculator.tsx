@@ -20,6 +20,7 @@ import { ClientManagerForm } from './ClientManagerForm';
 import { ProposalApprovalRequestButton } from '@/components/proposals/ProposalApprovalRequestButton';
 import { ProposalStatusBadge } from '@/components/proposals/ProposalStatusBadge';
 import { ProposalApprovalInfo } from '@/components/proposals/ProposalApprovalInfo';
+import { ConvertToB2BOpportunityButton } from '@/components/proposals/ConvertToB2BOpportunityButton';
 
 // Interfaces locais
 interface ClientData {
@@ -1923,6 +1924,7 @@ export const PABXSIPCalculator: React.FC<PABXSIPCalculatorProps> = ({ onBackToDa
                                                     >
                                                         <Edit className="h-4 w-4 mr-2" /> Editar
                                                     </Button>
+                                                    <ConvertToB2BOpportunityButton proposal={proposal} />
                                                     <Button
                                                         variant="destructive"
                                                         size="sm"

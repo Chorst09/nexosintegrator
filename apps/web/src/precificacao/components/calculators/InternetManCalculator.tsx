@@ -14,6 +14,7 @@ import { ClientManagerForm } from './ClientManagerForm';
 import { ProposalApprovalRequestButton } from '@/components/proposals/ProposalApprovalRequestButton';
 import { ProposalStatusBadge } from '@/components/proposals/ProposalStatusBadge';
 import { ProposalApprovalInfo } from '@/components/proposals/ProposalApprovalInfo';
+import { ConvertToB2BOpportunityButton } from '@/components/proposals/ConvertToB2BOpportunityButton';
 import { ClientManagerInfo } from './ClientManagerInfo';
 import { ClientData, AccountManagerData, Proposal as ProposalType, UserRole } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1900,6 +1901,7 @@ const InternetManCalculator: React.FC<InternetManCalculatorProps> = ({ onBackToD
                                                     <Button variant="outline" size="sm" onClick={() => editProposal(p)}>
                                                         <Edit className="h-4 w-4 mr-2" /> Editar Proposta
                                                     </Button>
+                                                    <ConvertToB2BOpportunityButton proposal={p} />
                                                     <Button
                                                         variant="destructive"
                                                         size="sm"

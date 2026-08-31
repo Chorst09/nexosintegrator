@@ -70,11 +70,24 @@ server {
     gzip_types text/plain text/css text/javascript application/json application/javascript;
     gzip_min_length 1000;
     
+    location = /index.html {
+        root $REPO_PATH/public;
+        add_header Cache-Control \"no-store, no-cache, must-revalidate\" always;
+        try_files /index.html =404;
+    }
+
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\$ {
+        root $REPO_PATH/public;
+        expires 1y;
+        add_header Cache-Control \"public, max-age=31536000, immutable, no-transform\" always;
+        add_header X-Content-Type-Options \"nosniff\" always;
+        try_files \$uri =404;
+    }
+
     location / {
         root $REPO_PATH/public;
+        add_header Cache-Control \"no-store, no-cache, must-revalidate\" always;
         try_files \$uri \$uri/ /index.html;
-        expires 1h;
-        add_header Cache-Control \"public, immutable\";
     }
     
     location /api/ {

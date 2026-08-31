@@ -12,6 +12,7 @@ import { generateNextProposalId, generateNewVersion } from '@/lib/proposal-id-ge
 import { ProposalApprovalRequestButton } from '@/components/proposals/ProposalApprovalRequestButton'
 import { ProposalStatusBadge } from '@/components/proposals/ProposalStatusBadge'
 import { ProposalApprovalInfo } from '@/components/proposals/ProposalApprovalInfo'
+import { ConvertToB2BOpportunityButton } from '@/components/proposals/ConvertToB2BOpportunityButton'
 import { useDeepLinkedProposal } from '@/hooks/use-deep-linked-proposal'
 import { getCRMAuthHeaders } from '@/config/api';
 
@@ -966,6 +967,7 @@ export default function SDWanCalculator({ onBackToDashboard, initialProposalId }
                           <Edit className="w-4 h-4 mr-1" />
                           Editar
                         </Button>
+                        <ConvertToB2BOpportunityButton proposal={proposal} />
                         <Button 
                           size="sm" 
                           variant="destructive"

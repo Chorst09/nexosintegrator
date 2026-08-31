@@ -266,7 +266,7 @@ router.put('/change-password', async (req, res) => {
 router.get('/users', authenticateToken, async (req, res) => {
   try {
     // Verificar permissão
-    if (!['ADMIN', 'MANAGER'].includes(req.user.role)) {
+    if (!['MASTER', 'ADMIN', 'MANAGER'].includes(req.user.actualRole || req.user.role)) {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
