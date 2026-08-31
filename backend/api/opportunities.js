@@ -367,8 +367,8 @@ export default async function handler(req) {
       ? (body.lossReason || null)
       : resolveStageDecisionLossReason(stageDecisionDetails);
     
-    const opportunity = await prisma.$transaction(async (tx) => {
-      const createOpportunity = async (number) => tx.opportunity.create({
+    const createOpportunityWithNumber = async (number) => prisma.$transaction(async (tx) => {
+      const created = await tx.opportunity.create({
         data: {
           number,
           title: body.title,
@@ -409,14 +409,6 @@ export default async function handler(req) {
           }
         }
       });
-      const number = body.number || await generateOpportunityNumber(tx, clientType);
-      let created;
-      try {
-        created = await createOpportunity(number);
-      } catch (error) {
-        if (body.number || !isUniqueOpportunityNumberError(error)) throw error;
-        created = await createOpportunity(await generateAvailableOpportunityNumber(tx, clientType));
-      }
 
       if (created.stage === 'WON') {
         await syncWonOpportunityCommission(tx, created);
@@ -424,6 +416,16 @@ export default async function handler(req) {
 
       return created;
     });
+
+    let opportunity;
+    try {
+      const number = body.number || await prisma.$transaction((tx) => generateOpportunityNumber(tx, clientType));
+      opportunity = await createOpportunityWithNumber(number);
+    } catch (error) {
+      if (body.number || !isUniqueOpportunityNumberError(error)) throw error;
+      const number = await prisma.$transaction((tx) => generateAvailableOpportunityNumber(tx, clientType));
+      opportunity = await createOpportunityWithNumber(number);
+    }
     
     // Atualizar lead score da empresa
     try {
