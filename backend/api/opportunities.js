@@ -21,6 +21,16 @@ const normalizeClientType = (value) => {
   return normalized === 'B2B' || normalized === 'B2G' ? normalized : null;
 };
 
+const normalizeRole = (user = {}) => String(user.actualRole || user.role || '').trim().toUpperCase();
+
+const canOwnOpportunityForClientType = (user = {}, clientType = 'B2B') => {
+  const type = normalizeClientType(clientType) || 'B2B';
+  const role = normalizeRole(user);
+  if (role === 'PRE_SALES') return false;
+  if (type === 'B2G') return Boolean(user.accessB2G || role === 'USER_B2G');
+  return Boolean(user.accessB2B || role === 'SELLER' || role === 'USER_B2B');
+};
+
 const hasB2GSignal = (value) => /\bB2G\b|GOVERNO|\bGOV\b|LICIT|EDITAL|TERMO DE REFER[ÊE]NCIA/i.test(String(value || ''));
 
 const hasB2GDescriptionShape = (value) => {
@@ -72,8 +82,6 @@ const resolveRequestedClientType = (body = {}, query = {}) => {
   if (hasB2GSignal(body.source) || hasB2GDescriptionShape(body.description)) return 'B2G';
   return 'B2B';
 };
-
-const normalizeRole = (user = {}) => String(user.actualRole || user.role || '').trim().toUpperCase();
 
 const canSeeAllOpportunities = (user = {}) =>
   ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR'].includes(normalizeRole(user));
@@ -342,8 +350,14 @@ export default async function handler(req) {
 
     const resolvedOwnerId = canSeeAllOpportunities(req.user) ? body.ownerId : req.user.userId;
     const tenantCompanyId = getTenantCompanyId(req.user) || body.tenantCompanyId || null;
+    if (!body.title) {
+      return Response.json({ error: 'Título é obrigatório' }, { status: 400 });
+    }
+    if (!body.companyId) {
+      return Response.json({ error: 'Selecione uma empresa para a oportunidade' }, { status: 400 });
+    }
     if (!resolvedOwnerId) {
-      return new Response('ownerId é obrigatório', { status: 400 });
+      return Response.json({ error: 'Selecione um responsável para a oportunidade' }, { status: 400 });
     }
 
     if (tenantCompanyId && body.companyId) {
@@ -354,6 +368,26 @@ export default async function handler(req) {
       if (!company || String(company.tenantCompanyId || '') !== tenantCompanyId) {
         return new Response('Empresa não pertence a este tenant', { status: 403 });
       }
+    }
+
+    const owner = await prisma.user.findUnique({
+      where: { id: resolvedOwnerId },
+      select: {
+        id: true,
+        role: true,
+        accessB2B: true,
+        accessB2G: true,
+        tenantCompanyId: true
+      }
+    });
+    if (!owner) {
+      return Response.json({ error: 'Responsável não encontrado' }, { status: 400 });
+    }
+    if (tenantCompanyId && owner.tenantCompanyId && String(owner.tenantCompanyId) !== String(tenantCompanyId)) {
+      return Response.json({ error: 'Responsável não pertence a este tenant' }, { status: 403 });
+    }
+    if (!canOwnOpportunityForClientType(owner, clientType)) {
+      return Response.json({ error: `Responsável sem acesso ao módulo ${clientType}` }, { status: 400 });
     }
 
     const projectType = normalizeProjectType(body.projectType);
@@ -514,6 +548,25 @@ export default async function handler(req) {
       updateData.companyId = body.companyId;
     }
     if (body.ownerId !== undefined && body.ownerId && canSeeAllOpportunities(req.user)) {
+      const owner = await prisma.user.findUnique({
+        where: { id: body.ownerId },
+        select: {
+          id: true,
+          role: true,
+          accessB2B: true,
+          accessB2G: true,
+          tenantCompanyId: true
+        }
+      });
+      if (!owner) {
+        return Response.json({ error: 'Responsável não encontrado' }, { status: 400 });
+      }
+      if (getTenantCompanyId(req.user) && owner.tenantCompanyId && String(owner.tenantCompanyId) !== String(getTenantCompanyId(req.user))) {
+        return Response.json({ error: 'Responsável não pertence a este tenant' }, { status: 403 });
+      }
+      if (!canOwnOpportunityForClientType(owner, nextClientType)) {
+        return Response.json({ error: `Responsável sem acesso ao módulo ${nextClientType}` }, { status: 400 });
+      }
       updateData.ownerId = body.ownerId;
     }
     if (body.lossReason !== undefined) {

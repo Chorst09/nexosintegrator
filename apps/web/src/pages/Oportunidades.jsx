@@ -84,6 +84,16 @@ const parseStageDecisionDetails = (details) => {
   }
 };
 
+const normalizeRoleName = (value) => String(value || '').trim().toUpperCase();
+
+const canOwnOpportunityForClientType = (user, clientType = 'B2B') => {
+  if (!user?.id) return false;
+  const role = normalizeRoleName(user.role);
+  if (role === 'PRE_SALES') return false;
+  if (clientType === 'B2G') return user.accessB2G !== false || role === 'USER_B2G';
+  return user.accessB2B !== false || role === 'SELLER' || role === 'USER_B2B';
+};
+
 export default function Oportunidades() {
   const navigate = useNavigate();
   const [opportunities, setOpportunities] = useState([]);
@@ -263,7 +273,10 @@ export default function Oportunidades() {
       
       if (usersRes.ok) {
         const usersData = await usersRes.json();
-        setUsers(Array.isArray(usersData) ? usersData.filter(user => user.role === 'SELLER' || user.role === 'ADMIN') : []);
+        const assignableUsers = Array.isArray(usersData)
+          ? usersData.filter((user) => canOwnOpportunityForClientType(user, pipelineClientType))
+          : [];
+        setUsers(assignableUsers);
       }
     } catch (error) {
       console.error('Erro ao carregar dependências:', error);
@@ -459,6 +472,12 @@ export default function Oportunidades() {
       
       const parsedValue = parseFloat(payloadFormData.value);
       const parsedProbability = parseInt(payloadFormData.probability);
+      const resolvedOwnerId = payloadFormData.ownerId || userId || '';
+
+      if (!resolvedOwnerId) {
+        alert('Selecione um responsável para criar a oportunidade.');
+        return;
+      }
 
       // Construir body explicitamente — nunca usar spread para evitar campos inválidos no Prisma
       const body = {
@@ -483,7 +502,7 @@ export default function Oportunidades() {
           return isNaN(d.getTime()) ? null : v;
         })(),
         companyId: payloadFormData.companyId || '',
-        ownerId: payloadFormData.ownerId || '',
+        ownerId: resolvedOwnerId,
         b2gStage: selectedOpportunity ? (selectedOpportunity.b2gStage || payloadFormData.b2gStage || null) : (payloadFormData.b2gStage || null),
         lossReason: payloadFormData.lossReason || null,
         notes: payloadFormData.notes || null,
@@ -503,8 +522,15 @@ export default function Oportunidades() {
       } else {
         let errMsg = 'Erro ao salvar oportunidade';
         try {
-          const errData = await response.json();
-          errMsg = errData.error || errData.message || errMsg;
+          const errText = await response.text();
+          if (errText) {
+            try {
+              const errData = JSON.parse(errText);
+              errMsg = errData.error || errData.message || errText;
+            } catch (_) {
+              errMsg = errText;
+            }
+          }
         } catch (_) {}
         console.error('[handleSubmit] Erro HTTP', response.status, errMsg);
         alert(`Erro ${response.status}: ${errMsg}`);
