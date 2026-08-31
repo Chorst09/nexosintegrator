@@ -1082,7 +1082,7 @@ router.post('/:projectId/attachments', authenticateToken, upload.single('file'),
         mimeType: req.file.mimetype,
         size: req.file.size,
         category: normalizeAttachmentCategory(category),
-        description: description || null,
+        description: String(description || '').trim() || null,
         uploadedBy: req.user.id
       }
     });

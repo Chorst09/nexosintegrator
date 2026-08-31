@@ -398,7 +398,8 @@ export function DocsView({
   onCreateProject?: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('OTHER');
+  const [uploadCategory, setUploadCategory] = useState('OTHER');
+  const [documentDescription, setDocumentDescription] = useState('');
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -451,7 +452,8 @@ export function DocsView({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('category', category);
+      formData.append('category', uploadCategory);
+      formData.append('description', documentDescription.trim());
 
       const response = await fetch(buildApiUrl(`/projetos/${selectedProjectId}/attachments`), {
         method: 'POST',
@@ -463,6 +465,7 @@ export function DocsView({
         throw new Error(payload.error || `Erro ${response.status} ao enviar documento`);
       }
       setDocuments((prev) => [payload, ...prev]);
+      setDocumentDescription('');
     } catch (err) {
       console.error('Erro ao enviar documento:', err);
       setError(err instanceof Error ? err.message : 'Erro ao enviar documento');
@@ -517,6 +520,12 @@ export function DocsView({
     const text = `${document.originalName} ${document.category} ${document.description || ''}`.toLowerCase();
     return !search || text.includes(search.toLowerCase());
   });
+  const groupedDocuments = DOCUMENT_CATEGORIES
+    .map((item) => ({
+      ...item,
+      documents: filteredDocuments.filter((document) => document.category === item.value)
+    }))
+    .filter((item) => item.documents.length > 0);
 
   return (
     <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300">
@@ -538,15 +547,6 @@ export function DocsView({
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
             </select>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              className="bg-[#111827] border border-[#263345] text-sm font-semibold text-slate-200 rounded-md px-3 py-1.5 focus:outline-none focus:border-[#22c55e]"
-            >
-              {DOCUMENT_CATEGORIES.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -557,11 +557,6 @@ export function DocsView({
                 className="bg-[#111827] border border-[#263345] text-sm text-slate-200 rounded-md pl-9 pr-4 py-1.5 focus:outline-none focus:border-[#ff7a00] w-64"
               />
             </div>
-            <label className={`flex items-center gap-2 text-sm text-white px-3 py-1.5 rounded-md transition-colors font-medium ${selectedProjectId && !saving ? 'bg-[#ff7a00] hover:bg-[#f6b40b] hover:text-[#050914] cursor-pointer' : 'bg-slate-700 cursor-not-allowed opacity-70'}`}>
-              <Upload className="w-4 h-4" />
-              {saving ? 'Enviando...' : 'Enviar'}
-              <input type="file" className="hidden" disabled={!selectedProjectId || saving} onChange={handleUpload} />
-            </label>
           </div>
         </div>
 
@@ -589,6 +584,38 @@ export function DocsView({
           </div>
         ) : (
           <>
+            <div className="mb-6 rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(255,122,0,0.14),rgba(17,24,39,0.98))] p-5">
+              <div className="grid gap-4 lg:grid-cols-[220px_1fr_auto] lg:items-end">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">Tipo do documento</span>
+                  <select
+                    value={uploadCategory}
+                    onChange={(event) => setUploadCategory(event.target.value)}
+                    className="h-11 rounded-md border border-[#374151] bg-[#070b16] px-3 text-sm font-semibold text-slate-100 outline-none transition-colors focus:border-[#22c55e]"
+                  >
+                    {DOCUMENT_CATEGORIES.map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">Do que se trata</span>
+                  <input
+                    type="text"
+                    value={documentDescription}
+                    onChange={(event) => setDocumentDescription(event.target.value)}
+                    placeholder="Ex.: Ata do kickoff externo, proposta aprovada, aceite da fase 1..."
+                    className="h-11 rounded-md border border-[#374151] bg-[#070b16] px-3 text-sm font-semibold text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00]"
+                  />
+                </label>
+                <label className={`flex h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-black text-white transition-colors ${selectedProjectId && !saving ? 'bg-[#ff7a00] hover:bg-[#f6b40b] hover:text-[#050914] cursor-pointer' : 'bg-slate-700 cursor-not-allowed opacity-70'}`}>
+                  <Upload className="w-4 h-4" />
+                  {saving ? 'Enviando...' : 'Enviar documento'}
+                  <input type="file" className="hidden" disabled={!selectedProjectId || saving} onChange={handleUpload} />
+                </label>
+              </div>
+            </div>
+
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
               <div className="rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(255,122,0,0.18),rgba(17,24,39,0.98))] p-4">
                 <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">Projeto</p>
@@ -620,52 +647,69 @@ export function DocsView({
                 <p className="mt-2 text-sm text-slate-500">Envie contratos, atas, entregáveis, evidências e aceites do projeto selecionado.</p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
-                <div className="grid grid-cols-[1.4fr_.6fr_.45fr_.55fr_.35fr] gap-4 border-b border-[#263345] bg-[#0b1020] px-5 py-3 text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  <span>Documento</span>
-                  <span>Categoria</span>
-                  <span>Tamanho</span>
-                  <span>Enviado em</span>
-                  <span className="text-right">Acoes</span>
-                </div>
-                <div className="divide-y divide-[#263345]">
-                  {filteredDocuments.map((document) => (
-                    <div key={document.id} className="grid grid-cols-[1.4fr_.6fr_.45fr_.55fr_.35fr] items-center gap-4 px-5 py-4 text-sm">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#ff7a00]/10 text-[#ff7a00]">
-                          <FileText className="h-5 w-5" />
+              <div className="space-y-5">
+                {groupedDocuments.map((group) => (
+                  <section key={group.value} className="overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
+                    <div className="flex items-center justify-between border-b border-[#263345] bg-[#0b1020] px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[#18c8df]/10 text-[#18c8df]">
+                          <FileText className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <h3 className="text-sm font-black uppercase tracking-wide text-slate-100">{group.label}</h3>
+                          <p className="text-xs text-slate-500">{group.documents.length} documento{group.documents.length !== 1 ? 's' : ''}</p>
                         </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-black text-slate-100">{document.originalName}</p>
-                          <p className="truncate text-xs text-slate-500">{document.mimeType || 'Arquivo'}</p>
-                        </div>
-                      </div>
-                      <span className="w-fit rounded-full border border-[#18c8df]/30 bg-[#18c8df]/10 px-2.5 py-1 text-xs font-black text-[#18c8df]">
-                        {categoryLabel(document.category)}
-                      </span>
-                      <span className="text-slate-400">{formatFileSize(document.size)}</span>
-                      <span className="text-slate-400">{new Date(document.createdAt).toLocaleDateString('pt-BR')}</span>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleDownload(document)}
-                          className="rounded-md border border-[#374151] bg-[#070b16] p-2 text-slate-400 transition-colors hover:border-[#22c55e] hover:text-[#22c55e]"
-                          title="Baixar"
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(document)}
-                          className="rounded-md border border-[#374151] bg-[#070b16] p-2 text-slate-400 transition-colors hover:border-[#ef4444] hover:text-[#ef4444]"
-                          title="Excluir"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="overflow-x-auto">
+                      <div className="grid min-w-[900px] grid-cols-[1.15fr_1.1fr_.35fr_.45fr_.3fr] gap-4 border-b border-[#263345] px-5 py-3 text-[11px] font-black uppercase tracking-wide text-slate-500">
+                        <span>Arquivo</span>
+                        <span>Do que se trata</span>
+                        <span>Tamanho</span>
+                        <span>Enviado em</span>
+                        <span className="text-right">Acoes</span>
+                      </div>
+                      <div className="divide-y divide-[#263345]">
+                        {group.documents.map((document) => (
+                          <div key={document.id} className="grid min-w-[900px] grid-cols-[1.15fr_1.1fr_.35fr_.45fr_.3fr] items-center gap-4 px-5 py-4 text-sm">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#ff7a00]/10 text-[#ff7a00]">
+                                <FileText className="h-5 w-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-black text-slate-100">{document.originalName}</p>
+                                <p className="truncate text-xs text-slate-500">{document.mimeType || 'Arquivo'}</p>
+                              </div>
+                            </div>
+                            <p className="line-clamp-2 text-sm leading-relaxed text-slate-300">
+                              {document.description || 'Sem descrição informada.'}
+                            </p>
+                            <span className="text-slate-400">{formatFileSize(document.size)}</span>
+                            <span className="text-slate-400">{new Date(document.createdAt).toLocaleDateString('pt-BR')}</span>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDownload(document)}
+                                className="rounded-md border border-[#374151] bg-[#070b16] p-2 text-slate-400 transition-colors hover:border-[#22c55e] hover:text-[#22c55e]"
+                                title="Baixar"
+                              >
+                                <Download className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(document)}
+                                className="rounded-md border border-[#374151] bg-[#070b16] p-2 text-slate-400 transition-colors hover:border-[#ef4444] hover:text-[#ef4444]"
+                                title="Excluir"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                ))}
               </div>
             )}
           </>
