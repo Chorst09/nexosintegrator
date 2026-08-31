@@ -8,8 +8,10 @@ Este pacote separa o codigo do modulo **Portal de Busca** para reutilizacao em o
 portal-busca-module/
   frontend/src/PortalBusca.jsx       # Tela React do Portal de Busca
   frontend/src/api.js                # Cliente minimo para montar URLs da API
-  backend/routes/bll-proxy.js        # Proxy para BLL e ConLicitacao
+  backend/routes/bll-proxy.js        # Proxy para BLL
   backend/routes/b2g-search.js       # API agregadora PNCP/ComprasNet opcional
+  backend/routes/comprasnet-proxy.js # Proxy Compras.gov.br/PNCP
+  backend/routes/b2g-managed-bids.js # Lista opcional de licitacoes gerenciadas
   backend/example-server.js          # Exemplo Express para montar as rotas
   package.json                       # Dependencias necessarias
 ```
@@ -17,10 +19,15 @@ portal-busca-module/
 ## O Que O Modulo Faz
 
 - Busca editais no PNCP direto do browser.
+- Busca em fontes publicas via backend:
+  - PNCP agregado
+  - Compras.gov.br / ComprasNet
+  - Transparencia Curitiba
+  - Portal Transparencia Federal
 - Permite configurar fontes autenticadas:
   - BLL Compras
-  - ConLicitacao
 - Salva favoritos no `localStorage`.
+- Permite marcar licitacoes como gerenciadas.
 - Permite criar lead/oportunidade se o sistema destino expuser endpoints compativeis.
 
 ## Dependencias Frontend
@@ -67,7 +74,23 @@ Obrigatorios para fontes autenticadas:
 ```text
 GET /api/bll-proxy
 GET /api/bll-proxy?action=login&portal=bll
-GET /api/bll-proxy?action=login&portal=conlicitacao
+```
+
+Obrigatorios para todas as fontes publicas atuais:
+
+```text
+GET /api/b2g-search/search
+GET /api/b2g-search/fontes
+GET /api/b2g-search/curitiba-ecompras
+GET /api/comprasnet-proxy
+```
+
+Opcional, usado no fluxo "Licitações Gerenciadas":
+
+```text
+GET /api/b2g/licitacoes-gerenciadas
+POST /api/b2g/licitacoes-gerenciadas
+DELETE /api/b2g/licitacoes-gerenciadas/:id
 ```
 
 Opcionais, usados apenas no fluxo "Salvar Lead":
@@ -94,11 +117,15 @@ Monte as rotas:
 const express = require('express');
 const bllProxyRoutes = require('./routes/bll-proxy');
 const b2gSearchRoutes = require('./routes/b2g-search');
+const comprasnetProxyRoutes = require('./routes/comprasnet-proxy');
+const b2gManagedBidsRoutes = require('./routes/b2g-managed-bids');
 
 const app = express();
 app.use(express.json());
 app.use('/api/bll-proxy', bllProxyRoutes);
 app.use('/api/b2g-search', b2gSearchRoutes);
+app.use('/api/comprasnet-proxy', comprasnetProxyRoutes);
+app.use('/api/b2g', b2gManagedBidsRoutes);
 ```
 
 Ou rode o exemplo:
@@ -116,9 +143,8 @@ Para credenciais via ambiente, use:
 ```bash
 BLL_EMAIL=
 BLL_PASSWORD=
-CONLICITACAO_EMAIL=
-CONLICITACAO_PASSWORD=
 JWT_SECRET=
+PORTAL_BUSCA_DATA_DIR=
 ```
 
 As credenciais tambem podem ser enviadas pelo frontend via headers:
@@ -126,14 +152,13 @@ As credenciais tambem podem ser enviadas pelo frontend via headers:
 ```text
 x-bll-email
 x-bll-password
-x-conlicitacao-email
-x-conlicitacao-password
 ```
 
 ## Observacoes De Integracao
 
 - `b2g-search.js` exige token JWT no header `Authorization: Bearer <token>`.
-- `PortalBusca.jsx` hoje chama PNCP diretamente pelo browser e usa `bll-proxy` somente para fontes pagas.
+- `PortalBusca.jsx` usa `b2g-search`, `comprasnet-proxy` e `bll-proxy`.
+- `b2g-managed-bids.js` usa arquivo JSON local por padrao. Para producao, troque por persistencia do sistema destino.
 - O botao "Salvar Lead" depende do modelo de dados do CRM atual. No outro sistema, adapte esse fluxo para o seu cadastro de leads.
 - O componente usa `useNavigate` de `react-router-dom`. Se o outro sistema nao usar React Router, remova o import e troque o redirecionamento por um callback.
 

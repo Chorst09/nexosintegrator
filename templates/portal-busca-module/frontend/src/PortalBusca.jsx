@@ -1,9 +1,9 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Filter, X, ExternalLink, Loader2, Heart,
   MapPin, Calendar, Lock, Plus, Bell, Settings, RefreshCcw, CheckCircle, Trash2,
-  BookmarkPlus, ThumbsUp, ThumbsDown, Tag, Building2
+  BookmarkPlus, ThumbsUp, ThumbsDown, Tag, Building2, ClipboardList
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from './api';
 
@@ -28,24 +28,44 @@ const ESTADOS_BR = [
 
 const FONTES_CONFIG = [
   { id: 'pncp', nome: 'PNCP Oficial', descricao: 'Portal Nacional de Contratações Públicas', metodo: 'API REST', sync: 'Tempo Real', icon: '🏛️' },
-  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Portal de Compras do Governo Federal (SIASG)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷' }
+  { id: 'comprasnet', nome: 'ComprasNet', descricao: 'Licitações do Compras.gov.br (SIASG / Lei 8.666)', metodo: 'API REST', sync: 'Tempo Real', icon: '🇧🇷', defaultActive: false },
+  { id: 'transparencia-curitiba', nome: 'Transparência Curitiba', descricao: 'Licitações e contratações do Portal da Transparência de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️' },
+  { id: 'transparencia-federal', nome: 'Portal Transparência Federal', descricao: 'Licitações do Poder Executivo Federal via API oficial da CGU', metodo: 'API com token', sync: 'Sob demanda', icon: '🔎', defaultActive: false },
+  { id: 'dispensas', nome: 'Compras.gov.br Dispensas', descricao: 'Dispensas e inexigibilidades (Lei 8.666 e 14.133)', metodo: 'API REST', sync: 'Tempo Real', icon: '📄', defaultActive: false },
+  { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️', defaultActive: false },
+  { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋', defaultActive: false },
+  { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢', defaultActive: false },
+  { id: 'curitiba-ecompras', nome: 'e-Compras Curitiba', descricao: 'Portal de Compras Eletrônicas do Município de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️', defaultActive: false }
 ];
 
 const FONTES_STORAGE_KEY = 'b2g_fontes_integradas_v1';
+const LICITACOES_GERENCIADAS_KEY = 'b2g_licitacoes_gerenciadas_v1';
+const FONTES_PADRAO_ATIVAS = FONTES_CONFIG.filter(fonte => fonte.defaultActive !== false).map(fonte => fonte.id);
 
 const FONTES_PAGAS = [
-  { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' },
-  { portal: 'bnc', nome: 'BNC Compras', descricao: 'Banco Nacional de Compras', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🏦' },
-  { portal: 'conlicitacao', nome: 'ConLicitação', descricao: 'Consulte Online ConLicitação', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '🔎' }
+  { portal: 'bll', nome: 'BLL Compras', descricao: 'Bolsa de Licitações e Leilões', metodo: 'Portal autenticado', sync: 'Sob demanda', icon: '⚖️' }
 ];
 
+const PORTAIS_INTEGRADOS_SUPORTADOS = new Set(FONTES_PAGAS.map(fonte => fonte.portal));
+
 const novaFonteForm = () => ({
-  portal: 'conlicitacao',
-  nome: 'ConLicitação',
+  portal: 'bll',
+  nome: 'BLL Compras',
   usuario: '',
   senha: '',
   ativa: true
 });
+
+const readFontesIntegradas = () => {
+  try {
+    const fontes = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
+    return Array.isArray(fontes)
+      ? fontes.filter(fonte => PORTAIS_INTEGRADOS_SUPORTADOS.has(fonte.portal))
+      : [];
+  } catch {
+    return [];
+  }
+};
 
 const ORDENS = [
   { value: 'data_desc', label: 'Mais recentes primeiro' },
@@ -53,20 +73,6 @@ const ORDENS = [
   { value: 'valor_desc', label: 'Maior valor primeiro' },
   { value: 'valor_asc', label: 'Menor valor primeiro' },
   { value: 'abertura_asc', label: 'Abertura mais próxima' }
-];
-
-const MODALIDADES_CONLICITACAO = [
-  { id: '', nome: 'Todas as modalidades' },
-  { id: 10, nome: 'Pregão Eletrônico' },
-  { id: 11, nome: 'Pregão Presencial' },
-  { id: 4, nome: 'Concorrência' },
-  { id: 7, nome: 'Dispensa de Licitação' },
-  { id: 13, nome: 'Tomada de Preço' },
-  { id: 6, nome: 'Convite' },
-  { id: 8, nome: 'Leilão' },
-  { id: 1, nome: 'Audiência Pública' },
-  { id: 2, nome: 'Compra Eletrônica' },
-  { id: 12, nome: 'RDC' }
 ];
 
 const CATEGORIAS_PRODUTO_TI = [
@@ -106,7 +112,6 @@ const kwMatch = (texto, kw) => {
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 
 const hoje = () => {
-  // PNCP tem dados até ~2025. Usar data atual mas com fallback para dados reais.
   const d = new Date();
   return d.toISOString().slice(0, 10).replaceAll('-', '');
 };
@@ -117,7 +122,7 @@ const diasAtras = (n) => {
 };
 // Data máxima com dados reais no PNCP (ajuste conforme necessário)
 const dataFimPadrao = () => hoje();
-const dataInicioPadrao = () => diasAtras(90);
+const dataInicioPadrao = () => diasAtras(30);
 const toISODate = (s) => {
   if (!s) return null;
   const str = String(s).replaceAll('-', '').slice(0, 8);
@@ -134,10 +139,11 @@ const matchObjeto = (texto, objeto) => {
 async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
   const dataI = dataInicio ? dataInicio.replaceAll('-', '') : dataInicioPadrao();
   const dataF = dataFim ? dataFim.replaceAll('-', '') : dataFimPadrao();
-  const modalidades = [6, 8, 9, 4, 5]; // Pregão, Dispensa, Inexigibilidade, Concorrência, Tomada de Preços
+  const modalidades = [6]; // Pregão eletrônico é a modalidade com maior volume no PNCP.
   const resultados = [];
 
-  const fetches = modalidades.map(async (mod) => {
+  // Buscar modalidades em sequência com timeout aumentado e retry
+  for (const mod of modalidades) {
     try {
       const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
       url.searchParams.set('dataInicial', dataI);
@@ -147,41 +153,67 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
       url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
       if (uf) url.searchParams.set('uf', uf);
 
-      const res = await fetch(url.toString(), {
-        headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-        signal: AbortSignal.timeout(15000)
-      });
-      if (!res.ok) return [];
-      const data = await res.json().catch(() => null);
-      const items = Array.isArray(data?.data) ? data.data : [];
-      return items
-        .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
-        .map(item => ({
-          id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
-          fonte: 'PNCP',
-          fonteLogo: '🏛️',
-          titulo: item.objetoCompra || 'Sem descrição',
-          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-          modalidade: item.modalidadeNome || '',
-          uf: item.unidadeOrgao?.ufSigla || uf || '',
-          municipio: item.unidadeOrgao?.municipioNome || '',
-          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
-          dataPublicacao: toISODate(item.dataPublicacaoPncp?.slice(0, 8)) || item.dataPublicacaoPncp,
-          dataAbertura: item.dataAberturaProposta,
-          dataEncerramento: item.dataEncerramentoProposta,
-          numero: item.numeroCompra || '',
-          ano: item.anoCompra || '',
-          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-          status: item.situacaoCompraNome || 'Publicado',
-          situacaoCodigo: item.codigoSituacaoCompra
-        }));
-    } catch { return []; }
-  });
-
-  const results = await Promise.allSettled(fetches);
-  for (const r of results) {
-    if (r.status === 'fulfilled') resultados.push(...r.value);
+      let retries = 0;
+      let lastError = null;
+      
+      while (retries >= 0) {
+        try {
+          const res = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
+            signal: AbortSignal.timeout(12000)
+          });
+          
+          if (!res.ok) {
+            if (retries > 0) {
+              await new Promise(r => setTimeout(r, 1000)); // Aguardar 1s antes de retry
+              retries--;
+              continue;
+            }
+            break;
+          }
+          
+          const data = await res.json().catch(() => null);
+          const items = Array.isArray(data?.data) ? data.data : [];
+          const filtered = items
+            .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+            .map(item => ({
+              id: item.numeroControlePNCP || `pncp-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+              fonte: 'PNCP',
+              fonteLogo: '🏛️',
+              titulo: item.objetoCompra || 'Sem descrição',
+              orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+              modalidade: item.modalidadeNome || '',
+              uf: item.unidadeOrgao?.ufSigla || uf || '',
+              municipio: item.unidadeOrgao?.municipioNome || '',
+              valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+              dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
+              dataAbertura: item.dataAberturaProposta,
+              dataEncerramento: item.dataEncerramentoProposta,
+              numero: item.numeroCompra || '',
+              ano: item.anoCompra || '',
+              link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+              status: item.situacaoCompraNome || 'Publicado',
+              situacaoCodigo: item.codigoSituacaoCompra
+            }));
+          
+          resultados.push(...filtered);
+          break; // Sucesso, sair do loop de retries
+        } catch (err) {
+          lastError = err;
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries--;
+          } else {
+            console.warn(`⚠️ PNCP mod ${mod} falhou após retries:`, err.message);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`⚠️ PNCP mod ${mod} erro:`, err.message);
+    }
   }
+  
   return resultados;
 }
 
@@ -194,35 +226,347 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
     url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
     if (uf) url.searchParams.set('uf', uf);
 
-    const res = await fetch(url.toString(), {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!res.ok) return [];
-    const data = await res.json().catch(() => null);
-    const items = Array.isArray(data?.data) ? data.data : [];
+    let retries = 0;
+    while (retries >= 0) {
+      try {
+        const res = await fetch(url.toString(), {
+          headers: { 'Accept': 'application/json', 'User-Agent': 'NexosCRM/2.0' },
+          signal: AbortSignal.timeout(12000)
+        });
+        
+        if (!res.ok) {
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries--;
+            continue;
+          }
+          return [];
+        }
+        
+        const data = await res.json().catch(() => null);
+        const items = Array.isArray(data?.data) ? data.data : [];
+        return items
+          .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+          .map(item => ({
+            id: `pncp-prop-${item.numeroControlePNCP || item.anoCompra + item.numeroCompra + item.orgaoEntidade?.cnpj}`,
+            fonte: 'PNCP',
+            fonteLogo: '🏛️',
+            titulo: item.objetoCompra || 'Sem descrição',
+            orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+            modalidade: item.modalidadeNome || '',
+            uf: item.unidadeOrgao?.ufSigla || uf || '',
+            municipio: item.unidadeOrgao?.municipioNome || '',
+            valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+            dataPublicacao: item.dataPublicacaoPncp,
+            dataAbertura: item.dataAberturaProposta,
+            dataEncerramento: item.dataEncerramentoProposta,
+            numero: item.numeroCompra || '',
+            ano: item.anoCompra || '',
+            link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+            status: 'Em proposta',
+            situacaoCodigo: item.codigoSituacaoCompra
+          }));
+      } catch (err) {
+        if (retries > 0) {
+          await new Promise(r => setTimeout(r, 1000));
+          retries--;
+        } else {
+          console.warn('⚠️ PNCP Proposta falhou após retries:', err.message);
+          return [];
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ PNCP Proposta erro:', err.message);
+    return [];
+  }
+}
+
+async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20, incluirPropostas = true }) {
+  const url = new URL(buildApiUrl('/b2g-search/search'), window.location.origin);
+  url.searchParams.set('fontes', 'pncp');
+  url.searchParams.set('objeto', objeto || '');
+  url.searchParams.set('uf', uf || '');
+  url.searchParams.set('dataInicio', dataInicio || '');
+  url.searchParams.set('dataFim', dataFim || '');
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
+  url.searchParams.set('incluirPropostas', incluirPropostas ? 'true' : 'false');
+
+  const res = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+    signal: AbortSignal.timeout(30000)
+  });
+  if (!res.ok) {
+    const publicacoes = await buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPagina });
+    const propostas = incluirPropostas ? await buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagina }) : [];
+    return [...publicacoes, ...propostas];
+  }
+
+  const payload = await res.json().catch(() => null);
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+  if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
+    console.debug('PNCP retornou sem resultados nesta consulta:', payload.erros.slice(0, 2).join('; '));
+    throw new Error(payload.erros.slice(0, 2).join('; '));
+  }
+  return data;
+}
+
+// ─── ComprasNet API (dadosabertos.compras.gov.br, via proxy) ─────────────────
+
+const UFS_BR_SET = new Set([
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+]);
+
+const extrairUfEndereco = (endereco) => {
+  const match = String(endereco || '').match(/(?:\/|\s*-\s*)\s*([A-Z]{2})\s*$/);
+  return match && UFS_BR_SET.has(match[1]) ? match[1] : '';
+};
+
+const extrairMunicipioEndereco = (endereco) => {
+  const match = String(endereco || '').match(/([^\/-]+?)(?:\/\s*|\s*-\s*)\s*[A-Z]{2}\s*$/);
+  if (!match) return '';
+  const parts = match[1].trim().split(/\s*-\s*/);
+  return parts[parts.length - 1].trim();
+};
+
+async function buscarComprasGovProxy(tipo, params) {
+  const url = new URL(buildApiUrl('/comprasnet-proxy'), window.location.origin);
+  if (tipo) url.searchParams.set('tipo', tipo);
+  if (params.dataInicio) url.searchParams.set('dataInicio', params.dataInicio);
+  if (params.dataFim) url.searchParams.set('dataFim', params.dataFim);
+  if (params.uf) url.searchParams.set('uf', params.uf);
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(params.tamanhoPagina || 20), 500)));
+
+  const res = await fetch(url.toString(), {
+    headers: { 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(70000)
+  });
+  if (!res.ok) return [];
+  const payload = await res.json().catch(() => null);
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+  if (data.length === 0 && payload?.erro) {
+    throw new Error(payload.erro);
+  }
+  return data;
+}
+
+async function buscarComprasNet({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('licitacao', { dataInicio, dataFim, tamanhoPagina });
+
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
-      .map(item => ({
-        id: `pncp-prop-${item.numeroControlePNCP || item.anoCompra + item.numeroCompra + item.orgaoEntidade?.cnpj}`,
-        fonte: 'PNCP',
-        fonteLogo: '🏛️',
-        titulo: item.objetoCompra || 'Sem descrição',
-        orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-        modalidade: item.modalidadeNome || '',
-        uf: item.unidadeOrgao?.ufSigla || uf || '',
-        municipio: item.unidadeOrgao?.municipioNome || '',
-        valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
-        dataPublicacao: item.dataPublicacaoPncp,
-        dataAbertura: item.dataAberturaProposta,
-        dataEncerramento: item.dataEncerramentoProposta,
-        numero: item.numeroCompra || '',
-        ano: item.anoCompra || '',
-        link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-        status: 'Em proposta',
-        situacaoCodigo: item.codigoSituacaoCompra
-      }));
+      .map(item => {
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `comprasnet-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
+          fonte: 'ComprasNet',
+          fonteLogo: '🇧🇷',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || 'ComprasNet',
+          modalidade: item.modalidadeNome || '',
+          uf: itemUf,
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
+        };
+      })
+      .filter(Boolean);
   } catch { return []; }
+}
+
+async function buscarComprasGovDispensas({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('dispensas', { dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+      .map(item => {
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `dispensa-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
+          fonte: 'Compras.gov.br Dispensas',
+          fonteLogo: '📄',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || 'Compras.gov.br',
+          modalidade: item.modalidadeNome || '',
+          uf: itemUf,
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarContratacoes14133({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('contratacoes14133', { uf, dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
+      .map(item => {
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `cn14133-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
+          fonte: 'Contratações Lei 14.133',
+          fonteLogo: '⚖️',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
+          uf: itemUf,
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarAtasRegistroPreco({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('arp', { dataInicio, dataFim, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidade?.razaoSocial}`, objeto))
+      .map(item => {
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `arp-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
+          fonte: 'Atas de Registro de Preço',
+          fonteLogo: '📋',
+          titulo: item.objetoCompra || 'Ata de Registro de Preço',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
+          uf: itemUf,
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Ata vigente'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarPregoes({ objeto, uf, dataInicio, tamanhoPagina = 20 }) {
+  try {
+    const items = await buscarComprasGovProxy('pregoes', { dataInicio, tamanhoPagina });
+
+    return items
+      .filter(item => matchObjeto(`${item.objetoCompra} ${item.orgaoEntidade?.razaoSocial}`, objeto))
+      .map(item => {
+        const itemUf = item.unidadeOrgao?.ufSigla || uf || '';
+        if (uf && itemUf !== uf) return null;
+        return {
+          id: `pregao-${item.numeroControlePNCP || item.numeroCompra || Math.random()}`,
+          fonte: 'Pregões (SIASG)',
+          fonteLogo: '📢',
+          titulo: item.objetoCompra || 'Sem descrição',
+          orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+          modalidade: item.modalidadeNome || '',
+          uf: itemUf,
+          municipio: item.unidadeOrgao?.municipioNome || '',
+          valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
+          dataPublicacao: item.dataPublicacaoPncp || null,
+          dataAbertura: item.dataAberturaProposta || null,
+          dataEncerramento: item.dataEncerramentoProposta || null,
+          numero: String(item.numeroCompra || ''),
+          ano: String(item.anoCompra || ''),
+          link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+          status: item.situacaoCompraNome || 'Publicado'
+        };
+      })
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+async function buscarCuritibaECompras({ objeto, uf, cidade, dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const url = new URL(buildApiUrl('/b2g-search/curitiba-ecompras'), window.location.origin);
+  url.searchParams.set('objeto', objeto || '');
+  url.searchParams.set('uf', uf || '');
+  url.searchParams.set('cidade', cidade || '');
+  url.searchParams.set('dataInicio', dataInicio || '');
+  url.searchParams.set('dataFim', dataFim || '');
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina || 20), 100)));
+
+  const res = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+    signal: AbortSignal.timeout(30000)
+  });
+  const payload = await res.json().catch(() => null);
+  
+  // ✅ Se tiver dados, retornar mesmo que res.ok seja false (fallback PNCP)
+  if (payload?.data && Array.isArray(payload.data) && payload.data.length > 0) {
+    return payload.data;
+  }
+  
+  // ❌ Se não tiver dados E resposta não OK, lançar erro
+  if (!res.ok) {
+    const message = payload?.erros?.[0] || payload?.error || payload?.message || 'Falha ao buscar no e-Compras Curitiba.';
+    throw new Error(message);
+  }
+  
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+async function buscarFonteB2GSearch(fonte, params) {
+  const url = new URL(buildApiUrl('/b2g-search/search'), window.location.origin);
+  url.searchParams.set('fontes', fonte);
+  url.searchParams.set('objeto', params.objeto || '');
+  url.searchParams.set('uf', params.uf || '');
+  url.searchParams.set('cidade', params.cidade || '');
+  url.searchParams.set('dataInicio', params.dataInicio || '');
+  url.searchParams.set('dataFim', params.dataFim || '');
+  url.searchParams.set('ordem', params.ordem || 'data_desc');
+  url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(params.tamanhoPagina || 50), 100)));
+
+  const res = await fetch(url.toString(), {
+    headers: getAuthHeaders(),
+    signal: AbortSignal.timeout(30000)
+  });
+  const payload = await res.json().catch(() => null);
+  const data = Array.isArray(payload?.data) ? payload.data : [];
+
+  if (!res.ok && data.length === 0) {
+    throw new Error(payload?.error || payload?.message || `Falha ao buscar em ${fonte}`);
+  }
+
+  if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
+    console.debug(`${fonte} retornou sem resultados nesta consulta:`, payload.erros.slice(0, 2).join('; '));
+  }
+
+  return data;
 }
 
 // ─── Helpers de UI ────────────────────────────────────────────────────────────
@@ -246,6 +590,39 @@ const deduplicar = (items) => {
   });
 };
 
+const getLicitacaoId = (item) => String(item?.id || item?.numeroControlePNCP || item?.numero || item?.link || '');
+
+const readLocalLicitacoesGerenciadas = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LICITACOES_GERENCIADAS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(item => getLicitacaoId(item)) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalLicitacoesGerenciadas = (items) => {
+  try {
+    localStorage.setItem(LICITACOES_GERENCIADAS_KEY, JSON.stringify(items));
+  } catch {
+    // Cache local é apenas contingência; falhas de storage não impedem a operação principal.
+  }
+};
+
+const mergeLicitacoesGerenciadas = (...lists) => {
+  const map = new Map();
+  lists.flat().forEach(item => {
+    const id = getLicitacaoId(item);
+    if (!id || map.has(id)) return;
+    map.set(id, { ...item, id });
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    const aTs = new Date(a.gerenciadaEm || a.createdAt || 0).getTime() || 0;
+    const bTs = new Date(b.gerenciadaEm || b.createdAt || 0).getTime() || 0;
+    return bTs - aTs;
+  });
+};
+
 const ordenar = (items, ordem) => [...items].sort((a, b) => {
   switch (ordem) {
     case 'data_desc': return new Date(b.dataPublicacao || 0) - new Date(a.dataPublicacao || 0);
@@ -261,15 +638,18 @@ const getFonteBadgeClass = (fonte) => {
   const map = {
     'PNCP': 'bg-blue-100 text-blue-800 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
     'ComprasNet': 'bg-green-100 text-green-800 border border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700',
+    'Compras.gov.br Dispensas': 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700',
+    'Contratações Lei 14.133': 'bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-700',
+    'Atas de Registro de Preço': 'bg-indigo-100 text-indigo-800 border border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700',
+    'Pregões (SIASG)': 'bg-rose-100 text-rose-800 border border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700',
+    'e-Compras Curitiba': 'bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-700',
     'BLL': 'bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
     'BNC': 'bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700',
-    'ConLicitação': 'bg-cyan-100 text-cyan-800 border border-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700',
   };
   return map[fonte] || 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600';
 };
 
 const getFonteDisplayName = (fonte) => {
-  if (fonte.portal === 'conlicitacao') return 'ConLicitação';
   return String(fonte.nome || fonte.portal || '').replace(' Compras', '').toUpperCase();
 };
 
@@ -324,18 +704,15 @@ async function buscarFonteIntegrada(fonte, params) {
   url.searchParams.set('comEdital', params.comEdital ? 'true' : '');
   url.searchParams.set('comMonitoramentoChat', params.comMonitoramentoChat ? 'true' : '');
   url.searchParams.set('numeroEdital', params.numeroEdital || '');
-  url.searchParams.set('numeroConlicitacao', params.numeroConlicitacao || '');
-  url.searchParams.set('modalidadeId', params.modalidadeId || '');
   url.searchParams.set('tamanhoPagina', params.tamanhoPagina || 20);
   if (fonte.portal !== 'bll') url.searchParams.set('useScraper', 'true');
 
-  const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
   const res = await fetch(url.toString(), {
     headers: {
-      [`x-${headerPrefix}-email`]: fonte.usuario,
-      [`x-${headerPrefix}-password`]: fonte.senha
+      [`x-${fonte.portal}-email`]: fonte.usuario || '',
+      [`x-${fonte.portal}-password`]: fonte.senha || ''
     },
-    signal: AbortSignal.timeout(30000)
+    signal: AbortSignal.timeout(18000)
   });
 
   if (!res.ok) {
@@ -367,7 +744,17 @@ function Toast({ toasts }) {
 
 // ─── Card de Edital ───────────────────────────────────────────────────────────
 
-function CardEdital({ item, favorito, leadSalvo, salvandoLead, onToggleFavorito, onAbrirSalvarLead }) {
+function CardEdital({
+  item,
+  favorito,
+  leadSalvo,
+  gerenciada,
+  salvandoLead,
+  salvandoGerenciada,
+  onToggleFavorito,
+  onToggleGerenciada,
+  onAbrirSalvarLead
+}) {
   const vigente = item.status && !['encerrado', 'cancelado', 'revogado'].includes(item.status.toLowerCase());
 
   return (
@@ -402,14 +789,32 @@ function CardEdital({ item, favorito, leadSalvo, salvandoLead, onToggleFavorito,
             </h3>
           </div>
 
-          {/* Valor */}
-          <div className="text-left md:text-right bg-slate-50 dark:bg-slate-700/40 md:bg-transparent md:dark:bg-transparent p-3 md:p-0 rounded-lg border border-slate-100 dark:border-slate-700 md:border-none shrink-0">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Valor Estimado</p>
-            {item.valor ? (
-              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.valor)}</p>
-            ) : (
-              <p className="text-sm text-slate-400 dark:text-slate-500 italic">Não informado</p>
+          <div className="flex flex-col gap-2 shrink-0">
+            {onToggleGerenciada && (
+              <button
+                onClick={() => onToggleGerenciada(item)}
+                disabled={salvandoGerenciada}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                  gerenciada
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30'
+                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30'
+                } disabled:cursor-wait disabled:opacity-70`}
+                title={gerenciada ? 'Remover de Licitações Gerenciadas' : 'Adicionar em Licitações Gerenciadas'}
+              >
+                {salvandoGerenciada ? <Loader2 size={14} className="animate-spin" /> : gerenciada ? <CheckCircle size={14} /> : <Plus size={14} />}
+                {salvandoGerenciada ? 'Salvando...' : gerenciada ? 'Licitação adicionada' : 'Adicionar licitação'}
+              </button>
             )}
+
+            {/* Valor */}
+            <div className="text-left md:text-right bg-slate-50 dark:bg-slate-700/40 md:bg-transparent md:dark:bg-transparent p-3 md:p-0 rounded-lg border border-slate-100 dark:border-slate-700 md:border-none">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Valor Estimado</p>
+              {item.valor ? (
+                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.valor)}</p>
+              ) : (
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic">Não informado</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -647,7 +1052,7 @@ function SalvarLeadModal({
 
 export default function PortalBusca() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('busca'); // 'busca' | 'fontes' | 'alertas'
+  const [activeTab, setActiveTab] = useState('busca'); // 'busca' | 'gerenciadas' | 'fontes' | 'alertas'
 
   // Busca
   const [objeto, setObjeto] = useState('');
@@ -658,8 +1063,6 @@ export default function PortalBusca() {
   const [comEdital, setComEdital] = useState(false);
   const [comMonitoramentoChat, setComMonitoramentoChat] = useState(false);
   const [numeroEdital, setNumeroEdital] = useState('');
-  const [numeroConlicitacao, setNumeroConlicitacao] = useState('');
-  const [modalidadeId, setModalidadeId] = useState('');
   const [ordem, setOrdem] = useState('data_desc');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -667,10 +1070,10 @@ export default function PortalBusca() {
   const [dataPrazoFim, setDataPrazoFim] = useState('');
   const [fontesAtivas, setFontesAtivas] = useState(() => {
     try {
-      const integradas = JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]');
-      return ['pncp', 'comprasnet', ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
+      const integradas = readFontesIntegradas();
+      return [...FONTES_PADRAO_ATIVAS, ...integradas.filter(f => f.ativa !== false).map(f => f.id)];
     } catch {
-      return ['pncp', 'comprasnet'];
+      return FONTES_PADRAO_ATIVAS;
     }
   });
   const [incluirPropostas, setIncluirPropostas] = useState(true);
@@ -678,7 +1081,7 @@ export default function PortalBusca() {
   const [produtoCustom, setProdutoCustom] = useState('');
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [fontesIntegradas, setFontesIntegradas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(FONTES_STORAGE_KEY) || '[]'); } catch { return []; }
+    try { return readFontesIntegradas(); } catch { return []; }
   });
   const [modalFonteAberto, setModalFonteAberto] = useState(false);
   const [fonteForm, setFonteForm] = useState(novaFonteForm);
@@ -705,6 +1108,11 @@ export default function PortalBusca() {
   });
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
 
+  // Licitações Gerenciadas
+  const [licitacoesGerenciadas, setLicitacoesGerenciadas] = useState(readLocalLicitacoesGerenciadas);
+  const [carregandoGerenciadas, setCarregandoGerenciadas] = useState(false);
+  const [salvandoGerenciadaIds, setSalvandoGerenciadaIds] = useState([]);
+
   // Alertas
   const [alertas, setAlertas] = useState(() => {
     try { return JSON.parse(localStorage.getItem('b2g_alertas') || '[]'); } catch { return []; }
@@ -715,7 +1123,7 @@ export default function PortalBusca() {
   const [toasts, setToasts] = useState([]);
 
   const fontesDisponiveis = useMemo(
-    () => [...FONTES_CONFIG, ...fontesIntegradas],
+    () => [...FONTES_CONFIG, ...fontesIntegradas.filter(fonte => PORTAIS_INTEGRADOS_SUPORTADOS.has(fonte.portal))],
     [fontesIntegradas]
   );
 
@@ -724,6 +1132,79 @@ export default function PortalBusca() {
     setToasts(prev => [...prev, { id, title, text, error }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(FONTES_STORAGE_KEY, JSON.stringify(fontesIntegradas));
+    setFontesAtivas(prev => {
+      const next = prev.filter(id => fontesDisponiveis.some(fonte => fonte.id === id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [fontesDisponiveis, fontesIntegradas]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const carregarLicitacoesGerenciadas = async () => {
+      const locais = readLocalLicitacoesGerenciadas();
+      setCarregandoGerenciadas(true);
+      try {
+        const response = await fetch(buildApiUrl('/b2g/licitacoes-gerenciadas'), {
+          headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || payload?.message || 'Não foi possível carregar licitações gerenciadas.');
+        }
+
+        const payload = await response.json().catch(() => null);
+        const servidor = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+        const idsServidor = new Set(servidor.map(getLicitacaoId).filter(Boolean));
+        const locaisSemServidor = locais.filter(item => !idsServidor.has(getLicitacaoId(item)));
+        const migradas = [];
+        let falhasMigracao = 0;
+
+        for (const item of locaisSemServidor) {
+          try {
+            const id = getLicitacaoId(item);
+            const saveResponse = await fetch(buildApiUrl('/b2g/licitacoes-gerenciadas'), {
+              method: 'POST',
+              headers: getAuthHeaders(),
+              body: JSON.stringify({ item: { ...item, id } })
+            });
+            if (saveResponse.ok) {
+              const savedPayload = await saveResponse.json().catch(() => null);
+              migradas.push(savedPayload?.data || item);
+            } else {
+              falhasMigracao += 1;
+            }
+          } catch {
+            falhasMigracao += 1;
+          }
+        }
+
+        if (!cancelled) {
+          const next = mergeLicitacoesGerenciadas(servidor, migradas);
+          setLicitacoesGerenciadas(next);
+          saveLocalLicitacoesGerenciadas(next);
+          if (falhasMigracao > 0) {
+            showToast('Algumas licitações não sincronizaram', 'Marque novamente os itens que não aparecerem na lista.', true);
+          }
+        }
+      } catch (error) {
+        if (!cancelled && locais.length > 0) {
+          setLicitacoesGerenciadas(locais);
+          showToast('Licitações em modo local', error.message || 'Não foi possível sincronizar com o servidor.', true);
+        }
+      } finally {
+        if (!cancelled) setCarregandoGerenciadas(false);
+      }
+    };
+
+    carregarLicitacoesGerenciadas();
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   // Filtro local por cidade e vigente (client-side após busca)
   const resultadosFiltrados = resultados.filter(item => {
@@ -750,6 +1231,11 @@ export default function PortalBusca() {
 
   const itensExibidos = mostrarFavoritos ? favoritos : resultadosFiltrados;
 
+  const executarFonte = (nomeFonte, promise) =>
+    promise.catch(error => {
+      throw new Error(`${nomeFonte}: ${error.message || 'falha na consulta'}`);
+    });
+
   const handleBuscar = useCallback(async () => {
     const hasAdvancedFilter = [
       cidade,
@@ -757,9 +1243,7 @@ export default function PortalBusca() {
       dataFim,
       dataPrazoInicio,
       dataPrazoFim,
-      numeroEdital,
-      numeroConlicitacao,
-      modalidadeId
+      numeroEdital
     ].some(value => String(value || '').trim());
 
     if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0 && !produtoCustom.trim()) {
@@ -793,19 +1277,40 @@ export default function PortalBusca() {
         comEdital,
         comMonitoramentoChat,
         numeroEdital,
-        numeroConlicitacao,
-        modalidadeId,
         tamanhoPagina: 50
       };
 
       const promises = [];
       if (fontesAtivas.includes('pncp')) {
-        promises.push(buscarPNCPPublicacao(params));
-        if (incluirPropostas) promises.push(buscarPNCPProposta(params));
+        promises.push(executarFonte('PNCP', buscarPNCPProxy({ ...params, incluirPropostas })));
+      }
+      if (fontesAtivas.includes('comprasnet')) {
+        promises.push(executarFonte('ComprasNet', buscarComprasNet(params)));
+      }
+      if (fontesAtivas.includes('transparencia-curitiba')) {
+        promises.push(executarFonte('Transparência Curitiba', buscarFonteB2GSearch('transparencia-curitiba', { ...params, ordem })));
+      }
+      if (fontesAtivas.includes('transparencia-federal')) {
+        promises.push(executarFonte('Portal Transparência Federal', buscarFonteB2GSearch('transparencia-federal', { ...params, ordem })));
+      }
+      if (fontesAtivas.includes('dispensas')) {
+        promises.push(executarFonte('Dispensas', buscarComprasGovDispensas(params)));
+      }
+      if (fontesAtivas.includes('contratacoes14133')) {
+        promises.push(executarFonte('Contratações Lei 14.133', buscarContratacoes14133(params)));
+      }
+      if (fontesAtivas.includes('arp')) {
+        promises.push(executarFonte('Atas de Registro de Preço', buscarAtasRegistroPreco(params)));
+      }
+      if (fontesAtivas.includes('pregoes')) {
+        promises.push(executarFonte('Pregões', buscarPregoes(params)));
+      }
+      if (fontesAtivas.includes('curitiba-ecompras')) {
+        promises.push(executarFonte('e-Compras Curitiba', buscarCuritibaECompras(params)));
       }
       fontesIntegradas
-        .filter(fonte => fonte.ativa && fontesAtivas.includes(fonte.id))
-        .forEach(fonte => promises.push(buscarFonteIntegrada(fonte, params)));
+        .filter(fonte => fonte.ativa && PORTAIS_INTEGRADOS_SUPORTADOS.has(fonte.portal) && fontesAtivas.includes(fonte.id))
+        .forEach(fonte => promises.push(executarFonte(getFonteDisplayName(fonte), buscarFonteIntegrada(fonte, params))));
 
       if (promises.length === 0) {
         setErro('Selecione ao menos uma fonte ativa para buscar.');
@@ -817,6 +1322,10 @@ export default function PortalBusca() {
       const todos = results
         .filter(r => r.status === 'fulfilled')
         .flatMap(r => r.value);
+      const falhas = results
+        .filter(r => r.status === 'rejected')
+        .map(r => r.reason?.message)
+        .filter(Boolean);
 
       const dedup = deduplicar(todos);
       const ordenados = ordenar(dedup, ordem);
@@ -832,8 +1341,14 @@ export default function PortalBusca() {
       setPorFonte(porFonteMap);
 
       if (ordenados.length === 0) {
+        if (falhas.length > 0) {
+          setErro(`Nenhuma fonte retornou resultado. Falhas: ${falhas.slice(0, 3).join('; ')}${falhas.length > 3 ? '...' : ''}`);
+        }
         showToast('Sem resultados', 'Tente outros termos ou amplie o período de busca.');
       } else {
+        if (falhas.length > 0) {
+          showToast('Busca parcial', `${ordenados.length} resultado(s). Algumas fontes não responderam.`);
+        }
         showToast('Busca concluída', `${ordenados.length} edital(is) encontrado(s).`);
       }
     } catch (err) {
@@ -855,8 +1370,6 @@ export default function PortalBusca() {
     comEdital,
     comMonitoramentoChat,
     numeroEdital,
-    numeroConlicitacao,
-    modalidadeId,
     ordem,
     incluirPropostas,
     fontesAtivas,
@@ -871,11 +1384,11 @@ export default function PortalBusca() {
   const limparFiltros = () => {
     setObjeto(''); setUf(''); setCidade('');
     setApenasVigentes(false); setBuscaExata(false); setComEdital(false); setComMonitoramentoChat(false);
-    setNumeroEdital(''); setNumeroConlicitacao(''); setModalidadeId('');
+    setNumeroEdital('');
     setDataInicio(''); setDataFim(''); setDataPrazoInicio(''); setDataPrazoFim('');
     setCategoriasProdutoTI([]);
     setProdutoCustom('');
-    setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false).map(f => f.id));
+    setOrdem('data_desc'); setFontesAtivas(fontesDisponiveis.filter(f => f.ativa !== false && f.defaultActive !== false).map(f => f.id));
     setResultados([]); setBuscaFeita(false); setErro('');
   };
 
@@ -904,6 +1417,78 @@ export default function PortalBusca() {
   const isFavorito = (item) => favoritos.some(f => f.id === item.id);
 
   const isLeadSalvo = (item) => leadsSalvos.some(id => String(id) === String(item.id));
+
+  const isLicitacaoGerenciada = (item) => {
+    const id = getLicitacaoId(item);
+    return Boolean(id) && licitacoesGerenciadas.some(licitacao => getLicitacaoId(licitacao) === id);
+  };
+
+  const isSalvandoGerenciada = (item) => {
+    const id = getLicitacaoId(item);
+    return Boolean(id) && salvandoGerenciadaIds.includes(id);
+  };
+
+  const toggleLicitacaoGerenciada = async (item) => {
+    const id = getLicitacaoId(item);
+    if (!id) {
+      showToast('Não foi possível gerenciar', 'Esta licitação não possui identificador válido.', true);
+      return;
+    }
+
+    const existe = isLicitacaoGerenciada(item);
+    setSalvandoGerenciadaIds(prev => prev.includes(id) ? prev : [...prev, id]);
+
+    try {
+      if (existe) {
+        const response = await fetch(buildApiUrl(`/b2g/licitacoes-gerenciadas/${encodeURIComponent(id)}`), {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || payload?.message || 'Não foi possível remover a licitação.');
+        }
+
+        setLicitacoesGerenciadas(prev => {
+          const next = prev.filter(licitacao => getLicitacaoId(licitacao) !== id);
+          saveLocalLicitacoesGerenciadas(next);
+          return next;
+        });
+      } else {
+        const itemParaSalvar = {
+          ...item,
+          id,
+          gerenciadaEm: new Date().toISOString()
+        };
+        const response = await fetch(buildApiUrl('/b2g/licitacoes-gerenciadas'), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ item: itemParaSalvar })
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || payload?.message || 'Não foi possível salvar a licitação.');
+        }
+
+        const payload = await response.json().catch(() => null);
+        const salvo = payload?.data || itemParaSalvar;
+        setLicitacoesGerenciadas(prev => {
+          const next = mergeLicitacoesGerenciadas([salvo], prev.filter(licitacao => getLicitacaoId(licitacao) !== id));
+          saveLocalLicitacoesGerenciadas(next);
+          return next;
+        });
+      }
+
+      showToast(
+        existe ? 'Licitação removida' : 'Licitação adicionada',
+        existe ? 'Removida de Licitações Gerenciadas.' : 'Salva em Licitações Gerenciadas.'
+      );
+    } catch (error) {
+      showToast('Erro ao salvar licitação', error.message || 'Tente novamente.', true);
+    } finally {
+      setSalvandoGerenciadaIds(prev => prev.filter(itemId => itemId !== id));
+    }
+  };
 
   const abrirSalvarLead = (item) => {
     setLeadModalItem(item);
@@ -1074,11 +1659,10 @@ export default function PortalBusca() {
       const url = new URL(buildApiUrl('/bll-proxy'), window.location.origin);
       url.searchParams.set('portal', fonte.portal);
       url.searchParams.set('action', 'login');
-      const headerPrefix = fonte.portal === 'conlicitacao' ? 'conlicitacao' : fonte.portal;
       const res = await fetch(url.toString(), {
         headers: {
-          [`x-${headerPrefix}-email`]: fonte.usuario,
-          [`x-${headerPrefix}-password`]: fonte.senha
+          [`x-${fonte.portal}-email`]: fonte.usuario,
+          [`x-${fonte.portal}-password`]: fonte.senha
         },
         signal: AbortSignal.timeout(15000)
       });
@@ -1171,6 +1755,7 @@ export default function PortalBusca() {
         <div className="flex items-center gap-1 px-4 py-2">
           {[
             { id: 'busca', label: 'Início', icon: <Search size={14} /> },
+            { id: 'gerenciadas', label: `Licitações Gerenciadas (${licitacoesGerenciadas.length})`, icon: <ClipboardList size={14} /> },
             { id: 'fontes', label: 'Fontes Integradas', icon: <Settings size={14} /> },
             { id: 'alertas', label: 'Alertas', icon: <Bell size={14} /> }
           ].map(tab => (
@@ -1237,134 +1822,143 @@ export default function PortalBusca() {
           {/* Corpo: filtros + resultados */}
           <div className="flex flex-col gap-4 p-4 max-w-7xl mx-auto w-full flex-1">
 
-            {/* Barra de filtros horizontal */}
-            <div className="bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
-              <div className="flex flex-wrap items-end gap-4">
-                {/* Status do Edital */}
+            {/* Painel de filtros */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_42px_-32px_rgba(15,23,42,0.45)] dark:border-slate-700/80 dark:bg-slate-900/70">
+              <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700/80 dark:bg-slate-900/85 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Status:</span>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Vigentes</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Em Proposta</span>
-                  </label>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                    <Filter size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Filtros de pesquisa</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Combine status, fonte, região, datas e produtos para refinar os editais.</p>
+                  </div>
                 </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* ConLicitações */}
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitações:</span>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={buscaExata} onChange={e => setBuscaExata(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Busca exata</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={comEdital} onChange={e => setComEdital(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Com edital</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="checkbox" checked={comMonitoramentoChat} onChange={e => setComMonitoramentoChat(e.target.checked)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                    <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">Chat</span>
-                  </label>
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Nº Edital */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Edital:</label>
-                  <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                </div>
-
-                {/* Nº ConLicitação */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">ConLicitação:</label>
-                  <input type="text" value={numeroConlicitacao} onChange={e => setNumeroConlicitacao(e.target.value)} placeholder="Código" className="w-28 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                </div>
-
-                {/* Modalidade */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Modalidade:</label>
-                  <select value={modalidadeId} onChange={e => setModalidadeId(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                    {MODALIDADES_CONLICITACAO.map(modalidade => (
-                      <option key={modalidade.id || 'all'} value={modalidade.id}>{modalidade.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Localização */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">UF:</label>
-                  <select value={uf} onChange={e => setUf(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100">
-                    <option value="">Todo Brasil</option>
-                    {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Cidade:</label>
-                  <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade..." className="w-32 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500" />
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Período publicação */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Publicação:</label>
-                  <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  <span className="text-xs text-slate-400">até</span>
-                  <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                </div>
-
-                {/* Data Prazo */}
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Prazo:</label>
-                  <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                  <span className="text-xs text-slate-400">até</span>
-                  <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100" />
-                </div>
-
-                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600" />
-
-                {/* Fontes */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Fontes:</span>
-                  {fontesDisponiveis.map(f => (
-                    <label key={f.id} className="flex items-center gap-1.5 cursor-pointer group">
-                      <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{f.icon} {f.nome}</span>
-                    </label>
-                  ))}
-                </div>
-
-                {/* Produtos TI */}
-                <div className="w-full flex items-center gap-2 flex-wrap border-t border-slate-100 dark:border-slate-700 pt-3 mt-1">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Produtos TI:</span>
-                  {CATEGORIAS_PRODUTO_TI.map(cat => (
-                    <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer group">
-                      <input type="checkbox" checked={categoriasProdutoTI.includes(cat.id)} onChange={() => toggleCategoriaProduto(cat.id)} className="w-3.5 h-3.5 text-blue-600 border-slate-300 rounded" />
-                      <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100">{cat.label}</span>
-                    </label>
-                  ))}
-                  <input
-                    type="text"
-                    value={produtoCustom}
-                    onChange={e => setProdutoCustom(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
-                    placeholder="Outro produto (ex: estabilizador)"
-                    className="w-52 text-xs border border-blue-300 dark:border-blue-600 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  />
-                </div>
-
-                {/* Limpar */}
-                <button onClick={limparFiltros} className="ml-auto text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline whitespace-nowrap">
+                <button
+                  onClick={limparFiltros}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-500/60 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                >
+                  <X size={14} />
                   Limpar filtros
                 </button>
+              </div>
+
+              <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+                <div className="space-y-4">
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Status</p>
+                      <div className="flex flex-wrap gap-2">
+                        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${apenasVigentes ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                          <input type="checkbox" checked={apenasVigentes} onChange={e => setApenasVigentes(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                          Vigentes
+                        </label>
+                        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${incluirPropostas ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-200' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                          <input type="checkbox" checked={incluirPropostas} onChange={e => setIncluirPropostas(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                          Em Proposta
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Portais autenticados</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { label: 'Busca exata', checked: buscaExata, onChange: setBuscaExata },
+                          { label: 'Com edital', checked: comEdital, onChange: setComEdital },
+                          { label: 'Chat', checked: comMonitoramentoChat, onChange: setComMonitoramentoChat }
+                        ].map(item => (
+                          <label key={item.label} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${item.checked ? 'border-cyan-400 bg-cyan-50 text-cyan-700 dark:border-cyan-500/60 dark:bg-cyan-500/15 dark:text-cyan-200' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                            <input type="checkbox" checked={item.checked} onChange={e => item.onChange(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-cyan-600" />
+                            {item.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Nº edital</label>
+                      <input type="text" value={numeroEdital} onChange={e => setNumeroEdital(e.target.value)} placeholder="Nº edital" className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[0.7fr_1.3fr]">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">UF</label>
+                      <select value={uf} onChange={e => setUf(e.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                        <option value="">Todo Brasil</option>
+                        {ESTADOS_BR.map(e => <option key={e.sigla} value={e.sigla}>{e.sigla}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Cidade</label>
+                      <input type="text" value={cidade} onChange={e => setCidade(e.target.value)} placeholder="Cidade..." className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Publicação</label>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/45">
+                        <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                        <span className="text-xs font-semibold text-slate-400">até</span>
+                        <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Prazo</label>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/45">
+                        <input type="date" value={dataPrazoInicio} onChange={e => setDataPrazoInicio(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                        <span className="text-xs font-semibold text-slate-400">até</span>
+                        <input type="date" value={dataPrazoFim} onChange={e => setDataPrazoFim(e.target.value)} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Fontes</p>
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">{fontesAtivas.length} ativas</span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {fontesDisponiveis.map(f => (
+                        <label key={f.id} className={`flex min-h-[42px] cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${fontesAtivas.includes(f.id) ? 'border-blue-400 bg-blue-50 text-blue-800 dark:border-blue-500/60 dark:bg-blue-500/15 dark:text-blue-100' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                          <input type="checkbox" checked={fontesAtivas.includes(f.id)} onChange={() => toggleFonte(f.id)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                          <span className="truncate">{f.icon} {f.nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Produtos TI</p>
+                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-bold text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-200">{categoriasProdutoTI.length} selecionados</span>
+                    </div>
+                    <div className="max-h-[148px] overflow-y-auto pr-1">
+                      <div className="flex flex-wrap gap-2">
+                        {CATEGORIAS_PRODUTO_TI.map(cat => (
+                          <label key={cat.id} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${categoriasProdutoTI.includes(cat.id) ? 'border-cyan-400 bg-cyan-50 text-cyan-800 dark:border-cyan-500/60 dark:bg-cyan-500/15 dark:text-cyan-100' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300'}`}>
+                            <input type="checkbox" checked={categoriasProdutoTI.includes(cat.id)} onChange={() => toggleCategoriaProduto(cat.id)} className="h-3.5 w-3.5 rounded border-slate-300 text-cyan-600" />
+                            {cat.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={produtoCustom}
+                      onChange={e => setProdutoCustom(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleBuscar(); }}
+                      placeholder="Outro produto (ex: estabilizador)"
+                      className="mt-3 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-blue-700/80 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1428,13 +2022,79 @@ export default function PortalBusca() {
                       favorito={isFavorito(item)}
                       leadSalvo={isLeadSalvo(item)}
                       salvandoLead={salvandoLeadId === item.id}
+                      gerenciada={isLicitacaoGerenciada(item)}
+                      salvandoGerenciada={isSalvandoGerenciada(item)}
                       onToggleFavorito={toggleFavorito}
+                      onToggleGerenciada={toggleLicitacaoGerenciada}
                       onAbrirSalvarLead={abrirSalvarLead}
                     />
                   ))}
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ABA LICITAÇÕES GERENCIADAS ───────────────────────────────────── */}
+      {activeTab === 'gerenciadas' && (
+        <div className="flex flex-col flex-1 p-4">
+          <div className="max-w-7xl mx-auto w-full">
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                  <ClipboardList size={20} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Licitações Gerenciadas</h2>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {carregandoGerenciadas ? 'Sincronizando licitações marcadas...' : 'Acompanhe as licitações marcadas nos resultados do Portal de Busca.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setActiveTab('busca'); setMostrarFavoritos(false); }}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                <Search size={15} />
+                Buscar licitações
+              </button>
+            </div>
+
+            {licitacoesGerenciadas.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-16 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800/60">
+                <ClipboardList size={44} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
+                <p className="text-lg font-semibold text-slate-700 dark:text-slate-200">Nenhuma licitação gerenciada</p>
+                <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
+                  Use o botão "Adicionar licitação" no cabeçalho de um resultado encontrado.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    {licitacoesGerenciadas.length} licitação(ões) em gerenciamento
+                  </p>
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                    Em acompanhamento
+                  </span>
+                </div>
+                {licitacoesGerenciadas.map(item => (
+                  <CardEdital
+                    key={getLicitacaoId(item)}
+                    item={item}
+                    favorito={isFavorito(item)}
+                    leadSalvo={isLeadSalvo(item)}
+                    gerenciada
+                    salvandoLead={salvandoLeadId === item.id}
+                    salvandoGerenciada={isSalvandoGerenciada(item)}
+                    onToggleFavorito={toggleFavorito}
+                    onToggleGerenciada={toggleLicitacaoGerenciada}
+                    onAbrirSalvarLead={abrirSalvarLead}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1491,7 +2151,7 @@ export default function PortalBusca() {
             >
               <Plus size={32} className="mb-2" />
               <span className="font-medium text-sm">Adicionar Nova Fonte</span>
-              <span className="text-xs mt-1 text-center">BLL, BNC, ConLicitação</span>
+              <span className="text-xs mt-1 text-center">BLL e BNC</span>
             </button>
           </div>
         </div>
