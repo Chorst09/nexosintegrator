@@ -1,9 +1,41 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Edit, Eye, FileText, Plus, Search, Settings, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import CommercialProposalPresentationView from '@/components/commercial-proposal/CommercialProposalPresentationView';
+import { buildApiUrl } from '../config/api';
 
 const STORAGE_LIST_KEY = 'proposta-comercial-double-drafts-v1';
+
+const formatProposalDate = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date().toLocaleDateString('pt-BR');
+  return date.toLocaleDateString('pt-BR');
+};
+
+const normalizeText = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+
+const getProposalNumber = (proposal) =>
+  normalizeText(proposal?.proposalNumber || proposal?.number || proposal?.draft?.proposalNumber || proposal?.draft?.number);
+
+const generateProposalNumber = (proposals) => {
+  const year = new Date().getFullYear();
+  const prefix = `PROP-${year}-`;
+  const used = proposals
+    .map(getProposalNumber)
+    .filter(number => number.startsWith(prefix))
+    .map(number => Number(number.slice(prefix.length)))
+    .filter(Number.isFinite);
+
+  return `${prefix}${String(Math.max(0, ...used) + 1).padStart(4, '0')}`;
+};
+
+const generateProposalId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 const readSavedProposals = () => {
   try {
@@ -24,6 +56,9 @@ const formatDateTime = (value) => {
 };
 
 export default function Propostas() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const lastOpportunityImportKey = useRef(null);
   const [savedProposals, setSavedProposals] = useState(() => readSavedProposals());
   const [mode, setMode] = useState('list');
   const [editorProposalId, setEditorProposalId] = useState(null);
@@ -49,6 +84,111 @@ export default function Propostas() {
     setMode('editor');
   }, []);
 
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    };
+  }, []);
+
+  const openOpportunityProposal = useCallback((opportunity) => {
+    const currentEntries = readSavedProposals();
+    const existing = currentEntries.find(proposal => proposal.opportunityId === opportunity.id);
+    const proposalId = existing?.id || generateProposalId();
+    const proposalNumber = getProposalNumber(existing) || generateProposalNumber(currentEntries);
+    const now = new Date().toISOString();
+    const companyName = normalizeText(opportunity?.company?.name || opportunity?.companyName || opportunity?.clientName);
+    const clientName = companyName || normalizeText(opportunity?.title) || 'Cliente sem nome';
+    const productName = normalizeText(opportunity?.projectName || opportunity?.title || opportunity?.description) || 'Produto/servico';
+    const proposalDate = existing?.draft?.cover?.date || formatProposalDate();
+
+    const draft = existing?.draft || {
+      savedAt: now,
+      cover: {
+        clientName,
+        date: proposalDate,
+        product: productName
+      },
+      slides: {},
+      contract: {
+        vigencia: '',
+        prazo: opportunity?.projectMonths ? `${opportunity.projectMonths} meses` : '',
+        termos: ''
+      },
+      investment: {
+        rows: [
+          {
+            service: productName,
+            description: normalizeText(opportunity?.description),
+            monthly: opportunity?.value ? Number(opportunity.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '',
+            contract: opportunity?.projectMonths ? `${opportunity.projectMonths} meses` : ''
+          }
+        ],
+        installationFee: ''
+      }
+    };
+
+    const entry = {
+      ...(existing || {}),
+      id: proposalId,
+      title: existing?.title || clientName,
+      proposalNumber,
+      opportunityId: opportunity.id,
+      clientType: searchParams.get('clientType') || existing?.clientType || 'B2B',
+      savedAt: existing?.savedAt || now,
+      draft: {
+        ...draft,
+        proposalNumber,
+        opportunityId: opportunity.id,
+        cover: {
+          ...(draft.cover || {}),
+          clientName: draft.cover?.clientName || clientName,
+          date: draft.cover?.date || proposalDate,
+          product: draft.cover?.product || productName
+        }
+      }
+    };
+
+    const next = [entry, ...currentEntries.filter(proposal => proposal.id !== proposalId)];
+    window.localStorage.setItem(STORAGE_LIST_KEY, JSON.stringify(next));
+    setSavedProposals(readSavedProposals());
+    openSavedProposal(proposalId);
+  }, [openSavedProposal, searchParams]);
+
+  useEffect(() => {
+    const opportunityId = searchParams.get('opportunityId');
+    if (!opportunityId) return;
+
+    const clientType = searchParams.get('clientType') || 'B2B';
+    const requestKey = `${opportunityId}:${clientType}`;
+    if (lastOpportunityImportKey.current === requestKey) return;
+    lastOpportunityImportKey.current = requestKey;
+
+    const loadOpportunity = async () => {
+      try {
+        const response = await fetch(
+          buildApiUrl(`/opportunities/${encodeURIComponent(opportunityId)}?clientType=${encodeURIComponent(clientType)}`),
+          { headers: getAuthHeaders() }
+        );
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel carregar a oportunidade para proposta.');
+        }
+
+        const opportunity = await response.json();
+        if (!opportunity?.id) return;
+        openOpportunityProposal(opportunity);
+        navigate('/propostas', { replace: true });
+      } catch (error) {
+        console.error('Erro ao abrir proposta da oportunidade:', error);
+        alert(error instanceof Error ? error.message : 'Erro ao abrir proposta da oportunidade.');
+      }
+    };
+
+    loadOpportunity();
+  }, [getAuthHeaders, navigate, openOpportunityProposal, searchParams]);
+
   const deleteSavedProposal = useCallback((proposalId) => {
     if (!window.confirm('Deseja realmente excluir esta proposta salva?')) return;
     const next = readSavedProposals().filter(proposal => proposal.id !== proposalId);
@@ -66,7 +206,8 @@ export default function Propostas() {
         proposal.title,
         cover.clientName,
         cover.date,
-        cover.product
+        cover.product,
+        getProposalNumber(proposal)
       ].some(value => String(value || '').toLowerCase().includes(term));
     });
   }, [savedProposals, searchTerm]);
@@ -162,6 +303,7 @@ export default function Propostas() {
                 <table className="min-w-full divide-y divide-[color:var(--crm-border)]">
                   <thead className="bg-black/5 dark:bg-white/5">
                     <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)]">Número</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)]">Cliente</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)]">Data</th>
                       <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--crm-muted)]">Produto</th>
@@ -172,8 +314,10 @@ export default function Propostas() {
                   <tbody className="divide-y divide-[color:var(--crm-border)]">
                     {filteredProposals.map(proposal => {
                       const cover = proposal?.draft?.cover || {};
+                      const proposalNumber = getProposalNumber(proposal) || '-';
                       return (
                         <tr key={proposal.id} className="hover:bg-black/5 dark:hover:bg-white/5">
+                          <td className="px-6 py-4 text-sm font-semibold text-[var(--crm-ink)]">{proposalNumber}</td>
                           <td className="px-6 py-4">
                             <div className="font-semibold text-[var(--crm-ink)]">{cover.clientName || proposal.title || 'Proposta sem nome'}</div>
                           </td>

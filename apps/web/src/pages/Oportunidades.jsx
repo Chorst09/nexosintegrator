@@ -395,6 +395,9 @@ export default function Oportunidades() {
       
       if (response.ok) {
         fetchOpportunities();
+        if (stage === 'PROPOSAL') {
+          navigate(`/propostas?opportunityId=${encodeURIComponent(id)}&clientType=${encodeURIComponent(pipelineClientType)}`);
+        }
       }
     } catch (error) {
       console.error('Erro ao mover oportunidade:', error);

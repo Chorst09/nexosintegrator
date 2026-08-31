@@ -189,7 +189,7 @@ export const ConvertToB2BOpportunityButton: React.FC<ConvertToB2BOpportunityButt
           description: `Oportunidade B2B criada a partir de orçamento salvo em Simuladores.\n${notes}`,
           value,
           probability: Number(proposal.forecastTemperature) || 50,
-          stage: 'PROPOSAL',
+          stage: 'DIAGNOSIS',
           source: 'MANUAL',
           expectedCloseDate: normalizeDateInput(proposal.expiryDate),
           companyId,

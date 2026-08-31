@@ -41,6 +41,8 @@ type InvestmentDraft = {
 
 type SavedDraft = {
   savedAt: string;
+  proposalNumber?: string;
+  opportunityId?: string;
   cover: {
     clientName: string;
     date: string;
@@ -54,6 +56,9 @@ type SavedDraft = {
 type SavedProposalEntry = {
   id: string;
   title: string;
+  proposalNumber?: string;
+  opportunityId?: string;
+  clientType?: string;
   savedAt: string;
   draft: SavedDraft;
 };
@@ -1412,6 +1417,31 @@ const generateProposalId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
+const normalizeProposalNumber = (entry?: Partial<SavedProposalEntry> | null): string => {
+  const number = entry?.proposalNumber || entry?.draft?.proposalNumber || '';
+  return String(number || '').trim();
+};
+
+const generateProposalNumber = (entries: SavedProposalEntry[]): string => {
+  const year = new Date().getFullYear();
+  const prefix = `PROP-${year}-`;
+  const used = entries
+    .map(normalizeProposalNumber)
+    .filter(number => number.startsWith(prefix))
+    .map(number => Number(number.slice(prefix.length)))
+    .filter(Number.isFinite);
+
+  return `${prefix}${String(Math.max(0, ...used) + 1).padStart(4, '0')}`;
+};
+
+const formatProposalDate = (): string => new Date().toLocaleDateString('pt-BR');
+
+const normalizeDraftCoverDate = (date: string): string => {
+  const clean = String(date || '').trim();
+  if (!clean || clean === 'Data DD/MM/AAAA') return formatProposalDate();
+  return clean;
+};
+
 export default function CommercialProposalPresentationView({
   initialProposalId = null,
   initialMode = 'latest',
@@ -1770,18 +1800,32 @@ export default function CommercialProposalPresentationView({
   const saveCurrentProposal = useCallback((): SavedProposalEntry => {
     const draft = buildDraft();
     const proposalId = activeProposalId ?? generateProposalId();
+    const existingEntry = savedProposals.find(item => item.id === proposalId);
+    const proposalNumber = normalizeProposalNumber(existingEntry) || generateProposalNumber(savedProposals);
+    const draftWithMetadata: SavedDraft = {
+      ...draft,
+      proposalNumber,
+      opportunityId: existingEntry?.opportunityId || existingEntry?.draft?.opportunityId,
+      cover: {
+        ...draft.cover,
+        date: normalizeDraftCoverDate(draft.cover.date)
+      }
+    };
     const entry: SavedProposalEntry = {
       id: proposalId,
       title: draft.cover.clientName.trim() || 'Proposta sem nome',
+      proposalNumber,
+      opportunityId: existingEntry?.opportunityId,
+      clientType: existingEntry?.clientType,
       savedAt: draft.savedAt,
-      draft
+      draft: draftWithMetadata
     };
 
     const remaining = savedProposals.filter(item => item.id !== proposalId);
     const updated = persistSavedProposals([entry, ...remaining]);
     setActiveProposalId(proposalId);
     setLastSavedAt(draft.savedAt);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draftWithMetadata));
 
     return updated.find(item => item.id === proposalId) ?? entry;
   }, [buildDraft, activeProposalId, savedProposals, persistSavedProposals]);
@@ -2558,6 +2602,7 @@ export default function CommercialProposalPresentationView({
                   <thead className="bg-muted/20">
                     <tr>
                       <th className="px-3 py-2 text-left">Cliente</th>
+                      <th className="px-3 py-2 text-left">Número</th>
                       <th className="px-3 py-2 text-left">Data</th>
                       <th className="px-3 py-2 text-left">Produto</th>
                       <th className="px-3 py-2 text-left">Salvo em</th>
@@ -2568,6 +2613,7 @@ export default function CommercialProposalPresentationView({
                     {filteredSavedProposals.map(entry => (
                       <tr key={entry.id} className={`border-t ${entry.id === activeProposalId ? 'bg-muted/30' : ''}`}>
                         <td className="px-3 py-2">{entry.draft.cover.clientName || entry.title}</td>
+                        <td className="px-3 py-2">{normalizeProposalNumber(entry) || '-'}</td>
                         <td className="px-3 py-2">{entry.draft.cover.date || '-'}</td>
                         <td className="px-3 py-2">{(entry.draft.cover.product || '').split('\n').join(' / ') || '-'}</td>
                         <td className="px-3 py-2">{new Date(entry.savedAt).toLocaleString('pt-BR')}</td>
