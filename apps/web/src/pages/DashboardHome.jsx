@@ -55,8 +55,8 @@ export default function DashboardHome() {
       description: 'Gestão completa do ciclo de vendas para empresas privadas, desde a prospecção até o fechamento e pós-venda',
       longDescription: 'Plataforma completa para gestão de vendas B2B com pipeline visual, automação de processos, gestão de propostas e contratos. Acompanhe cada oportunidade desde o primeiro contato até o fechamento.',
       icon: Building2,
-      gradient: 'from-blue-600 to-cyan-500',
-      bgGradient: 'linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%)',
+      gradient: 'from-orange-500 via-cyan-400 to-teal-500',
+      bgGradient: 'radial-gradient(ellipse at 0% 0%, rgba(125, 54, 18, 0.22) 0%, transparent 46%), radial-gradient(ellipse at 100% 0%, rgba(34, 211, 238, 0.18) 0%, transparent 50%)',
       features: [
         { icon: Target, text: 'Pipeline visual de vendas' },
         { icon: Briefcase, text: 'Gestão de oportunidades' },
@@ -81,8 +81,8 @@ export default function DashboardHome() {
       description: 'Gestão especializada de licitações, editais e oportunidades com órgãos públicos federais, estaduais e municipais',
       longDescription: 'Sistema completo para monitoramento de editais, análise de viabilidade com IA, gestão documental e acompanhamento de atas de registro de preços. Maximize suas chances de sucesso em licitações.',
       icon: Landmark,
-      gradient: 'from-blue-600 to-indigo-600',
-      bgGradient: 'linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(79, 70, 229, 0.1) 100%)',
+      gradient: 'from-amber-400 via-cyan-400 to-sky-500',
+      bgGradient: 'radial-gradient(ellipse at 0% 0%, rgba(245, 158, 11, 0.18) 0%, transparent 45%), radial-gradient(ellipse at 100% 0%, rgba(14, 165, 233, 0.18) 0%, transparent 50%)',
       features: [
         { icon: FileText, text: 'Monitoramento de editais' },
         { icon: Brain, text: 'Análise com IA' },
@@ -107,8 +107,8 @@ export default function DashboardHome() {
       description: 'Ferramentas completas para gestão de equipe, produtos, comissões, metas e análise de performance comercial',
       longDescription: 'Centralize a gestão da sua operação comercial com controle de produtos, equipe de vendas, comissões, metas e relatórios avançados. Tome decisões baseadas em dados.',
       icon: BarChart3,
-      gradient: 'from-cyan-600 to-blue-600',
-      bgGradient: 'linear-gradient(135deg, rgba(8, 145, 178, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)',
+      gradient: 'from-cyan-400 via-teal-400 to-orange-400',
+      bgGradient: 'radial-gradient(ellipse at 0% 0%, rgba(20, 184, 166, 0.18) 0%, transparent 46%), radial-gradient(ellipse at 100% 0%, rgba(255, 122, 0, 0.16) 0%, transparent 48%)',
       features: [
         { icon: Package, text: 'Catálogo de produtos' },
         { icon: Users, text: 'Gestão de vendedores' },
@@ -133,8 +133,8 @@ export default function DashboardHome() {
       description: 'Suporte especializado para análise técnica, dimensionamento de soluções e elaboração de orçamentos complexos',
       longDescription: 'Equipe de pré-vendas com ferramentas especializadas para análise técnica, calculadoras de dimensionamento e gestão de solicitações. Acelere o processo comercial com suporte técnico qualificado.',
       icon: Calculator,
-      gradient: 'from-blue-500 to-sky-500',
-      bgGradient: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(14, 165, 233, 0.1) 100%)',
+      gradient: 'from-rose-400 via-orange-400 to-cyan-400',
+      bgGradient: 'radial-gradient(ellipse at 0% 0%, rgba(190, 24, 93, 0.14) 0%, transparent 45%), radial-gradient(ellipse at 100% 0%, rgba(34, 211, 238, 0.18) 0%, transparent 52%)',
       features: [
         { icon: ClipboardList, text: 'Solicitações de orçamento' },
         { icon: Calculator, text: 'Calculadoras especializadas' },
@@ -254,30 +254,30 @@ export default function DashboardHome() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-blue-950">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_0%_0%,rgba(125,54,18,0.46)_0%,rgba(66,20,22,0.30)_18%,transparent_42%),radial-gradient(ellipse_at_94%_4%,rgba(31,112,124,0.46)_0%,rgba(15,58,66,0.25)_24%,transparent_48%),radial-gradient(ellipse_at_43%_100%,rgba(13,67,94,0.34)_0%,transparent_44%),linear-gradient(180deg,#07080f_0%,#080a12_52%,#07111b_100%)] text-[var(--crm-ink)]">
       {/* Header/Navbar */}
-      <header className="border-b border-[var(--crm-border)] bg-white/80 backdrop-blur-lg dark:bg-slate-900/80">
+      <header className="border-b border-[#0b2a35]/70 bg-[#070a12]/78 backdrop-blur-2xl">
         <div className="container mx-auto flex items-center justify-between px-4 py-4 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-200/18 bg-[linear-gradient(135deg,#242230_0%,#0b2430_54%,#8a3f17_100%)] text-white font-bold shadow-[0_14px_34px_-24px_rgba(34,211,238,0.75)]">
               CRM
             </div>
             <div>
-              <div className="text-lg font-bold text-[var(--crm-ink)]">CRM NEXOS</div>
-              <div className="text-xs text-[var(--crm-muted)]">Gestão Comercial Completa</div>
+              <div className="text-lg font-bold text-white">CRM NEXOS</div>
+              <div className="text-xs text-slate-400">Gestão Comercial Completa</div>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/login')}
-              className="rounded-xl border-2 border-blue-500 px-6 py-2 font-semibold text-blue-600 transition-all hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+              className="rounded-xl border border-cyan-200/28 bg-[#07111d]/72 px-6 py-2 font-semibold text-cyan-100 transition-all hover:border-cyan-200/50 hover:bg-[#102033]/84"
             >
               Entrar
             </button>
             <button
               onClick={() => document.getElementById('plans-section')?.scrollIntoView({ behavior: 'smooth' })}
-              className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-2 font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
+              className="rounded-xl bg-[linear-gradient(105deg,#ff7a00_0%,#35c2d8_58%,#123348_100%)] px-6 py-2 font-semibold text-[#07111b] shadow-[0_16px_36px_-24px_rgba(255,122,0,0.75)] transition-all hover:scale-105 hover:shadow-xl"
             >
               Ver Planos
             </button>
@@ -287,12 +287,13 @@ export default function DashboardHome() {
 
       <div className="container mx-auto space-y-16 px-4 py-12 lg:px-8 lg:py-20">
       {/* Hero Section */}
-      <section className="relative overflow-hidden rounded-3xl border border-[var(--crm-border)] bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-8 text-white lg:p-16">
+      <section className="relative overflow-hidden rounded-3xl border border-cyan-200/14 bg-[radial-gradient(ellipse_at_0%_0%,rgba(125,54,18,0.58)_0%,rgba(66,20,22,0.28)_24%,transparent_50%),radial-gradient(ellipse_at_92%_0%,rgba(35,196,218,0.42)_0%,rgba(15,58,66,0.24)_28%,transparent_55%),radial-gradient(ellipse_at_48%_100%,rgba(12,67,94,0.48)_0%,transparent_46%),linear-gradient(135deg,#07080f_0%,#080a12_48%,#071b25_100%)] p-8 text-white shadow-[0_28px_70px_-44px_rgba(34,211,238,0.55)] lg:p-16">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
+        <div className="absolute inset-x-16 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(125,238,255,0.42),transparent)]" />
         
         <div className="relative z-10 grid gap-8 lg:grid-cols-2 lg:items-center">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-200/16 bg-white/[0.08] px-4 py-2 text-sm font-semibold text-cyan-50 backdrop-blur-sm">
               <Rocket className="h-4 w-4" />
               Plataforma Completa de CRM
             </div>
@@ -308,12 +309,12 @@ export default function DashboardHome() {
             <div className="mt-8 flex flex-wrap gap-4">
               <button
                 onClick={() => document.getElementById('plans-section')?.scrollIntoView({ behavior: 'smooth' })}
-                className="rounded-xl bg-white px-8 py-4 font-semibold text-blue-600 transition-all hover:scale-105 hover:shadow-xl"
+                className="rounded-xl bg-white px-8 py-4 font-semibold text-[#07111b] transition-all hover:scale-105 hover:shadow-xl"
               >
                 Ver Planos
               </button>
               <button
-                className="rounded-xl border-2 border-white/30 bg-white/10 px-8 py-4 font-semibold backdrop-blur-sm transition-all hover:bg-white/20"
+                className="rounded-xl border border-cyan-100/26 bg-white/[0.06] px-8 py-4 font-semibold backdrop-blur-sm transition-all hover:bg-white/[0.12]"
               >
                 Ver Demonstração
               </button>
@@ -322,22 +323,22 @@ export default function DashboardHome() {
           
           <div className="hidden lg:block">
             <div className="relative">
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl" />
-              <div className="relative rounded-3xl border border-white/20 bg-white/10 p-8 backdrop-blur-xl">
+              <div className="absolute inset-0 rounded-3xl bg-[linear-gradient(135deg,rgba(255,122,0,0.18),rgba(34,211,238,0.16))] backdrop-blur-xl" />
+              <div className="relative rounded-3xl border border-cyan-200/16 bg-[#07111d]/46 p-8 backdrop-blur-xl">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl bg-white/20 p-4 backdrop-blur-sm">
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.10] p-4 backdrop-blur-sm">
                     <div className="text-3xl font-black">127</div>
                     <div className="mt-1 text-sm text-white/80">Oportunidades</div>
                   </div>
-                  <div className="rounded-2xl bg-white/20 p-4 backdrop-blur-sm">
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.10] p-4 backdrop-blur-sm">
                     <div className="text-3xl font-black">43</div>
                     <div className="mt-1 text-sm text-white/80">Editais</div>
                   </div>
-                  <div className="rounded-2xl bg-white/20 p-4 backdrop-blur-sm">
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.10] p-4 backdrop-blur-sm">
                     <div className="text-3xl font-black">8.4%</div>
                     <div className="mt-1 text-sm text-white/80">Conversão</div>
                   </div>
-                  <div className="rounded-2xl bg-white/20 p-4 backdrop-blur-sm">
+                  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.10] p-4 backdrop-blur-sm">
                     <div className="text-3xl font-black">24</div>
                     <div className="mt-1 text-sm text-white/80">Vendedores</div>
                   </div>
@@ -365,7 +366,7 @@ export default function DashboardHome() {
             return (
               <div
                 key={product.id}
-                className="group relative overflow-hidden rounded-3xl border border-[var(--crm-border)] bg-white transition-all duration-500 hover:shadow-2xl dark:bg-slate-900"
+                className="group relative overflow-hidden rounded-3xl border border-cyan-200/12 bg-[#07111d]/72 text-slate-100 shadow-[0_24px_60px_-44px_rgba(34,211,238,0.42)] backdrop-blur-xl transition-all duration-500 hover:border-cyan-200/22 hover:shadow-2xl"
               >
                 {/* Background Gradient */}
                 <div
@@ -384,14 +385,14 @@ export default function DashboardHome() {
                       </div>
                     </div>
 
-                    <h3 className="mt-6 text-3xl font-black text-[var(--crm-ink)]">
+                    <h3 className="mt-6 text-3xl font-black text-white">
                       {product.name}
                     </h3>
                     <p className={`text-lg font-semibold bg-gradient-to-r ${product.gradient} bg-clip-text text-transparent`}>
                       {product.tagline}
                     </p>
                     
-                    <p className="mt-4 text-base leading-relaxed text-[var(--crm-muted)]">
+                    <p className="mt-4 text-base leading-relaxed text-slate-400">
                       {product.longDescription}
                     </p>
 
@@ -400,7 +401,7 @@ export default function DashboardHome() {
                       {product.features.map((feature, idx) => {
                         const FeatureIcon = feature.icon;
                         return (
-                          <div key={idx} className="flex items-center gap-2 text-sm text-[var(--crm-ink)]">
+                          <div key={idx} className="flex items-center gap-2 text-sm text-slate-200">
                             <div className={`rounded-lg bg-gradient-to-br ${product.gradient} p-1.5 text-white`}>
                               <FeatureIcon className="h-3.5 w-3.5" />
                             </div>
@@ -413,10 +414,10 @@ export default function DashboardHome() {
                     {/* Stats */}
                     <div className="mt-6 grid grid-cols-3 gap-4">
                       {product.stats.map((stat, idx) => (
-                        <div key={idx} className="rounded-xl border border-[var(--crm-border)] bg-white/50 p-3 backdrop-blur-sm dark:bg-slate-900/50">
-                          <div className="text-xl font-black text-[var(--crm-ink)]">{stat.value}</div>
-                          <div className="text-xs text-[var(--crm-muted)]">{stat.label}</div>
-                          <div className="mt-1 text-xs font-semibold text-green-600">{stat.trend}</div>
+                        <div key={idx} className="rounded-xl border border-cyan-200/10 bg-white/[0.055] p-3 backdrop-blur-sm">
+                          <div className="text-xl font-black text-white">{stat.value}</div>
+                          <div className="text-xs text-slate-400">{stat.label}</div>
+                          <div className="mt-1 text-xs font-semibold text-emerald-300">{stat.trend}</div>
                         </div>
                       ))}
                     </div>
@@ -438,7 +439,7 @@ export default function DashboardHome() {
                   <div className={`${!isEven ? 'lg:col-start-1 lg:row-start-1' : ''}`}>
                     <div className="relative">
                       <div className={`absolute inset-0 rounded-3xl bg-gradient-to-br ${product.gradient} opacity-20 blur-3xl`} />
-                      <div className="relative overflow-hidden rounded-3xl border border-[var(--crm-border)] bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
+                      <div className="relative overflow-hidden rounded-3xl border border-cyan-200/12 bg-[#07111d]/72 backdrop-blur-sm">
                         <img 
                           src={product.imageUrl} 
                           alt={product.name}
@@ -456,10 +457,10 @@ export default function DashboardHome() {
       </section>
 
       {/* Plans Section */}
-      <section id="plans-section" className="rounded-3xl border border-[var(--crm-border)] bg-gradient-to-br from-slate-50 to-blue-50 p-8 dark:from-slate-900 dark:to-blue-950 lg:p-12">
+      <section id="plans-section" className="rounded-3xl border border-cyan-200/12 bg-[radial-gradient(ellipse_at_0%_0%,rgba(125,54,18,0.20)_0%,transparent_45%),radial-gradient(ellipse_at_100%_0%,rgba(34,211,238,0.18)_0%,transparent_48%),linear-gradient(135deg,rgba(7,17,29,0.84),rgba(6,9,17,0.88))] p-8 shadow-[0_24px_60px_-44px_rgba(34,211,238,0.42)] backdrop-blur-xl lg:p-12">
         <div className="mb-8 text-center">
-          <h2 className="text-3xl font-black text-[var(--crm-ink)]">Planos e Preços</h2>
-          <p className="mt-2 text-lg text-[var(--crm-muted)]">
+          <h2 className="text-3xl font-black text-white">Planos e Preços</h2>
+          <p className="mt-2 text-lg text-slate-400">
             Escolha o plano ideal para o tamanho da sua operação
           </p>
         </div>
@@ -474,36 +475,36 @@ export default function DashboardHome() {
                 className={`
                   relative overflow-hidden rounded-2xl border p-6 transition-all duration-300
                   ${plan.highlight
-                    ? 'scale-105 border-blue-500 bg-white shadow-2xl dark:bg-slate-900'
-                    : 'border-[var(--crm-border)] bg-white/50 backdrop-blur-sm hover:shadow-lg dark:bg-slate-900/50'
+                    ? 'scale-105 border-cyan-200/24 bg-[#07111d]/86 shadow-2xl'
+                    : 'border-cyan-200/10 bg-white/[0.055] backdrop-blur-sm hover:border-cyan-200/20 hover:shadow-lg'
                   }
                 `}
               >
                 {plan.highlight && (
-                  <div className="absolute right-4 top-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 px-3 py-1 text-xs font-bold text-white shadow-lg">
+                  <div className="absolute right-4 top-4 rounded-full bg-[linear-gradient(105deg,#ff7a00,#35c2d8)] px-3 py-1 text-xs font-bold text-[#07111b] shadow-lg">
                     Mais Popular
                   </div>
                 )}
 
                 <div className="flex items-center gap-3">
-                  <div className={`rounded-xl p-3 ${plan.highlight ? 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white' : 'bg-[var(--crm-border)] text-[var(--crm-ink)]'}`}>
+                  <div className={`rounded-xl p-3 ${plan.highlight ? 'bg-gradient-to-br from-orange-500 via-cyan-400 to-teal-500 text-[#07111b]' : 'bg-white/[0.08] text-cyan-100'}`}>
                     <Icon className="h-6 w-6" />
                   </div>
-                  <h3 className="text-2xl font-black text-[var(--crm-ink)]">{plan.name}</h3>
+                  <h3 className="text-2xl font-black text-white">{plan.name}</h3>
                 </div>
 
                 <div className="mt-6">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-[var(--crm-ink)]">{plan.price}</span>
-                    <span className="text-sm text-[var(--crm-muted)]">{plan.period}</span>
+                    <span className="text-4xl font-black text-white">{plan.price}</span>
+                    <span className="text-sm text-slate-400">{plan.period}</span>
                   </div>
-                  <p className="mt-2 text-sm text-[var(--crm-muted)]">{plan.description}</p>
+                  <p className="mt-2 text-sm text-slate-400">{plan.description}</p>
                 </div>
 
                 <ul className="mt-6 space-y-3">
                   {plan.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-[var(--crm-ink)]">
-                      <CheckCircle2 className={`mt-0.5 h-5 w-5 flex-shrink-0 ${plan.highlight ? 'text-blue-500' : 'text-green-500'}`} />
+                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-200">
+                      <CheckCircle2 className={`mt-0.5 h-5 w-5 flex-shrink-0 ${plan.highlight ? 'text-cyan-300' : 'text-emerald-300'}`} />
                       {feature}
                     </li>
                   ))}
@@ -514,8 +515,8 @@ export default function DashboardHome() {
                     className={`
                       mt-8 w-full rounded-xl py-3 font-semibold transition-all
                       ${plan.highlight
-                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:scale-105 hover:shadow-xl'
-                        : 'border-2 border-[var(--crm-border)] bg-white text-[var(--crm-ink)] hover:border-blue-500 hover:text-blue-500 dark:bg-slate-900'
+                        ? 'bg-[linear-gradient(105deg,#ff7a00,#35c2d8)] text-[#07111b] shadow-lg hover:scale-105 hover:shadow-xl'
+                        : 'border border-cyan-200/16 bg-[#07111d]/72 text-cyan-100 hover:border-cyan-200/36 hover:text-white'
                       }
                     `}
                   >
@@ -528,30 +529,30 @@ export default function DashboardHome() {
 
         {/* Additional Info */}
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-[var(--crm-border)] bg-white/50 p-4 text-center backdrop-blur-sm dark:bg-slate-900/50">
-            <Shield className="mx-auto h-8 w-8 text-blue-500" />
-            <div className="mt-2 font-semibold text-[var(--crm-ink)]">Segurança</div>
-            <div className="mt-1 text-xs text-[var(--crm-muted)]">Dados criptografados</div>
+          <div className="rounded-xl border border-cyan-200/10 bg-white/[0.055] p-4 text-center backdrop-blur-sm">
+            <Shield className="mx-auto h-8 w-8 text-cyan-300" />
+            <div className="mt-2 font-semibold text-white">Segurança</div>
+            <div className="mt-1 text-xs text-slate-400">Dados criptografados</div>
           </div>
-          <div className="rounded-xl border border-[var(--crm-border)] bg-white/50 p-4 text-center backdrop-blur-sm dark:bg-slate-900/50">
+          <div className="rounded-xl border border-cyan-200/10 bg-white/[0.055] p-4 text-center backdrop-blur-sm">
             <Zap className="mx-auto h-8 w-8 text-yellow-500" />
-            <div className="mt-2 font-semibold text-[var(--crm-ink)]">Performance</div>
-            <div className="mt-1 text-xs text-[var(--crm-muted)]">99.9% uptime</div>
+            <div className="mt-2 font-semibold text-white">Performance</div>
+            <div className="mt-1 text-xs text-slate-400">99.9% uptime</div>
           </div>
-          <div className="rounded-xl border border-[var(--crm-border)] bg-white/50 p-4 text-center backdrop-blur-sm dark:bg-slate-900/50">
-            <Users className="mx-auto h-8 w-8 text-green-500" />
-            <div className="mt-2 font-semibold text-[var(--crm-ink)]">Suporte</div>
-            <div className="mt-1 text-xs text-[var(--crm-muted)]">Equipe dedicada</div>
+          <div className="rounded-xl border border-cyan-200/10 bg-white/[0.055] p-4 text-center backdrop-blur-sm">
+            <Users className="mx-auto h-8 w-8 text-emerald-300" />
+            <div className="mt-2 font-semibold text-white">Suporte</div>
+            <div className="mt-1 text-xs text-slate-400">Equipe dedicada</div>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="relative overflow-hidden rounded-3xl border border-[var(--crm-border)] bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-center text-white lg:p-12">
+      <section className="relative overflow-hidden rounded-3xl border border-cyan-200/14 bg-[radial-gradient(ellipse_at_0%_0%,rgba(125,54,18,0.42)_0%,transparent_48%),radial-gradient(ellipse_at_100%_0%,rgba(34,211,238,0.34)_0%,transparent_52%),linear-gradient(135deg,#07080f,#071b25)] p-8 text-center text-white shadow-[0_28px_70px_-44px_rgba(34,211,238,0.55)] lg:p-12">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
         
         <div className="relative z-10">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-200/16 bg-white/[0.08] backdrop-blur-sm">
             <Users className="h-8 w-8" />
           </div>
           
@@ -565,13 +566,13 @@ export default function DashboardHome() {
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <button 
               onClick={() => navigate('/login')}
-              className="rounded-xl bg-white px-8 py-4 font-semibold text-blue-600 transition-all hover:scale-105 hover:shadow-xl"
+              className="rounded-xl bg-white px-8 py-4 font-semibold text-[#07111b] transition-all hover:scale-105 hover:shadow-xl"
             >
               Agendar demonstração
             </button>
             <button 
               onClick={() => navigate('/login')}
-              className="rounded-xl border-2 border-white/30 bg-white/10 px-8 py-4 font-semibold backdrop-blur-sm transition-all hover:bg-white/20"
+              className="rounded-xl border border-cyan-100/26 bg-white/[0.06] px-8 py-4 font-semibold backdrop-blur-sm transition-all hover:bg-white/[0.12]"
             >
               Falar com especialista
             </button>
@@ -581,7 +582,7 @@ export default function DashboardHome() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[var(--crm-border)] bg-white/80 backdrop-blur-lg dark:bg-slate-900/80">
+      <footer className="border-t border-[#0b2a35]/70 bg-[#070a12]/78 backdrop-blur-2xl">
         <div className="container mx-auto px-4 py-8 text-center lg:px-8">
           <div className="text-sm text-[var(--crm-muted)]">
             © 2026 CRM NEXOS. Todos os direitos reservados.

@@ -407,8 +407,8 @@ export default function Sidebar({
           collapsed ? 'items-start gap-3 px-3 py-2.5 lg:items-center lg:justify-center lg:gap-0 lg:px-2' : 'items-start gap-3 px-3 py-2.5',
           'border transition-all duration-300 ease-out',
           isActive
-            ? 'border-cyan-200/35 bg-gradient-to-r from-cyan-400/35 via-sky-400/22 to-transparent text-white shadow-soft-2xl'
-            : 'border-transparent bg-white/[0.02] text-slate-100/85 hover:border-white/[0.18] hover:bg-white/[0.08] hover:text-white'
+            ? 'border-cyan-200/45 bg-[linear-gradient(115deg,rgba(35,194,216,0.34)_0%,rgba(29,78,216,0.18)_44%,rgba(5,9,18,0.44)_100%)] text-white shadow-[0_18px_36px_-26px_rgba(34,211,238,0.95)]'
+            : 'border-white/[0.055] bg-[#081321]/55 text-slate-100/82 hover:border-cyan-200/24 hover:bg-[#102033]/82 hover:text-white'
         ].join(' ')}
       >
         {({ isActive }) => (
@@ -416,7 +416,7 @@ export default function Sidebar({
             <span
               className={[
                 'absolute inset-y-2 left-0 w-1 rounded-r-full transition-opacity duration-300',
-                isActive ? 'bg-cyan-200 opacity-100' : 'opacity-0 group-hover:opacity-70 bg-white/60'
+                isActive ? 'bg-cyan-200 opacity-100 shadow-[0_0_18px_rgba(103,232,249,0.8)]' : 'opacity-0 group-hover:opacity-70 bg-cyan-100/70'
               ].join(' ')}
             />
 
@@ -452,35 +452,39 @@ export default function Sidebar({
 
   const SidebarInner = () => (
     <div className="relative z-10 flex h-full flex-col">
-      <div className={['relative overflow-hidden border-b border-white/12 py-5', collapsed ? 'px-5 lg:px-3' : 'px-5'].join(' ')}>
-        <div className="absolute -right-24 -top-20 h-56 w-56 rounded-full bg-cyan-400/18 blur-2xl motion-safe:animate-float" />
-        <div className="absolute -left-16 -bottom-24 h-60 w-60 rounded-full bg-blue-500/16 blur-2xl motion-safe:animate-float" />
+      <div className={['relative overflow-hidden border-b border-[#0b2a35]/70 py-5', collapsed ? 'px-5 lg:px-3' : 'px-5'].join(' ')}>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_88%_0%,rgba(35,211,238,0.20)_0%,transparent_48%),linear-gradient(180deg,rgba(13,31,48,0.72)_0%,rgba(5,10,18,0.18)_100%)]" />
 
-        <div className={['relative flex items-center justify-center rounded-[22px] border border-[#2f8ebc9a] bg-[#103c5d]/80 shadow-[0_18px_42px_-32px_rgba(47,198,255,0.75)]', collapsed ? 'h-[4.6rem] lg:h-14' : 'h-[4.6rem]'].join(' ')}>
+        <div className={['relative flex items-center justify-center overflow-hidden rounded-[22px] border border-cyan-200/12 bg-[linear-gradient(135deg,rgba(12,35,54,0.88)_0%,rgba(8,18,31,0.92)_54%,rgba(20,67,79,0.72)_100%)] shadow-[0_22px_48px_-34px_rgba(34,211,238,0.62),inset_0_1px_0_rgba(255,255,255,0.04)]', collapsed ? 'h-[4.6rem] lg:h-14' : 'h-[4.6rem]'].join(' ')}>
+          <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(125,238,255,0.32),transparent)]" />
           {resolvePublicUrl(branding.logoUrl) ? (
             <img
               src={resolvePublicUrl(branding.logoUrl)}
               alt="Logo"
-              className={collapsed ? 'max-h-12 max-w-[12rem] object-contain lg:max-h-8 lg:max-w-10' : 'max-h-12 max-w-[12rem] object-contain'}
+              className={collapsed ? 'relative z-10 max-h-12 max-w-[12rem] object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,0.45)] lg:max-h-8 lg:max-w-10' : 'relative z-10 max-h-12 max-w-[12rem] object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,0.45)]'}
             />
           ) : (
             <>
-              <div className={collapsed ? 'relative flex items-center gap-1.5 lg:hidden' : 'relative flex items-center gap-1.5'}>
-                <div className="absolute -left-6 top-1/2 h-px w-12 -translate-y-1/2 bg-[linear-gradient(90deg,transparent,#f07a2a,#43d8ff)]" />
-                <div className="relative h-12 w-20">
-                  <div className="absolute left-0 top-1 h-10 w-10 rounded-full border-[9px] border-[#1fb5d4]" />
-                  <div className="absolute left-9 top-1 h-10 w-10 rounded-full border-[9px] border-[#ff9829]" />
-                  <div className="absolute left-[1.6rem] top-[0.72rem] flex h-8 w-8 items-center justify-center rounded-full bg-[#143956] text-[9px] font-black text-[#dcecff] shadow-inner">
+              <div className={collapsed ? 'relative z-10 flex items-center gap-3 lg:hidden' : 'relative z-10 flex items-center gap-3'}>
+                <div className="relative h-11 w-[4.85rem] shrink-0">
+                  <div className="absolute left-0 top-0.5 h-10 w-10 rounded-full border-[8px] border-[#25c6de] shadow-[0_0_24px_rgba(37,198,222,0.30)]" />
+                  <div className="absolute left-[2.1rem] top-0.5 h-10 w-10 rounded-full border-[8px] border-[#ff961f] shadow-[0_0_24px_rgba(255,150,31,0.22)]" />
+                  <div className="absolute left-[1.42rem] top-[0.57rem] flex h-8 w-8 items-center justify-center rounded-full border border-cyan-100/18 bg-[#09233a] text-[9px] font-black text-[#dcecff] shadow-[inset_0_0_18px_rgba(34,211,238,0.12)]">
                     AI
                   </div>
                 </div>
-                <div className="-ml-5 text-[13px] font-black tracking-tight text-white">
-                  ChorstConsult
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-black leading-none tracking-[0.01em] text-white">
+                    ChorstConsult
+                  </div>
+                  <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.24em] text-cyan-100/62">
+                    Nexos AI
+                  </div>
                 </div>
               </div>
 
               {collapsed ? (
-                <div className="hidden h-10 w-10 items-center justify-center rounded-full border border-cyan-200/35 bg-[#143956] text-[10px] font-black text-[#dcecff] shadow-inner shadow-cyan-950/40 lg:flex">
+                <div className="relative z-10 hidden h-10 w-10 items-center justify-center rounded-full border border-cyan-200/35 bg-[#09233a] text-[10px] font-black text-[#dcecff] shadow-inner shadow-cyan-950/40 lg:flex">
                   AI
                 </div>
               ) : null}
@@ -491,7 +495,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          className="absolute right-2 top-2 z-20 hidden h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/30 bg-[#0b2747]/95 text-cyan-100 shadow-[0_12px_28px_-18px_rgba(34,211,238,0.95)] transition hover:border-cyan-200/60 hover:bg-[#123a62] lg:inline-flex"
+          className="absolute right-2 top-2 z-20 hidden h-9 w-9 items-center justify-center rounded-xl border border-cyan-300/28 bg-[#061524]/95 text-cyan-100 shadow-[0_12px_28px_-18px_rgba(34,211,238,0.95)] transition hover:border-cyan-200/60 hover:bg-[#102b40] lg:inline-flex"
           aria-pressed={collapsed}
           aria-label={collapsed ? 'Expandir módulos' : 'Recolher módulos'}
           title={collapsed ? 'Expandir módulos' : 'Recolher módulos'}
@@ -521,8 +525,8 @@ export default function Sidebar({
                   'w-full flex items-center rounded-2xl py-2.5',
                   collapsed ? 'justify-between gap-3 px-3 lg:justify-center lg:gap-0 lg:px-2' : 'justify-between gap-3 px-3',
                   'text-left text-[11px] font-bold uppercase tracking-[0.14em]',
-                  'border border-transparent bg-white/[0.02] text-slate-300/90',
-                  'transition-all duration-300 hover:border-white/[0.15] hover:bg-white/[0.08] hover:text-white'
+                  'border border-white/[0.05] bg-[#081321]/50 text-slate-300/90',
+                  'transition-all duration-300 hover:border-cyan-200/22 hover:bg-[#102033]/76 hover:text-white'
                 ].join(' ')}
                 aria-expanded={isOpen}
               >
@@ -569,13 +573,14 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="border-t border-white/12 px-3 py-3">
-        <div className="text-center text-[10px] text-slate-300/65">
-          <div className={collapsed ? 'font-semibold lg:text-[9px]' : 'font-semibold'}>
+      <div className="relative overflow-hidden border-t border-[#0b2a35]/70 px-3 py-3">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,20,33,0.12)_0%,rgba(20,61,72,0.28)_100%)]" />
+        <div className="relative rounded-xl border border-cyan-200/[0.055] bg-[#06111d]/56 px-3 py-2 text-center text-[10px] text-slate-300/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+          <div className={collapsed ? 'font-semibold text-cyan-50/80 lg:text-[9px]' : 'font-semibold text-cyan-50/80'}>
             <span className={collapsed ? 'lg:hidden' : ''}>{branding.appName || 'CRM NEXOS'}</span>
             <span className={collapsed ? 'hidden lg:inline' : 'hidden'}>NEXOS</span> v2
           </div>
-          <div className={collapsed ? 'opacity-90 lg:hidden' : 'opacity-90'}>© 2026</div>
+          <div className={collapsed ? 'opacity-80 lg:hidden' : 'opacity-80'}>© 2026</div>
         </div>
       </div>
     </div>
@@ -602,13 +607,13 @@ export default function Sidebar({
           open ? 'translate-x-0' : '-translate-x-full',
           'lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:z-20 lg:max-w-none',
           'flex flex-col overflow-hidden text-white',
-          'bg-gradient-to-b from-[#020817] via-[#081226] to-[#10233f]',
-          'border-r border-cyan-300/20 shadow-soft-2xl'
+          'bg-[radial-gradient(ellipse_at_92%_0%,rgba(37,196,218,0.24)_0%,transparent_42%),radial-gradient(ellipse_at_0%_18%,rgba(51,15,28,0.38)_0%,transparent_46%),linear-gradient(180deg,#05070d_0%,#07101c_48%,#071b25_100%)]',
+          'border-r border-[#0b2a35]/70 shadow-[18px_0_52px_-36px_rgba(34,211,238,0.62)]'
         ].join(' ')}
       >
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/[0.12] via-transparent to-blue-500/[0.18]" />
-          <div className="absolute inset-0 crm-dotgrid opacity-20" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(35,211,238,0.08)_0%,transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.025)_0%,transparent_32%)]" />
+          <div className="absolute inset-0 crm-dotgrid opacity-[0.14]" />
         </div>
 
         <SidebarInner />

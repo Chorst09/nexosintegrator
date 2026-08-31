@@ -82,12 +82,12 @@ export default function Topbar({ onMenuClick }) {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-[#2f5d8f7a] bg-[#071832]/95 px-4 py-3 shadow-[0_20px_45px_-35px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 border-b border-[#0b2a35]/70 bg-[radial-gradient(ellipse_at_76%_0%,rgba(37,196,218,0.22)_0%,transparent_44%),radial-gradient(ellipse_at_18%_0%,rgba(51,15,28,0.34)_0%,transparent_48%),linear-gradient(180deg,rgba(5,7,13,0.98)_0%,rgba(7,16,28,0.96)_100%)] px-4 py-3 shadow-[0_22px_54px_-38px_rgba(34,211,238,0.55)] backdrop-blur-2xl sm:px-6 lg:px-8">
       <div className="mx-auto flex h-[5.65rem] w-full max-w-[1920px] items-center gap-5">
         <button
           type="button"
           onClick={onMenuClick}
-          className="lg:hidden inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#4d8fcc6b] bg-[#10345a] text-[#dcecff]"
+          className="lg:hidden inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-200/24 bg-[#061524]/92 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
           aria-label="Abrir menu"
           title="Menu"
         >
@@ -95,28 +95,29 @@ export default function Topbar({ onMenuClick }) {
         </button>
 
         <div
-          className="relative hidden h-[5.15rem] min-w-0 flex-1 overflow-hidden rounded-[24px] border border-[#3f91c47a] bg-cover bg-center shadow-[0_24px_54px_-34px_rgba(0,0,0,0.95)] md:block"
+          className="relative hidden h-[5.15rem] min-w-0 flex-1 overflow-hidden rounded-[24px] border border-cyan-200/12 bg-cover bg-center shadow-[0_24px_54px_-36px_rgba(34,211,238,0.58),inset_0_1px_0_rgba(255,255,255,0.04)] md:block"
           style={{ backgroundImage: "url('/b2g/govflow-header.png')" }}
         >
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,18,39,0.72)_0%,rgba(5,18,39,0.38)_34%,rgba(8,31,56,0.16)_68%,rgba(0,169,190,0.22)_100%)]" />
-          <div className="absolute left-3 top-1/2 max-w-[min(30rem,56%)] -translate-y-1/2 rounded-[16px] bg-black/24 px-5 py-2.5 shadow-[0_22px_44px_-24px_rgba(0,0,0,0.95)] backdrop-blur-sm">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.42em] text-[#d6ecff]/85">Sistema</div>
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,7,13,0.82)_0%,rgba(5,9,18,0.56)_36%,rgba(9,34,42,0.20)_70%,rgba(35,211,238,0.26)_100%)]" />
+          <div className="absolute inset-x-10 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(125,238,255,0.58),transparent)]" />
+          <div className="absolute left-3 top-1/2 max-w-[min(30rem,56%)] -translate-y-1/2 rounded-[16px] border border-white/[0.04] bg-[#05070d]/34 px-5 py-2.5 shadow-[0_22px_44px_-26px_rgba(0,0,0,0.95)] backdrop-blur-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.42em] text-cyan-50/78">Sistema</div>
             <div className="mt-0.5 truncate text-xl font-black leading-none text-white">{headerTitle}</div>
-            <div className="mt-1 max-w-full truncate text-[11px] font-semibold text-[#c6dcf2]/85">{meta.subtitle}</div>
+            <div className="mt-1 max-w-full truncate text-[11px] font-semibold text-slate-300/88">{meta.subtitle}</div>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-1 items-center md:hidden">
           <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.42em] text-[#8fd1ff]">Sistema</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.42em] text-cyan-200/82">Sistema</div>
             <div className="max-w-[13rem] truncate text-xl font-black text-white">{headerTitle}</div>
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-4 text-[#dcecff]">
+        <div className="ml-auto flex shrink-0 items-center gap-4 text-cyan-50">
           <button
             type="button"
-            className="hidden h-10 w-10 items-center justify-center rounded-full text-[#dcecff] transition hover:bg-[#1a4168] sm:inline-flex"
+            className="hidden h-10 w-10 items-center justify-center rounded-full border border-transparent text-cyan-50 transition hover:border-cyan-200/16 hover:bg-[#102033]/78 sm:inline-flex"
             aria-label="Notificações"
             title="Notificações"
           >
@@ -126,7 +127,7 @@ export default function Topbar({ onMenuClick }) {
           <button
             type="button"
             onClick={toggleTheme}
-            className="hidden h-10 w-10 items-center justify-center rounded-full text-[#dcecff] transition hover:bg-[#1a4168] sm:inline-flex"
+            className="hidden h-10 w-10 items-center justify-center rounded-full border border-transparent text-cyan-50 transition hover:border-cyan-200/16 hover:bg-[#102033]/78 sm:inline-flex"
             title={`Tema: ${theme} (ativo: ${resolvedTheme})`}
             aria-label="Alternar tema"
           >
@@ -139,36 +140,36 @@ export default function Topbar({ onMenuClick }) {
             )}
           </button>
 
-          <div className="hidden h-10 w-px bg-[#385f8b] lg:block" />
+          <div className="hidden h-10 w-px bg-cyan-100/18 lg:block" />
 
           <div className="relative">
             <button
               type="button"
               onClick={() => setUserMenuOpen((prev) => !prev)}
-              className="flex items-center gap-3 rounded-2xl px-1.5 py-1 transition hover:bg-[#1a4168]/70"
+              className="flex items-center gap-3 rounded-2xl px-1.5 py-1 transition hover:bg-[#102033]/78"
               aria-haspopup="menu"
               aria-expanded={userMenuOpen}
               title="Menu do usuário"
             >
               <span className="hidden min-w-0 text-right lg:block">
                 <span className="block max-w-[170px] truncate text-xs font-black text-white">{userName}</span>
-                <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.15em] text-[#a8bed8]">{userRole}</span>
+                <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.15em] text-cyan-100/62">{userRole}</span>
               </span>
 
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#5f9ccc95] bg-[#234d73] text-sm font-black text-[#dcecff] shadow-[inset_0_0_24px_rgba(143,209,255,0.12)]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-cyan-200/30 bg-[linear-gradient(135deg,rgba(10,35,52,0.92),rgba(31,112,124,0.70))] text-sm font-black text-cyan-50 shadow-[0_12px_28px_-18px_rgba(34,211,238,0.85),inset_0_0_24px_rgba(143,209,255,0.12)]">
                 {userInitials}
               </span>
             </button>
 
             {userMenuOpen && (
               <div
-                className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-44 overflow-hidden rounded-2xl border border-[#5f9ccc70] bg-[#071832] p-1.5 shadow-[0_24px_58px_-28px_rgba(0,0,0,0.98)]"
+                className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-44 overflow-hidden rounded-2xl border border-cyan-200/20 bg-[#060d18] p-1.5 shadow-[0_24px_58px_-28px_rgba(0,0,0,0.98)]"
                 role="menu"
               >
                 <button
                   type="button"
                   onClick={handleUserAccess}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-[#dcecff] transition hover:bg-[#143b62]"
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-cyan-50 transition hover:bg-[#102033]"
                   role="menuitem"
                 >
                   <User className="h-4 w-4" />
@@ -177,7 +178,7 @@ export default function Topbar({ onMenuClick }) {
                 <button
                   type="button"
                   onClick={handleLogin}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-[#dcecff] transition hover:bg-[#143b62]"
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-cyan-50 transition hover:bg-[#102033]"
                   role="menuitem"
                 >
                   <LogIn className="h-4 w-4" />
