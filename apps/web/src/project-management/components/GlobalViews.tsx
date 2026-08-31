@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   Home, CheckCircle2, FileText, LayoutTemplate, Clock, Calendar,
-  Search, Plus, Filter, MoreVertical, LayoutGrid, List, Sparkles, Folder, ArrowLeft,
+  Search, Plus, Filter, List, Sparkles, ArrowLeft,
   BarChart2, Briefcase, Users, ArrowUpRight, Target, GitBranch, AlertTriangle,
-  ClipboardCheck, Lightbulb, Gauge, Layers3, TimerReset, Route, Wand2, Trash2, RotateCcw, Save
+  ClipboardCheck, Lightbulb, Gauge, Layers3, TimerReset, Route, Wand2, Trash2, RotateCcw, Save,
+  Upload, Download
 } from 'lucide-react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import ArchitectureDiagram from './ArchitectureDiagram';
 import type { Issue, Space } from '../types';
+import { buildApiUrl, getAuthHeaders } from '../../config/api';
 
 export function HomeView({
   onCreateProject,
@@ -348,78 +350,326 @@ export function PlannedView({
   );
 }
 
-export function DocsView() {
+type ProjectDocument = {
+  id: string;
+  projectId: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  category: string;
+  description?: string | null;
+  uploadedBy?: string;
+  createdAt: string;
+};
+
+const DOCUMENT_CATEGORIES = [
+  { value: 'OTHER', label: 'Geral' },
+  { value: 'CONTRACT', label: 'Contrato' },
+  { value: 'DELIVERABLE', label: 'Entregavel' },
+  { value: 'MINUTES', label: 'Ata' },
+  { value: 'CHANGE_REQUEST', label: 'Mudanca' },
+  { value: 'ACCEPTANCE', label: 'Aceite' }
+];
+
+const categoryLabel = (value?: string) =>
+  DOCUMENT_CATEGORIES.find((item) => item.value === value)?.label || 'Geral';
+
+const formatFileSize = (size = 0) => {
+  if (!size) return '0 KB';
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+};
+
+const authUploadHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+export function DocsView({
+  projects = [],
+  activeProjectId,
+  onProjectChange,
+  onCreateProject
+}: {
+  projects?: Space[];
+  activeProjectId?: string;
+  onProjectChange?: (projectId: string) => void;
+  onCreateProject?: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('OTHER');
+  const [documents, setDocuments] = useState<ProjectDocument[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const selectedProjectId = activeProjectId || projects[0]?.id || '';
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+
+  const loadDocuments = async () => {
+    if (!selectedProjectId) {
+      setDocuments([]);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${selectedProjectId}/attachments`), {
+        headers: getAuthHeaders()
+      });
+      const payload = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(payload.error || `Erro ${response.status} ao carregar documentos`);
+      }
+      setDocuments(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      console.error('Erro ao carregar documentos do projeto:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao carregar documentos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeProjectId && projects[0]?.id) {
+      onProjectChange?.(projects[0].id);
+    }
+  }, [activeProjectId, onProjectChange, projects]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [selectedProjectId]);
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedProjectId) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('category', category);
+
+      const response = await fetch(buildApiUrl(`/projetos/${selectedProjectId}/attachments`), {
+        method: 'POST',
+        headers: authUploadHeaders(),
+        body: formData
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Erro ${response.status} ao enviar documento`);
+      }
+      setDocuments((prev) => [payload, ...prev]);
+    } catch (err) {
+      console.error('Erro ao enviar documento:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao enviar documento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDownload = async (document: ProjectDocument) => {
+    if (!selectedProjectId) return;
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${selectedProjectId}/attachments/${document.id}/download`), {
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) throw new Error(`Erro ${response.status} ao baixar documento`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = document.originalName || document.filename;
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Erro ao baixar documento:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao baixar documento');
+    }
+  };
+
+  const handleDelete = async (document: ProjectDocument) => {
+    if (!selectedProjectId) return;
+    if (!window.confirm(`Excluir o documento "${document.originalName}"?`)) return;
+
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${selectedProjectId}/attachments/${document.id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Erro ${response.status} ao excluir documento`);
+      }
+      setDocuments((prev) => prev.filter((item) => item.id !== document.id));
+    } catch (err) {
+      console.error('Erro ao excluir documento:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao excluir documento');
+    }
+  };
+
+  const filteredDocuments = documents.filter((document) => {
+    const text = `${document.originalName} ${document.category} ${document.description || ''}`.toLowerCase();
+    return !search || text.includes(search.toLowerCase());
+  });
+
   return (
     <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300">
-      <div className="max-w-5xl mx-auto flex flex-col h-full">
+      <div className="max-w-7xl mx-auto flex flex-col h-full">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
             <FileText className="w-6 h-6 text-[#ff7a00]" />
             Documentos
           </h1>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedProjectId}
+              onChange={(event) => onProjectChange?.(event.target.value)}
+              className="bg-[#111827] border border-[#263345] text-sm font-semibold text-slate-200 rounded-md px-3 py-1.5 focus:outline-none focus:border-[#ff7a00] min-w-[240px]"
+            >
+              {projects.length === 0 ? (
+                <option value="">Nenhum projeto</option>
+              ) : projects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="bg-[#111827] border border-[#263345] text-sm font-semibold text-slate-200 rounded-md px-3 py-1.5 focus:outline-none focus:border-[#22c55e]"
+            >
+              {DOCUMENT_CATEGORIES.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar documentos..."
                 className="bg-[#111827] border border-[#263345] text-sm text-slate-200 rounded-md pl-9 pr-4 py-1.5 focus:outline-none focus:border-[#ff7a00] w-64"
               />
             </div>
-            <button className="flex items-center justify-center p-1.5 text-slate-400 hover:text-slate-200 bg-[#111827] border border-[#263345] rounded-md transition-colors">
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button className="flex items-center gap-2 text-sm text-white bg-[#ff7a00] hover:bg-[#f6b40b] px-3 py-1.5 rounded-md transition-colors font-medium">
-              <Plus className="w-4 h-4" /> Novo Doc
-            </button>
+            <label className={`flex items-center gap-2 text-sm text-white px-3 py-1.5 rounded-md transition-colors font-medium ${selectedProjectId && !saving ? 'bg-[#ff7a00] hover:bg-[#f6b40b] hover:text-[#050914] cursor-pointer' : 'bg-slate-700 cursor-not-allowed opacity-70'}`}>
+              <Upload className="w-4 h-4" />
+              {saving ? 'Enviando...' : 'Enviar'}
+              <input type="file" className="hidden" disabled={!selectedProjectId || saving} onChange={handleUpload} />
+            </label>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-[#111827] border border-dashed border-[#263345] rounded-md p-6 hover:border-[#ff7a00] cursor-pointer transition-all flex flex-col items-center justify-center text-slate-500 hover:text-[#ff7a00] hover:bg-[#ff7a00]/5 min-h-[160px]">
-            <Plus className="w-8 h-8 mb-2 opacity-50" />
-            <span className="text-sm font-medium">Novo Documento</span>
+        {error && (
+          <div className="mb-5 rounded-md border border-[#ff7a00]/40 bg-[#ff7a00]/10 px-4 py-3 text-sm font-semibold text-[#ffb15c]">
+            {error}
           </div>
+        )}
 
-          <div className="bg-[#111827] border border-[#263345] rounded-md p-5 hover:border-[#ff7a00] cursor-pointer transition-colors group relative flex flex-col min-h-[160px]">
-            <div className="absolute top-4 right-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <MoreVertical className="w-4 h-4 hover:text-slate-300" />
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-[#ff7a00]/10 text-[#ff7a00] flex items-center justify-center mb-auto group-hover:bg-[#ff7a00] group-hover:text-white transition-colors">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div className="mt-4">
-              <h3 className="font-bold text-slate-200 group-hover:text-[#ff7a00] transition-colors line-clamp-1">Guia de Integração API</h3>
-              <p className="text-xs text-slate-500 mt-1">Modificado há 2 dias</p>
-            </div>
+        {!selectedProjectId ? (
+          <div className="rounded-lg border border-[#263345] bg-[#111827] p-10 text-center">
+            <FileText className="mx-auto mb-4 h-12 w-12 text-[#ff7a00]" />
+            <h2 className="text-lg font-black text-slate-100">Nenhum projeto disponível</h2>
+            <p className="mt-2 text-sm text-slate-500">Crie um projeto para organizar contratos, atas, entregáveis e evidências.</p>
+            {onCreateProject && (
+              <button
+                type="button"
+                onClick={onCreateProject}
+                className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#ff7a00] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]"
+              >
+                <Plus className="h-4 w-4" />
+                Novo Projeto
+              </button>
+            )}
           </div>
+        ) : (
+          <>
+            <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(255,122,0,0.18),rgba(17,24,39,0.98))] p-4">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">Projeto</p>
+                <p className="mt-2 truncate text-base font-black text-slate-100">{selectedProject?.name || 'Projeto'}</p>
+                <p className="mt-1 text-xs text-[#ffb15c]">{selectedProject?.number || selectedProject?.status || 'Documento'}</p>
+              </div>
+              <div className="rounded-lg border border-[#263345] bg-[#111827] p-4">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">Total</p>
+                <p className="mt-2 text-2xl font-black text-slate-100">{documents.length}</p>
+              </div>
+              <div className="rounded-lg border border-[#263345] bg-[#111827] p-4">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">Contratos/Aceites</p>
+                <p className="mt-2 text-2xl font-black text-[#22c55e]">{documents.filter((item) => ['CONTRACT', 'ACCEPTANCE'].includes(item.category)).length}</p>
+              </div>
+              <div className="rounded-lg border border-[#263345] bg-[#111827] p-4">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">Entregaveis</p>
+                <p className="mt-2 text-2xl font-black text-[#18c8df]">{documents.filter((item) => item.category === 'DELIVERABLE').length}</p>
+              </div>
+            </div>
 
-          <div className="bg-[#111827] border border-[#263345] rounded-md p-5 hover:border-[#22c55e] cursor-pointer transition-colors group relative flex flex-col min-h-[160px]">
-            <div className="absolute top-4 right-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <MoreVertical className="w-4 h-4 hover:text-slate-300" />
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-[#22c55e]/10 text-[#22c55e] flex items-center justify-center mb-auto group-hover:bg-[#22c55e] group-hover:text-white transition-colors">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div className="mt-4">
-              <h3 className="font-bold text-slate-200 group-hover:text-[#22c55e] transition-colors line-clamp-1">Ata: Kick-off Paranacidade</h3>
-              <p className="text-xs text-slate-500 mt-1">Vinculado à PRJ-002</p>
-            </div>
-          </div>
-
-          <div className="bg-[#111827] border border-[#263345] rounded-md p-5 hover:border-[#eab308] cursor-pointer transition-colors group relative flex flex-col min-h-[160px]">
-            <div className="absolute top-4 right-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <MoreVertical className="w-4 h-4 hover:text-slate-300" />
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-[#eab308]/10 text-[#eab308] flex items-center justify-center mb-auto group-hover:bg-[#eab308] group-hover:text-slate-900 transition-colors">
-              <Folder className="w-5 h-5" />
-            </div>
-            <div className="mt-4">
-              <h3 className="font-bold text-slate-200 group-hover:text-[#eab308] transition-colors line-clamp-1">Requisitos de Sistema</h3>
-              <p className="text-xs text-slate-500 mt-1">5 documentos internos</p>
-            </div>
-          </div>
-        </div>
+            {loading ? (
+              <div className="rounded-lg border border-[#263345] bg-[#111827] p-8 text-center text-sm font-semibold text-slate-500">
+                Carregando documentos...
+              </div>
+            ) : filteredDocuments.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-[#263345] bg-[#111827] p-10 text-center">
+                <Upload className="mx-auto mb-4 h-12 w-12 text-[#ff7a00]" />
+                <h2 className="text-lg font-black text-slate-100">Nenhum documento encontrado</h2>
+                <p className="mt-2 text-sm text-slate-500">Envie contratos, atas, entregáveis, evidências e aceites do projeto selecionado.</p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
+                <div className="grid grid-cols-[1.4fr_.6fr_.45fr_.55fr_.35fr] gap-4 border-b border-[#263345] bg-[#0b1020] px-5 py-3 text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  <span>Documento</span>
+                  <span>Categoria</span>
+                  <span>Tamanho</span>
+                  <span>Enviado em</span>
+                  <span className="text-right">Acoes</span>
+                </div>
+                <div className="divide-y divide-[#263345]">
+                  {filteredDocuments.map((document) => (
+                    <div key={document.id} className="grid grid-cols-[1.4fr_.6fr_.45fr_.55fr_.35fr] items-center gap-4 px-5 py-4 text-sm">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#ff7a00]/10 text-[#ff7a00]">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-black text-slate-100">{document.originalName}</p>
+                          <p className="truncate text-xs text-slate-500">{document.mimeType || 'Arquivo'}</p>
+                        </div>
+                      </div>
+                      <span className="w-fit rounded-full border border-[#18c8df]/30 bg-[#18c8df]/10 px-2.5 py-1 text-xs font-black text-[#18c8df]">
+                        {categoryLabel(document.category)}
+                      </span>
+                      <span className="text-slate-400">{formatFileSize(document.size)}</span>
+                      <span className="text-slate-400">{new Date(document.createdAt).toLocaleDateString('pt-BR')}</span>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(document)}
+                          className="rounded-md border border-[#374151] bg-[#070b16] p-2 text-slate-400 transition-colors hover:border-[#22c55e] hover:text-[#22c55e]"
+                          title="Baixar"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(document)}
+                          className="rounded-md border border-[#374151] bg-[#070b16] p-2 text-slate-400 transition-colors hover:border-[#ef4444] hover:text-[#ef4444]"
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
       </div>
     </div>

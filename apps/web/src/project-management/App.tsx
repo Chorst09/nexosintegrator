@@ -726,7 +726,17 @@ export default function App({ onBack }: { onBack?: () => void }) {
               />
             )}
             {globalView === 'teams' && <TeamView />}
-            {globalView === 'docs' && <DocsView />}
+            {globalView === 'docs' && (
+              <DocsView
+                projects={spaces}
+                activeProjectId={activeSpaceId}
+                onProjectChange={setActiveSpaceId}
+                onCreateProject={() => {
+                  setGlobalView('spaces');
+                  setIsCreatingSpace(true);
+                }}
+              />
+            )}
             {globalView === 'dashboards' && (
               <Dashboard
                 projects={spaces}

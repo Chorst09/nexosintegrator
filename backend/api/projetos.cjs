@@ -43,6 +43,7 @@ function generateProjectNumber() {
 const PROJECT_STATUSES = ['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', 'CANCELADO'];
 const PROJECT_PHASES = ['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO', 'MONITORAMENTO', 'ENCERRAMENTO'];
 const PROJECT_TYPES = ['B2B', 'B2G'];
+const ATTACHMENT_CATEGORIES = ['CONTRACT', 'DELIVERABLE', 'MINUTES', 'CHANGE_REQUEST', 'ACCEPTANCE', 'OTHER'];
 
 const DEFAULT_PROJECT_PHASES = [
   { name: 'Setup Inicial', order: 1 },
@@ -87,6 +88,15 @@ function normalizeProjectMetadata(metadata, fallback = {}) {
 
 function isForeignKeyError(error) {
   return error?.code === 'P2003';
+}
+
+function normalizeAttachmentCategory(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  return ATTACHMENT_CATEGORIES.includes(raw) ? raw : 'OTHER';
+}
+
+function resolveAttachmentPath(filename) {
+  return path.join(__dirname, '../uploads/projects', path.basename(String(filename || '')));
 }
 
 // Dashboard / KPIs
@@ -1031,10 +1041,38 @@ router.put('/:projectId/b2b-config', authenticateToken, async (req, res) => {
 });
 
 // === ANEXOS ===
+router.get('/:projectId/attachments', authenticateToken, async (req, res) => {
+  try {
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.projectId },
+      select: { id: true }
+    });
+    if (!project) return res.status(404).json({ error: 'Projeto não encontrado' });
+
+    const attachments = await prisma.projectAttachment.findMany({
+      where: { projectId: req.params.projectId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(attachments);
+  } catch (error) {
+    console.error('Erro ao listar anexos:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 router.post('/:projectId/attachments', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-    const { category } = req.body;
+    const { category, description } = req.body;
+
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.projectId },
+      select: { id: true }
+    });
+    if (!project) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Projeto não encontrado' });
+    }
 
     const attachment = await prisma.projectAttachment.create({
       data: {
@@ -1043,24 +1081,51 @@ router.post('/:projectId/attachments', authenticateToken, upload.single('file'),
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         size: req.file.size,
-        path: req.file.path,
-        category: category || 'OTHER'
+        category: normalizeAttachmentCategory(category),
+        description: description || null,
+        uploadedBy: req.user.id
       }
     });
     res.status(201).json(attachment);
   } catch (error) {
     console.error('Erro ao fazer upload:', error);
-    if (req.file) fs.unlinkSync(req.file.path);
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.get('/:projectId/attachments/:attachmentId/download', authenticateToken, async (req, res) => {
+  try {
+    const attachment = await prisma.projectAttachment.findFirst({
+      where: {
+        id: req.params.attachmentId,
+        projectId: req.params.projectId
+      }
+    });
+    if (!attachment) return res.status(404).json({ error: 'Arquivo não encontrado' });
+
+    const filePath = resolveAttachmentPath(attachment.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Arquivo físico não encontrado' });
+
+    res.download(filePath, attachment.originalName);
+  } catch (error) {
+    console.error('Erro ao baixar anexo:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 
 router.delete('/:projectId/attachments/:attachmentId', authenticateToken, async (req, res) => {
   try {
-    const attachment = await prisma.projectAttachment.findUnique({ where: { id: req.params.attachmentId } });
+    const attachment = await prisma.projectAttachment.findFirst({
+      where: {
+        id: req.params.attachmentId,
+        projectId: req.params.projectId
+      }
+    });
     if (!attachment) return res.status(404).json({ error: 'Arquivo não encontrado' });
 
-    if (fs.existsSync(attachment.path)) fs.unlinkSync(attachment.path);
+    const filePath = resolveAttachmentPath(attachment.filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     await prisma.projectAttachment.delete({ where: { id: req.params.attachmentId } });
     res.json({ message: 'Arquivo removido' });
   } catch (error) {
