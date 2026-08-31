@@ -38,6 +38,7 @@ import {
   isOpportunityInClientType,
   normalizeClientType
 } from '../utils/businessModel';
+import { createOrUpdateCommercialProposalFromOpportunity } from '../lib/commercial-proposal-drafts';
 
 const stages = ["LEAD", "QUALIFICATION", "DIAGNOSIS", "PROPOSAL", "NEGOTIATION", "WON", "LOST"];
 
@@ -394,9 +395,17 @@ export default function Oportunidades() {
       });
       
       if (response.ok) {
+        const movedOpportunity = await response.json().catch(() => null);
         fetchOpportunities();
         if (stage === 'PROPOSAL') {
-          navigate(`/propostas?opportunityId=${encodeURIComponent(id)}&clientType=${encodeURIComponent(pipelineClientType)}`);
+          const fallbackOpportunity = opportunities.find((opportunity) => opportunity.id === id) || { id };
+          const proposalEntry = createOrUpdateCommercialProposalFromOpportunity(movedOpportunity || fallbackOpportunity, {
+            clientType: pipelineClientType
+          });
+          const proposalQuery = proposalEntry?.id
+            ? `proposalId=${encodeURIComponent(proposalEntry.id)}`
+            : `newProposal=1&opportunityId=${encodeURIComponent(id)}`;
+          navigate(`/propostas?${proposalQuery}&clientType=${encodeURIComponent(pipelineClientType)}`);
         }
       }
     } catch (error) {

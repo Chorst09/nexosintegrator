@@ -4,48 +4,17 @@ import { Calendar, Edit, Eye, FileText, Plus, Search, Settings, Trash2 } from 'l
 import PageHeader from '../components/PageHeader';
 import CommercialProposalPresentationView from '@/components/commercial-proposal/CommercialProposalPresentationView';
 import { buildApiUrl } from '../config/api';
+import {
+  COMMERCIAL_PROPOSALS_STORAGE_KEY,
+  createOrUpdateCommercialProposalFromOpportunity,
+  getCommercialProposalNumber,
+  readCommercialProposalDrafts
+} from '../lib/commercial-proposal-drafts';
 
-const STORAGE_LIST_KEY = 'proposta-comercial-double-drafts-v1';
-
-const formatProposalDate = (value = new Date()) => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return new Date().toLocaleDateString('pt-BR');
-  return date.toLocaleDateString('pt-BR');
-};
-
-const normalizeText = (value) => String(value || '').trim().replace(/\s+/g, ' ');
-
-const getProposalNumber = (proposal) =>
-  normalizeText(proposal?.proposalNumber || proposal?.number || proposal?.draft?.proposalNumber || proposal?.draft?.number);
-
-const generateProposalNumber = (proposals) => {
-  const year = new Date().getFullYear();
-  const prefix = `PROP-${year}-`;
-  const used = proposals
-    .map(getProposalNumber)
-    .filter(number => number.startsWith(prefix))
-    .map(number => Number(number.slice(prefix.length)))
-    .filter(Number.isFinite);
-
-  return `${prefix}${String(Math.max(0, ...used) + 1).padStart(4, '0')}`;
-};
-
-const generateProposalId = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
+const STORAGE_LIST_KEY = COMMERCIAL_PROPOSALS_STORAGE_KEY;
 
 const readSavedProposals = () => {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_LIST_KEY) || '[]');
-    return Array.isArray(parsed)
-      ? parsed.sort((a, b) => new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime())
-      : [];
-  } catch {
-    return [];
-  }
+  return readCommercialProposalDrafts();
 };
 
 const formatDateTime = (value) => {
@@ -93,70 +62,32 @@ export default function Propostas() {
   }, []);
 
   const openOpportunityProposal = useCallback((opportunity) => {
-    const currentEntries = readSavedProposals();
-    const existing = currentEntries.find(proposal => proposal.opportunityId === opportunity.id);
-    const proposalId = existing?.id || generateProposalId();
-    const proposalNumber = getProposalNumber(existing) || generateProposalNumber(currentEntries);
-    const now = new Date().toISOString();
-    const companyName = normalizeText(opportunity?.company?.name || opportunity?.companyName || opportunity?.clientName);
-    const clientName = companyName || normalizeText(opportunity?.title) || 'Cliente sem nome';
-    const productName = normalizeText(opportunity?.projectName || opportunity?.title || opportunity?.description) || 'Produto/servico';
-    const proposalDate = existing?.draft?.cover?.date || formatProposalDate();
-
-    const draft = existing?.draft || {
-      savedAt: now,
-      cover: {
-        clientName,
-        date: proposalDate,
-        product: productName
-      },
-      slides: {},
-      contract: {
-        vigencia: '',
-        prazo: opportunity?.projectMonths ? `${opportunity.projectMonths} meses` : '',
-        termos: ''
-      },
-      investment: {
-        rows: [
-          {
-            service: productName,
-            description: normalizeText(opportunity?.description),
-            monthly: opportunity?.value ? Number(opportunity.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '',
-            contract: opportunity?.projectMonths ? `${opportunity.projectMonths} meses` : ''
-          }
-        ],
-        installationFee: ''
-      }
-    };
-
-    const entry = {
-      ...(existing || {}),
-      id: proposalId,
-      title: existing?.title || clientName,
-      proposalNumber,
-      opportunityId: opportunity.id,
-      clientType: searchParams.get('clientType') || existing?.clientType || 'B2B',
-      savedAt: existing?.savedAt || now,
-      draft: {
-        ...draft,
-        proposalNumber,
-        opportunityId: opportunity.id,
-        cover: {
-          ...(draft.cover || {}),
-          clientName: draft.cover?.clientName || clientName,
-          date: draft.cover?.date || proposalDate,
-          product: draft.cover?.product || productName
-        }
-      }
-    };
-
-    const next = [entry, ...currentEntries.filter(proposal => proposal.id !== proposalId)];
-    window.localStorage.setItem(STORAGE_LIST_KEY, JSON.stringify(next));
+    const entry = createOrUpdateCommercialProposalFromOpportunity(opportunity, {
+      clientType: searchParams.get('clientType') || 'B2B'
+    });
+    if (!entry?.id) return;
     setSavedProposals(readSavedProposals());
-    openSavedProposal(proposalId);
+    openSavedProposal(entry.id);
   }, [openSavedProposal, searchParams]);
 
   useEffect(() => {
+    const proposalId = searchParams.get('proposalId');
+    if (!proposalId) return;
+
+    const requestKey = `proposal:${proposalId}`;
+    if (lastOpportunityImportKey.current === requestKey) return;
+    lastOpportunityImportKey.current = requestKey;
+
+    const exists = readSavedProposals().some(proposal => proposal.id === proposalId);
+    if (!exists) return;
+
+    setSavedProposals(readSavedProposals());
+    openSavedProposal(proposalId);
+    navigate('/propostas', { replace: true });
+  }, [navigate, openSavedProposal, searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get('proposalId')) return;
     const opportunityId = searchParams.get('opportunityId');
     if (!opportunityId) return;
 
@@ -207,7 +138,7 @@ export default function Propostas() {
         cover.clientName,
         cover.date,
         cover.product,
-        getProposalNumber(proposal)
+        getCommercialProposalNumber(proposal)
       ].some(value => String(value || '').toLowerCase().includes(term));
     });
   }, [savedProposals, searchTerm]);
@@ -314,7 +245,7 @@ export default function Propostas() {
                   <tbody className="divide-y divide-[color:var(--crm-border)]">
                     {filteredProposals.map(proposal => {
                       const cover = proposal?.draft?.cover || {};
-                      const proposalNumber = getProposalNumber(proposal) || '-';
+                      const proposalNumber = getCommercialProposalNumber(proposal) || '-';
                       return (
                         <tr key={proposal.id} className="hover:bg-black/5 dark:hover:bg-white/5">
                           <td className="px-6 py-4 text-sm font-semibold text-[var(--crm-ink)]">{proposalNumber}</td>

@@ -1771,6 +1771,12 @@ export default function CommercialProposalPresentationView({
     return [...filtered].sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
   }, [savedProposals, proposalFilterText, proposalFilterSavedDate, proposalSortOrder]);
 
+  const activeProposal = useMemo(
+    () => savedProposals.find(entry => entry.id === activeProposalId) ?? null,
+    [savedProposals, activeProposalId]
+  );
+  const activeProposalNumber = normalizeProposalNumber(activeProposal);
+
   const buildDraft = useCallback((): SavedDraft => {
     const slides: Record<string, Record<string, string>> = {};
 
@@ -2546,6 +2552,12 @@ export default function CommercialProposalPresentationView({
           </div>
 
           <p className="text-sm text-muted-foreground">Visualizacao com partes editaveis e fixas para todos os slides.</p>
+          {activeProposalNumber && (
+            <div className="flex flex-wrap items-center gap-4 rounded-md border bg-muted/20 px-3 py-2 text-sm">
+              <span className="font-semibold">Proposta {activeProposalNumber}</span>
+              <span className="text-muted-foreground">Data: {coverFields.date.value || formatProposalDate()}</span>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             A opcao visualizar exibe os slides 1 a 10, incluindo 1, 2, 3 e os demais fixos.
           </p>
