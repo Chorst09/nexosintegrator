@@ -21,6 +21,7 @@ import WorkloadView from './components/WorkloadView';
 import { HomeView, PlannedView, DocsView, WhiteboardsView } from './components/GlobalViews';
 import TaskModal from './components/TaskModal';
 import CreateTaskModal from './components/CreateTaskModal';
+import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { mockIssues } from './data';
 import { Space, Issue } from './types';
 
@@ -29,17 +30,76 @@ function cn(...inputs: ClassValue[]) {
 }
 
 type ViewMode = 'board' | 'list' | 'dashboard' | 'team' | 'calendar' | 'gantt' | 'activity' | 'workload';
+type ProjectStatus = NonNullable<Space['status']>;
+type ProjectPhase = NonNullable<Space['phase']>;
+
+type CompanyOption = {
+  id: string;
+  name: string;
+  clientType?: 'B2B' | 'B2G' | string;
+};
+
+type UserOption = {
+  id: string;
+  name: string;
+  email?: string;
+  role?: string;
+  accessB2B?: boolean;
+  accessB2G?: boolean;
+  accessManagement?: boolean;
+};
+
+type ApiProject = {
+  id: string;
+  number?: string;
+  name: string;
+  description?: string | null;
+  type?: 'B2B' | 'B2G';
+  phase?: ProjectPhase;
+  status?: ProjectStatus | string;
+  budget?: number | string | null;
+  plannedStartDate?: string | null;
+  plannedEndDate?: string | null;
+  createdAt?: string;
+  metadata?: Record<string, unknown> | null;
+  companyId?: string;
+  projectManagerId?: string;
+  opportunityId?: string | null;
+  company?: { id?: string; name?: string; clientType?: string } | null;
+  projectManager?: { id?: string; name?: string; email?: string } | null;
+};
+
+const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  PLANEJADO: 'Planejado',
+  EM_ANDAMENTO: 'Em andamento',
+  PAUSADO: 'Pausado',
+  CONCLUIDO: 'Concluido',
+  CANCELADO: 'Cancelado'
+};
+
+const PROJECT_STATUS_OPTIONS: Array<{ value: ProjectStatus; label: string }> = [
+  { value: 'PLANEJADO', label: 'Planejado' },
+  { value: 'EM_ANDAMENTO', label: 'Em andamento' },
+  { value: 'PAUSADO', label: 'Pausado' },
+  { value: 'CONCLUIDO', label: 'Concluido' },
+  { value: 'CANCELADO', label: 'Cancelado' }
+];
 
 const emptyProjectForm = {
   name: '',
+  type: 'B2B' as 'B2B' | 'B2G',
+  companyId: '',
   client: '',
   sponsor: '',
+  projectManagerId: '',
   manager: '',
-  status: 'PLANEJAMENTO' as const,
+  status: 'PLANEJADO' as ProjectStatus,
+  phase: 'SETUP' as ProjectPhase,
   priority: 'Normal' as const,
   startDate: '',
   endDate: '',
   budget: '',
+  opportunityId: '',
   objective: '',
   scope: '',
   deliverables: '',
@@ -49,6 +109,73 @@ const emptyProjectForm = {
 };
 
 type ProjectForm = typeof emptyProjectForm;
+
+function normalizeProjectStatus(value?: string | null): ProjectStatus {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PLANEJAMENTO') return 'PLANEJADO';
+  if (raw === 'EM EXECUCAO' || raw === 'EM EXECUÇÃO' || raw === 'EM PROGRESSO') return 'EM_ANDAMENTO';
+  if (raw === 'EM RISCO') return 'PAUSADO';
+  if (raw === 'CONCLUÍDO') return 'CONCLUIDO';
+  if (['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', 'CANCELADO'].includes(raw)) {
+    return raw as ProjectStatus;
+  }
+  return 'PLANEJADO';
+}
+
+function normalizeProjectPhase(value?: string | null): ProjectPhase {
+  const raw = String(value || '').trim().toUpperCase();
+  if (['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO', 'MONITORAMENTO', 'ENCERRAMENTO'].includes(raw)) {
+    return raw as ProjectPhase;
+  }
+  return 'SETUP';
+}
+
+function toDateInputValue(value?: string | null) {
+  if (!value) return '';
+  return String(value).split('T')[0];
+}
+
+function parseCurrencyValue(value: string) {
+  const normalized = String(value || '')
+    .replace(/[R$\s.]/g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function mapProjectToSpace(project: ApiProject, index = 0): Space {
+  const metadata = project.metadata && typeof project.metadata === 'object' ? project.metadata : {};
+  const colors = ['bg-[#ff7a00]', 'bg-[#18c8df]', 'bg-[#22c55e]', 'bg-[#f6b40b]', 'bg-[#1f7fe5]'];
+  const name = project.name || 'Projeto sem nome';
+
+  return {
+    id: project.id,
+    number: project.number,
+    name,
+    initial: name.charAt(0).toUpperCase(),
+    color: colors[index % colors.length],
+    type: project.type,
+    companyId: project.companyId || project.company?.id,
+    projectManagerId: project.projectManagerId || project.projectManager?.id,
+    opportunityId: project.opportunityId || undefined,
+    client: project.company?.name || String(metadata.client || ''),
+    sponsor: String(metadata.sponsor || ''),
+    manager: project.projectManager?.name || String(metadata.manager || ''),
+    status: normalizeProjectStatus(project.status),
+    phase: normalizeProjectPhase(project.phase),
+    priority: (metadata.priority as Space['priority']) || 'Normal',
+    startDate: toDateInputValue(project.plannedStartDate),
+    endDate: toDateInputValue(project.plannedEndDate),
+    budget: project.budget !== undefined && project.budget !== null ? String(project.budget) : '',
+    objective: String(metadata.objective || ''),
+    scope: String(metadata.scope || project.description || ''),
+    deliverables: String(metadata.deliverables || ''),
+    successCriteria: String(metadata.successCriteria || ''),
+    risks: String(metadata.risks || ''),
+    notes: String(metadata.notes || ''),
+    createdAt: project.createdAt
+  };
+}
 
 export default function App({ onBack }: { onBack?: () => void }) {
   const navigate = useNavigate();
@@ -72,25 +199,27 @@ export default function App({ onBack }: { onBack?: () => void }) {
   const [spaces, setSpaces] = useState<Space[]>(() => {
     const saved = localStorage.getItem('pm_projects_v1');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed)
+          ? parsed.map((space, index) => ({
+              ...space,
+              status: normalizeProjectStatus(space.status),
+              phase: normalizeProjectPhase(space.phase),
+              color: space.color || ['bg-[#ff7a00]', 'bg-[#18c8df]', 'bg-[#22c55e]'][index % 3],
+              initial: space.initial || String(space.name || 'P').charAt(0).toUpperCase()
+            }))
+          : [];
+      } catch (e) {}
     }
-    return [{
-      id: 's1',
-      name: 'Projeto Paranacidade',
-      initial: 'P',
-      color: 'bg-[#ff7a00]',
-      client: 'Paranacidade',
-      manager: 'Carlos Horst',
-      status: 'PLANEJAMENTO',
-      priority: 'Alta',
-      objective: 'Implantar e acompanhar as etapas do projeto com controle executivo.',
-      scope: 'Escopo inicial do projeto com fases de acesso, kick-off, plano de implantação e migração.',
-      deliverables: 'Plano de implantação, cronograma, atas, evidências e acompanhamento por fases.',
-      createdAt: new Date().toISOString()
-    }];
+    return [];
   });
-  const [activeSpaceId, setActiveSpaceId] = useState<string>('s1');
-  const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({ 's1': true });
+  const [activeSpaceId, setActiveSpaceId] = useState<string>('');
+  const [expandedSpaces, setExpandedSpaces] = useState<Record<string, boolean>>({});
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [projectLoadError, setProjectLoadError] = useState('');
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
 
   // New States
   const [selectedTask, setSelectedTask] = useState<Issue | null>(null);
@@ -102,6 +231,79 @@ export default function App({ onBack }: { onBack?: () => void }) {
     localStorage.setItem('pm_projects_v1', JSON.stringify(spaces));
   }, [spaces]);
 
+  const loadProjects = async () => {
+    setIsLoadingProjects(true);
+    setProjectLoadError('');
+
+    try {
+      const response = await fetch(buildApiUrl('/projetos?limit=200'), {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status} ao carregar projetos`);
+      }
+
+      const payload = await response.json();
+      const projects = Array.isArray(payload) ? payload : payload.projects || payload.data || [];
+      const mapped = Array.isArray(projects) ? projects.map(mapProjectToSpace) : [];
+      setSpaces(mapped);
+      setExpandedSpaces((prev) => {
+        const next = { ...prev };
+        mapped.forEach((project) => {
+          if (next[project.id] === undefined) next[project.id] = true;
+        });
+        return next;
+      });
+      setActiveSpaceId((current) => {
+        if (current && mapped.some((project) => project.id === current)) return current;
+        return mapped[0]?.id || '';
+      });
+    } catch (error) {
+      console.error('Erro ao carregar projetos:', error);
+      setProjectLoadError(error instanceof Error ? error.message : 'Erro ao carregar projetos');
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
+
+  const loadProjectDependencies = async () => {
+    try {
+      const [companiesRes, usersRes] = await Promise.all([
+        fetch(buildApiUrl('/companies'), { headers: getAuthHeaders() }),
+        fetch(buildApiUrl('/users'), { headers: getAuthHeaders() })
+      ]);
+
+      if (companiesRes.ok) {
+        const payload = await companiesRes.json();
+        const rows = Array.isArray(payload) ? payload : payload.companies || payload.data || [];
+        setCompanies(Array.isArray(rows) ? rows : []);
+      }
+
+      if (usersRes.ok) {
+        const payload = await usersRes.json();
+        const rows = Array.isArray(payload) ? payload : payload.users || payload.data || [];
+        const assignable = Array.isArray(rows)
+          ? rows.filter((user: UserOption) => {
+              const role = String(user.role || '').toUpperCase();
+              return ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR', 'SELLER', 'USER', 'USER_B2B', 'USER_B2G'].includes(role)
+                || user.accessManagement
+                || user.accessB2B
+                || user.accessB2G;
+            })
+          : [];
+        setUsers(assignable);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar empresas e usuários:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadProjects();
+    loadProjectDependencies();
+  }, []);
+
   const activeProject = spaces.find(s => s.id === activeSpaceId) || spaces[0];
   const activeProjectIssues = issues.filter(issue => {
     if (!activeProject) return false;
@@ -110,33 +312,64 @@ export default function App({ onBack }: { onBack?: () => void }) {
   });
   const isDashboardFocus = (globalView === 'spaces' && activeView === 'dashboard') || globalView === 'dashboards';
 
-  const submitNewSpace = () => {
+  const submitNewSpace = async () => {
     const name = projectForm.name.trim();
     const scope = projectForm.scope.trim();
     const objective = projectForm.objective.trim();
 
-    if (!name || !scope || !objective) {
-      setProjectFormError('Informe nome, objetivo e escopo do projeto antes de criar as fases.');
+    if (!name || !projectForm.companyId || !projectForm.projectManagerId || !scope || !objective) {
+      setProjectFormError('Informe nome, cliente, gestor, objetivo e escopo antes de criar o projeto planejado.');
       return;
     }
 
     if (isCreatingSpace) {
-      const colors = ['bg-[#ff7a00]', 'bg-[#18c8df]', 'bg-[#22c55e]', 'bg-[#f6b40b]', 'bg-[#1f7fe5]'];
-      const randomColor = colors[spaces.length % colors.length];
-      const newSpace: Space = {
-        id: `s-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        ...projectForm,
-        name,
-        scope,
-        objective,
-        initial: name.charAt(0).toUpperCase(),
-        color: randomColor,
-        createdAt: new Date().toISOString()
-      };
-      setSpaces(prev => [...prev, newSpace]);
-      setActiveSpaceId(newSpace.id);
-      setExpandedSpaces(prev => ({ ...prev, [newSpace.id]: true }));
-      setActiveView('dashboard');
+      try {
+        setProjectFormError('');
+        const response = await fetch(buildApiUrl('/projetos'), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            name,
+            type: projectForm.type,
+            companyId: projectForm.companyId,
+            projectManagerId: projectForm.projectManagerId,
+            status: projectForm.status,
+            phase: projectForm.phase,
+            budget: parseCurrencyValue(projectForm.budget),
+            plannedStartDate: projectForm.startDate || null,
+            plannedEndDate: projectForm.endDate || null,
+            opportunityId: projectForm.opportunityId || null,
+            description: scope,
+            metadata: {
+              objective,
+              scope,
+              sponsor: projectForm.sponsor.trim(),
+              priority: projectForm.priority,
+              deliverables: projectForm.deliverables.trim(),
+              successCriteria: projectForm.successCriteria.trim(),
+              risks: projectForm.risks.trim(),
+              notes: projectForm.notes.trim()
+            }
+          })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || `Erro ${response.status} ao criar projeto`);
+        }
+
+        const newSpace = mapProjectToSpace(payload, spaces.length);
+        setSpaces(prev => [newSpace, ...prev.filter(project => project.id !== newSpace.id)]);
+        setActiveSpaceId(newSpace.id);
+        setExpandedSpaces(prev => ({ ...prev, [newSpace.id]: true }));
+        setActiveView('dashboard');
+        setGlobalView('spaces');
+        navigate(`/projetos/${newSpace.id}`);
+      } catch (error) {
+        console.error('Erro ao criar projeto:', error);
+        setProjectFormError(error instanceof Error ? error.message : 'Erro ao criar projeto');
+        return;
+      }
     }
     setIsCreatingSpace(false);
     setProjectForm(emptyProjectForm);
@@ -356,7 +589,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 <div className={cn("w-5 h-5 rounded-sm text-[10px] flex items-center justify-center font-bold text-white mr-1", activeProject?.color || "bg-slate-700")}>
                   {activeProject?.initial || "P"}
                 </div>
-                {activeProject?.name || "Projeto Paranacidade"} <span className="text-slate-500 font-normal">/</span>
+                {activeProject?.name || (isLoadingProjects ? "Carregando projetos..." : "Projetos")} <span className="text-slate-500 font-normal">/</span>
                 <ListIcon className="w-5 h-5 text-slate-400 ml-1" /> Fases
                 <ChevronDown className="w-5 h-5 text-slate-500 cursor-pointer" />
               </div>
@@ -399,7 +632,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(255,122,0,0.16),rgba(17,24,39,0.98))] p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Status</p>
-                  <p className="mt-1 text-sm font-black text-[#ffb15c]">{activeProject.status || 'PLANEJAMENTO'}</p>
+                  <p className="mt-1 text-sm font-black text-[#ffb15c]">{PROJECT_STATUS_LABELS[activeProject.status || 'PLANEJADO']}</p>
                 </div>
                 <div className="rounded-lg border border-[#263345] bg-[linear-gradient(140deg,rgba(34,197,94,0.14),rgba(17,24,39,0.98))] p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[#8f9caf]">Fases</p>
@@ -426,8 +659,24 @@ export default function App({ onBack }: { onBack?: () => void }) {
 
         {/* View Renderer */}
         <div className="flex-1 overflow-hidden relative bg-[#070b16]">
-          {activeView === 'board' && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} />}
-          {activeView === 'list' && <ListView issues={issues} onTaskClick={setSelectedTask} />}
+          {projectLoadError && (
+            <div className="m-6 rounded-md border border-[#ff7a00]/35 bg-[#ff7a00]/10 px-4 py-3 text-sm font-semibold text-[#ffb15c]">
+              {projectLoadError}
+            </div>
+          )}
+          {!isLoadingProjects && spaces.length === 0 && !projectLoadError && (
+            <div className="m-6 rounded-lg border border-[#263345] bg-[#111827] p-8 text-center">
+              <Briefcase className="mx-auto mb-3 h-10 w-10 text-[#ff7a00]" />
+              <h2 className="text-lg font-black text-slate-100">Nenhum projeto cadastrado</h2>
+              <p className="mt-2 text-sm text-slate-500">Crie o primeiro projeto para iniciar o planejamento.</p>
+              <button onClick={() => setIsCreatingSpace(true)} className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#ff7a00] px-4 py-2 text-sm font-black text-white hover:bg-[#f6b40b] hover:text-[#050914]">
+                <Plus className="h-4 w-4" />
+                Novo Projeto
+              </button>
+            </div>
+          )}
+          {activeView === 'board' && activeProject && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} />}
+          {activeView === 'list' && activeProject && <ListView issues={issues} onTaskClick={setSelectedTask} />}
           {activeView === 'dashboard' && (
             <Dashboard
               projects={spaces}
@@ -461,7 +710,21 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 }}
               />
             )}
-            {globalView === 'planned' && <PlannedView />}
+            {globalView === 'planned' && (
+              <PlannedView
+                projects={spaces}
+                issues={issues}
+                onCreateProject={() => {
+                  setGlobalView('spaces');
+                  setIsCreatingSpace(true);
+                }}
+                onOpenProject={(projectId) => {
+                  setActiveSpaceId(projectId);
+                  setGlobalView('spaces');
+                  setActiveView('dashboard');
+                }}
+              />
+            )}
             {globalView === 'teams' && <TeamView />}
             {globalView === 'docs' && <DocsView />}
             {globalView === 'dashboards' && (
@@ -497,6 +760,9 @@ export default function App({ onBack }: { onBack?: () => void }) {
         <ProjectCreateModal
           form={projectForm}
           error={projectFormError}
+          companies={companies}
+          users={users}
+          statusOptions={PROJECT_STATUS_OPTIONS}
           onChange={(patch) => {
             setProjectForm(prev => ({ ...prev, ...patch }));
             setProjectFormError('');
@@ -516,18 +782,29 @@ export default function App({ onBack }: { onBack?: () => void }) {
 function ProjectCreateModal({
   form,
   error,
+  companies,
+  users,
+  statusOptions,
   onChange,
   onCancel,
   onSubmit
 }: {
   form: ProjectForm;
   error: string;
+  companies: CompanyOption[];
+  users: UserOption[];
+  statusOptions: Array<{ value: ProjectStatus; label: string }>;
   onChange: (patch: Partial<ProjectForm>) => void;
   onCancel: () => void;
-  onSubmit: () => void;
+  onSubmit: () => void | Promise<void>;
 }) {
   const fieldClass = "w-full rounded-md border border-[#374151] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00] focus:ring-2 focus:ring-[#ff7a00]/20";
   const labelClass = "text-[11px] font-bold uppercase tracking-wide text-[#8f9caf]";
+  const filteredCompanies = companies.filter((company) => !company.clientType || String(company.clientType).toUpperCase() === form.type);
+  const filteredUsers = users.filter((user) => {
+    if (form.type === 'B2G') return user.accessB2G || ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR', 'USER_B2G'].includes(String(user.role || '').toUpperCase());
+    return user.accessB2B || ['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR', 'SELLER', 'USER', 'USER_B2B'].includes(String(user.role || '').toUpperCase());
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -570,17 +847,56 @@ function ProjectCreateModal({
               <input className={fieldClass} value={form.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="Ex.: Implantação Paranacidade" />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Cliente</span>
-              <input className={fieldClass} value={form.client} onChange={(e) => onChange({ client: e.target.value })} placeholder="Cliente ou órgão" />
+              <span className={labelClass}>Tipo</span>
+              <select
+                className={fieldClass}
+                value={form.type}
+                onChange={(e) => onChange({ type: e.target.value as ProjectForm['type'], companyId: '', client: '' })}
+              >
+                <option value="B2B">B2B Privado</option>
+                <option value="B2G">B2G Governo</option>
+              </select>
             </label>
 
+            <label className="flex flex-col gap-1.5">
+              <span className={labelClass}>Cliente *</span>
+              <select
+                className={fieldClass}
+                value={form.companyId}
+                onChange={(e) => {
+                  const company = companies.find((item) => item.id === e.target.value);
+                  onChange({
+                    companyId: e.target.value,
+                    client: company?.name || '',
+                    type: (String(company?.clientType || form.type).toUpperCase() === 'B2G' ? 'B2G' : 'B2B') as ProjectForm['type']
+                  });
+                }}
+              >
+                <option value="">Selecione...</option>
+                {filteredCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+            </label>
             <label className="flex flex-col gap-1.5">
               <span className={labelClass}>Patrocinador</span>
               <input className={fieldClass} value={form.sponsor} onChange={(e) => onChange({ sponsor: e.target.value })} placeholder="Sponsor" />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Gerente</span>
-              <input className={fieldClass} value={form.manager} onChange={(e) => onChange({ manager: e.target.value })} placeholder="Responsável" />
+              <span className={labelClass}>Gerente *</span>
+              <select
+                className={fieldClass}
+                value={form.projectManagerId}
+                onChange={(e) => {
+                  const user = users.find((item) => item.id === e.target.value);
+                  onChange({ projectManagerId: e.target.value, manager: user?.name || '' });
+                }}
+              >
+                <option value="">Selecione...</option>
+                {filteredUsers.map((user) => (
+                  <option key={user.id} value={user.id}>{user.name}{user.email ? ` - ${user.email}` : ''}</option>
+                ))}
+              </select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className={labelClass}>Orçamento</span>
@@ -593,10 +909,9 @@ function ProjectCreateModal({
             <label className="flex flex-col gap-1.5">
               <span className={labelClass}>Status</span>
               <select className={fieldClass} value={form.status} onChange={(e) => onChange({ status: e.target.value as ProjectForm['status'] })}>
-                <option>PLANEJAMENTO</option>
-                <option>EM EXECUCAO</option>
-                <option>EM RISCO</option>
-                <option>CONCLUIDO</option>
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </label>
             <label className="flex flex-col gap-1.5">

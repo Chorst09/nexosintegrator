@@ -4,13 +4,19 @@ export type IssueStatus = 'PENDENTE' | 'PLANEJAMENTO' | 'EM PROGRESSO' | 'EM RIS
 
 export interface Space {
   id: string;
+  number?: string;
   name: string;
   initial: string;
   color: string;
+  type?: 'B2B' | 'B2G';
+  companyId?: string;
+  projectManagerId?: string;
+  opportunityId?: string;
   client?: string;
   sponsor?: string;
   manager?: string;
-  status?: 'PLANEJAMENTO' | 'EM EXECUCAO' | 'EM RISCO' | 'CONCLUIDO';
+  status?: 'PLANEJADO' | 'EM_ANDAMENTO' | 'PAUSADO' | 'CONCLUIDO' | 'CANCELADO';
+  phase?: 'SETUP' | 'KICKOFF_INTERNO' | 'KICKOFF_EXTERNO' | 'EXECUCAO' | 'MONITORAMENTO' | 'ENCERRAMENTO';
   priority?: IssuePriority;
   startDate?: string;
   endDate?: string;

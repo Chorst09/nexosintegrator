@@ -48,7 +48,7 @@ const fallbackProject: Space = {
   name: 'Todos os projetos',
   initial: 'P',
   color: 'bg-[#ff7a00]',
-  status: 'PLANEJAMENTO',
+  status: 'PLANEJADO',
   objective: 'Acompanhar projetos, fases, riscos e entregas em uma visão executiva.',
   scope: 'Painel consolidado para leitura rápida do portfólio.'
 };
@@ -195,7 +195,7 @@ export default function Dashboard({
             <div className="rounded-lg border border-[#374151] bg-[linear-gradient(135deg,rgba(255,122,0,0.16),rgba(246,180,11,0.08),rgba(17,24,39,0.96))] p-4">
               <p className="text-[11px] font-black uppercase tracking-wide text-[#8f9caf]">Projeto ativo</p>
               <p className="mt-2 truncate text-lg font-black text-white">{selectedProject.name}</p>
-              <p className="mt-1 text-xs font-bold text-[#ffb15c]">{selectedProject.status || 'PLANEJAMENTO'}</p>
+              <p className="mt-1 text-xs font-bold text-[#ffb15c]">{selectedProject.status || 'PLANEJADO'}</p>
             </div>
           </div>
         </header>

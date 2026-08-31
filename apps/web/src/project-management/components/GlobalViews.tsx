@@ -8,6 +8,7 @@ import {
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import ArchitectureDiagram from './ArchitectureDiagram';
+import type { Issue, Space } from '../types';
 
 export function HomeView({
   onCreateProject,
@@ -171,10 +172,51 @@ export function HomeView({
   );
 }
 
-export function PlannedView() {
+const plannedDateLabel = (value?: string) => {
+  if (!value) return 'Sem data';
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return 'Sem data';
+  return parsed.toLocaleDateString('pt-BR');
+};
+
+const plannedTime = (value?: string) => {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime();
+};
+
+export function PlannedView({
+  projects = [],
+  issues = [],
+  onCreateProject,
+  onOpenProject
+}: {
+  projects?: Space[];
+  issues?: Issue[];
+  onCreateProject?: () => void;
+  onOpenProject?: (projectId: string) => void;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayTime = today.getTime();
+  const nextWeekTime = todayTime + 7 * 24 * 60 * 60 * 1000;
+  const plannedProjects = projects
+    .filter((project) => project.status === 'PLANEJADO')
+    .sort((a, b) => plannedTime(a.startDate || a.createdAt) - plannedTime(b.startDate || b.createdAt));
+  const plannedIssues = issues.filter((issue) => ['PENDENTE', 'PLANEJAMENTO'].includes(issue.status));
+  const todayIssues = plannedIssues.filter((issue) => plannedTime(issue.dueDate) === todayTime);
+  const overdueIssues = plannedIssues.filter((issue) => plannedTime(issue.dueDate) < todayTime);
+  const nextIssues = plannedIssues
+    .filter((issue) => {
+      const time = plannedTime(issue.dueDate);
+      return time > todayTime && time <= nextWeekTime;
+    })
+    .sort((a, b) => plannedTime(a.dueDate) - plannedTime(b.dueDate))
+    .slice(0, 6);
+
   return (
     <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
             <Calendar className="w-6 h-6 text-[#22c55e]" />
@@ -184,43 +226,117 @@ export function PlannedView() {
             <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 bg-[#111827] border border-[#263345] px-3 py-1.5 rounded-md transition-colors">
               <Calendar className="w-4 h-4" /> Hoje
             </button>
-            <button className="flex items-center gap-2 text-sm text-white bg-[#ff7a00] hover:bg-[#f6b40b] px-3 py-1.5 rounded-md transition-colors font-medium">
-              <Plus className="w-4 h-4" /> Nova Fase
+            <button
+              type="button"
+              onClick={onCreateProject}
+              className="flex items-center gap-2 text-sm text-white bg-[#ff7a00] hover:bg-[#f6b40b] hover:text-[#050914] px-3 py-1.5 rounded-md transition-colors font-medium"
+            >
+              <Plus className="w-4 h-4" /> Novo Projeto
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Today's Tasks */}
           <div className="lg:col-span-2 flex flex-col gap-4">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Para Hoje</h2>
-
-            <div className="bg-[#111827] border border-[#263345] rounded-md p-8 flex flex-col items-center justify-center min-h-[250px] text-center">
-              <div className="w-16 h-16 bg-[#22c55e]/10 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle2 className="w-8 h-8 text-[#22c55e]" />
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Projetos planejados</h2>
+                <p className="mt-1 text-xs text-slate-500">{plannedProjects.length} projeto{plannedProjects.length !== 1 ? 's' : ''} aguardando inicio.</p>
               </div>
-              <h2 className="text-lg font-semibold text-slate-200 mb-2">Tudo em dia!</h2>
-              <p className="text-slate-500 max-w-sm">Você não tem fases planejadas para hoje. Aproveite para planejar sua semana ou descansar.</p>
+              <span className="rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-1 text-xs font-black text-[#22c55e]">
+                PLANEJADO
+              </span>
             </div>
+
+            {plannedProjects.length === 0 ? (
+              <div className="bg-[#111827] border border-[#263345] rounded-md p-8 flex flex-col items-center justify-center min-h-[250px] text-center">
+                <div className="w-16 h-16 bg-[#22c55e]/10 rounded-full flex items-center justify-center mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-[#22c55e]" />
+                </div>
+                <h2 className="text-lg font-semibold text-slate-200 mb-2">Nenhum projeto planejado</h2>
+                <p className="text-slate-500 max-w-sm">Crie um projeto novo ou converta uma oportunidade ganha para iniciar o planejamento.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {plannedProjects.map((project) => (
+                  <article key={project.id} className="rounded-lg border border-[#263345] bg-[#111827] p-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          {project.number && (
+                            <span className="rounded-full border border-[#18c8df]/35 bg-[#18c8df]/10 px-2.5 py-1 text-[11px] font-black text-[#18c8df]">
+                              {project.number}
+                            </span>
+                          )}
+                          <span className="rounded-full border border-[#ff7a00]/35 bg-[#ff7a00]/10 px-2.5 py-1 text-[11px] font-black text-[#ffb15c]">
+                            {project.type || 'Projeto'}
+                          </span>
+                        </div>
+                        <h3 className="truncate text-lg font-black text-slate-100">{project.name}</h3>
+                        <p className="mt-1 text-sm text-slate-400">{project.client || 'Cliente nao informado'}</p>
+                        <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-slate-300">{project.scope || project.objective || 'Escopo ainda nao informado.'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onOpenProject?.(project.id)}
+                        className="flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#374151] bg-[#070b16] px-3 py-2 text-sm font-bold text-slate-200 transition-colors hover:border-[#ff7a00] hover:text-white"
+                      >
+                        Abrir <ArrowUpRight className="h-4 w-4 text-[#ff7a00]" />
+                      </button>
+                    </div>
+                    <div className="mt-5 grid gap-3 text-xs md:grid-cols-3">
+                      <div className="rounded-md border border-[#263345] bg-[#070b16] p-3">
+                        <p className="font-bold uppercase text-slate-500">Inicio previsto</p>
+                        <p className="mt-1 font-black text-slate-100">{plannedDateLabel(project.startDate)}</p>
+                      </div>
+                      <div className="rounded-md border border-[#263345] bg-[#070b16] p-3">
+                        <p className="font-bold uppercase text-slate-500">Fim previsto</p>
+                        <p className="mt-1 font-black text-slate-100">{plannedDateLabel(project.endDate)}</p>
+                      </div>
+                      <div className="rounded-md border border-[#263345] bg-[#070b16] p-3">
+                        <p className="font-bold uppercase text-slate-500">Gestor</p>
+                        <p className="mt-1 truncate font-black text-slate-100">{project.manager || 'Nao definido'}</p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Overdue / Upcoming */}
           <div className="flex flex-col gap-4">
+            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Para Hoje</h2>
+            <div className="bg-[#111827] border border-[#263345] rounded-md p-4 flex flex-col gap-3">
+              {todayIssues.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhuma fase planejada para hoje.</p>
+              ) : todayIssues.map((issue) => (
+                <div key={issue.id} className="flex gap-3 rounded-md border border-[#263345] bg-[#070b16] p-3">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-[#22c55e]" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-200">{issue.title}</p>
+                    <p className="text-xs text-slate-500">{issue.assignee?.name || 'Sem responsavel'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Atrasadas</h2>
             <div className="bg-[#111827] border border-[#263345] rounded-md p-6 text-center text-slate-500 text-sm">
-              Nenhuma tarefa em atraso.
+              {overdueIssues.length === 0 ? 'Nenhuma tarefa em atraso.' : `${overdueIssues.length} tarefa${overdueIssues.length !== 1 ? 's' : ''} em atraso.`}
             </div>
 
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mt-4">Próximos 7 dias</h2>
             <div className="bg-[#111827] border border-[#263345] rounded-md p-4 flex flex-col gap-3">
-              {[1, 2].map((i) => (
-                <div key={i} className="flex gap-3 p-2 hover:bg-[#111827] rounded-lg transition-colors cursor-pointer border border-transparent hover:border-[#263345]">
+              {nextIssues.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhuma fase prevista nos próximos dias.</p>
+              ) : nextIssues.map((issue) => (
+                <div key={issue.id} className="flex gap-3 p-2 rounded-lg border border-transparent transition-colors hover:border-[#263345] hover:bg-[#070b16]">
                   <div className="w-8 h-8 rounded bg-[#ff7a00]/10 text-[#ff7a00] flex items-center justify-center shrink-0">
                     <Clock className="w-4 h-4" />
                   </div>
                   <div className="overflow-hidden">
-                    <p className="text-sm font-medium text-slate-200 truncate">Revisão de planejamento sprint {i}</p>
-                    <p className="text-xs text-slate-500">Quinta-feira, 14:00</p>
+                    <p className="text-sm font-medium text-slate-200 truncate">{issue.title}</p>
+                    <p className="text-xs text-slate-500">{plannedDateLabel(issue.dueDate)}</p>
                   </div>
                 </div>
               ))}

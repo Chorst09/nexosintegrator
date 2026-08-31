@@ -24,7 +24,8 @@ import {
   Mail,
   Users,
   MessageCircle,
-  StickyNote
+  StickyNote,
+  FolderKanban
 } from 'lucide-react';
 
 import PageHeader from '../components/PageHeader';
@@ -600,6 +601,38 @@ export default function Oportunidades() {
     }
   };
 
+  const handleCreateProjectFromOpportunity = async (opportunity, e) => {
+    if (e) e.stopPropagation();
+    if (!opportunity?.id) return;
+
+    if (opportunity.project?.id) {
+      navigate(`/projetos/${opportunity.project.id}`);
+      return;
+    }
+
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/from-opportunity/${opportunity.id}`), {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || `Erro ${response.status} ao criar projeto`);
+      }
+
+      setOpportunities(prev => prev.map(item => (
+        item.id === opportunity.id
+          ? { ...item, project: { id: payload.id, number: payload.number, name: payload.name, status: payload.status } }
+          : item
+      )));
+      navigate(`/projetos/${payload.id}`);
+    } catch (error) {
+      console.error('Erro ao criar projeto da oportunidade:', error);
+      alert(error.message || 'Erro ao criar projeto da oportunidade');
+    }
+  };
+
   const handleViewDetails = async (opportunity) => {
     setSelectedOpportunity(opportunity);
     setFollowUpText('');
@@ -1152,6 +1185,18 @@ export default function Oportunidades() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
+                        </div>
+                      )}
+                      {stage === 'WON' && (
+                        <div className="flex items-center gap-1.5 pt-3 border-t border-[var(--crm-border)]">
+                          <button
+                            onClick={(e) => handleCreateProjectFromOpportunity(opp, e)}
+                            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
+                            title={opp.project?.id ? 'Abrir projeto vinculado' : 'Criar projeto planejado'}
+                          >
+                            <FolderKanban className="w-3.5 h-3.5" />
+                            {opp.project?.id ? 'Abrir Projeto' : 'Criar Projeto'}
+                          </button>
                         </div>
                       )}
                     </div>

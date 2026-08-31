@@ -321,7 +321,10 @@ export default async function handler(req) {
             }
           }
         },
-        commission: true
+        commission: true,
+        project: {
+          select: { id: true, number: true, name: true, status: true }
+        }
       },
       orderBy: [
         { stage: 'asc' },
@@ -442,6 +445,9 @@ export default async function handler(req) {
             include: {
               product: true
             }
+          },
+          project: {
+            select: { id: true, number: true, name: true, status: true }
           }
         }
       });
@@ -598,6 +604,9 @@ export default async function handler(req) {
             include: {
               product: true
             }
+          },
+          project: {
+            select: { id: true, number: true, name: true, status: true }
           }
         }
       });

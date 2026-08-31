@@ -40,6 +40,55 @@ function generateProjectNumber() {
   return `PRJ-${year}-${rand}`;
 }
 
+const PROJECT_STATUSES = ['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', 'CANCELADO'];
+const PROJECT_PHASES = ['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO', 'MONITORAMENTO', 'ENCERRAMENTO'];
+const PROJECT_TYPES = ['B2B', 'B2G'];
+
+const DEFAULT_PROJECT_PHASES = [
+  { name: 'Setup Inicial', order: 1 },
+  { name: 'Kickoff Interno', order: 2 },
+  { name: 'Kickoff Externo', order: 3 },
+  { name: 'Execução', order: 4 },
+  { name: 'Monitoramento', order: 5 },
+  { name: 'Encerramento', order: 6 }
+];
+
+function normalizeProjectStatus(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PLANEJAMENTO') return 'PLANEJADO';
+  if (raw === 'EM EXECUCAO' || raw === 'EM EXECUÇÃO' || raw === 'EM PROGRESSO') return 'EM_ANDAMENTO';
+  if (raw === 'EM RISCO') return 'PAUSADO';
+  if (raw === 'CONCLUÍDO') return 'CONCLUIDO';
+  return PROJECT_STATUSES.includes(raw) ? raw : 'PLANEJADO';
+}
+
+function normalizeProjectPhase(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  return PROJECT_PHASES.includes(raw) ? raw : 'SETUP';
+}
+
+function normalizeProjectType(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  return PROJECT_TYPES.includes(raw) ? raw : null;
+}
+
+function normalizeProjectMetadata(metadata, fallback = {}) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return fallback;
+  return Object.entries(metadata).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    if (typeof value === 'string') {
+      acc[key] = value.trim();
+      return acc;
+    }
+    acc[key] = value;
+    return acc;
+  }, { ...fallback });
+}
+
+function isForeignKeyError(error) {
+  return error?.code === 'P2003';
+}
+
 // Dashboard / KPIs
 router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
@@ -150,54 +199,83 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Criar projeto manualmente
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, description, type, companyId, projectManagerId, budget, plannedStartDate, plannedEndDate, opportunityId, contractId } = req.body;
+    const {
+      name,
+      description,
+      type,
+      status,
+      phase,
+      companyId,
+      projectManagerId,
+      budget,
+      plannedStartDate,
+      plannedEndDate,
+      opportunityId,
+      contractId,
+      metadata
+    } = req.body;
+    const normalizedType = normalizeProjectType(type);
+    const normalizedStatus = normalizeProjectStatus(status);
+    const normalizedPhase = normalizeProjectPhase(phase);
 
-    if (!name || !type || !companyId || !projectManagerId) {
+    if (!name || !normalizedType || !companyId || !projectManagerId) {
       return res.status(400).json({ error: 'Nome, tipo, empresa e gestor são obrigatórios' });
     }
 
+    const [company, manager] = await Promise.all([
+      prisma.company.findUnique({ where: { id: companyId }, select: { id: true, clientType: true } }),
+      prisma.user.findUnique({ where: { id: projectManagerId }, select: { id: true } })
+    ]);
+
+    if (!company) return res.status(404).json({ error: 'Empresa não encontrada' });
+    if (!manager) return res.status(404).json({ error: 'Gestor do projeto não encontrado' });
+
     const projectNumber = generateProjectNumber();
 
-    const project = await prisma.project.create({
-      data: {
-        number: projectNumber,
-        name,
-        description,
-        type,
-        budget: budget ? parseFloat(budget) : 0,
-        plannedStartDate: plannedStartDate ? new Date(plannedStartDate) : null,
-        plannedEndDate: plannedEndDate ? new Date(plannedEndDate) : null,
-        companyId,
-        projectManagerId,
-        createdBy: req.user.id,
-        opportunityId: opportunityId || null,
-        contractId: contractId || null,
-        phases: {
-          create: [
-            { name: 'Setup Inicial', order: 1 },
-            { name: 'Kickoff Interno', order: 2 },
-            { name: 'Kickoff Externo', order: 3 },
-            { name: 'Execução', order: 4 },
-            { name: 'Encerramento', order: 5 }
-          ]
+    const project = await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          number: projectNumber,
+          name: String(name).trim(),
+          description,
+          type: normalizedType,
+          status: normalizedStatus,
+          phase: normalizedPhase,
+          budget: budget ? parseFloat(budget) : 0,
+          plannedStartDate: plannedStartDate ? new Date(plannedStartDate) : null,
+          plannedEndDate: plannedEndDate ? new Date(plannedEndDate) : null,
+          companyId,
+          projectManagerId,
+          createdBy: req.user.id,
+          opportunityId: opportunityId || null,
+          contractId: contractId || null,
+          metadata: normalizeProjectMetadata(metadata),
+          phases: {
+            create: DEFAULT_PROJECT_PHASES
+          }
+        },
+        include: {
+          company: { select: { id: true, name: true, clientType: true } },
+          projectManager: { select: { id: true, name: true, email: true } },
+          phases: true
         }
-      },
-      include: {
-        company: { select: { id: true, name: true } },
-        projectManager: { select: { id: true, name: true } },
-        phases: true
-      }
-    });
+      });
 
-    if (type === 'B2G') {
-      await prisma.projectB2GConfig.create({ data: { projectId: project.id } });
-    } else {
-      await prisma.projectB2BConfig.create({ data: { projectId: project.id } });
-    }
+      if (normalizedType === 'B2G') {
+        await tx.projectB2GConfig.create({ data: { projectId: created.id } });
+      } else {
+        await tx.projectB2BConfig.create({ data: { projectId: created.id } });
+      }
+
+      return created;
+    });
 
     res.status(201).json(project);
   } catch (error) {
     console.error('Erro ao criar projeto:', error);
+    if (isForeignKeyError(error)) {
+      return res.status(400).json({ error: 'Empresa, gestor, oportunidade ou contrato inválido para o projeto' });
+    }
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -209,6 +287,7 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
       where: { id: req.params.opportunityId },
       include: {
         company: { select: { id: true, name: true, clientType: true } },
+        owner: { select: { id: true, name: true, email: true } },
         proposals: { where: { status: 'ACCEPTED' }, take: 1 },
         products: { include: { product: true } }
       }
@@ -222,44 +301,56 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
 
     const projectNumber = generateProjectNumber();
     const clientType = opportunity.company?.clientType || 'B2B';
+    const projectType = clientType === 'B2G' ? 'B2G' : 'B2B';
+    const projectManagerId = opportunity.ownerId || req.user.id;
 
-    const project = await prisma.project.create({
-      data: {
-        number: projectNumber,
-        name: opportunity.title,
-        description: opportunity.description || '',
-        type: clientType === 'B2G' ? 'B2G' : 'B2B',
-        budget: opportunity.value,
-        companyId: opportunity.companyId,
-        projectManagerId: req.user.id,
-        createdBy: req.user.id,
-        opportunityId: opportunity.id,
-        phases: {
-          create: [
-            { name: 'Setup Inicial', order: 1 },
-            { name: 'Kickoff Interno', order: 2 },
-            { name: 'Kickoff Externo', order: 3 },
-            { name: 'Execução', order: 4 },
-            { name: 'Encerramento', order: 5 }
-          ]
+    const project = await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          number: projectNumber,
+          name: opportunity.projectName || opportunity.title,
+          description: opportunity.description || '',
+          type: projectType,
+          status: 'PLANEJADO',
+          phase: 'SETUP',
+          budget: opportunity.value || 0,
+          companyId: opportunity.companyId,
+          projectManagerId,
+          createdBy: req.user.id,
+          opportunityId: opportunity.id,
+          metadata: normalizeProjectMetadata({
+            objective: opportunity.title || '',
+            scope: opportunity.description || '',
+            sourceOpportunityNumber: opportunity.number,
+            sourceOpportunityStage: opportunity.stage,
+            sourceProposalId: opportunity.proposals?.[0]?.id || null
+          }),
+          phases: {
+            create: DEFAULT_PROJECT_PHASES
+          }
+        },
+        include: {
+          company: { select: { id: true, name: true, clientType: true } },
+          projectManager: { select: { id: true, name: true, email: true } },
+          phases: true
         }
-      },
-      include: {
-        company: { select: { id: true, name: true } },
-        projectManager: { select: { id: true, name: true } },
-        phases: true
-      }
-    });
+      });
 
-    if (clientType === 'B2G') {
-      await prisma.projectB2GConfig.create({ data: { projectId: project.id } });
-    } else {
-      await prisma.projectB2BConfig.create({ data: { projectId: project.id } });
-    }
+      if (projectType === 'B2G') {
+        await tx.projectB2GConfig.create({ data: { projectId: created.id } });
+      } else {
+        await tx.projectB2BConfig.create({ data: { projectId: created.id } });
+      }
+
+      return created;
+    });
 
     res.status(201).json(project);
   } catch (error) {
     console.error('Erro ao criar projeto da oportunidade:', error);
+    if (isForeignKeyError(error)) {
+      return res.status(400).json({ error: 'Dados inválidos para criar o projeto da oportunidade' });
+    }
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -267,34 +358,38 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
 // Atualizar projeto
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, description, status, phase, budget, healthScore, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate, projectManagerId } = req.body;
+    const { name, description, status, phase, budget, healthScore, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate, projectManagerId, metadata } = req.body;
 
     const updateData = {};
     if (name) updateData.name = name;
     if (description !== undefined) updateData.description = description;
-    if (status) updateData.status = status;
-    if (phase) updateData.phase = phase;
+    if (status) updateData.status = normalizeProjectStatus(status);
+    if (phase) updateData.phase = normalizeProjectPhase(phase);
     if (budget !== undefined) updateData.budget = parseFloat(budget);
     if (healthScore !== undefined) updateData.healthScore = parseInt(healthScore);
     if (progressPercent !== undefined) updateData.progressPercent = parseInt(progressPercent);
-    if (plannedStartDate) updateData.plannedStartDate = new Date(plannedStartDate);
-    if (plannedEndDate) updateData.plannedEndDate = new Date(plannedEndDate);
-    if (actualStartDate) updateData.actualStartDate = new Date(actualStartDate);
-    if (actualEndDate) updateData.actualEndDate = new Date(actualEndDate);
+    if (plannedStartDate !== undefined) updateData.plannedStartDate = plannedStartDate ? new Date(plannedStartDate) : null;
+    if (plannedEndDate !== undefined) updateData.plannedEndDate = plannedEndDate ? new Date(plannedEndDate) : null;
+    if (actualStartDate !== undefined) updateData.actualStartDate = actualStartDate ? new Date(actualStartDate) : null;
+    if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
     if (projectManagerId) updateData.projectManagerId = projectManagerId;
+    if (metadata !== undefined) updateData.metadata = normalizeProjectMetadata(metadata);
 
     const project = await prisma.project.update({
       where: { id: req.params.id },
       data: updateData,
       include: {
-        company: { select: { id: true, name: true } },
-        projectManager: { select: { id: true, name: true } }
+        company: { select: { id: true, name: true, clientType: true } },
+        projectManager: { select: { id: true, name: true, email: true } }
       }
     });
 
     res.json(project);
   } catch (error) {
     console.error('Erro ao atualizar projeto:', error);
+    if (isForeignKeyError(error)) {
+      return res.status(400).json({ error: 'Gestor inválido para este projeto' });
+    }
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
