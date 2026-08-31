@@ -343,6 +343,7 @@ export default function Administracao() {
     email: '',
     password: '',
     role: 'USER',
+    tenantCompanyId: '',
     regionId: '',
     quota: '',
     accessB2B: true,
@@ -782,6 +783,7 @@ export default function Administracao() {
       email: '',
       password: '',
       role: 'USER',
+      tenantCompanyId: isMasterSession ? '' : contractedCompany?.id || '',
       regionId: '',
       quota: '',
       commissionSalePercentage: '',
@@ -813,6 +815,7 @@ export default function Administracao() {
       email: user?.email || '',
       password: '',
       role: normalizedRole,
+      tenantCompanyId: user?.tenantCompanyId || user?.tenantCompany?.id || '',
       regionId: user?.region?.id || user?.regionId || '',
       quota: typeof user?.quota === 'number' ? String(user.quota) : '',
       commissionSalePercentage: user?.commissionSalePercentage != null ? String(user.commissionSalePercentage) : '',
@@ -845,6 +848,7 @@ export default function Administracao() {
         name: userForm.name?.trim(),
         email: userForm.email?.trim(),
         role: normalizeRole(userForm.role),
+        tenantCompanyId: userForm.tenantCompanyId || null,
         regionId: userForm.regionId || null,
         quota: userForm.quota === '' ? null : Number(userForm.quota),
         commissionSalePercentage: userForm.commissionSalePercentage === '' ? null : Number(userForm.commissionSalePercentage),
@@ -2089,6 +2093,7 @@ export default function Administracao() {
   };
 
   const usersColumns = useMemo(() => {
+    const companyById = new Map(licensingCompanies.map((company) => [company.id, company]));
     return [
       {
         key: 'name',
@@ -2108,6 +2113,18 @@ export default function Administracao() {
             {roleLabel(u.role)}
           </span>
         )
+      },
+      {
+        key: 'tenantCompany',
+        label: 'Empresa',
+        render: (u) => {
+          const company = u.tenantCompany || companyById.get(u.tenantCompanyId);
+          return (
+            <div className="text-sm text-gray-900 dark:text-gray-100">
+              {company?.name || company?.legalName || '-'}
+            </div>
+          );
+        }
       },
       {
         key: 'region',
@@ -2159,7 +2176,7 @@ export default function Administracao() {
         )
       }
     ];
-  }, [regions]);
+  }, [licensingCompanies]);
 
   const logoSrc = resolvePublicUrl(settings.logoUrl);
   const pageTitle = isAdministrationRoute ? 'Administração' : 'Configurações';
@@ -3649,6 +3666,28 @@ export default function Administracao() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-100 mb-1">Empresa vinculada</label>
+              <select
+                value={userForm.tenantCompanyId || ''}
+                onChange={(e) => setUserForm((f) => ({ ...f, tenantCompanyId: e.target.value }))}
+                disabled={!isMasterSession}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+              >
+                <option value="">Sem empresa vinculada</option>
+                {licensingCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name || company.legalName || 'Empresa sem nome'}
+                  </option>
+                ))}
+              </select>
+              {!isMasterSession && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-300">
+                  Administradores criam usuários dentro da própria empresa.
+                </p>
+              )}
             </div>
           </div>
 

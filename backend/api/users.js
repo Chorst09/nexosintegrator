@@ -85,6 +85,7 @@ const sanitizeUser = (user) => {
     role,
     region: user.region,
     regionId: user.regionId || user.region?.id || null,
+    tenantCompany: user.tenantCompany || null,
     quota: user.quota,
     commissionSalePercentage: user.commissionSalePercentage ?? null,
     commissionProject12: user.commissionProject12 ?? null,
@@ -134,6 +135,7 @@ export default async function handler(req) {
           commissionProject48: true,
           commissionProject60: true,
           tenantCompanyId: true,
+          tenantCompany: { select: { id: true, name: true, legalName: true, status: true } },
           accessB2B: true,
           accessB2G: true,
           accessPreSales: true,
@@ -174,6 +176,7 @@ export default async function handler(req) {
         commissionProject48: true,
         commissionProject60: true,
         tenantCompanyId: true,
+        tenantCompany: { select: { id: true, name: true, legalName: true, status: true } },
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
@@ -242,6 +245,9 @@ export default async function handler(req) {
     const tenantCompany = tenantCompanyId
       ? await prisma.tenantCompany.findUnique({ where: { id: tenantCompanyId }, select: selectTenantAccess })
       : null;
+    if (tenantCompanyId && !tenantCompany) {
+      return Response.json({ error: 'Empresa vinculada não encontrada' }, { status: 400 });
+    }
 
     const requestedAccess = resolveUserAccess(role, {
       accessB2B: body.accessB2B,
@@ -297,6 +303,7 @@ export default async function handler(req) {
         commissionProject48: true,
         commissionProject60: true,
         tenantCompanyId: true,
+        tenantCompany: { select: { id: true, name: true, legalName: true, status: true } },
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
@@ -357,6 +364,9 @@ export default async function handler(req) {
     const tenantCompany = nextTenantCompanyId
       ? await prisma.tenantCompany.findUnique({ where: { id: nextTenantCompanyId }, select: selectTenantAccess })
       : null;
+    if (nextTenantCompanyId && !tenantCompany) {
+      return Response.json({ error: 'Empresa vinculada não encontrada' }, { status: 400 });
+    }
 
     const requestedAccess = resolveUserAccess(nextRole, {
       accessB2B: body.accessB2B,
@@ -439,6 +449,7 @@ export default async function handler(req) {
         commissionProject48: true,
         commissionProject60: true,
         tenantCompanyId: true,
+        tenantCompany: { select: { id: true, name: true, legalName: true, status: true } },
         accessB2B: true,
         accessB2G: true,
         accessPreSales: true,
