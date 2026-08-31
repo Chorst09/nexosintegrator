@@ -203,11 +203,19 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "Opportunity"
       ADD COLUMN IF NOT EXISTS "number" TEXT,
+      ADD COLUMN IF NOT EXISTS "projectName" TEXT,
+      ADD COLUMN IF NOT EXISTS "projectClientType" TEXT,
       ADD COLUMN IF NOT EXISTS "b2gStage" TEXT,
       ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
       ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER,
       ADD COLUMN IF NOT EXISTS "stageDecisionDetails" JSONB,
       ADD COLUMN IF NOT EXISTS "tenantCompanyId" TEXT;
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    UPDATE "Opportunity"
+      SET "projectName" = "title"
+      WHERE "projectName" IS NULL;
   `);
 
   await prisma.$executeRawUnsafe(`

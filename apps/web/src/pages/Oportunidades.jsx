@@ -474,7 +474,7 @@ export default function Oportunidades() {
           : (payloadFormData.description ? JSON.stringify(payloadFormData.description) : null),
         value: Number.isFinite(parsedValue) ? parsedValue : 0,
         probability: Number.isFinite(parsedProbability) ? Math.min(100, Math.max(0, parsedProbability)) : 50,
-        stage: selectedOpportunity ? (selectedOpportunity.stage || payloadFormData.stage || 'LEAD') : (payloadFormData.stage || 'LEAD'),
+        stage: payloadFormData.stage || selectedOpportunity?.stage || 'LEAD',
         source: payloadFormData.source || null,
         expectedCloseDate: (() => {
           const v = payloadFormData.expectedCloseDate || '';

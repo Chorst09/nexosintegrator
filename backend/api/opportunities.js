@@ -372,6 +372,8 @@ export default async function handler(req) {
         data: {
           number,
           title: body.title,
+          projectName: body.projectName || body.title,
+          projectClientType: body.projectClientType || null,
           projectType,
           projectMonths,
           description: body.description,
@@ -457,6 +459,7 @@ export default async function handler(req) {
         stageDecisionDetails: true,
         source: true,
         description: true,
+        companyId: true,
         company: { select: { clientType: true, segment: true } }
       }
     });
@@ -480,9 +483,11 @@ export default async function handler(req) {
       b2gStage: body.b2gStage !== undefined ? (body.b2gStage || null) : existing.b2gStage
     });
     const updateData = {};
-    if (body.stage) updateData.stage = body.stage;
+    if (body.stage !== undefined) updateData.stage = body.stage;
     if (body.b2gStage !== undefined) updateData.b2gStage = body.b2gStage || null;
-    if (body.title) updateData.title = body.title;
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.projectName !== undefined) updateData.projectName = body.projectName || body.title || null;
+    if (body.projectClientType !== undefined) updateData.projectClientType = body.projectClientType || null;
     if (body.projectType !== undefined) {
       updateData.projectType = normalizeProjectType(body.projectType);
       updateData.projectMonths = normalizeProjectMonths(updateData.projectType, body.projectMonths);
@@ -492,7 +497,25 @@ export default async function handler(req) {
     if (body.description !== undefined) updateData.description = body.description;
     if (body.value !== undefined) updateData.value = body.value;
     if (body.probability !== undefined) updateData.probability = body.probability;
-    if (body.expectedCloseDate) updateData.expectedCloseDate = new Date(body.expectedCloseDate);
+    if (body.expectedCloseDate !== undefined) {
+      updateData.expectedCloseDate = body.expectedCloseDate ? new Date(body.expectedCloseDate) : null;
+    }
+    if (body.source !== undefined) updateData.source = body.source || null;
+    if (body.companyId !== undefined && body.companyId) {
+      if (getTenantCompanyId(req.user)) {
+        const company = await prisma.company.findUnique({
+          where: { id: body.companyId },
+          select: { tenantCompanyId: true }
+        });
+        if (!company || String(company.tenantCompanyId || '') !== String(getTenantCompanyId(req.user))) {
+          return new Response('Empresa não pertence a este tenant', { status: 403 });
+        }
+      }
+      updateData.companyId = body.companyId;
+    }
+    if (body.ownerId !== undefined && body.ownerId && canSeeAllOpportunities(req.user)) {
+      updateData.ownerId = body.ownerId;
+    }
     if (body.lossReason !== undefined) {
       updateData.lossReason = body.lossReason || null;
     } else if (stageDecisionDetails !== undefined) {
@@ -538,6 +561,9 @@ export default async function handler(req) {
     // Atualizar lead score da empresa
     try {
       await updateCompanyLeadScore(opportunity.companyId);
+      if (existing.companyId && existing.companyId !== opportunity.companyId) {
+        await updateCompanyLeadScore(existing.companyId);
+      }
     } catch (error) {
       console.error('Erro ao atualizar lead score:', error);
     }

@@ -9,8 +9,15 @@ async function main() {
   try {
     await prisma.$executeRawUnsafe(`
       ALTER TABLE "Opportunity"
+        ADD COLUMN IF NOT EXISTS "projectName" TEXT,
+        ADD COLUMN IF NOT EXISTS "projectClientType" TEXT,
         ADD COLUMN IF NOT EXISTS "projectType" TEXT NOT NULL DEFAULT 'SINGLE',
         ADD COLUMN IF NOT EXISTS "projectMonths" INTEGER;
+    `);
+    await prisma.$executeRawUnsafe(`
+      UPDATE "Opportunity"
+        SET "projectName" = "title"
+        WHERE "projectName" IS NULL;
     `);
     await prisma.$executeRawUnsafe(`
       ALTER TABLE "Commission"

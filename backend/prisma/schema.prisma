@@ -227,6 +227,8 @@ model Opportunity {
   id              String   @id @default(uuid())
   number          String?  @unique
   title           String
+  projectName     String?
+  projectClientType String?
   b2gStage        String?
   projectType     String   @default("SINGLE")
   projectMonths   Int?
