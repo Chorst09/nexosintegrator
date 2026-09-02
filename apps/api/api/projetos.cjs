@@ -66,6 +66,209 @@ function normalizeProjectMetadata(metadata, fallback = {}) {
   }, { ...fallback });
 }
 
+function parseGeminiJson(text) {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('Gemini não retornou conteúdo para análise');
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    throw error;
+  }
+}
+
+function sanitizeText(value, fallback = '') {
+  return String(value || fallback).trim();
+}
+
+function sanitizeTextArray(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeText(item)).filter(Boolean);
+  }
+  const text = sanitizeText(value);
+  return text ? [text] : [];
+}
+
+function sanitizeAiPhases(phases) {
+  if (!Array.isArray(phases)) return [];
+  return phases
+    .map((phase, index) => {
+      const requirements = sanitizeTextArray(phase?.requirements);
+      const materials = sanitizeTextArray(phase?.materials);
+      const descriptionParts = [
+        sanitizeText(phase?.description),
+        sanitizeText(phase?.deliverable) ? `Entregável: ${sanitizeText(phase.deliverable)}` : '',
+        requirements.length ? `Requisitos: ${requirements.join('; ')}` : '',
+        materials.length ? `Materiais: ${materials.join('; ')}` : ''
+      ].filter(Boolean);
+
+      return {
+        name: sanitizeText(phase?.name, `Fase ${index + 1}`),
+        description: descriptionParts.join('\n'),
+        order: Number.isFinite(Number(phase?.order)) ? Number(phase.order) : index + 1,
+        plannedStartDay: Number.isFinite(Number(phase?.plannedStartDay)) ? Number(phase.plannedStartDay) : null,
+        plannedEndDay: Number.isFinite(Number(phase?.plannedEndDay)) ? Number(phase.plannedEndDay) : null,
+        deliverable: sanitizeText(phase?.deliverable),
+        requirements,
+        materials
+      };
+    })
+    .filter((phase) => phase.name)
+    .slice(0, 12);
+}
+
+function sanitizeAiProjectAnalysis(value) {
+  const phases = sanitizeAiPhases(value?.phases);
+  return {
+    name: sanitizeText(value?.name),
+    type: String(value?.type || '').toUpperCase() === 'B2G' ? 'B2G' : String(value?.type || '').toUpperCase() === 'B2B' ? 'B2B' : undefined,
+    objective: sanitizeText(value?.objective),
+    scope: sanitizeText(value?.scope),
+    deliverables: sanitizeTextArray(value?.deliverables),
+    successCriteria: sanitizeTextArray(value?.successCriteria),
+    risks: sanitizeTextArray(value?.risks),
+    notes: sanitizeText(value?.notes),
+    phases
+  };
+}
+
+function buildProjectPhaseCreates(phases, plannedStartDate) {
+  const sanitized = sanitizeAiPhases(phases);
+  if (sanitized.length === 0) {
+    return [
+      { name: 'Setup Inicial', order: 1 },
+      { name: 'Kickoff Interno', order: 2 },
+      { name: 'Kickoff Externo', order: 3 },
+      { name: 'Execução', order: 4 },
+      { name: 'Encerramento', order: 5 }
+    ];
+  }
+
+  const start = plannedStartDate ? new Date(plannedStartDate) : null;
+  const isValidStart = start && !Number.isNaN(start.getTime());
+
+  return sanitized.map((phase, index) => {
+    const data = {
+      name: phase.name,
+      description: phase.description || null,
+      order: phase.order || index + 1
+    };
+
+    if (isValidStart && phase.plannedStartDay) {
+      data.plannedStartDate = new Date(start.getTime() + (phase.plannedStartDay - 1) * 24 * 60 * 60 * 1000);
+    }
+    if (isValidStart && phase.plannedEndDay) {
+      data.plannedEndDate = new Date(start.getTime() + (phase.plannedEndDay - 1) * 24 * 60 * 60 * 1000);
+    }
+
+    return data;
+  });
+}
+
+// Analisar edital/escopo com Gemini e retornar campos prontos para o cadastro
+router.post('/ai-analyze', authenticateToken, async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada no backend' });
+    }
+
+    const sourceText = sanitizeText(req.body?.sourceText);
+    if (sourceText.length < 80) {
+      return res.status(400).json({ error: 'Informe um texto de edital ou análise com conteúdo suficiente para a IA.' });
+    }
+
+    const model = process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview';
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+
+    const prompt = `
+Você é um gerente de projeto sênior especializado em implantação de tecnologia, licitações e contratos B2B/B2G.
+Analise o conteúdo abaixo e retorne exclusivamente um JSON válido com os campos solicitados.
+
+Contexto já informado:
+- Nome atual do projeto: ${sanitizeText(req.body?.projectName, 'não informado')}
+- Tipo atual: ${sanitizeText(req.body?.projectType, 'não informado')}
+- Cliente atual: ${sanitizeText(req.body?.client, 'não informado')}
+
+Regras:
+- Gere objetivo, escopo, entregáveis, critérios de sucesso, riscos e observações.
+- Gere fases sequenciais com nome, descrição, entregável, requisitos, materiais quando existirem, e prazo em dias relativos à assinatura/início.
+- Use linguagem objetiva em português do Brasil.
+- Não invente dados financeiros, nomes de pessoas ou datas absolutas se o texto não trouxer.
+- Preserve requisitos críticos, SLAs, materiais obrigatórios, marcos e restrições logísticas.
+
+Formato JSON obrigatório:
+{
+  "name": "nome sugerido do projeto",
+  "type": "B2B ou B2G",
+  "objective": "objetivo do projeto",
+  "scope": "escopo consolidado",
+  "deliverables": ["entregável 1"],
+  "successCriteria": ["critério 1"],
+  "risks": ["risco 1"],
+  "notes": "observações executivas",
+  "phases": [
+    {
+      "name": "nome da fase",
+      "description": "descrição da fase",
+      "order": 1,
+      "plannedStartDay": 1,
+      "plannedEndDay": 50,
+      "deliverable": "produto/entregável da fase",
+      "requirements": ["requisito de gestão, técnico, documental ou SLA"],
+      "materials": ["material obrigatório quando existir"]
+    }
+  ]
+}
+
+Conteúdo para análise:
+${sourceText}
+`.trim();
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json'
+        }
+      })
+    });
+
+    clearTimeout(timeout);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = payload?.error?.message || `Erro ${response.status} ao consultar Gemini`;
+      return res.status(response.status).json({ error: message });
+    }
+
+    const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
+    const parsed = parseGeminiJson(text);
+    res.json({ analysis: sanitizeAiProjectAnalysis(parsed), model });
+  } catch (error) {
+    console.error('Erro ao analisar projeto com Gemini:', error);
+    if (error?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Tempo esgotado ao analisar com Gemini' });
+    }
+    res.status(500).json({ error: 'Erro ao analisar projeto com Gemini' });
+  }
+});
+
 // Dashboard / KPIs
 router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
@@ -181,7 +384,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Criar projeto manualmente
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, description, type, companyId, projectManagerId, status, phase, budget, plannedStartDate, plannedEndDate, opportunityId, contractId, metadata } = req.body;
+    const { name, description, type, companyId, projectManagerId, status, phase, budget, plannedStartDate, plannedEndDate, opportunityId, contractId, metadata, phases } = req.body;
 
     if (!name || !type || !companyId || !projectManagerId) {
       return res.status(400).json({ error: 'Nome, tipo, empresa e gestor são obrigatórios' });
@@ -207,13 +410,7 @@ router.post('/', authenticateToken, async (req, res) => {
         contractId: contractId || null,
         metadata: normalizeProjectMetadata(metadata),
         phases: {
-          create: [
-            { name: 'Setup Inicial', order: 1 },
-            { name: 'Kickoff Interno', order: 2 },
-            { name: 'Kickoff Externo', order: 3 },
-            { name: 'Execução', order: 4 },
-            { name: 'Encerramento', order: 5 }
-          ]
+          create: buildProjectPhaseCreates(phases, plannedStartDate)
         }
       },
       include: {
