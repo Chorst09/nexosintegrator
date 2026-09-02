@@ -245,6 +245,135 @@ Ficou acordado que os próximos acompanhamentos serão conduzidos conforme a gov
   }
 };
 
+const MINUTES_STORAGE_VERSION = 1;
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const safeFileName = (value) => String(value || 'ata-kickoff')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase() || 'ata-kickoff';
+
+const parseMinutesDocuments = (rawNotes) => {
+  const raw = String(rawNotes || '').trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.type === 'kickoff-minutes' && Array.isArray(parsed.documents)) {
+      return parsed.documents.map((document) => ({
+        id: String(document.id || `ata-${Date.now()}`),
+        templateKey: document.templateKey || 'CUSTOM',
+        title: document.title || 'Ata de Kickoff',
+        content: document.content || '',
+        createdAt: document.createdAt || new Date().toISOString(),
+        updatedAt: document.updatedAt || document.createdAt || new Date().toISOString()
+      }));
+    }
+  } catch {
+    // Texto antigo de ata continua sendo tratado como uma ata editável.
+  }
+
+  return [{
+    id: 'legacy-minutes',
+    templateKey: 'LEGACY',
+    title: 'Ata salva anteriormente',
+    content: raw,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }];
+};
+
+const serializeMinutesDocuments = (documents) => JSON.stringify({
+  type: 'kickoff-minutes',
+  version: MINUTES_STORAGE_VERSION,
+  documents
+});
+
+const buildMinutesPdfHtml = ({ meeting, document }) => {
+  const generatedAt = new Date().toLocaleString('pt-BR');
+  const fileName = `${safeFileName(document.title)}.pdf`;
+  const participants = (meeting.participants || [])
+    .map((participant) => participant.user?.name || participant.contact?.name)
+    .filter(Boolean)
+    .join(', ');
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(fileName)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 18px; background: #111827; color: #f8fafc; box-shadow: 0 4px 18px rgba(15,23,42,.18); }
+    .toolbar strong { font-size: 14px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { border: 0; border-radius: 6px; padding: 9px 12px; font-weight: 800; cursor: pointer; }
+    .primary { background: #4f46e5; color: #fff; }
+    .secondary { background: #263345; color: #fff; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; padding: 18mm; background: #fff; box-shadow: 0 20px 45px rgba(15,23,42,.2); }
+    .hero { border-bottom: 4px solid #4f46e5; padding-bottom: 18px; margin-bottom: 18px; }
+    .eyebrow { color: #4f46e5; font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 6px 0 8px; font-size: 30px; line-height: 1.1; color: #0f172a; }
+    .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 18px; margin-top: 14px; font-size: 12px; }
+    .meta div { border-bottom: 1px solid #eef2f7; padding-bottom: 7px; }
+    .meta span { display: block; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; }
+    .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #dbe3ee; display: flex; justify-content: space-between; color: #64748b; font-size: 10px; }
+    @page { size: A4; margin: 10mm; }
+    @media print {
+      body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .toolbar { display: none; }
+      .page { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <strong>Visualizacao PDF - ${escapeHtml(document.title)}</strong>
+    <div class="actions">
+      <button class="secondary" onclick="window.close()">Fechar</button>
+      <button class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+  </div>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Ata de Kickoff</div>
+      <h1>${escapeHtml(document.title)}</h1>
+      <div class="meta">
+        <div><span>Reuniao</span>${escapeHtml(meeting.title || '-')}</div>
+        <div><span>Numero</span>${escapeHtml(meeting.number || '-')}</div>
+        <div><span>Cliente</span>${escapeHtml(meeting.company?.name || '-')}</div>
+        <div><span>Oportunidade</span>${escapeHtml(meeting.opportunity?.title || '-')}</div>
+        <div><span>Data</span>${formatMeetingDate(meeting.scheduledDate)}</div>
+        <div><span>Horario</span>${escapeHtml(`${meeting.startTime || '-'}${meeting.endTime ? ` as ${meeting.endTime}` : ''}`)}</div>
+        <div><span>Responsavel</span>${escapeHtml(meeting.owner?.name || '-')}</div>
+        <div><span>Gerado em</span>${escapeHtml(generatedAt)}</div>
+      </div>
+      <div class="meta">
+        <div><span>Participantes</span>${escapeHtml(participants || '-')}</div>
+        <div><span>Arquivo sugerido</span>${escapeHtml(fileName)}</div>
+      </div>
+    </section>
+    <section class="content">${escapeHtml(document.content || '')}</section>
+    <div class="footer">
+      <span>Nexos Integrator - Gestao de Kickoff</span>
+      <span>${escapeHtml(fileName)}</span>
+    </div>
+  </main>
+</body>
+</html>`;
+};
+
 const Kickoff = () => {
   const [searchParams] = useSearchParams();
   const companyIdFilter = searchParams.get('companyId') || '';
@@ -1310,7 +1439,6 @@ const KickoffFormModal = ({ onClose, onSaved, meeting, initialContext = null }) 
 // ===== MODAL DETALHES =====
 const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [notes, setNotes] = useState(meeting.meetingNotes || '');
   const [actionForm, setActionForm] = useState({ title: '', description: '', priority: 'MEDIUM', dueDate: '', assigneeId: '' });
   const [users, setUsers] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -1322,6 +1450,13 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
   const [tratativaDraft, setTratativaDraft] = useState('');
   const [editingTratativaId, setEditingTratativaId] = useState(null);
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const [minutesDocuments, setMinutesDocuments] = useState(() => parseMinutesDocuments(meeting.meetingNotes));
+  const [minutesEditor, setMinutesEditor] = useState(null);
+  const [savingMinutes, setSavingMinutes] = useState(false);
+
+  useEffect(() => {
+    setMinutesDocuments(parseMinutesDocuments(meeting.meetingNotes));
+  }, [meeting.id, meeting.meetingNotes]);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -1353,7 +1488,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
     if (res.ok) {
       const data = await res.json();
       onMeetingChange(data);
-      setNotes(data.meetingNotes || '');
+      setMinutesDocuments(parseMinutesDocuments(data.meetingNotes));
     }
     onRefresh();
   };
@@ -1369,15 +1504,21 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
     }
   };
 
-  const saveNotes = async () => {
+  const persistMinutesDocuments = async (documents) => {
     const res = await fetch(buildApiUrl(`/kickoff/meetings/${meeting.id}/notes`), {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ meetingNotes: notes })
+      body: JSON.stringify({ meetingNotes: serializeMinutesDocuments(documents) })
     });
     if (res.ok) {
-      await refresh();
+      const updatedMeeting = await res.json();
+      onMeetingChange(updatedMeeting);
+      setMinutesDocuments(parseMinutesDocuments(updatedMeeting.meetingNotes));
+      onRefresh();
+      return updatedMeeting;
     }
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || 'Erro ao salvar ata');
   };
 
   const toggleChecklist = async (item) => {
@@ -1491,11 +1632,81 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
     if (res.ok) await refresh();
   };
 
-  const applyMinutesTemplate = (templateKey) => {
+  const openMinutesEditorFromTemplate = (templateKey) => {
     const template = MINUTES_TEMPLATES[templateKey];
     if (!template) return;
-    if (notes.trim() && !window.confirm('Substituir o texto atual da ata por este modelo?')) return;
-    setNotes(template.buildNotes(meeting));
+    setMinutesEditor({
+      id: null,
+      templateKey,
+      title: template.title,
+      content: template.buildNotes(meeting)
+    });
+  };
+
+  const editMinutesDocument = (document) => {
+    setMinutesEditor({
+      id: document.id,
+      templateKey: document.templateKey,
+      title: document.title,
+      content: document.content
+    });
+  };
+
+  const saveMinutesDocument = async () => {
+    if (!minutesEditor?.title?.trim()) {
+      alert('Informe o título da ATA.');
+      return;
+    }
+    if (!minutesEditor?.content?.trim()) {
+      alert('Digite o conteúdo da ATA antes de salvar.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const document = {
+      id: minutesEditor.id || `ata-${Date.now()}`,
+      templateKey: minutesEditor.templateKey || 'CUSTOM',
+      title: minutesEditor.title.trim(),
+      content: minutesEditor.content,
+      createdAt: minutesDocuments.find((item) => item.id === minutesEditor.id)?.createdAt || now,
+      updatedAt: now
+    };
+    const nextDocuments = minutesEditor.id
+      ? minutesDocuments.map((item) => item.id === minutesEditor.id ? document : item)
+      : [document, ...minutesDocuments.filter((item) => item.id !== document.id)];
+
+    setSavingMinutes(true);
+    try {
+      await persistMinutesDocuments(nextDocuments);
+      setMinutesEditor(null);
+    } catch (error) {
+      console.error('Erro ao salvar ATA:', error);
+      alert(error.message || 'Erro ao salvar ATA');
+    } finally {
+      setSavingMinutes(false);
+    }
+  };
+
+  const deleteMinutesDocument = async (document) => {
+    if (!window.confirm(`Excluir a ATA "${document.title}"?`)) return;
+    const nextDocuments = minutesDocuments.filter((item) => item.id !== document.id);
+    try {
+      await persistMinutesDocuments(nextDocuments);
+    } catch (error) {
+      console.error('Erro ao excluir ATA:', error);
+      alert(error.message || 'Erro ao excluir ATA');
+    }
+  };
+
+  const previewMinutesPdf = (document) => {
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      alert('Não foi possível abrir a visualização em PDF. Libere pop-ups e tente novamente.');
+      return;
+    }
+    previewWindow.document.write(buildMinutesPdfHtml({ meeting, document }));
+    previewWindow.document.close();
+    previewWindow.focus();
   };
 
   const applyActionTemplate = (action) => {
@@ -2019,7 +2230,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                       </div>
                       <button
                         type="button"
-                        onClick={() => applyMinutesTemplate(key)}
+                        onClick={() => openMinutesEditorFromTemplate(key)}
                         className={`flex-shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors ${
                           template.accent === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'
                         }`}
@@ -2049,22 +2260,84 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
               </div>
 
               <div>
-                <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-indigo-500" /> Ata da Reunião
-                </h4>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={8}
-                  className={`${inputClass} font-mono text-sm leading-relaxed`}
-                  placeholder="Registre aqui os pontos discutidos, decisões tomadas e observações da reunião..."
-                />
-                <div className="flex justify-end mt-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-500" /> Atas salvas
+                  </h4>
                   <button
-                    onClick={saveNotes}
-                    className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
+                    type="button"
+                    onClick={() => setMinutesEditor({ id: null, templateKey: 'CUSTOM', title: 'Ata da Reunião', content: '' })}
+                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
-                    Salvar Ata
+                    <Plus className="w-4 h-4" /> Nova ATA em branco
+                  </button>
+                </div>
+
+                {minutesDocuments.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {minutesDocuments.map((document) => (
+                      <div key={document.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-[color:var(--crm-border)] dark:bg-[var(--crm-surface-2)]">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{document.title}</p>
+                              {document.templateKey && document.templateKey !== 'CUSTOM' && (
+                                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+                                  {MINUTES_TEMPLATES[document.templateKey]?.badge || document.templateKey}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                              Atualizada em {document.updatedAt ? new Date(document.updatedAt).toLocaleString('pt-BR') : 'data não informada'}
+                            </p>
+                            <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                              {document.content}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 md:flex-shrink-0 md:justify-end">
+                            <button
+                              type="button"
+                              onClick={() => previewMinutesPdf(document)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-[color:var(--crm-border)] dark:bg-[var(--crm-surface)] dark:text-slate-300 dark:hover:bg-white/10"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> Visualizar PDF
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => editMinutesDocument(document)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-500/25 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
+                            >
+                              <Edit className="w-3.5 h-3.5" /> Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteMinutesDocument(document)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center dark:border-[color:var(--crm-border)] dark:bg-[var(--crm-surface-2)]">
+                    <FileText className="mx-auto mb-2 h-7 w-7 text-gray-400 dark:text-slate-500" />
+                    <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Nenhuma ATA salva</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      Selecione um modelo acima para abrir a ATA em tela maior, digitar e salvar.
+                    </p>
+                  </div>
+                )}
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => minutesDocuments[0] ? previewMinutesPdf(minutesDocuments[0]) : openMinutesEditorFromTemplate('EXTERNAL')}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-slate-200 dark:text-slate-950 dark:hover:bg-white"
+                  >
+                    {minutesDocuments[0] ? <Eye className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                    {minutesDocuments[0] ? 'Visualizar última ATA em PDF' : 'Criar ATA com modelo'}
                   </button>
                 </div>
               </div>
@@ -2248,6 +2521,102 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
           </button>
         </div>
       </div>
+
+      {minutesEditor && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[var(--crm-surface)]">
+            <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-gray-200 p-5 dark:border-[color:var(--crm-border)]">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Editor de ATA</p>
+                <h3 className="mt-1 text-xl font-bold text-gray-900 dark:text-slate-100">
+                  {minutesEditor.id ? 'Editar ATA' : 'Nova ATA'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMinutesEditor(null)}
+                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                title="Fechar editor"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-y-auto p-5 lg:grid-cols-[320px_1fr]">
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Título da ATA</label>
+                  <input
+                    type="text"
+                    value={minutesEditor.title}
+                    onChange={(e) => setMinutesEditor((prev) => ({ ...prev, title: e.target.value }))}
+                    className={inputClass}
+                    placeholder="Ex.: Ata de Kickoff Externo"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Modelo</label>
+                  <select
+                    value={minutesEditor.templateKey || 'CUSTOM'}
+                    onChange={(e) => {
+                      const templateKey = e.target.value;
+                      const template = MINUTES_TEMPLATES[templateKey];
+                      setMinutesEditor((prev) => ({
+                        ...prev,
+                        templateKey,
+                        title: template && (!prev.title || prev.title === 'Ata da Reunião') ? template.title : prev.title,
+                        content: template && !prev.content?.trim() ? template.buildNotes(meeting) : prev.content
+                      }));
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="CUSTOM">Sem modelo</option>
+                    {Object.entries(MINUTES_TEMPLATES).map(([key, template]) => (
+                      <option key={key} value={key}>{template.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs leading-relaxed text-gray-600 dark:border-[color:var(--crm-border)] dark:bg-[var(--crm-surface-2)] dark:text-slate-300">
+                  <p className="font-semibold text-gray-800 dark:text-slate-200">Reunião</p>
+                  <p className="mt-2">{meeting.opportunity?.title || 'Projeto sem título'}</p>
+                  <p>{meeting.company?.name || 'Cliente não informado'}</p>
+                  <p>{formatMeetingDate(meeting.scheduledDate)} {meeting.startTime || ''}</p>
+                </div>
+              </div>
+
+              <div className="flex min-h-[480px] flex-col">
+                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Conteúdo da ATA</label>
+                <textarea
+                  value={minutesEditor.content}
+                  onChange={(e) => setMinutesEditor((prev) => ({ ...prev, content: e.target.value }))}
+                  className={`${inputClass} flex-1 resize-none font-mono text-sm leading-relaxed`}
+                  placeholder="Digite aqui a ata da reunião..."
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-shrink-0 flex-wrap justify-end gap-3 border-t border-gray-200 p-5 dark:border-[color:var(--crm-border)]">
+              <button
+                type="button"
+                onClick={() => setMinutesEditor(null)}
+                className="rounded-lg bg-gray-200 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-300 dark:hover:bg-slate-500"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveMinutesDocument}
+                disabled={savingMinutes}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {savingMinutes && <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>}
+                <FileText className="h-4 w-4" /> Salvar ATA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
