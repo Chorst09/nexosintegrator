@@ -26,14 +26,17 @@ function formatTime(value: string) {
 export default function TaskModal({
   task,
   onClose,
-  onUpdate
+  onUpdate,
+  users = []
 }: {
   task: Issue;
   onClose: () => void;
   onUpdate: (task: Issue) => void;
+  users?: User[];
 }) {
   const [draft, setDraft] = useState<Issue>(task);
   const [followUpText, setFollowUpText] = useState('');
+  const assignableUsers = users.length > 0 ? users : mockUsers;
 
   const statusOptions = mockColumns.map(column => column.id);
   const priorityOptions: IssuePriority[] = ['Urgente', 'Alta', 'Normal', 'Baixa'];
@@ -125,12 +128,12 @@ export default function TaskModal({
                   className={fieldClass}
                   value={draft.assignee?.id || ''}
                   onChange={(e) => {
-                    const assignee = mockUsers.find(user => user.id === e.target.value);
+                    const assignee = assignableUsers.find(user => user.id === e.target.value);
                     persist({ assignee: assignee as User | undefined });
                   }}
                 >
                   <option value="">Sem responsável</option>
-                  {mockUsers.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                  {assignableUsers.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </select>
               </label>
 
@@ -169,19 +172,25 @@ export default function TaskModal({
                 <label>
                   <span className={labelClass}><Clock className="h-4 w-4" /> Estimativa</span>
                   <input
+                    type="number"
+                    min="0"
+                    step="0.5"
                     className={fieldClass}
-                    value={draft.estimate || ''}
-                    onChange={(e) => persist({ estimate: e.target.value })}
-                    placeholder="Ex.: 10 dias"
+                    value={draft.estimatedHours ?? draft.estimate ?? ''}
+                    onChange={(e) => persist({ estimate: e.target.value, estimatedHours: Number(e.target.value) || 0 })}
+                    placeholder="Horas"
                   />
                 </label>
                 <label>
-                  <span className={labelClass}><Target className="h-4 w-4" /> Pontos</span>
+                  <span className={labelClass}><Target className="h-4 w-4" /> Realizado</span>
                   <input
+                    type="number"
+                    min="0"
+                    step="0.5"
                     className={fieldClass}
-                    value={draft.points || ''}
-                    onChange={(e) => persist({ points: e.target.value })}
-                    placeholder="0"
+                    value={draft.actualHours ?? ''}
+                    onChange={(e) => persist({ actualHours: Number(e.target.value) || 0 })}
+                    placeholder="Horas"
                   />
                 </label>
               </div>

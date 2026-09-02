@@ -574,6 +574,11 @@ router.get('/', authenticateToken, async (req, res) => {
           company: { select: { id: true, name: true, clientType: true } },
           projectManager: { select: { id: true, name: true, email: true } },
           phases: { orderBy: { order: 'asc' } },
+          tasks: {
+            include: { assignedTo: { select: { id: true, name: true, email: true } } },
+            orderBy: { createdAt: 'asc' }
+          },
+          team: { include: { user: { select: { id: true, name: true, email: true } } } },
           _count: { select: { tasks: true, milestones: true, team: true } }
         },
         orderBy: { createdAt: 'desc' },
@@ -602,6 +607,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
         opportunity: { select: { id: true, number: true, title: true, value: true } },
         contract: { select: { id: true, number: true, title: true, value: true, slaResponseTime: true, slaResolutionTime: true, slaAvailability: true } },
         phases: { orderBy: { order: 'asc' } },
+        tasks: {
+          include: { assignedTo: { select: { id: true, name: true, email: true } } },
+          orderBy: { createdAt: 'asc' }
+        },
         milestones: { orderBy: { plannedDate: 'asc' } },
         team: { include: { user: { select: { id: true, name: true, email: true } } } },
         risks: { orderBy: { identifiedDate: 'desc' } },
@@ -915,7 +924,7 @@ router.get('/:projectId/tasks', authenticateToken, async (req, res) => {
     const tasks = await prisma.projectTask.findMany({
       where,
       include: {
-        assignedTo: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
         phase: { select: { id: true, name: true } },
         milestone: { select: { id: true, name: true } },
         _count: { select: { timelogs: true } }
@@ -931,8 +940,24 @@ router.get('/:projectId/tasks', authenticateToken, async (req, res) => {
 
 router.post('/:projectId/tasks', authenticateToken, async (req, res) => {
   try {
-    const { title, description, status, priority, dueDate, assignedToId, phaseId, milestoneId, estimatedHours, dependencyId } = req.body;
+    const { title, description, status, priority, dueDate, assignedToId, phaseId, milestoneId, estimatedHours, actualHours, dependencyId } = req.body;
     if (!title) return res.status(400).json({ error: 'Título é obrigatório' });
+
+    if (assignedToId) {
+      const teamMember = await prisma.projectTeam.findFirst({
+        where: { projectId: req.params.projectId, userId: assignedToId, isActive: true },
+        select: { id: true }
+      });
+      if (!teamMember) return res.status(400).json({ error: 'Responsável não pertence à equipe deste projeto' });
+    }
+
+    if (phaseId) {
+      const phase = await prisma.projectPhase.findFirst({
+        where: { id: phaseId, projectId: req.params.projectId },
+        select: { id: true }
+      });
+      if (!phase) return res.status(400).json({ error: 'Fase não pertence a este projeto' });
+    }
 
     const task = await prisma.projectTask.create({
       data: {
@@ -946,10 +971,11 @@ router.post('/:projectId/tasks', authenticateToken, async (req, res) => {
         phaseId: phaseId || null,
         milestoneId: milestoneId || null,
         estimatedHours: estimatedHours ? parseFloat(estimatedHours) : 0,
+        actualHours: actualHours ? parseFloat(actualHours) : 0,
         dependencyId: dependencyId || null
       },
       include: {
-        assignedTo: { select: { id: true, name: true } }
+        assignedTo: { select: { id: true, name: true, email: true } }
       }
     });
     res.status(201).json(task);
@@ -970,7 +996,7 @@ router.put('/:projectId/tasks/:taskId', authenticateToken, async (req, res) => {
       if (status === 'DONE') updateData.completedAt = new Date();
     }
     if (priority) updateData.priority = priority;
-    if (dueDate) updateData.dueDate = new Date(dueDate);
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
     if (assignedToId !== undefined) updateData.assignedToId = assignedToId || null;
     if (phaseId !== undefined) updateData.phaseId = phaseId || null;
     if (milestoneId !== undefined) updateData.milestoneId = milestoneId || null;
@@ -978,10 +1004,32 @@ router.put('/:projectId/tasks/:taskId', authenticateToken, async (req, res) => {
     if (actualHours !== undefined) updateData.actualHours = parseFloat(actualHours);
     if (dependencyId !== undefined) updateData.dependencyId = dependencyId || null;
 
+    const existingTask = await prisma.projectTask.findFirst({
+      where: { id: req.params.taskId, projectId: req.params.projectId },
+      select: { id: true }
+    });
+    if (!existingTask) return res.status(404).json({ error: 'Tarefa não encontrada neste projeto' });
+
+    if (assignedToId) {
+      const teamMember = await prisma.projectTeam.findFirst({
+        where: { projectId: req.params.projectId, userId: assignedToId, isActive: true },
+        select: { id: true }
+      });
+      if (!teamMember) return res.status(400).json({ error: 'Responsável não pertence à equipe deste projeto' });
+    }
+
+    if (phaseId) {
+      const phase = await prisma.projectPhase.findFirst({
+        where: { id: phaseId, projectId: req.params.projectId },
+        select: { id: true }
+      });
+      if (!phase) return res.status(400).json({ error: 'Fase não pertence a este projeto' });
+    }
+
     const task = await prisma.projectTask.update({
       where: { id: req.params.taskId },
       data: updateData,
-      include: { assignedTo: { select: { id: true, name: true } } }
+      include: { assignedTo: { select: { id: true, name: true, email: true } } }
     });
     res.json(task);
   } catch (error) {

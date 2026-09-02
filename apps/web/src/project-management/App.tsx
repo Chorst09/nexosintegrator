@@ -22,7 +22,7 @@ import { HomeView, PlannedView, DocsView, WhiteboardsView } from './components/G
 import TaskModal from './components/TaskModal';
 import CreateTaskModal from './components/CreateTaskModal';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
-import { Space, Issue } from './types';
+import { Space, Issue, ProjectTeamMember, User } from './types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -69,6 +69,7 @@ type ApiProject = {
   projectManager?: { id?: string; name?: string; email?: string } | null;
   phases?: ApiProjectPhase[];
   tasks?: ApiProjectTask[];
+  team?: ProjectTeamMember[];
 };
 
 type ApiProjectPhase = {
@@ -95,7 +96,11 @@ type ApiProjectTask = {
   dueDate?: string | null;
   createdAt?: string;
   updatedAt?: string;
-  assignedTo?: { id?: string; name?: string } | null;
+  assignedTo?: { id?: string; name?: string; email?: string } | null;
+  assignedToId?: string | null;
+  phaseId?: string | null;
+  estimatedHours?: number | string | null;
+  actualHours?: number | string | null;
 };
 
 const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -232,10 +237,54 @@ function formatAiLongText(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function getInitials(name?: string, email?: string) {
+  const source = String(name || email || '?').trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
+function mapTeamMemberToUser(member: ProjectTeamMember, index = 0): User {
+  const colors = ['bg-[#ff7a00]', 'bg-[#18c8df]', 'bg-[#22c55e]', 'bg-[#f6b40b]', 'bg-[#3b82f6]', 'bg-zinc-600'];
+  const name = member.user?.name || 'Usuario sem nome';
+  const email = member.user?.email || '';
+  return {
+    id: member.userId || member.user?.id || member.id,
+    memberId: member.id,
+    name,
+    email,
+    initials: getInitials(name, email),
+    color: colors[index % colors.length],
+    role: member.role,
+    allocationPercent: member.allocationPercent ?? 100,
+    hourlyCost: member.hourlyCost ?? 0
+  };
+}
+
+function parseHours(value: unknown) {
+  const numeric = typeof value === 'number'
+    ? value
+    : Number(String(value || '').replace(',', '.').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : 0;
+}
+
 function mapProjectToSpace(project: ApiProject, index = 0): Space {
   const metadata = project.metadata && typeof project.metadata === 'object' ? project.metadata : {};
   const colors = ['bg-[#ff7a00]', 'bg-[#18c8df]', 'bg-[#22c55e]', 'bg-[#f6b40b]', 'bg-[#1f7fe5]'];
   const name = project.name || 'Projeto sem nome';
+  const teamMembers = Array.isArray(project.team) ? [...project.team] : [];
+  const hasProjectManagerInTeam = project.projectManagerId && teamMembers.some(member => member.userId === project.projectManagerId);
+  if (project.projectManagerId && project.projectManager && !hasProjectManagerInTeam) {
+    teamMembers.unshift({
+      id: `manager-${project.projectManagerId}`,
+      userId: project.projectManagerId,
+      role: 'PROJECT_MANAGER',
+      allocationPercent: 100,
+      hourlyCost: 0,
+      isActive: true,
+      user: project.projectManager
+    });
+  }
 
   return {
     id: project.id,
@@ -262,7 +311,8 @@ function mapProjectToSpace(project: ApiProject, index = 0): Space {
     successCriteria: String(metadata.successCriteria || ''),
     risks: String(metadata.risks || ''),
     notes: String(metadata.notes || ''),
-    createdAt: project.createdAt
+    createdAt: project.createdAt,
+    teamMembers
   };
 }
 
@@ -318,6 +368,9 @@ function mapProjectPhaseToIssue(project: ApiProject, phase: ApiProjectPhase): Is
     priority: 'Normal',
     startDate: toDateInputValue(phase.plannedStartDate || phase.actualStartDate),
     dueDate: toDateInputValue(phase.plannedEndDate || phase.actualEndDate),
+    estimatedHours: 0,
+    actualHours: 0,
+    sourceType: 'phase',
     createdAt: phase.createdAt || project.createdAt || new Date().toISOString(),
     updatedAt: phase.updatedAt || project.createdAt || new Date().toISOString()
   };
@@ -334,6 +387,7 @@ function mapProjectTaskToIssue(project: ApiProject, task: ApiProjectTask): Issue
   return {
     id: `task-${task.id}`,
     projectId: project.id,
+    phaseId: task.phaseId || undefined,
     key: undefined,
     title: task.title || 'Fase sem nome',
     description: task.description || '',
@@ -343,9 +397,14 @@ function mapProjectTaskToIssue(project: ApiProject, task: ApiProjectTask): Issue
     assignee: task.assignedTo?.name ? {
       id: task.assignedTo.id || '',
       name: task.assignedTo.name,
+      email: task.assignedTo.email || '',
       initials: initials || task.assignedTo.name.charAt(0).toUpperCase(),
       color: 'bg-[#ff7a00]'
     } : undefined,
+    estimate: task.estimatedHours !== undefined && task.estimatedHours !== null ? String(task.estimatedHours) : '',
+    estimatedHours: parseHours(task.estimatedHours),
+    actualHours: parseHours(task.actualHours),
+    sourceType: 'task',
     createdAt: task.createdAt || new Date().toISOString(),
     updatedAt: task.updatedAt || new Date().toISOString()
   };
@@ -375,6 +434,39 @@ function issueStatusToProjectPhaseStatus(status?: Issue['status']) {
   }
 }
 
+function issueStatusToTaskStatus(status?: Issue['status']) {
+  switch (status) {
+    case 'EM PROGRESSO':
+    case 'ATUALIZAÇÃO NECESSÁRIA':
+      return 'IN_PROGRESS';
+    case 'EM RISCO':
+      return 'BLOCKED';
+    case 'CONCLUÍDO':
+      return 'DONE';
+    case 'CANCELADO':
+      return 'BLOCKED';
+    case 'PENDENTE':
+    case 'PLANEJAMENTO':
+    case 'EM ESPERA':
+    default:
+      return 'TODO';
+  }
+}
+
+function issuePriorityToTaskPriority(priority?: Issue['priority']) {
+  switch (priority) {
+    case 'Urgente':
+      return 'URGENT';
+    case 'Alta':
+      return 'HIGH';
+    case 'Baixa':
+      return 'LOW';
+    case 'Normal':
+    default:
+      return 'MEDIUM';
+  }
+}
+
 function buildPhaseRequestPayload(issue: Issue) {
   return {
     name: issue.title.trim(),
@@ -383,6 +475,26 @@ function buildPhaseRequestPayload(issue: Issue) {
     plannedStartDate: issue.startDate || null,
     plannedEndDate: issue.dueDate || null
   };
+}
+
+function buildTaskRequestPayload(issue: Issue) {
+  return {
+    title: issue.title.trim(),
+    description: issue.description || '',
+    status: issueStatusToTaskStatus(issue.status),
+    priority: issuePriorityToTaskPriority(issue.priority),
+    dueDate: issue.dueDate || null,
+    assignedToId: issue.assignee?.id || null,
+    phaseId: issue.phaseId || null,
+    estimatedHours: issue.estimatedHours ?? parseHours(issue.estimate),
+    actualHours: issue.actualHours ?? 0
+  };
+}
+
+function getProjectTaskId(issue: Issue) {
+  const id = String(issue.id || '');
+  if (!id.startsWith('task-') || !issue.projectId) return '';
+  return id.replace(/^task-/, '');
 }
 
 function getStoredProjectIssues(): Issue[] {
@@ -498,8 +610,13 @@ export default function App({ onBack }: { onBack?: () => void }) {
       const mapped = Array.isArray(projects) ? projects.map(mapProjectToSpace) : [];
       const apiIssues = Array.isArray(projects)
         ? projects.flatMap((project: ApiProject) => {
-            const phaseIssues = Array.isArray(project.phases) ? project.phases.map((phase) => mapProjectPhaseToIssue(project, phase)) : [];
             const taskIssues = Array.isArray(project.tasks) ? project.tasks.map((task) => mapProjectTaskToIssue(project, task)) : [];
+            const taskPhaseIds = new Set((project.tasks || []).map(task => task.phaseId).filter(Boolean));
+            const phaseIssues = Array.isArray(project.phases)
+              ? project.phases
+                  .filter((phase) => !taskPhaseIds.has(phase.id))
+                  .map((phase) => mapProjectPhaseToIssue(project, phase))
+              : [];
             return [...phaseIssues, ...taskIssues];
           })
         : [];
@@ -575,6 +692,9 @@ export default function App({ onBack }: { onBack?: () => void }) {
   }, []);
 
   const activeProject = spaces.find(s => s.id === activeSpaceId) || spaces[0];
+  const activeTeamUsers = (activeProject?.teamMembers || [])
+    .filter(member => member.isActive !== false)
+    .map(mapTeamMemberToUser);
   const activeProjectIssues = sortIssuesBySequence(issues.filter(issue => {
     if (!activeProject) return false;
     return issue.projectId === activeProject.id;
@@ -739,29 +859,79 @@ export default function App({ onBack }: { onBack?: () => void }) {
     }
   };
 
-  const scheduleProjectPhaseSave = (issue: Issue) => {
+  const saveProjectTaskIssue = async (issue: Issue) => {
+    const taskId = getProjectTaskId(issue);
+    if (!taskId || !issue.projectId) return;
+
+    const payload = buildTaskRequestPayload(issue);
+    if (!payload.title) throw new Error('Informe o nome da tarefa antes de salvar.');
+
+    const response = await fetch(buildApiUrl(`/projetos/${issue.projectId}/tasks/${taskId}`), {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const responsePayload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(responsePayload.error || `Erro ${response.status} ao salvar tarefa`);
+    }
+  };
+
+  const convertPhaseToTaskIssue = async (issue: Issue) => {
     const phaseId = getProjectPhaseId(issue);
-    if (!phaseId || !issue.title.trim()) return;
+    if (!phaseId || !issue.projectId) return null;
+
+    const payload = buildTaskRequestPayload({
+      ...issue,
+      phaseId,
+      sourceType: 'task'
+    });
+    if (!payload.title) throw new Error('Informe o nome da tarefa antes de salvar.');
+
+    const response = await fetch(buildApiUrl(`/projetos/${issue.projectId}/tasks`), {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const responsePayload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(responsePayload.error || `Erro ${response.status} ao converter fase em tarefa`);
+    }
+
+    return mapProjectTaskToIssue({ id: issue.projectId } as ApiProject, responsePayload);
+  };
+
+  const saveProjectIssue = async (issue: Issue) => {
+    if (getProjectTaskId(issue)) {
+      await saveProjectTaskIssue(issue);
+      return;
+    }
+    await saveProjectPhaseIssue(issue);
+  };
+
+  const scheduleProjectIssueSave = (issue: Issue) => {
+    const canPersist = Boolean(getProjectPhaseId(issue) || getProjectTaskId(issue));
+    if (!canPersist || !issue.title.trim()) return;
 
     if (issueSaveTimers.current[issue.id]) {
       clearTimeout(issueSaveTimers.current[issue.id]);
     }
 
     issueSaveTimers.current[issue.id] = setTimeout(() => {
-      saveProjectPhaseIssue(issue).catch((error) => {
-        console.error('Erro ao salvar fase:', error);
-        alert(error instanceof Error ? error.message : 'Erro ao salvar fase');
+      saveProjectIssue(issue).catch((error) => {
+        console.error('Erro ao salvar item:', error);
+        alert(error instanceof Error ? error.message : 'Erro ao salvar item');
       });
     }, 700);
   };
 
   const handlePersistedIssueChange = async (updatedIssue: Issue, previousIssue: Issue) => {
     try {
-      await saveProjectPhaseIssue(updatedIssue);
+      await saveProjectIssue(updatedIssue);
     } catch (error) {
       setIssues(prev => prev.map(issue => issue.id === previousIssue.id ? previousIssue : issue));
-      console.error('Erro ao salvar fase:', error);
-      alert(error instanceof Error ? error.message : 'Erro ao salvar fase');
+      console.error('Erro ao salvar item:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao salvar item');
     }
   };
 
@@ -770,15 +940,26 @@ export default function App({ onBack }: { onBack?: () => void }) {
     if (!normalizedTitle || !activeProject?.id) return;
 
     try {
-      const response = await fetch(buildApiUrl(`/projetos/${activeProject.id}/phases`), {
+      const shouldCreateTask = data.assignee?.id || data.estimatedHours || data.phaseKind === 'DEFAULT';
+      const response = await fetch(buildApiUrl(`/projetos/${activeProject.id}/${shouldCreateTask ? 'tasks' : 'phases'}`), {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          name: normalizedTitle,
-          description: data.description || '',
-          status: issueStatusToProjectPhaseStatus(data.status || 'PENDENTE'),
-          plannedEndDate: data.dueDate || null
-        })
+        body: JSON.stringify(shouldCreateTask
+          ? {
+              title: normalizedTitle,
+              description: data.description || '',
+              status: issueStatusToTaskStatus(data.status || 'PENDENTE'),
+              priority: issuePriorityToTaskPriority(data.priority || 'Normal'),
+              dueDate: data.dueDate || null,
+              assignedToId: data.assignee?.id || null,
+              estimatedHours: parseHours(data.estimatedHours)
+            }
+          : {
+              name: normalizedTitle,
+              description: data.description || '',
+              status: issueStatusToProjectPhaseStatus(data.status || 'PENDENTE'),
+              plannedEndDate: data.dueDate || null
+            })
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -786,9 +967,13 @@ export default function App({ onBack }: { onBack?: () => void }) {
       }
 
       const newTask = {
-        ...mapProjectPhaseToIssue({ id: activeProject.id, createdAt: activeProject.createdAt } as ApiProject, payload),
+        ...(shouldCreateTask
+          ? mapProjectTaskToIssue({ id: activeProject.id, createdAt: activeProject.createdAt } as ApiProject, payload)
+          : mapProjectPhaseToIssue({ id: activeProject.id, createdAt: activeProject.createdAt } as ApiProject, payload)),
         priority: data.priority || 'Normal',
         assignee: data.assignee,
+        estimate: data.estimatedHours ? String(data.estimatedHours) : '',
+        estimatedHours: parseHours(data.estimatedHours),
         customFields: data.customFields || []
       };
       setIssues(prev => [...prev.filter(issue => issue.id !== newTask.id), newTask]);
@@ -819,9 +1004,40 @@ export default function App({ onBack }: { onBack?: () => void }) {
   };
 
   const handleUpdateIssue = (updatedIssue: Issue) => {
+    const shouldConvertPhase = Boolean(
+      getProjectPhaseId(updatedIssue)
+      && (updatedIssue.assignee?.id || (updatedIssue.estimatedHours || 0) > 0)
+    );
+
+    if (shouldConvertPhase) {
+      setSelectedTask(updatedIssue);
+      convertPhaseToTaskIssue(updatedIssue)
+        .then((convertedIssue) => {
+          if (!convertedIssue) return;
+          const mergedIssue = {
+            ...convertedIssue,
+            status: updatedIssue.status,
+            priority: updatedIssue.priority,
+            assignee: updatedIssue.assignee,
+            estimatedHours: updatedIssue.estimatedHours,
+            actualHours: updatedIssue.actualHours,
+            estimate: updatedIssue.estimate,
+            customFields: updatedIssue.customFields,
+            followUps: updatedIssue.followUps
+          };
+          setIssues(prev => [mergedIssue, ...prev.filter(issue => issue.id !== updatedIssue.id && issue.id !== mergedIssue.id)]);
+          setSelectedTask(mergedIssue);
+        })
+        .catch((error) => {
+          console.error('Erro ao converter fase em tarefa:', error);
+          alert(error instanceof Error ? error.message : 'Erro ao converter fase em tarefa');
+        });
+      return;
+    }
+
     setIssues(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
     setSelectedTask(updatedIssue);
-    scheduleProjectPhaseSave(updatedIssue);
+    scheduleProjectIssueSave(updatedIssue);
   };
 
   return (
@@ -1071,7 +1287,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
               </button>
             </div>
           )}
-          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} onIssueChange={handlePersistedIssueChange} />}
+          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} users={activeTeamUsers} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} onIssueChange={handlePersistedIssueChange} />}
           {activeView === 'list' && activeProject && <ListView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'dashboard' && (
             <Dashboard
@@ -1094,7 +1310,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
           {activeView === 'calendar' && <CalendarView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'gantt' && <GanttView issues={activeProjectIssues} />}
           {activeView === 'activity' && <ActivityView />}
-          {activeView === 'workload' && <WorkloadView issues={activeProjectIssues} />}
+          {activeView === 'workload' && <WorkloadView issues={activeProjectIssues} users={activeTeamUsers} />}
         </div>
 
           </>
@@ -1172,11 +1388,12 @@ export default function App({ onBack }: { onBack?: () => void }) {
       </main>
 
       {selectedTask && (
-        <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={handleUpdateIssue} />
+        <TaskModal task={selectedTask} users={activeTeamUsers} onClose={() => setSelectedTask(null)} onUpdate={handleUpdateIssue} />
       )}
 
       {isCreatingTaskGlobal && (
         <CreateTaskModal
+          users={activeTeamUsers}
           onClose={() => setIsCreatingTaskGlobal(false)}
           onCreate={handleGlobalCreateTaskSubmit}
         />

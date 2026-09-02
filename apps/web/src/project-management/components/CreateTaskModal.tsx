@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Maximize2, List as ListIcon, Calendar, Flag, Tag, Users, MoreHorizontal, Sparkles, Paperclip, Bell, ChevronDown, CheckCircle2, Circle, Plus, Trash2, Rocket } from 'lucide-react';
+import { X, Maximize2, List as ListIcon, Calendar, Flag, Tag, Users, MoreHorizontal, Sparkles, Paperclip, Bell, ChevronDown, CheckCircle2, Circle, Plus, Trash2, Rocket, Clock } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { mockUsers, mockColumns } from '../data';
@@ -13,11 +13,13 @@ interface CreateTaskModalProps {
   onClose: () => void;
   onCreate: (title: string, data: any) => void;
   defaultStatus?: string;
+  users?: User[];
 }
 
-export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PENDENTE' }: CreateTaskModalProps) {
+export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PENDENTE', users = [] }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const assignableUsers = users.length > 0 ? users : mockUsers;
   const [phaseKind, setPhaseKind] = useState<'DEFAULT' | 'KICKOFF_INTERNO' | 'KICKOFF_EXTERNO'>('DEFAULT');
   const [showTaskType, setShowTaskType] = useState(false);
 
@@ -32,11 +34,12 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dueDate, setDueDate] = useState<string>('');
+  const [estimatedHours, setEstimatedHours] = useState<string>('');
 
   const [customFields, setCustomFields] = useState<{ id: string, name: string, value: string }[]>([]);
 
   const handleCreate = () => {
-    onCreate(title, { description, priority, status, assignee, dueDate, customFields, phaseKind });
+    onCreate(title, { description, priority, status, assignee, dueDate, estimatedHours, customFields, phaseKind });
   };
 
   const selectPhaseKind = (kind: 'DEFAULT' | 'KICKOFF_INTERNO' | 'KICKOFF_EXTERNO') => {
@@ -244,7 +247,7 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
                 <div className="absolute top-full left-0 mt-1 w-56 bg-[#0d1423] border border-[#374151] rounded-md shadow-xl z-10 py-2">
                   <div className="px-3 pb-2 text-xs text-slate-400 font-medium">Atribuir a</div>
                   <div className="px-1 space-y-0.5">
-                    {mockUsers.map(u => (
+                    {assignableUsers.map(u => (
                       <button key={u.id} onClick={() => { setAssignee(u); setShowAssignees(false); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1f2937] text-left text-sm text-slate-200 transition-colors">
                         <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white", u.color)}>
                           {u.initials}
@@ -260,6 +263,19 @@ export default function CreateTaskModal({ onClose, onCreate, defaultStatus = 'PE
                 </div>
               )}
             </div>
+
+            <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#374151] bg-[#070b16] text-slate-300 text-sm font-medium">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(e.target.value)}
+                placeholder="Horas estimadas"
+                className="w-28 bg-transparent text-slate-200 outline-none placeholder:text-slate-500"
+              />
+            </label>
 
             {/* Due Date Dropdown (Native) */}
             <div className="relative">

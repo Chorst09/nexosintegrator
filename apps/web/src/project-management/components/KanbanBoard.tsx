@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Issue, Column, IssueStatus } from '../types';
+import { Issue, Column, IssueStatus, User } from '../types';
 import { mockColumns } from '../data';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -81,10 +81,12 @@ export default function KanbanBoard({
   setIssues,
   onTaskClick,
   onCreateTask,
-  onIssueChange
+  onIssueChange,
+  users = []
 }: {
   issues: Issue[],
   setIssues: React.Dispatch<React.SetStateAction<Issue[]>>,
+  users?: User[],
   onTaskClick?: (issue: Issue) => void,
   onCreateTask?: (title: string, data: any) => void | Promise<void>,
   onIssueChange?: (updatedIssue: Issue, previousIssue: Issue) => void | Promise<void>
@@ -455,6 +457,7 @@ export default function KanbanBoard({
 
       {isCreatingTask && (
         <CreateTaskModal
+          users={users}
           defaultStatus={newTaskStatus || 'PENDENTE'}
           onClose={() => {
             setIsCreatingTask(false);

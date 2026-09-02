@@ -28,6 +28,7 @@ export interface Space {
   risks?: string;
   notes?: string;
   createdAt?: string;
+  teamMembers?: ProjectTeamMember[];
 }
 
 export interface User {
@@ -37,6 +38,23 @@ export interface User {
   color: string;
   role?: string;
   email?: string;
+  allocationPercent?: number;
+  hourlyCost?: number;
+  memberId?: string;
+}
+
+export interface ProjectTeamMember {
+  id: string;
+  userId: string;
+  role?: string;
+  allocationPercent?: number;
+  hourlyCost?: number;
+  isActive?: boolean;
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+  };
 }
 
 export interface CustomField {
@@ -48,6 +66,7 @@ export interface CustomField {
 export interface Issue {
   id: string;
   projectId?: string;
+  phaseId?: string;
   key?: string;
   title: string;
   description?: string;
@@ -57,7 +76,10 @@ export interface Issue {
   startDate?: string;
   dueDate?: string;
   estimate?: string;
+  estimatedHours?: number;
+  actualHours?: number;
   points?: string;
+  sourceType?: 'phase' | 'task' | 'local';
   customFields?: CustomField[];
   followUps?: FollowUp[];
   createdAt: string;
