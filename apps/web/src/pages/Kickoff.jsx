@@ -2523,7 +2523,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
       </div>
 
       {minutesEditor && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-y-0 left-0 right-0 z-[70] flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm lg:left-[312px] lg:p-6">
           <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[var(--crm-surface)]">
             <div className="flex flex-shrink-0 items-start justify-between gap-4 border-b border-gray-200 p-5 dark:border-[color:var(--crm-border)]">
               <div className="min-w-0">
@@ -2542,8 +2542,8 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
               </button>
             </div>
 
-            <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-y-auto p-5 lg:grid-cols-[320px_1fr]">
-              <div className="space-y-4">
+            <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 overflow-y-auto p-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="min-w-0 space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Título da ATA</label>
                   <input
@@ -2585,7 +2585,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
                 </div>
               </div>
 
-              <div className="flex min-h-[480px] flex-col">
+              <div className="flex min-h-[480px] min-w-0 flex-col">
                 <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-slate-300">Conteúdo da ATA</label>
                 <textarea
                   value={minutesEditor.content}
