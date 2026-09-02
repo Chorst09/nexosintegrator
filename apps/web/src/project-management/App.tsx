@@ -1320,6 +1320,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
             {globalView === 'home' && (
               <HomeView
                 projects={spaces}
+                issues={issues}
                 getPhaseCount={getProjectIssueCount}
                 onCreateProject={() => {
                   setIsCreatingSpace(true);
@@ -1330,7 +1331,6 @@ export default function App({ onBack }: { onBack?: () => void }) {
                   setGlobalView('spaces');
                   setActiveView('dashboard');
                 }}
-                onViewProject={(projectId) => openProject(projectId, 'dashboard')}
                 onEditProject={editProject}
                 onDeleteProject={deleteProject}
               />

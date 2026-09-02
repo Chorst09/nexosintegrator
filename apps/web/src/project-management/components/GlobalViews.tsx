@@ -9,26 +9,333 @@ import {
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import ArchitectureDiagram from './ArchitectureDiagram';
-import type { Issue, Space } from '../types';
+import type { Issue, ProjectTeamMember, Space } from '../types';
 import { buildApiUrl, getAuthHeaders } from '../../config/api';
+
+const projectStatusLabel: Record<string, string> = {
+  PLANEJADO: 'Planejado',
+  EM_ANDAMENTO: 'Em andamento',
+  PAUSADO: 'Pausado',
+  CONCLUIDO: 'Concluido',
+  CANCELADO: 'Cancelado'
+};
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function toNumber(value: unknown) {
+  const parsed = typeof value === 'number'
+    ? value
+    : Number(String(value || '').replace(',', '.').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatProjectDate(value?: string | null) {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '-';
+  return parsed.toLocaleDateString('pt-BR');
+}
+
+function formatCurrency(value?: string) {
+  const amount = toNumber(value);
+  if (!amount) return '-';
+  return amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function slugify(value: string) {
+  return String(value || 'projeto')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'projeto';
+}
+
+function paragraph(value?: string) {
+  const text = String(value || '').trim();
+  if (!text) return '<p class="muted">Nao informado.</p>';
+  return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+}
+
+function tableRows(rows: string[], emptyLabel: string) {
+  if (rows.length === 0) {
+    return `<tr><td colspan="6" class="muted center">${escapeHtml(emptyLabel)}</td></tr>`;
+  }
+  return rows.join('');
+}
+
+function buildProjectPdfHtml({
+  project,
+  issues,
+  teamMembers,
+  totalEstimated,
+  completedCount,
+  progress,
+  fileName
+}: {
+  project: Space;
+  issues: Issue[];
+  teamMembers: ProjectTeamMember[];
+  totalEstimated: number;
+  completedCount: number;
+  progress: number;
+  fileName: string;
+}) {
+  const generatedAt = new Date().toLocaleString('pt-BR');
+  const activeIssues = issues.filter(issue => issue.status !== 'CANCELADO');
+  const riskIssues = issues.filter(issue => issue.status === 'EM RISCO' || issue.priority === 'Urgente');
+  const unassignedIssues = issues.filter(issue => !issue.assignee?.id);
+  const projectLabel = projectStatusLabel[project.status || ''] || project.status || 'Planejado';
+
+  const teamRows = tableRows(teamMembers.map(member => `
+    <tr>
+      <td>${escapeHtml(member.user?.name || 'Usuario sem nome')}</td>
+      <td>${escapeHtml(member.user?.email || '-')}</td>
+      <td>${escapeHtml(member.role || 'Membro')}</td>
+      <td>${escapeHtml(`${member.allocationPercent ?? 100}%`)}</td>
+      <td>${formatProjectDate(member.startDate || member.createdAt)}</td>
+      <td>${member.isActive === false ? 'Inativo' : 'Ativo'}</td>
+    </tr>
+  `), 'Nenhum membro ativo informado.');
+
+  const issueRows = tableRows(issues.map((issue, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>
+        <strong>${escapeHtml(issue.title)}</strong>
+        ${issue.description ? `<div class="small">${escapeHtml(issue.description)}</div>` : ''}
+      </td>
+      <td>${escapeHtml(issue.sourceType === 'task' ? 'Tarefa' : 'Fase')}</td>
+      <td>${escapeHtml(issue.status)}</td>
+      <td>${escapeHtml(issue.assignee?.name || 'Nao atribuido')}</td>
+      <td>${escapeHtml(`${toNumber(issue.estimatedHours || issue.estimate)}h`)}</td>
+    </tr>
+  `), 'Nenhuma fase ou tarefa encontrada.');
+
+  const riskRows = tableRows(riskIssues.map(issue => `
+    <tr>
+      <td>${escapeHtml(issue.title)}</td>
+      <td>${escapeHtml(issue.status)}</td>
+      <td>${escapeHtml(issue.priority)}</td>
+      <td>${escapeHtml(issue.assignee?.name || 'Nao atribuido')}</td>
+      <td>${formatProjectDate(issue.dueDate)}</td>
+      <td>${escapeHtml(issue.description || '-')}</td>
+    </tr>
+  `), 'Nenhum risco ou item urgente identificado.');
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(fileName)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 18px; background: #111827; color: #f8fafc; box-shadow: 0 4px 18px rgba(15,23,42,.18); }
+    .toolbar strong { font-size: 14px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { border: 0; border-radius: 6px; padding: 9px 12px; font-weight: 800; cursor: pointer; }
+    .primary { background: #ff7a00; color: #fff; }
+    .secondary { background: #263345; color: #fff; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; padding: 18mm; background: #fff; box-shadow: 0 20px 45px rgba(15,23,42,.2); }
+    .hero { border-bottom: 4px solid #ff7a00; padding-bottom: 18px; margin-bottom: 18px; }
+    .eyebrow { color: #ff7a00; font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 6px 0 4px; font-size: 30px; line-height: 1.1; color: #0f172a; }
+    h2 { margin: 22px 0 10px; font-size: 17px; color: #0f172a; border-bottom: 1px solid #dbe3ee; padding-bottom: 7px; }
+    p { margin: 0; line-height: 1.55; }
+    .muted { color: #64748b; }
+    .small { margin-top: 4px; color: #64748b; font-size: 11px; line-height: 1.4; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+    .metric { border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px; background: #f8fafc; }
+    .metric span { display: block; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .metric strong { display: block; margin-top: 5px; color: #0f172a; font-size: 18px; }
+    .info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 18px; margin-top: 14px; font-size: 12px; }
+    .info div { border-bottom: 1px solid #eef2f7; padding-bottom: 7px; }
+    .info span { display: block; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+    th { background: #111827; color: #f8fafc; text-align: left; padding: 8px; font-size: 10px; text-transform: uppercase; }
+    td { border: 1px solid #dbe3ee; padding: 8px; vertical-align: top; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .center { text-align: center; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #dbe3ee; display: flex; justify-content: space-between; color: #64748b; font-size: 10px; }
+    @page { size: A4; margin: 10mm; }
+    @media print {
+      body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .toolbar { display: none; }
+      .page { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+      h2 { break-after: avoid; }
+      table, .metric, .info div { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <strong>Visualizacao PDF - ${escapeHtml(project.name)}</strong>
+    <div class="actions">
+      <button class="secondary" onclick="window.close()">Fechar</button>
+      <button class="primary" onclick="window.print()">Imprimir / Salvar PDF</button>
+    </div>
+  </div>
+
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Relatorio completo do projeto</div>
+      <h1>${escapeHtml(project.name)}</h1>
+      <p class="muted">${escapeHtml(project.client || 'Cliente nao informado')}</p>
+      <div class="info">
+        <div><span>Numero</span>${escapeHtml(project.number || '-')}</div>
+        <div><span>Status</span>${escapeHtml(projectLabel)}</div>
+        <div><span>Tipo</span>${escapeHtml(project.type || '-')}</div>
+        <div><span>Gestor</span>${escapeHtml(project.manager || '-')}</div>
+        <div><span>Patrocinador</span>${escapeHtml(project.sponsor || '-')}</div>
+        <div><span>Periodo</span>${formatProjectDate(project.startDate)} a ${formatProjectDate(project.endDate)}</div>
+        <div><span>Orcamento</span>${formatCurrency(project.budget)}</div>
+        <div><span>Gerado em</span>${escapeHtml(generatedAt)}</div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="metric"><span>Progresso</span><strong>${progress}%</strong></div>
+      <div class="metric"><span>Fases/Tarefas</span><strong>${issues.length}</strong></div>
+      <div class="metric"><span>Concluidos</span><strong>${completedCount}</strong></div>
+      <div class="metric"><span>Horas estimadas</span><strong>${totalEstimated}h</strong></div>
+      <div class="metric"><span>Itens ativos</span><strong>${activeIssues.length}</strong></div>
+      <div class="metric"><span>Nao atribuidos</span><strong>${unassignedIssues.length}</strong></div>
+      <div class="metric"><span>Riscos/Urgentes</span><strong>${riskIssues.length}</strong></div>
+      <div class="metric"><span>Equipe</span><strong>${teamMembers.length}</strong></div>
+    </section>
+
+    <section>
+      <h2>Objetivo</h2>
+      ${paragraph(project.objective)}
+    </section>
+
+    <section>
+      <h2>Escopo</h2>
+      ${paragraph(project.scope)}
+    </section>
+
+    <section class="two-col">
+      <div>
+        <h2>Entregaveis</h2>
+        ${paragraph(project.deliverables)}
+      </div>
+      <div>
+        <h2>Criterios de sucesso</h2>
+        ${paragraph(project.successCriteria)}
+      </div>
+    </section>
+
+    <section class="two-col">
+      <div>
+        <h2>Riscos informados</h2>
+        ${paragraph(project.risks)}
+      </div>
+      <div>
+        <h2>Observacoes</h2>
+        ${paragraph(project.notes)}
+      </div>
+    </section>
+
+    <section>
+      <h2>Equipe do projeto</h2>
+      <table>
+        <thead>
+          <tr><th>Membro</th><th>E-mail</th><th>Funcao</th><th>Alocacao</th><th>Entrada</th><th>Status</th></tr>
+        </thead>
+        <tbody>${teamRows}</tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Fases e tarefas vinculadas</h2>
+      <table>
+        <thead>
+          <tr><th>#</th><th>Item</th><th>Tipo</th><th>Status</th><th>Responsavel</th><th>Horas</th></tr>
+        </thead>
+        <tbody>${issueRows}</tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Riscos e urgencias</h2>
+      <table>
+        <thead>
+          <tr><th>Item</th><th>Status</th><th>Prioridade</th><th>Responsavel</th><th>Prazo</th><th>Descricao</th></tr>
+        </thead>
+        <tbody>${riskRows}</tbody>
+      </table>
+    </section>
+
+    <div class="footer">
+      <span>Nexos Integrator - Gestao de Projetos</span>
+      <span>${escapeHtml(fileName)}</span>
+    </div>
+  </main>
+</body>
+</html>`;
+}
 
 export function HomeView({
   projects = [],
+  issues = [],
   getPhaseCount,
   onCreateProject,
   onOpenDashboard,
-  onViewProject,
   onEditProject,
   onDeleteProject
 }: {
   projects?: Space[];
+  issues?: Issue[];
   getPhaseCount?: (projectId: string) => number;
   onCreateProject?: () => void;
   onOpenDashboard?: () => void;
-  onViewProject?: (projectId: string) => void;
   onEditProject?: (projectId: string) => void;
   onDeleteProject?: (projectId: string) => void;
 }) {
+  const openProjectPdfPreview = (project: Space) => {
+    const projectIssues = issues
+      .filter((issue) => issue.projectId === project.id)
+      .sort((a, b) => {
+        const dateA = new Date(a.startDate || a.createdAt || 0).getTime();
+        const dateB = new Date(b.startDate || b.createdAt || 0).getTime();
+        return dateA - dateB;
+      });
+
+    const teamMembers = (project.teamMembers || []).filter((member) => member.isActive !== false);
+    const totalEstimated = projectIssues.reduce((total, issue) => total + toNumber(issue.estimatedHours || issue.estimate), 0);
+    const completedCount = projectIssues.filter((issue) => issue.status === 'CONCLUÍDO').length;
+    const progress = projectIssues.length > 0 ? Math.round((completedCount / projectIssues.length) * 100) : 0;
+    const fileName = `${slugify(project.name || 'projeto')}-relatorio.pdf`;
+    const preview = window.open('', '_blank');
+
+    if (!preview) {
+      alert('Não foi possível abrir a visualização em PDF. Libere pop-ups e tente novamente.');
+      return;
+    }
+
+    preview.document.write(buildProjectPdfHtml({
+      project,
+      issues: projectIssues,
+      teamMembers,
+      totalEstimated,
+      completedCount,
+      progress,
+      fileName
+    }));
+    preview.document.close();
+    preview.focus();
+  };
+
   return (
     <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300 custom-scrollbar">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -186,7 +493,9 @@ export function HomeView({
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => onViewProject?.(project.id)}
+                            onClick={() => {
+                              openProjectPdfPreview(project);
+                            }}
                             className="inline-flex items-center gap-1.5 rounded-md border border-[#374151] bg-[#070b16] px-3 py-1.5 text-xs font-bold text-slate-200 transition-colors hover:border-[#18c8df] hover:text-white"
                           >
                             <Eye className="h-3.5 w-3.5 text-[#18c8df]" />
