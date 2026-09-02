@@ -155,6 +155,21 @@ function parseGeminiJson(text) {
   }
 }
 
+function formatGeminiError(status, message) {
+  const text = sanitizeText(message);
+  const normalized = text.toLowerCase();
+
+  if (status === 429 && normalized.includes('prepayment credits are depleted')) {
+    return 'Créditos do Gemini API esgotados neste projeto Google. Adicione créditos ou configure uma GEMINI_API_KEY de outro projeto com billing ativo.';
+  }
+
+  if (status === 429) {
+    return 'Limite de uso do Gemini atingido. Aguarde a liberação da cota ou ajuste o billing/cotas no Google AI Studio.';
+  }
+
+  return text || `Erro ${status} ao consultar Gemini`;
+}
+
 function sanitizeText(value, fallback = '') {
   return String(value || fallback).trim();
 }
@@ -464,7 +479,7 @@ ${sourceText}
     clearTimeout(timeout);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = payload?.error?.message || `Erro ${response.status} ao consultar Gemini`;
+      const message = formatGeminiError(response.status, payload?.error?.message);
       return res.status(response.status).json({ error: message });
     }
 
