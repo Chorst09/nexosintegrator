@@ -3,7 +3,7 @@ import { Issue, Column, IssueStatus } from '../types';
 import { mockColumns } from '../data';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Flag, Paperclip, Calendar, MoreHorizontal, Plus, GripVertical, User as UserIcon, CheckSquare, MessageSquare, CircleDashed, Circle, CheckCircle2 } from 'lucide-react';
+import { Flag, Paperclip, Calendar, MoreHorizontal, Plus, GripVertical, User as UserIcon, CheckSquare, MessageSquare, CircleDashed, Circle, CheckCircle2, Pencil } from 'lucide-react';
 import CreateTaskModal from './CreateTaskModal';
 
 function cn(...inputs: ClassValue[]) {
@@ -279,7 +279,7 @@ export default function KanbanBoard({
                             onTaskClick?.(issue);
                           }
                         }}
-                        className="group/card relative bg-[#111827] hover:bg-[#111827] rounded-md border border-[#263345] hover:border-[#374151] shadow-sm hover:shadow-lg cursor-grab active:cursor-grabbing transition-all duration-200 overflow-hidden flex flex-col"
+                        className="group/card relative bg-[#111827] hover:bg-[#151d2d] rounded-md border border-[#263345] hover:border-[#374151] shadow-sm hover:shadow-lg cursor-pointer transition-all duration-200 overflow-hidden flex flex-col"
                       >
                         {/* Priority Top Border Highlight */}
                         <div className={cn(
@@ -289,31 +289,40 @@ export default function KanbanBoard({
 
                         {/* Drag Handle & ID */}
                         <div className="px-4 pt-3 flex items-center justify-between mb-2">
-                          <span className="text-[10px] font-mono text-slate-500 tracking-wider">
+                          <span className="text-[10px] font-mono text-slate-500 tracking-wider" title="Código da fase">
                             {getTaskId(issue.id, issue.key)}
                           </span>
-                          <button className="opacity-0 group-hover/card:opacity-100 text-slate-600 hover:text-slate-400 transition-opacity cursor-grab active:cursor-grabbing">
-                            <GripVertical className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/card:opacity-100">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTitleId(issue.id);
+                              }}
+                              className="rounded p-1 text-slate-500 hover:bg-[#0d1423] hover:text-[#ffb15c]"
+                              title="Editar nome da fase"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded p-1 text-slate-600 hover:bg-[#0d1423] hover:text-slate-400 cursor-grab active:cursor-grabbing"
+                              title="Mover fase"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Content */}
                         <div className="px-4 flex-1">
-                          {/* Tags */}
-                          <div className="flex flex-wrap gap-1.5 mb-2.5">
-                            {tags.map((tag, idx) => (
-                              <span key={idx} className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border", tag.color)}>
-                                {tag.label}
-                              </span>
-                            ))}
-                          </div>
-
                           {/* Title - Smart Input Editable */}
-                          <div className="mb-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="mb-3" onClick={(e) => e.stopPropagation()}>
                             {editingTitleId === issue.id ? (
                               <input
                                 autoFocus
                                 defaultValue={issue.title}
+                                onFocus={(e) => e.currentTarget.select()}
                                 onBlur={(e) => handleTitleChange(issue.id, e.target.value)}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') handleTitleChange(issue.id, e.currentTarget.value);
@@ -321,20 +330,28 @@ export default function KanbanBoard({
                                     handleTitleChange(issue.id, issue.title);
                                   }
                                 }}
-                                className="w-full bg-[#111827] border border-[#ff7a00] text-[13px] font-medium text-white rounded px-2 py-1 outline-none shadow-sm"
-                                placeholder="Digite o título da tarefa..."
+                                className="w-full bg-[#070b16] border border-[#ff7a00] text-[13px] font-bold text-white rounded px-2 py-1 outline-none shadow-sm"
+                                placeholder="Digite o nome da fase..."
                               />
                             ) : (
                               <div
                                 onClick={() => setEditingTitleId(issue.id)}
                                 className={cn(
-                                  "text-[13px] font-medium leading-relaxed px-1 -mx-1 cursor-text hover:bg-[#111827] rounded transition-colors break-words",
-                                  getTitleColor(issue.id)
+                                  "min-h-[38px] text-[13px] font-bold leading-relaxed px-1 -mx-1 cursor-text hover:bg-[#0d1423] rounded transition-colors break-words text-slate-100 line-clamp-2"
                                 )}
                               >
-                                {issue.title}
+                                {issue.title || 'Fase sem nome'}
                               </div>
                             )}
+                          </div>
+
+                          {/* Tags */}
+                          <div className="flex flex-wrap gap-1.5 mb-2.5">
+                            {tags.map((tag, idx) => (
+                              <span key={idx} className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border", tag.color)}>
+                                {tag.label}
+                              </span>
+                            ))}
                           </div>
 
                           {/* Custom Fields */}
