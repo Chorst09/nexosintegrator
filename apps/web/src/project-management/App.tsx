@@ -1309,7 +1309,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
           )}
           {activeView === 'calendar' && <CalendarView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'gantt' && <GanttView issues={activeProjectIssues} />}
-          {activeView === 'activity' && <ActivityView />}
+          {activeView === 'activity' && <ActivityView project={activeProject} issues={activeProjectIssues} users={activeTeamUsers} onTaskClick={setSelectedTask} />}
           {activeView === 'workload' && <WorkloadView issues={activeProjectIssues} users={activeTeamUsers} />}
         </div>
 

@@ -49,7 +49,11 @@ export interface ProjectTeamMember {
   role?: string;
   allocationPercent?: number;
   hourlyCost?: number;
+  startDate?: string | null;
+  endDate?: string | null;
   isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   user?: {
     id?: string;
     name?: string;
