@@ -68,6 +68,7 @@ const PROJECT_STATUSES = ['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', '
 const PROJECT_PHASES = ['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO', 'MONITORAMENTO', 'ENCERRAMENTO'];
 const PROJECT_TYPES = ['B2B', 'B2G'];
 const ATTACHMENT_CATEGORIES = ['CONTRACT', 'DELIVERABLE', 'MINUTES', 'CHANGE_REQUEST', 'ACCEPTANCE', 'OTHER'];
+const PROJECT_PHASE_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED'];
 
 const DEFAULT_PROJECT_PHASES = [
   {
@@ -109,6 +110,15 @@ function normalizeProjectStatus(value) {
 function normalizeProjectPhase(value) {
   const raw = String(value || '').trim().toUpperCase();
   return PROJECT_PHASES.includes(raw) ? raw : 'SETUP';
+}
+
+function normalizeProjectPhaseStatus(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  if (['PENDENTE', 'TODO', 'PLANEJADO', 'PLANEJAMENTO', 'EM ESPERA'].includes(raw)) return 'PENDING';
+  if (['EM_ANDAMENTO', 'EM EXECUCAO', 'EM EXECUÇÃO', 'EM PROGRESSO', 'ATUALIZACAO_NECESSARIA', 'ATUALIZAÇÃO NECESSÁRIA', 'EM RISCO'].includes(raw)) return 'IN_PROGRESS';
+  if (['DONE', 'CONCLUIDO', 'CONCLUÍDO'].includes(raw)) return 'COMPLETED';
+  if (['CANCELADO', 'CANCELED', 'CANCELLED'].includes(raw)) return 'SKIPPED';
+  return PROJECT_PHASE_STATUSES.includes(raw) ? raw : 'PENDING';
 }
 
 function normalizeProjectType(value) {
@@ -817,14 +827,69 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // === FASES ===
+router.post('/:projectId/phases', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, status, order, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate, progressPercent } = req.body;
+    const phaseName = sanitizeText(name);
+    if (!phaseName) return res.status(400).json({ error: 'Nome da fase é obrigatório' });
+
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.projectId },
+      select: { id: true }
+    });
+    if (!project) return res.status(404).json({ error: 'Projeto não encontrado' });
+
+    const maxOrder = await prisma.projectPhase.aggregate({
+      where: { projectId: req.params.projectId },
+      _max: { order: true }
+    });
+    const requestedOrder = Number(order);
+
+    const phase = await prisma.projectPhase.create({
+      data: {
+        projectId: req.params.projectId,
+        name: phaseName,
+        description: description !== undefined ? sanitizeText(description) : null,
+        order: Number.isFinite(requestedOrder) && requestedOrder > 0 ? requestedOrder : (maxOrder._max.order || 0) + 1,
+        status: normalizeProjectPhaseStatus(status),
+        plannedStartDate: plannedStartDate ? new Date(plannedStartDate) : null,
+        plannedEndDate: plannedEndDate ? new Date(plannedEndDate) : null,
+        actualStartDate: actualStartDate ? new Date(actualStartDate) : null,
+        actualEndDate: actualEndDate ? new Date(actualEndDate) : null,
+        progressPercent: progressPercent !== undefined ? parseInt(progressPercent) : 0
+      }
+    });
+
+    res.status(201).json(phase);
+  } catch (error) {
+    console.error('Erro ao criar fase:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 router.put('/:projectId/phases/:phaseId', authenticateToken, async (req, res) => {
   try {
-    const { status, progressPercent, actualStartDate, actualEndDate } = req.body;
+    const { name, description, status, order, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate } = req.body;
     const updateData = {};
-    if (status) updateData.status = status;
+    if (name !== undefined) {
+      const phaseName = sanitizeText(name);
+      if (!phaseName) return res.status(400).json({ error: 'Nome da fase é obrigatório' });
+      updateData.name = phaseName;
+    }
+    if (description !== undefined) updateData.description = sanitizeText(description);
+    if (status) updateData.status = normalizeProjectPhaseStatus(status);
+    if (order !== undefined) updateData.order = parseInt(order);
     if (progressPercent !== undefined) updateData.progressPercent = parseInt(progressPercent);
-    if (actualStartDate) updateData.actualStartDate = new Date(actualStartDate);
-    if (actualEndDate) updateData.actualEndDate = new Date(actualEndDate);
+    if (plannedStartDate !== undefined) updateData.plannedStartDate = plannedStartDate ? new Date(plannedStartDate) : null;
+    if (plannedEndDate !== undefined) updateData.plannedEndDate = plannedEndDate ? new Date(plannedEndDate) : null;
+    if (actualStartDate !== undefined) updateData.actualStartDate = actualStartDate ? new Date(actualStartDate) : null;
+    if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
+
+    const existingPhase = await prisma.projectPhase.findFirst({
+      where: { id: req.params.phaseId, projectId: req.params.projectId },
+      select: { id: true }
+    });
+    if (!existingPhase) return res.status(404).json({ error: 'Fase não encontrada neste projeto' });
 
     const phase = await prisma.projectPhase.update({
       where: { id: req.params.phaseId },

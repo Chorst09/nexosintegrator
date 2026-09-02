@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Home, Compass, CheckSquare, Sparkles, Users, FileText,
@@ -268,10 +268,11 @@ function mapProjectToSpace(project: ApiProject, index = 0): Space {
 
 function normalizeIssueStatus(value?: string | null): Issue['status'] {
   const raw = String(value || '').trim().toUpperCase();
+  if (['PENDING', 'TODO'].includes(raw)) return 'PENDENTE';
   if (['IN_PROGRESS', 'IN PROGRESS', 'DOING', 'EM_ANDAMENTO', 'EM EXECUCAO', 'EM EXECUÇÃO'].includes(raw)) return 'EM PROGRESSO';
   if (['AT_RISK', 'RISK', 'BLOCKED', 'PAUSADO'].includes(raw)) return 'EM RISCO';
   if (['DONE', 'COMPLETED', 'CONCLUIDO', 'CONCLUÍDO'].includes(raw)) return 'CONCLUÍDO';
-  if (['CANCELLED', 'CANCELED', 'CANCELADO'].includes(raw)) return 'CANCELADO';
+  if (['SKIPPED', 'CANCELLED', 'CANCELED', 'CANCELADO'].includes(raw)) return 'CANCELADO';
   if (['PLANNED', 'PLANEJADO', 'PLANEJAMENTO'].includes(raw)) return 'PLANEJAMENTO';
   return 'PENDENTE';
 }
@@ -328,6 +329,40 @@ function mapProjectTaskToIssue(project: ApiProject, task: ApiProjectTask): Issue
   };
 }
 
+function getProjectPhaseId(issue: Issue) {
+  const id = String(issue.id || '');
+  if (!id.startsWith('phase-') || !issue.projectId) return '';
+  return id.replace(/^phase-/, '');
+}
+
+function issueStatusToProjectPhaseStatus(status?: Issue['status']) {
+  switch (status) {
+    case 'EM PROGRESSO':
+    case 'EM RISCO':
+    case 'ATUALIZAÇÃO NECESSÁRIA':
+      return 'IN_PROGRESS';
+    case 'CONCLUÍDO':
+      return 'COMPLETED';
+    case 'CANCELADO':
+      return 'SKIPPED';
+    case 'PENDENTE':
+    case 'PLANEJAMENTO':
+    case 'EM ESPERA':
+    default:
+      return 'PENDING';
+  }
+}
+
+function buildPhaseRequestPayload(issue: Issue) {
+  return {
+    name: issue.title.trim(),
+    description: issue.description || '',
+    status: issueStatusToProjectPhaseStatus(issue.status),
+    plannedStartDate: issue.startDate || null,
+    plannedEndDate: issue.dueDate || null
+  };
+}
+
 function getStoredProjectIssues(): Issue[] {
   const saved = localStorage.getItem('pm_issues_v4');
   if (!saved) return [];
@@ -367,6 +402,7 @@ function projectToForm(project: Space): ProjectForm {
 
 export default function App({ onBack }: { onBack?: () => void }) {
   const navigate = useNavigate();
+  const issueSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [globalView, setGlobalView] = useState('spaces');
 
@@ -415,6 +451,12 @@ export default function App({ onBack }: { onBack?: () => void }) {
   useEffect(() => {
     localStorage.setItem('pm_projects_v1', JSON.stringify(spaces));
   }, [spaces]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(issueSaveTimers.current).forEach(clearTimeout);
+    };
+  }, []);
 
   const loadProjects = async () => {
     setIsLoadingProjects(true);
@@ -655,48 +697,107 @@ export default function App({ onBack }: { onBack?: () => void }) {
     setIsCreatingTaskGlobal(true);
   };
 
-  const handleGlobalCreateTaskSubmit = (title: string, data: any) => {
-    const normalizedTitle = title.trim();
-    const newTask: Issue = {
-      id: `new-${Date.now()}`,
-      key: `TSK-${Math.floor(Math.random() * 1000) + 100}`,
-      title: normalizedTitle,
-      description: data.description || '',
-      status: data.status || 'PENDENTE',
-      projectId: activeSpaceId,
-      priority: data.priority || 'Normal',
-      assignee: data.assignee,
-      dueDate: data.dueDate,
-      customFields: data.customFields || [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setIssues(prev => [newTask, ...prev]);
-    setIsCreatingTaskGlobal(false);
+  const saveProjectPhaseIssue = async (issue: Issue) => {
+    const phaseId = getProjectPhaseId(issue);
+    if (!phaseId || !issue.projectId) return;
 
-    if (data.phaseKind === 'KICKOFF_INTERNO' || data.phaseKind === 'KICKOFF_EXTERNO') {
-      const kickoffContext = {
-        source: 'project-management',
-        projectId: activeProject?.id,
-        projectName: activeProject?.name,
-        projectClient: activeProject?.client,
-        projectManager: activeProject?.manager,
-        projectScope: activeProject?.scope,
-        projectObjective: activeProject?.objective,
-        phaseId: newTask.id,
-        phaseTitle: normalizedTitle,
-        phaseDescription: data.description || '',
-        kickoffType: data.phaseKind === 'KICKOFF_INTERNO' ? 'internal' : 'external',
-        createdAt: new Date().toISOString()
+    const payload = buildPhaseRequestPayload(issue);
+    if (!payload.name) throw new Error('Informe o nome da fase antes de salvar.');
+
+    const response = await fetch(buildApiUrl(`/projetos/${issue.projectId}/phases/${phaseId}`), {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const responsePayload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(responsePayload.error || `Erro ${response.status} ao salvar fase`);
+    }
+  };
+
+  const scheduleProjectPhaseSave = (issue: Issue) => {
+    const phaseId = getProjectPhaseId(issue);
+    if (!phaseId || !issue.title.trim()) return;
+
+    if (issueSaveTimers.current[issue.id]) {
+      clearTimeout(issueSaveTimers.current[issue.id]);
+    }
+
+    issueSaveTimers.current[issue.id] = setTimeout(() => {
+      saveProjectPhaseIssue(issue).catch((error) => {
+        console.error('Erro ao salvar fase:', error);
+        alert(error instanceof Error ? error.message : 'Erro ao salvar fase');
+      });
+    }, 700);
+  };
+
+  const handlePersistedIssueChange = async (updatedIssue: Issue, previousIssue: Issue) => {
+    try {
+      await saveProjectPhaseIssue(updatedIssue);
+    } catch (error) {
+      setIssues(prev => prev.map(issue => issue.id === previousIssue.id ? previousIssue : issue));
+      console.error('Erro ao salvar fase:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao salvar fase');
+    }
+  };
+
+  const handleGlobalCreateTaskSubmit = async (title: string, data: any) => {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle || !activeProject?.id) return;
+
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${activeProject.id}/phases`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: normalizedTitle,
+          description: data.description || '',
+          status: issueStatusToProjectPhaseStatus(data.status || 'PENDENTE'),
+          plannedEndDate: data.dueDate || null
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Erro ${response.status} ao criar fase`);
+      }
+
+      const newTask = {
+        ...mapProjectPhaseToIssue({ id: activeProject.id, createdAt: activeProject.createdAt } as ApiProject, payload),
+        priority: data.priority || 'Normal',
+        assignee: data.assignee,
+        customFields: data.customFields || []
       };
-      localStorage.setItem('pm_kickoff_context', JSON.stringify(kickoffContext));
-      navigate(`/kickoff?from=project&openCreate=1&type=${kickoffContext.kickoffType}`);
+      setIssues(prev => [newTask, ...prev.filter(issue => issue.id !== newTask.id)]);
+      setIsCreatingTaskGlobal(false);
+
+      if (data.phaseKind === 'KICKOFF_INTERNO' || data.phaseKind === 'KICKOFF_EXTERNO') {
+        const kickoffContext = {
+          source: 'project-management',
+          projectId: activeProject.id,
+          projectName: activeProject.name,
+          projectClient: activeProject.client,
+          projectManager: activeProject.manager,
+          projectScope: activeProject.scope,
+          projectObjective: activeProject.objective,
+          phaseId: newTask.id,
+          phaseTitle: normalizedTitle,
+          phaseDescription: data.description || '',
+          kickoffType: data.phaseKind === 'KICKOFF_INTERNO' ? 'internal' : 'external',
+          createdAt: new Date().toISOString()
+        };
+        localStorage.setItem('pm_kickoff_context', JSON.stringify(kickoffContext));
+        navigate(`/kickoff?from=project&openCreate=1&type=${kickoffContext.kickoffType}`);
+      }
+    } catch (error) {
+      console.error('Erro ao criar fase:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao criar fase');
     }
   };
 
   const handleUpdateIssue = (updatedIssue: Issue) => {
     setIssues(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
     setSelectedTask(updatedIssue);
+    scheduleProjectPhaseSave(updatedIssue);
   };
 
   return (
@@ -946,7 +1047,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
               </button>
             </div>
           )}
-          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} />}
+          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} onIssueChange={handlePersistedIssueChange} />}
           {activeView === 'list' && activeProject && <ListView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'dashboard' && (
             <Dashboard

@@ -60,12 +60,14 @@ export default function KanbanBoard({
   issues,
   setIssues,
   onTaskClick,
-  onCreateTask
+  onCreateTask,
+  onIssueChange
 }: {
   issues: Issue[],
   setIssues: React.Dispatch<React.SetStateAction<Issue[]>>,
   onTaskClick?: (issue: Issue) => void,
-  onCreateTask?: (title: string, data: any) => void
+  onCreateTask?: (title: string, data: any) => void | Promise<void>,
+  onIssueChange?: (updatedIssue: Issue, previousIssue: Issue) => void | Promise<void>
 }) {
   const [columns, setColumns] = useState<Column[]>(() => {
     const saved = localStorage.getItem('pm_columns_v4');
@@ -97,14 +99,19 @@ export default function KanbanBoard({
   };
 
   const handleTitleChange = (id: string, newTitle: string) => {
+    const previousIssue = issues.find(iss => iss.id === id);
     if (!newTitle.trim()) {
       // If saved empty, remove the task (useful for canceling new tasks)
       setIssues(prev => prev.filter(iss => iss.id !== id || (iss.title && iss.title.trim() !== '')));
       setEditingTitleId(null);
       return;
     }
-    setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, title: newTitle.trim() } : iss));
+    const updatedIssue = previousIssue ? { ...previousIssue, title: newTitle.trim(), updatedAt: new Date().toISOString() } : null;
+    setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, title: newTitle.trim(), updatedAt: new Date().toISOString() } : iss));
     setEditingTitleId(null);
+    if (updatedIssue && previousIssue) {
+      void onIssueChange?.(updatedIssue, previousIssue);
+    }
   };
 
   const handleAddTask = (status: IssueStatus) => {
@@ -187,10 +194,16 @@ export default function KanbanBoard({
 
     if (!id) return;
 
+    const previousIssue = issues.find(issue => issue.id === id);
+    const updatedIssue = previousIssue ? { ...previousIssue, status, updatedAt: new Date().toISOString() } : null;
+
     setIssues(prev => prev.map(issue =>
       issue.id === id ? { ...issue, status, updatedAt: new Date().toISOString() } : issue
     ));
     setDraggedIssueId(null);
+    if (updatedIssue && previousIssue) {
+      void onIssueChange?.(updatedIssue, previousIssue);
+    }
   };
 
   return (
