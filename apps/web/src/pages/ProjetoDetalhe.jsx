@@ -195,6 +195,22 @@ export default function ProjetoDetalhe() {
     } catch (e) { console.error(e); }
   };
 
+  const handleDeleteTeamMember = async (member) => {
+    if (!window.confirm(`Excluir ${member.user?.name || 'este membro'} da equipe do projeto?`)) return;
+
+    try {
+      const res = await fetch(buildApiUrl(`/projetos/${id}/team/${member.id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (res.ok) {
+        setTeam(prev => prev.filter(item => item.id !== member.id));
+        fetchProject();
+      }
+    } catch (e) { console.error(e); }
+  };
+
   const handleCreateRisk = async (e) => {
     e.preventDefault();
     try {
@@ -543,7 +559,7 @@ export default function ProjetoDetalhe() {
                           </span>
                         </td>
                         <td className="p-2 text-right">
-                          <button className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500">
+                          <button onClick={() => handleDeleteTeamMember(member)} className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500" title="Excluir membro">
                             <Trash2 size={12} />
                           </button>
                         </td>

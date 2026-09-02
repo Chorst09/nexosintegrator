@@ -67,6 +67,7 @@ function generateProjectNumber() {
 const PROJECT_STATUSES = ['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', 'CANCELADO'];
 const PROJECT_PHASES = ['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO', 'MONITORAMENTO', 'ENCERRAMENTO'];
 const PROJECT_PHASE_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED'];
+const PROJECT_ROLES = ['PROJECT_MANAGER', 'TECH_LEAD', 'DEVELOPER', 'ANALYST', 'QA', 'ARCHITECT', 'CONSULTANT'];
 
 function normalizeProjectStatus(value) {
   const raw = String(value || '').trim().toUpperCase();
@@ -1021,11 +1022,30 @@ router.post('/:projectId/team', authenticateToken, async (req, res) => {
     const { userId, role, allocationPercent, hourlyCost, startDate, endDate } = req.body;
     if (!userId) return res.status(400).json({ error: 'Usuário é obrigatório' });
 
+    const normalizedRole = String(role || 'DEVELOPER').trim().toUpperCase();
+    if (!PROJECT_ROLES.includes(normalizedRole)) {
+      return res.status(400).json({ error: 'Função de projeto inválida' });
+    }
+
+    const existingMember = await prisma.projectTeam.findUnique({
+      where: {
+        projectId_userId: {
+          projectId: req.params.projectId,
+          userId
+        }
+      },
+      include: { user: { select: { id: true, name: true, email: true } } }
+    });
+
+    if (existingMember) {
+      return res.status(409).json({ error: 'Membro já está no projeto', member: existingMember });
+    }
+
     const member = await prisma.projectTeam.create({
       data: {
         projectId: req.params.projectId,
         userId,
-        role: role || 'DEVELOPER',
+        role: normalizedRole,
         allocationPercent: allocationPercent ? parseFloat(allocationPercent) : 100,
         hourlyCost: hourlyCost ? parseFloat(hourlyCost) : 0,
         startDate: startDate ? new Date(startDate) : null,
@@ -1063,6 +1083,17 @@ router.put('/:projectId/team/:memberId', authenticateToken, async (req, res) => 
 
 router.delete('/:projectId/team/:memberId', authenticateToken, async (req, res) => {
   try {
+    const member = await prisma.projectTeam.findFirst({
+      where: {
+        id: req.params.memberId,
+        projectId: req.params.projectId
+      }
+    });
+
+    if (!member) {
+      return res.status(404).json({ error: 'Membro não encontrado neste projeto' });
+    }
+
     await prisma.projectTeam.delete({ where: { id: req.params.memberId } });
     res.json({ message: 'Membro removido' });
   } catch (error) {

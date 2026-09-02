@@ -2,11 +2,49 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { mockUsers } from '../data';
 import {
   Mail, MoreHorizontal, Search, UserPlus, Shield, Activity, Users,
-  Send, X, CheckCircle2, Settings, Copy, AtSign, Building2
+  Send, X, CheckCircle2, Settings, Copy, AtSign, Building2, Trash2, Loader2
 } from 'lucide-react';
+import { buildApiUrl, getAuthHeaders } from '../../config/api';
 
 type EmailProvider = 'Gmail' | 'Google Workspace' | 'Outlook' | 'Microsoft 365' | 'Zoho Mail' | 'SMTP proprio';
 type TeamRole = 'Admin' | 'Gerente' | 'Membro' | 'Convidado';
+type ProjectRole = 'PROJECT_MANAGER' | 'TECH_LEAD' | 'DEVELOPER' | 'ANALYST' | 'QA' | 'ARCHITECT' | 'CONSULTANT';
+
+type UserOption = {
+  id: string;
+  name: string;
+  email?: string;
+  role?: string;
+};
+
+type TeamMember = {
+  id: string;
+  userId: string;
+  role?: ProjectRole | string;
+  allocationPercent?: number;
+  hourlyCost?: number;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  user?: {
+    id?: string;
+    name?: string;
+    email?: string;
+  };
+};
+
+type DisplayUser = {
+  id: string;
+  memberId?: string;
+  userId?: string;
+  name: string;
+  email?: string;
+  initials: string;
+  color: string;
+  role?: string;
+  isActive?: boolean;
+  lastAccess?: string;
+};
 
 interface TeamInvite {
   id: string;
@@ -17,6 +55,13 @@ interface TeamInvite {
   status: 'Pendente' | 'Enviado';
   createdAt: string;
 }
+
+type TeamViewProps = {
+  projectId?: string;
+  projectName?: string;
+  users?: UserOption[];
+  onTeamChanged?: () => void;
+};
 
 const providerOptions: Array<{
   name: EmailProvider;
@@ -32,6 +77,21 @@ const providerOptions: Array<{
 ];
 
 const defaultInviteMessage = 'Voce foi convidado para participar da equipe do projeto no Nexos.';
+const roleToProjectRole: Record<TeamRole, ProjectRole> = {
+  Admin: 'PROJECT_MANAGER',
+  Gerente: 'PROJECT_MANAGER',
+  Membro: 'DEVELOPER',
+  Convidado: 'CONSULTANT'
+};
+const projectRoleLabels: Record<ProjectRole, string> = {
+  PROJECT_MANAGER: 'Gestor',
+  TECH_LEAD: 'Tech Lead',
+  DEVELOPER: 'Membro',
+  ANALYST: 'Analista',
+  QA: 'QA',
+  ARCHITECT: 'Arquiteto',
+  CONSULTANT: 'Convidado'
+};
 
 function parseEmails(value: string) {
   return value
@@ -53,7 +113,19 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export default function TeamView() {
+function getInitials(name?: string, email?: string) {
+  const source = String(name || email || '?').trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
+function normalizeUserRole(role?: string) {
+  const raw = String(role || '').trim().toUpperCase();
+  return projectRoleLabels[raw as ProjectRole] || role || 'Membro';
+}
+
+export default function TeamView({ projectId, projectName, users = [], onTeamChanged }: TeamViewProps) {
   const [search, setSearch] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
@@ -61,7 +133,11 @@ export default function TeamView() {
   const [role, setRole] = useState<TeamRole>('Membro');
   const [message, setMessage] = useState(defaultInviteMessage);
   const [inviteError, setInviteError] = useState('');
+  const [teamError, setTeamError] = useState('');
+  const [isLoadingTeam, setIsLoadingTeam] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState('');
   const [copied, setCopied] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>(() => {
     const saved = localStorage.getItem('pm_team_invites_v1');
     if (saved) {
@@ -74,20 +150,136 @@ export default function TeamView() {
     localStorage.setItem('pm_team_invites_v1', JSON.stringify(invites));
   }, [invites]);
 
+  const loadTeam = async () => {
+    if (!projectId) {
+      setTeamMembers([]);
+      setTeamError('');
+      return;
+    }
+
+    setIsLoadingTeam(true);
+    setTeamError('');
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${projectId}/team`), {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status} ao carregar equipe`);
+      }
+
+      const payload = await response.json();
+      setTeamMembers(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      console.error('Erro ao carregar equipe do projeto:', error);
+      setTeamError(error instanceof Error ? error.message : 'Erro ao carregar equipe');
+    } finally {
+      setIsLoadingTeam(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTeam();
+  }, [projectId]);
+
+  useEffect(() => {
+    const acceptInvite = async () => {
+      if (!projectId) return;
+
+      const params = new URLSearchParams(window.location.search);
+      const inviteProjectId = params.get('projectId');
+      const inviteRole = params.get('role') as TeamRole | null;
+      const hasInvite = params.has('invite');
+
+      if (!hasInvite || inviteProjectId !== projectId) return;
+
+      const acceptedKey = `pm_invite_accepted_${projectId}`;
+      if (sessionStorage.getItem(acceptedKey) === 'true') return;
+
+      try {
+        const meResponse = await fetch(buildApiUrl('/auth/me'), {
+          headers: getAuthHeaders()
+        });
+
+        if (!meResponse.ok) return;
+
+        const mePayload = await meResponse.json();
+        const currentUser = mePayload.user || mePayload;
+        if (!currentUser?.id) return;
+
+        const selectedRole = inviteRole && roleToProjectRole[inviteRole] ? roleToProjectRole[inviteRole] : 'DEVELOPER';
+        const response = await fetch(buildApiUrl(`/projetos/${projectId}/team`), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            userId: currentUser.id,
+            role: selectedRole,
+            allocationPercent: 100,
+            hourlyCost: 0
+          })
+        });
+
+        if (!response.ok && response.status !== 409) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || `Erro ${response.status} ao aceitar convite`);
+        }
+
+        sessionStorage.setItem(acceptedKey, 'true');
+        await loadTeam();
+        onTeamChanged?.();
+        params.delete('invite');
+        params.delete('role');
+        const nextSearch = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+      } catch (error) {
+        console.error('Erro ao aceitar convite de equipe:', error);
+        setTeamError(error instanceof Error ? error.message : 'Nao foi possivel aceitar o convite.');
+      }
+    };
+
+    acceptInvite();
+  }, [projectId, onTeamChanged]);
+
+  const displayedUsers = useMemo(() => {
+    if (!projectId) return mockUsers as DisplayUser[];
+    return teamMembers.map((member, index) => {
+      const name = member.user?.name || 'Usuario sem nome';
+      const email = member.user?.email || '';
+      const colors = ['bg-[#ff7a00]', 'bg-[#18c8df]', 'bg-[#22c55e]', 'bg-[#f6b40b]', 'bg-[#3b82f6]', 'bg-zinc-600'];
+      return {
+        id: member.id,
+        memberId: member.id,
+        userId: member.userId,
+        name,
+        email,
+        initials: getInitials(name, email),
+        color: colors[index % colors.length],
+        role: normalizeUserRole(member.role),
+        isActive: member.isActive !== false,
+        lastAccess: member.createdAt ? `Adicionado em ${formatDate(member.createdAt)}` : 'Sem registro'
+      };
+    });
+  }, [projectId, teamMembers]);
+
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return mockUsers;
-    return mockUsers.filter(user =>
+    if (!term) return displayedUsers;
+    return displayedUsers.filter(user =>
       user.name.toLowerCase().includes(term) ||
       user.email?.toLowerCase().includes(term) ||
       user.role?.toLowerCase().includes(term)
     );
-  }, [search]);
+  }, [displayedUsers, search]);
 
   const selectedProvider = providerOptions.find(item => item.name === provider) || providerOptions[0];
   const pendingInvites = invites.filter(invite => invite.status === 'Pendente').length;
   const parsedEmails = parseEmails(inviteEmails);
-  const inviteLink = `https://nexos.chorstconsult.com.br/projetos?invite=${encodeURIComponent(provider)}&role=${encodeURIComponent(role)}`;
+  const inviteParams = new URLSearchParams({
+    invite: provider,
+    role
+  });
+  if (projectId) inviteParams.set('projectId', projectId);
+  const inviteLink = `${window.location.origin}/projetos?${inviteParams.toString()}`;
 
   const resetInvite = () => {
     setInviteEmails('');
@@ -103,7 +295,7 @@ export default function TeamView() {
     resetInvite();
   };
 
-  const sendInvite = () => {
+  const sendInvite = async () => {
     const invalidEmails = parsedEmails.filter(email => !isValidEmail(email));
 
     if (parsedEmails.length === 0) {
@@ -126,9 +318,73 @@ export default function TeamView() {
       createdAt: new Date().toISOString()
     };
 
-    setInvites(prev => [nextInvite, ...prev]);
-    window.location.href = `mailto:${parsedEmails.join(',')}?subject=${encodeURIComponent('Convite para equipe do projeto')}&body=${encodeURIComponent(`${message}\n\nAcesse: ${inviteLink}`)}`;
-    closeInvite();
+    try {
+      setInviteError('');
+
+      if (projectId) {
+        const currentUserIds = new Set(teamMembers.map(member => member.userId));
+        const matchingUsers = parsedEmails
+          .map(email => users.find(user => String(user.email || '').trim().toLowerCase() === email))
+          .filter((user): user is UserOption => Boolean(user))
+          .filter(user => !currentUserIds.has(user.id));
+
+        await Promise.all(matchingUsers.map(user => fetch(buildApiUrl(`/projetos/${projectId}/team`), {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            userId: user.id,
+            role: roleToProjectRole[role],
+            allocationPercent: 100,
+            hourlyCost: 0
+          })
+        }).then(async response => {
+          if (!response.ok && response.status !== 409) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.error || `Erro ${response.status} ao adicionar ${user.email}`);
+          }
+        })));
+
+        if (matchingUsers.length > 0) {
+          nextInvite.status = 'Enviado';
+          await loadTeam();
+          onTeamChanged?.();
+        }
+      }
+
+      setInvites(prev => [nextInvite, ...prev]);
+      window.location.href = `mailto:${parsedEmails.join(',')}?subject=${encodeURIComponent('Convite para equipe do projeto')}&body=${encodeURIComponent(`${message}\n\nAcesse: ${inviteLink}`)}`;
+      closeInvite();
+    } catch (error) {
+      console.error('Erro ao enviar convite:', error);
+      setInviteError(error instanceof Error ? error.message : 'Nao foi possivel adicionar o membro ao projeto.');
+    }
+  };
+
+  const removeMember = async (memberId: string, memberName: string) => {
+    if (!projectId) return;
+    if (!window.confirm(`Excluir ${memberName} da equipe deste projeto?`)) return;
+
+    setRemovingMemberId(memberId);
+    setTeamError('');
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${projectId}/team/${memberId}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Erro ${response.status} ao remover membro`);
+      }
+
+      setTeamMembers(prev => prev.filter(member => member.id !== memberId));
+      onTeamChanged?.();
+    } catch (error) {
+      console.error('Erro ao remover membro:', error);
+      setTeamError(error instanceof Error ? error.message : 'Nao foi possivel remover o membro.');
+    } finally {
+      setRemovingMemberId('');
+    }
   };
 
   const copyInviteLink = async () => {
@@ -146,10 +402,13 @@ export default function TeamView() {
       <div className="max-w-6xl mx-auto">
 
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
-            <Users className="w-6 h-6 text-[#ff7a00]" />
-            Equipe do Projeto
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+              <Users className="w-6 h-6 text-[#ff7a00]" />
+              Equipe do Projeto
+            </h1>
+            {projectName && <p className="mt-1 text-sm text-slate-500">Projeto: {projectName}</p>}
+          </div>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -176,14 +435,14 @@ export default function TeamView() {
               <div className="text-slate-500 text-sm font-medium">Membros Totais</div>
               <Users className="w-4 h-4 text-[#ff7a00]" />
             </div>
-            <div className="text-2xl font-bold text-slate-100">{mockUsers.length}</div>
+            <div className="text-2xl font-bold text-slate-100">{displayedUsers.length}</div>
           </div>
           <div className="bg-[linear-gradient(140deg,rgba(34,197,94,0.14),rgba(17,24,39,0.98))] border border-[#263345] rounded-md p-5">
             <div className="flex justify-between items-start mb-2">
-              <div className="text-slate-500 text-sm font-medium">Ativos Agora</div>
+              <div className="text-slate-500 text-sm font-medium">Membros Ativos</div>
               <Activity className="w-4 h-4 text-[#22c55e]" />
             </div>
-            <div className="text-2xl font-bold text-slate-100">2</div>
+            <div className="text-2xl font-bold text-slate-100">{displayedUsers.filter(user => user.isActive !== false).length}</div>
           </div>
           <div className="bg-[linear-gradient(140deg,rgba(246,180,11,0.14),rgba(17,24,39,0.98))] border border-[#263345] rounded-md p-5">
             <div className="flex justify-between items-start mb-2">
@@ -196,6 +455,11 @@ export default function TeamView() {
 
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="bg-[#111827] border border-[#263345] rounded-md overflow-hidden shadow-sm">
+            {teamError && (
+              <div className="border-b border-[#ff7a00]/35 bg-[#ff7a00]/10 px-6 py-3 text-sm font-semibold text-[#ffb15c]">
+                {teamError}
+              </div>
+            )}
             <table className="w-full text-left text-sm">
               <thead className="border-b border-[#263345] text-slate-400 bg-[#0b1020]">
                 <tr>
@@ -207,7 +471,22 @@ export default function TeamView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#0d1423]">
-                {filteredUsers.map((user, idx) => (
+                {isLoadingTeam && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-500">
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-[#ff7a00]" />
+                      Carregando equipe...
+                    </td>
+                  </tr>
+                )}
+                {!isLoadingTeam && filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-500">
+                      Nenhum membro encontrado.
+                    </td>
+                  </tr>
+                )}
+                {!isLoadingTeam && filteredUsers.map((user, idx) => (
                   <tr key={user.id} className="hover:bg-[#0d1423] transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -230,16 +509,22 @@ export default function TeamView() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${idx < 2 ? 'bg-[#22c55e]' : 'bg-slate-600'}`}></span>
-                        <span className="text-slate-300 text-xs">{idx < 2 ? 'Online' : 'Offline'}</span>
+                        <span className={`w-2 h-2 rounded-full ${user.isActive !== false ? 'bg-[#22c55e]' : 'bg-slate-600'}`}></span>
+                        <span className="text-slate-300 text-xs">{user.isActive !== false ? 'Ativo' : 'Inativo'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-slate-500 text-xs font-medium">
-                      {idx === 0 ? 'Agora mesmo' : idx === 1 ? 'Há 5 min' : 'Há 2 dias'}
+                      {user.lastAccess || (idx === 0 ? 'Agora mesmo' : idx === 1 ? 'Ha 5 min' : 'Ha 2 dias')}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="text-slate-500 hover:text-slate-200 p-1.5 rounded hover:bg-[#1f2937] transition-colors opacity-0 group-hover:opacity-100">
-                        <MoreHorizontal className="w-4 h-4" />
+                      <button
+                        type="button"
+                        onClick={() => projectId ? removeMember(user.memberId || user.id, user.name) : undefined}
+                        disabled={!projectId || removingMemberId === (user.memberId || user.id)}
+                        title={projectId ? 'Excluir membro' : 'Disponivel em um projeto selecionado'}
+                        className="text-slate-500 hover:text-red-300 p-1.5 rounded hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        {projectId ? <Trash2 className="w-4 h-4" /> : <MoreHorizontal className="w-4 h-4" />}
                       </button>
                     </td>
                   </tr>

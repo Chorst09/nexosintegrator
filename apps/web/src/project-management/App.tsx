@@ -524,6 +524,8 @@ export default function App({ onBack }: { onBack?: () => void }) {
         return next;
       });
       setActiveSpaceId((current) => {
+        const requestedProjectId = new URLSearchParams(window.location.search).get('projectId');
+        if (requestedProjectId && mapped.some((project) => project.id === requestedProjectId)) return requestedProjectId;
         if (current && mapped.some((project) => project.id === current)) return current;
         return mapped[0]?.id || '';
       });
@@ -1081,7 +1083,14 @@ export default function App({ onBack }: { onBack?: () => void }) {
               onCreateProject={() => setIsCreatingSpace(true)}
             />
           )}
-          {activeView === 'team' && <TeamView />}
+          {activeView === 'team' && (
+            <TeamView
+              projectId={activeProject?.id}
+              projectName={activeProject?.name}
+              users={users}
+              onTeamChanged={loadProjects}
+            />
+          )}
           {activeView === 'calendar' && <CalendarView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'gantt' && <GanttView issues={activeProjectIssues} />}
           {activeView === 'activity' && <ActivityView />}
@@ -1125,7 +1134,14 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 }}
               />
             )}
-            {globalView === 'teams' && <TeamView />}
+            {globalView === 'teams' && (
+              <TeamView
+                projectId={activeProject?.id}
+                projectName={activeProject?.name}
+                users={users}
+                onTeamChanged={loadProjects}
+              />
+            )}
             {globalView === 'docs' && (
               <DocsView
                 projects={spaces}
