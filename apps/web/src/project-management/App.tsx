@@ -4,7 +4,7 @@ import {
   Home, Compass, CheckSquare, Sparkles, Users, FileText,
   BarChart2, LayoutTemplate, MoreHorizontal,
   Search, Bell, Settings, Plus, ChevronDown, CheckCircle2,
-  List as ListIcon, Calendar, Activity,
+  List as ListIcon, Calendar, Activity, Upload,
   Users2, GanttChartSquare, ArrowLeft, X, Target, Briefcase, DollarSign
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
@@ -31,6 +31,7 @@ function cn(...inputs: ClassValue[]) {
 type ViewMode = 'board' | 'list' | 'dashboard' | 'team' | 'calendar' | 'gantt' | 'activity' | 'workload';
 type ProjectStatus = NonNullable<Space['status']>;
 type ProjectPhase = NonNullable<Space['phase']>;
+type ProjectPriority = 'Baixa' | 'Normal' | 'Alta' | 'Urgente';
 
 type CompanyOption = {
   id: string;
@@ -123,7 +124,7 @@ const emptyProjectForm = {
   manager: '',
   status: 'PLANEJADO' as ProjectStatus,
   phase: 'SETUP' as ProjectPhase,
-  priority: 'Normal' as const,
+  priority: 'Normal' as ProjectPriority,
   startDate: '',
   endDate: '',
   budget: '',
@@ -146,6 +147,8 @@ type GeneratedProjectPhase = {
   plannedEndDay?: number | null;
   deliverable?: string;
   requirements?: string[];
+  materials?: string[];
+  pmbokProcessGroup?: string;
 };
 
 function normalizeProjectStatus(value?: string | null): ProjectStatus {
@@ -179,6 +182,54 @@ function parseCurrencyValue(value: string) {
     .replace(',', '.');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeLookupText(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function findOptionByName<T extends { name: string }>(options: T[], value?: string | null) {
+  const target = normalizeLookupText(value);
+  if (!target) return undefined;
+  return options.find((option) => normalizeLookupText(option.name) === target)
+    || options.find((option) => normalizeLookupText(option.name).includes(target) || target.includes(normalizeLookupText(option.name)));
+}
+
+function normalizeAiPriority(value?: string | null): ProjectForm['priority'] | undefined {
+  const raw = normalizeLookupText(value);
+  if (!raw) return undefined;
+  if (raw.includes('critica') || raw.includes('critical') || raw.includes('urgente')) return 'Urgente';
+  if (raw.includes('alta') || raw.includes('high')) return 'Alta';
+  if (raw.includes('baixa') || raw.includes('low')) return 'Baixa';
+  return 'Normal';
+}
+
+function normalizeAiDateInput(value?: string | null) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const br = text.match(/\b([0-3]?\d)[\/\-.]([0-1]?\d)[\/\-.](\d{4})\b/);
+  if (br) return `${br[3]}-${br[2].padStart(2, '0')}-${br[1].padStart(2, '0')}`;
+  return '';
+}
+
+function formatAiBudget(value: unknown) {
+  if (value === null || value === undefined || value === '') return '';
+  const numeric = typeof value === 'number'
+    ? value
+    : Number(String(value).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+  return Number.isFinite(numeric) ? String(numeric) : '';
+}
+
+function formatAiLongText(value: unknown, fallback = '') {
+  if (Array.isArray(value)) return value.filter(Boolean).join('\n');
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
 function mapProjectToSpace(project: ApiProject, index = 0): Space {
@@ -495,6 +546,9 @@ export default function App({ onBack }: { onBack?: () => void }) {
             metadata: {
               objective,
               scope,
+              methodology: 'PMBOK/PMI',
+              charterFramework: 'Project Charter + Declaração de Escopo',
+              analysisSource: generatedProjectPhases.length > 0 ? 'GEMINI_AI_ANALYSIS' : 'MANUAL',
               sponsor: projectForm.sponsor.trim(),
               priority: projectForm.priority,
               deliverables: projectForm.deliverables.trim(),
@@ -1047,6 +1101,8 @@ function ProjectCreateModal({
   onSubmit: () => void | Promise<void>;
 }) {
   const [aiSourceText, setAiSourceText] = useState('');
+  const [aiFile, setAiFile] = useState<File | null>(null);
+  const [aiFileInputKey, setAiFileInputKey] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiError, setAiError] = useState('');
   const fieldClass = "w-full rounded-md border border-[#374151] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00] focus:ring-2 focus:ring-[#ff7a00]/20";
@@ -1059,8 +1115,8 @@ function ProjectCreateModal({
 
   const handleAnalyzeWithAi = async () => {
     const sourceText = aiSourceText.trim();
-    if (!sourceText) {
-      setAiError('Cole o texto do edital, termo de referência ou análise antes de usar a IA.');
+    if (!sourceText && !aiFile) {
+      setAiError('Anexe o edital/projeto ou cole o texto antes de usar a IA.');
       return;
     }
 
@@ -1068,15 +1124,18 @@ function ProjectCreateModal({
     setAiError('');
 
     try {
+      const formData = new FormData();
+      if (sourceText) formData.append('sourceText', sourceText);
+      if (aiFile) formData.append('file', aiFile);
+      formData.append('projectName', form.name);
+      formData.append('projectType', form.type);
+      formData.append('client', form.client);
+
+      const token = localStorage.getItem('token');
       const response = await fetch(buildApiUrl('/projetos/ai-analyze'), {
         method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          sourceText,
-          projectName: form.name,
-          projectType: form.type,
-          client: form.client
-        })
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData
       });
       const payload = await response.json().catch(() => ({}));
 
@@ -1085,16 +1144,29 @@ function ProjectCreateModal({
       }
 
       const analysis = payload.analysis || {};
+      const matchedCompany = findOptionByName(companies, analysis.client || form.client);
+      const matchedManager = findOptionByName(users, analysis.manager || form.manager);
+      const nextType = String(matchedCompany?.clientType || analysis.type || form.type).toUpperCase() === 'B2G' ? 'B2G' : 'B2B';
+      const aiPriority = normalizeAiPriority(analysis.priority);
       onAnalyzeResult({
         name: analysis.name || form.name,
-        type: (analysis.type === 'B2G' || analysis.type === 'B2B') ? analysis.type : form.type,
+        type: nextType,
+        companyId: matchedCompany?.id || form.companyId,
+        client: matchedCompany?.name || analysis.client || form.client,
+        sponsor: analysis.sponsor || form.sponsor,
+        projectManagerId: matchedManager?.id || form.projectManagerId,
+        manager: matchedManager?.name || analysis.manager || form.manager,
+        budget: formatAiBudget(analysis.budget) || form.budget,
+        startDate: normalizeAiDateInput(analysis.startDate) || form.startDate,
+        endDate: normalizeAiDateInput(analysis.endDate) || form.endDate,
         objective: analysis.objective || form.objective,
         scope: analysis.scope || form.scope,
-        deliverables: Array.isArray(analysis.deliverables) ? analysis.deliverables.join('\n') : analysis.deliverables || form.deliverables,
-        successCriteria: Array.isArray(analysis.successCriteria) ? analysis.successCriteria.join('\n') : analysis.successCriteria || form.successCriteria,
-        risks: Array.isArray(analysis.risks) ? analysis.risks.join('\n') : analysis.risks || form.risks,
+        deliverables: formatAiLongText(analysis.deliverables, form.deliverables),
+        successCriteria: formatAiLongText(analysis.successCriteria, form.successCriteria),
+        risks: formatAiLongText(analysis.risks, form.risks),
         notes: analysis.notes || form.notes,
-        status: 'PLANEJADO',
+        status: normalizeProjectStatus(analysis.status || 'PLANEJADO'),
+        priority: aiPriority || form.priority,
         phase: 'SETUP'
       }, Array.isArray(analysis.phases) ? analysis.phases : []);
     } catch (error) {
@@ -1150,20 +1222,58 @@ function ProjectCreateModal({
                 <div>
                   <p className="flex items-center gap-2 text-sm font-black text-slate-100">
                     <Sparkles className="h-4 w-4 text-[#18c8df]" />
-                    Analisar com IA
+                    Analisar com IA PMBOK/PMI
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Cole o edital, termo de referência ou análise prévia para gerar requisitos e fases.</p>
+                  <p className="mt-1 text-xs text-slate-500">Anexe o edital/projeto ou cole o conteúdo para preencher requisitos, escopo e fases.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAnalyzeWithAi}
-                  disabled={isAnalyzing}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#18c8df] px-4 py-2 text-xs font-black text-[#050914] transition-colors hover:bg-[#67e8f9] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {isAnalyzing ? 'Analisando...' : 'Gerar requisitos e fases'}
-                </button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-[#18c8df]/45 bg-[#18c8df]/10 px-4 py-2 text-xs font-black text-[#67e8f9] transition-colors hover:border-[#67e8f9] hover:bg-[#18c8df]/15">
+                    <Upload className="h-3.5 w-3.5" />
+                    Anexar edital/projeto
+                    <input
+                      key={aiFileInputKey}
+                      type="file"
+                      className="sr-only"
+                      accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/plain,text/markdown,text/csv,application/json"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setAiFile(file);
+                        setAiError('');
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeWithAi}
+                    disabled={isAnalyzing}
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-[#18c8df] px-4 py-2 text-xs font-black text-[#050914] transition-colors hover:bg-[#67e8f9] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {isAnalyzing ? 'Analisando...' : 'Gerar requisitos e fases'}
+                  </button>
+                </div>
               </div>
+              {aiFile && (
+                <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-[#263345] bg-[#070b16] px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <FileText className="h-4 w-4 flex-shrink-0 text-[#18c8df]" />
+                    <span className="truncate text-xs font-semibold text-slate-300">{aiFile.name}</span>
+                    <span className="text-[11px] text-slate-600">{Math.max(1, Math.round(aiFile.size / 1024))} KB</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiFile(null);
+                      setAiFileInputKey((value) => value + 1);
+                      setAiError('');
+                    }}
+                    className="rounded-md p-1 text-slate-500 transition-colors hover:bg-[#1f2937] hover:text-white"
+                    title="Remover anexo"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               <textarea
                 className={`${fieldClass} min-h-[120px] resize-y`}
                 value={aiSourceText}
@@ -1171,7 +1281,7 @@ function ProjectCreateModal({
                   setAiSourceText(e.target.value);
                   setAiError('');
                 }}
-                placeholder="Cole aqui o texto analisado do edital, termo de referência, requisitos técnicos, prazos e entregáveis..."
+                placeholder="Opcional: cole aqui também trechos do edital, termo de referência, requisitos técnicos, prazos e entregáveis..."
               />
               {aiError && (
                 <div className="mt-3 rounded-md border border-red-500/35 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200">
@@ -1189,6 +1299,9 @@ function ProjectCreateModal({
                       <div key={`${phase.name}-${index}`} className="rounded-md border border-[#263345] bg-[#070b16] p-3">
                         <p className="text-xs font-black text-slate-100">{index + 1}. {phase.name}</p>
                         <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{phase.description || phase.deliverable || 'Fase gerada pela IA.'}</p>
+                        {phase.pmbokProcessGroup && (
+                          <p className="mt-2 text-[11px] font-bold text-[#67e8f9]">{phase.pmbokProcessGroup}</p>
+                        )}
                         {(phase.plannedStartDay || phase.plannedEndDay) && (
                           <p className="mt-2 text-[11px] font-bold text-[#ffb15c]">
                             Dia {phase.plannedStartDay || '?'} a {phase.plannedEndDay || '?'}

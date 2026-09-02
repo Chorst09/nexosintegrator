@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const { PDFParse } = require('pdf-parse');
 const path = require('path');
 const fs = require('fs');
 const { prisma } = require('../lib/prisma.cjs');
@@ -31,6 +32,29 @@ const upload = multer({
     cb(new Error('Tipo de arquivo não permitido'));
   }
 });
+
+const aiUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: function (req, file, cb) {
+    const allowedExtensions = ['.pdf', '.txt', '.md', '.csv', '.json'];
+    const extname = path.extname(file.originalname || '').toLowerCase();
+    if (allowedExtensions.includes(extname)) {
+      return cb(null, true);
+    }
+    cb(new Error('Tipo de arquivo não permitido para análise. Envie PDF, TXT, MD, CSV ou JSON.'));
+  }
+});
+
+function handleAiUpload(req, res, next) {
+  aiUpload.single('file')(req, res, (error) => {
+    if (!error) return next();
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'O arquivo para análise deve ter no máximo 25 MB.'
+      : error.message || 'Erro ao anexar arquivo para análise.';
+    return res.status(400).json({ error: message });
+  });
+}
 
 const router = express.Router();
 
@@ -83,6 +107,76 @@ function sanitizeText(value, fallback = '') {
   return String(value || fallback).trim();
 }
 
+const MAX_AI_SOURCE_CHARS = 160000;
+
+function cleanAiSourceText(value, max = MAX_AI_SOURCE_CHARS) {
+  if (typeof value !== 'string') return '';
+  const normalized = value
+    .replace(/\u0000/g, ' ')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return normalized.slice(0, max);
+}
+
+function createHttpError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function extractPdfText(buffer) {
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const parsed = await parser.getText();
+    return cleanAiSourceText(parsed?.text || '');
+  } finally {
+    await parser.destroy().catch(() => undefined);
+  }
+}
+
+async function extractAiFileText(file) {
+  if (!file?.buffer?.length) return '';
+  const extname = path.extname(file.originalname || '').toLowerCase();
+  const mimeType = String(file.mimetype || '').toLowerCase();
+
+  if (extname === '.pdf' || mimeType === 'application/pdf') {
+    const text = await extractPdfText(file.buffer);
+    if (!text) throw createHttpError(400, 'Não foi possível extrair texto do PDF anexado.');
+    return text;
+  }
+
+  const isTextFile = ['.txt', '.md', '.csv', '.json'].includes(extname)
+    || mimeType.startsWith('text/')
+    || ['application/json', 'application/csv'].includes(mimeType);
+
+  if (isTextFile) {
+    return cleanAiSourceText(file.buffer.toString('utf8'));
+  }
+
+  throw createHttpError(415, 'Formato não suportado para análise. Envie PDF, TXT, MD, CSV ou JSON.');
+}
+
+async function resolveAiAnalysisSource(req) {
+  const pastedText = cleanAiSourceText(req.body?.sourceText || '');
+  const fileText = req.file ? await extractAiFileText(req.file) : '';
+  return {
+    sourceText: cleanAiSourceText([pastedText, fileText].filter(Boolean).join('\n\n')),
+    sourceFileName: req.file?.originalname || null
+  };
+}
+
+function pickValue(source, ...keys) {
+  if (!source || typeof source !== 'object') return undefined;
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined && source[key] !== '') {
+      return source[key];
+    }
+  }
+  return undefined;
+}
+
 function sanitizeTextArray(value) {
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeText(item)).filter(Boolean);
@@ -91,28 +185,80 @@ function sanitizeTextArray(value) {
   return text ? [text] : [];
 }
 
+function normalizeAiProjectType(value) {
+  const raw = sanitizeText(value).toUpperCase();
+  if (raw.includes('B2G') || raw.includes('GOVERNO') || raw.includes('PUBLIC')) return 'B2G';
+  if (raw.includes('B2B') || raw.includes('PRIV')) return 'B2B';
+  return undefined;
+}
+
+function normalizeAiPriority(value) {
+  const raw = sanitizeText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  if (raw.includes('CRITICA') || raw.includes('CRITICAL') || raw.includes('URGENTE')) return 'Urgente';
+  if (raw.includes('ALTA') || raw.includes('HIGH')) return 'Alta';
+  if (raw.includes('BAIXA') || raw.includes('LOW')) return 'Baixa';
+  return raw ? 'Normal' : undefined;
+}
+
+function normalizeAiBudget(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const normalized = String(value)
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\.(?=\d{3}(\D|$))/g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeAiDate(value) {
+  const text = sanitizeText(value);
+  if (!text) return '';
+  const br = text.match(/\b([0-3]?\d)[\/\-.]([0-1]?\d)[\/\-.](\d{4})\b/);
+  if (br) {
+    const day = br[1].padStart(2, '0');
+    const month = br[2].padStart(2, '0');
+    return `${br[3]}-${month}-${day}`;
+  }
+  const iso = text.match(/\b(\d{4})[\/\-.]([0-1]?\d)[\/\-.]([0-3]?\d)\b/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+  }
+  return '';
+}
+
 function sanitizeAiPhases(phases) {
   if (!Array.isArray(phases)) return [];
   return phases
     .map((phase, index) => {
-      const requirements = sanitizeTextArray(phase?.requirements);
-      const materials = sanitizeTextArray(phase?.materials);
+      const requirements = sanitizeTextArray(pickValue(phase, 'requirements', 'requisitos', 'requisitos_gestao', 'requisitos_tecnicos'));
+      const materials = sanitizeTextArray(pickValue(phase, 'materials', 'materiais', 'materiais_necessarios', 'acessorios_obrigatorios'));
+      const deliverable = sanitizeText(pickValue(phase, 'deliverable', 'entregavel', 'produto_entregavel', 'produto/entregavel'));
+      const pmbokProcessGroup = sanitizeText(pickValue(phase, 'pmbokProcessGroup', 'grupo_processo_pmbok', 'grupo_pmbok'));
       const descriptionParts = [
-        sanitizeText(phase?.description),
-        sanitizeText(phase?.deliverable) ? `Entregável: ${sanitizeText(phase.deliverable)}` : '',
+        sanitizeText(pickValue(phase, 'description', 'descricao')),
+        pmbokProcessGroup ? `Grupo de Processos PMBOK: ${pmbokProcessGroup}` : '',
+        deliverable ? `Entregável: ${deliverable}` : '',
         requirements.length ? `Requisitos: ${requirements.join('; ')}` : '',
         materials.length ? `Materiais: ${materials.join('; ')}` : ''
       ].filter(Boolean);
+      const order = pickValue(phase, 'order', 'ordem');
+      const plannedStartDay = pickValue(phase, 'plannedStartDay', 'prazo_inicio_dia', 'dia_inicio', 'inicio_dia');
+      const plannedEndDay = pickValue(phase, 'plannedEndDay', 'prazo_fim_dia', 'dia_fim', 'fim_dia');
 
       return {
-        name: sanitizeText(phase?.name, `Fase ${index + 1}`),
+        name: sanitizeText(pickValue(phase, 'name', 'nome'), `Fase ${index + 1}`),
         description: descriptionParts.join('\n'),
-        order: Number.isFinite(Number(phase?.order)) ? Number(phase.order) : index + 1,
-        plannedStartDay: Number.isFinite(Number(phase?.plannedStartDay)) ? Number(phase.plannedStartDay) : null,
-        plannedEndDay: Number.isFinite(Number(phase?.plannedEndDay)) ? Number(phase.plannedEndDay) : null,
-        deliverable: sanitizeText(phase?.deliverable),
+        order: Number.isFinite(Number(order)) ? Number(order) : index + 1,
+        plannedStartDay: Number.isFinite(Number(plannedStartDay)) ? Number(plannedStartDay) : null,
+        plannedEndDay: Number.isFinite(Number(plannedEndDay)) ? Number(plannedEndDay) : null,
+        deliverable,
         requirements,
-        materials
+        materials,
+        pmbokProcessGroup
       };
     })
     .filter((phase) => phase.name)
@@ -120,16 +266,25 @@ function sanitizeAiPhases(phases) {
 }
 
 function sanitizeAiProjectAnalysis(value) {
-  const phases = sanitizeAiPhases(value?.phases);
+  const phases = sanitizeAiPhases(pickValue(value, 'phases', 'fases'));
   return {
-    name: sanitizeText(value?.name),
-    type: String(value?.type || '').toUpperCase() === 'B2G' ? 'B2G' : String(value?.type || '').toUpperCase() === 'B2B' ? 'B2B' : undefined,
-    objective: sanitizeText(value?.objective),
-    scope: sanitizeText(value?.scope),
-    deliverables: sanitizeTextArray(value?.deliverables),
-    successCriteria: sanitizeTextArray(value?.successCriteria),
-    risks: sanitizeTextArray(value?.risks),
-    notes: sanitizeText(value?.notes),
+    name: sanitizeText(pickValue(value, 'name', 'nome_projeto')),
+    type: normalizeAiProjectType(pickValue(value, 'type', 'tipo')),
+    client: sanitizeText(pickValue(value, 'client', 'cliente')),
+    sponsor: sanitizeText(pickValue(value, 'sponsor', 'patrocinador')),
+    manager: sanitizeText(pickValue(value, 'manager', 'gerente')),
+    budget: normalizeAiBudget(pickValue(value, 'budget', 'orcamento')),
+    status: normalizeProjectStatus(pickValue(value, 'status')),
+    priority: normalizeAiPriority(pickValue(value, 'priority', 'prioridade')),
+    startDate: normalizeAiDate(pickValue(value, 'startDate', 'data_inicio')),
+    endDate: normalizeAiDate(pickValue(value, 'endDate', 'data_fim')),
+    objective: sanitizeText(pickValue(value, 'objective', 'objetivo')),
+    scope: sanitizeText(pickValue(value, 'scope', 'escopo')),
+    deliverables: sanitizeTextArray(pickValue(value, 'deliverables', 'entregaveis')),
+    successCriteria: sanitizeTextArray(pickValue(value, 'successCriteria', 'criterios_sucesso', 'criterios_de_sucesso')),
+    risks: sanitizeTextArray(pickValue(value, 'risks', 'riscos')),
+    notes: sanitizeText(pickValue(value, 'notes', 'observacoes')),
+    methodology: 'PMBOK/PMI',
     phases
   };
 }
@@ -138,11 +293,31 @@ function buildProjectPhaseCreates(phases, plannedStartDate) {
   const sanitized = sanitizeAiPhases(phases);
   if (sanitized.length === 0) {
     return [
-      { name: 'Setup Inicial', order: 1 },
-      { name: 'Kickoff Interno', order: 2 },
-      { name: 'Kickoff Externo', order: 3 },
-      { name: 'Execução', order: 4 },
-      { name: 'Encerramento', order: 5 }
+      {
+        name: 'Iniciação',
+        order: 1,
+        description: 'Grupo de Processos PMBOK: Iniciação\nEntregável: Termo de Abertura do Projeto e identificação inicial de stakeholders.'
+      },
+      {
+        name: 'Planejamento',
+        order: 2,
+        description: 'Grupo de Processos PMBOK: Planejamento\nEntregável: Plano de gerenciamento do projeto, EAP/WBS, cronograma, RACI, riscos e comunicação.'
+      },
+      {
+        name: 'Execução',
+        order: 3,
+        description: 'Grupo de Processos PMBOK: Execução\nEntregável: Produtos e pacotes de trabalho executados conforme escopo aprovado.'
+      },
+      {
+        name: 'Monitoramento e Controle',
+        order: 4,
+        description: 'Grupo de Processos PMBOK: Monitoramento e Controle\nEntregável: Acompanhamento de desempenho, controle integrado de mudanças, qualidade, riscos e aceite parcial.'
+      },
+      {
+        name: 'Encerramento',
+        order: 5,
+        description: 'Grupo de Processos PMBOK: Encerramento\nEntregável: Aceite final, documentação de encerramento, lições aprendidas e transição operacional.'
+      }
     ];
   }
 
@@ -168,16 +343,16 @@ function buildProjectPhaseCreates(phases, plannedStartDate) {
 }
 
 // Analisar edital/escopo com Gemini e retornar campos prontos para o cadastro
-router.post('/ai-analyze', authenticateToken, async (req, res) => {
+router.post('/ai-analyze', authenticateToken, handleAiUpload, async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       return res.status(503).json({ error: 'GEMINI_API_KEY não configurada no backend' });
     }
 
-    const sourceText = sanitizeText(req.body?.sourceText);
+    const { sourceText, sourceFileName } = await resolveAiAnalysisSource(req);
     if (sourceText.length < 80) {
-      return res.status(400).json({ error: 'Informe um texto de edital ou análise com conteúdo suficiente para a IA.' });
+      return res.status(400).json({ error: 'Anexe um edital/projeto ou informe um texto com conteúdo suficiente para a IA.' });
     }
 
     const model = process.env.GEMINI_MODEL || 'gemini-3.1-pro-preview';
@@ -186,41 +361,53 @@ router.post('/ai-analyze', authenticateToken, async (req, res) => {
     const timeout = setTimeout(() => controller.abort(), 120000);
 
     const prompt = `
-Você é um gerente de projeto sênior especializado em implantação de tecnologia, licitações e contratos B2B/B2G.
-Analise o conteúdo abaixo e retorne exclusivamente um JSON válido com os campos solicitados.
+Você é um gerente de projetos sênior, certificado PMP pelo PMI. Sua tarefa é analisar o texto fornecido pelo usuário (editais, notas de reunião, RFPs, termos de referência ou projetos) e extrair as informações necessárias para elaborar o Termo de Abertura do Projeto (Project Charter), a Declaração de Escopo de alto nível e as fases iniciais do projeto seguindo PMBOK.
+
+Você deve retornar EXCLUSIVAMENTE um objeto JSON válido, sem formatação markdown, sem comentários e sem texto fora do JSON.
 
 Contexto já informado:
 - Nome atual do projeto: ${sanitizeText(req.body?.projectName, 'não informado')}
 - Tipo atual: ${sanitizeText(req.body?.projectType, 'não informado')}
 - Cliente atual: ${sanitizeText(req.body?.client, 'não informado')}
+- Arquivo anexado: ${sanitizeText(sourceFileName, 'não informado')}
 
-Regras:
-- Gere objetivo, escopo, entregáveis, critérios de sucesso, riscos e observações.
-- Gere fases sequenciais com nome, descrição, entregável, requisitos, materiais quando existirem, e prazo em dias relativos à assinatura/início.
-- Use linguagem objetiva em português do Brasil.
-- Não invente dados financeiros, nomes de pessoas ou datas absolutas se o texto não trouxer.
-- Preserve requisitos críticos, SLAs, materiais obrigatórios, marcos e restrições logísticas.
+Regras PMBOK:
+1. Seja rigoroso com a taxonomia do PMI. Diferencie claramente o que é Objetivo (por que estamos fazendo) do que é Escopo (o que será feito) e do que são Entregáveis (produtos tangíveis gerados).
+2. Se uma informação financeira ou de cronograma não for explicitamente citada no texto, retorne o valor como null. Não faça estimativas não fundamentadas.
+3. Para campos de texto longo, utilize formatação em tópicos com hífens (-) para facilitar a leitura no sistema.
+4. Garanta que o JSON seja perfeitamente válido.
+5. Preserve requisitos críticos, SLAs, materiais obrigatórios, marcos, premissas, exclusões, restrições logísticas, normativas técnicas e critérios formais de aceite.
+6. Gere fases sequenciais do projeto com base no ciclo de vida identificado. Classifique cada fase em um Grupo de Processos PMBOK: Iniciação, Planejamento, Execução, Monitoramento e Controle ou Encerramento.
 
 Formato JSON obrigatório:
 {
-  "name": "nome sugerido do projeto",
-  "type": "B2B ou B2G",
-  "objective": "objetivo do projeto",
-  "scope": "escopo consolidado",
-  "deliverables": ["entregável 1"],
-  "successCriteria": ["critério 1"],
-  "risks": ["risco 1"],
-  "notes": "observações executivas",
-  "phases": [
+  "nome_projeto": "string (Título claro e descritivo do projeto. Ex.: Migração de Datacenter e Links Dedicados)",
+  "tipo": "string (Classificação do projeto)",
+  "cliente": "string (Nome do cliente, órgão ou stakeholder principal. Obrigatório se identificado)",
+  "patrocinador": "string ou null (Sponsor do projeto, quem provê os recursos)",
+  "gerente": "string ou null (Gerente de Projetos designado)",
+  "orcamento": "number ou null (Orçamento aprovado de alto nível. Apenas números e decimais)",
+  "status": "Planejado",
+  "prioridade": "Baixa, Normal, Alta ou Crítica",
+  "data_inicio": "string no formato DD/MM/AAAA ou null",
+  "data_fim": "string no formato DD/MM/AAAA ou null",
+  "objetivo": "string (Justificativa e Objetivos SMART do projeto. Descreva o Business Case e os impactos estratégicos esperados. Obrigatório)",
+  "escopo": "string (Declaração do Escopo preliminar. Liste claramente Inclusões, Exclusões e Premissas de alto nível. Obrigatório)",
+  "entregaveis": "string (Estrutura Analítica do Projeto - EAP/WBS de alto nível em tópicos hierárquicos. Obrigatório)",
+  "criterios_sucesso": "string (Requisitos de aprovação, métricas de qualidade, KPIs e tolerâncias do cliente)",
+  "riscos": "string (Registro inicial de riscos com ameaças de alto nível e mitigações iniciais)",
+  "observacoes": "string (Restrições organizacionais, dependências externas ou normativas técnicas)",
+  "fases": [
     {
-      "name": "nome da fase",
-      "description": "descrição da fase",
-      "order": 1,
-      "plannedStartDay": 1,
-      "plannedEndDay": 50,
-      "deliverable": "produto/entregável da fase",
-      "requirements": ["requisito de gestão, técnico, documental ou SLA"],
-      "materials": ["material obrigatório quando existir"]
+      "nome": "string",
+      "descricao": "string",
+      "ordem": 1,
+      "prazo_inicio_dia": 1,
+      "prazo_fim_dia": 50,
+      "entregavel": "string",
+      "requisitos": ["string"],
+      "materiais": ["string"],
+      "grupo_processo_pmbok": "Iniciação, Planejamento, Execução, Monitoramento e Controle ou Encerramento"
     }
   ]
 }
@@ -259,11 +446,14 @@ ${sourceText}
 
     const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
     const parsed = parseGeminiJson(text);
-    res.json({ analysis: sanitizeAiProjectAnalysis(parsed), model });
+    res.json({ analysis: sanitizeAiProjectAnalysis(parsed), model, sourceFileName });
   } catch (error) {
     console.error('Erro ao analisar projeto com Gemini:', error);
     if (error?.name === 'AbortError') {
       return res.status(504).json({ error: 'Tempo esgotado ao analisar com Gemini' });
+    }
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
     }
     res.status(500).json({ error: 'Erro ao analisar projeto com Gemini' });
   }
@@ -467,11 +657,31 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
         opportunityId: opportunity.id,
         phases: {
           create: [
-            { name: 'Setup Inicial', order: 1 },
-            { name: 'Kickoff Interno', order: 2 },
-            { name: 'Kickoff Externo', order: 3 },
-            { name: 'Execução', order: 4 },
-            { name: 'Encerramento', order: 5 }
+            {
+              name: 'Iniciação',
+              order: 1,
+              description: 'Grupo de Processos PMBOK: Iniciação\nEntregável: Termo de Abertura do Projeto e identificação inicial de stakeholders.'
+            },
+            {
+              name: 'Planejamento',
+              order: 2,
+              description: 'Grupo de Processos PMBOK: Planejamento\nEntregável: Plano de gerenciamento do projeto, EAP/WBS, cronograma, RACI, riscos e comunicação.'
+            },
+            {
+              name: 'Execução',
+              order: 3,
+              description: 'Grupo de Processos PMBOK: Execução\nEntregável: Produtos e pacotes de trabalho executados conforme escopo aprovado.'
+            },
+            {
+              name: 'Monitoramento e Controle',
+              order: 4,
+              description: 'Grupo de Processos PMBOK: Monitoramento e Controle\nEntregável: Acompanhamento de desempenho, controle integrado de mudanças, qualidade, riscos e aceite parcial.'
+            },
+            {
+              name: 'Encerramento',
+              order: 5,
+              description: 'Grupo de Processos PMBOK: Encerramento\nEntregável: Aceite final, documentação de encerramento, lições aprendidas e transição operacional.'
+            }
           ]
         }
       },
