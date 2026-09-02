@@ -91,10 +91,12 @@ $SSH_CMD $SERVER_USER@$SERVER_IP << 'ENDSSH'
     tar -xzf nexoscrm-deploy.tar.gz
     rm nexoscrm-deploy.tar.gz
     
-    # Preparar .env de produção sem gravar segredos no repositório ou no script
-    if [ -f .env.production ]; then
+    # Preservar .env já existente no servidor, pois ele contém segredos reais de produção.
+    if [ -f .env ]; then
+        echo "✅ Usando .env existente do servidor"
+    elif [ -f .env.production ]; then
         cp .env.production .env
-    elif [ ! -f .env ]; then
+    else
         echo "❌ Arquivo .env não encontrado em /opt/nexoscrm."
         echo "   Crie .env com DB_PASSWORD, DATABASE_URL, JWT_SECRET, CORS_ORIGIN e VITE_API_URL antes do deploy."
         exit 1
