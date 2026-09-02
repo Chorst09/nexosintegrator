@@ -1241,7 +1241,8 @@ function ProjectCreateModal({
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(payload.error || `Erro ${response.status} ao analisar com IA`);
+        setAiError(payload.error || `Erro ${response.status} ao analisar com IA`);
+        return;
       }
 
       const analysis = payload.analysis || {};
