@@ -181,6 +181,7 @@ const ArchNode = ({ id, data, selected }: any) => {
           <img
             src={customImage}
             alt={data.label}
+            crossOrigin="anonymous"
             onError={() => setImgError(true)}
             className={`${isPhysical ? 'h-full w-full object-cover' : 'h-full w-full object-contain'}`}
           />
@@ -248,6 +249,17 @@ const BACKGROUND_IMAGE_NODE_POSITION = { x: -120, y: -80 };
 const BACKGROUND_IMAGE_NODE_SIZE = { width: 1280, height: 760 };
 const DIAGRAMS_STORAGE_KEY = 'architecture_diagrams_v1';
 const LEGACY_DIAGRAM_STORAGE_KEY = 'saved_diagram';
+
+const physicalComponentImages = {
+  radio:
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Tropo%20Scatter%20Microwave%20System%20Antenna.jpg?width=960',
+  dish:
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Parabolic%20antennas%20point-to-point%20link.jpg?width=960',
+  tower:
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microwave%20Radio%20Antenna%20Tower%20in%20Brewster%2C%20Minnesota%20%2844879513262%29.jpg?width=960',
+  rack:
+    'https://commons.wikimedia.org/wiki/Special:FilePath/19-inch%20rackmount%20Ethernet%20switches%20and%20patch%20panels.jpg?width=960'
+};
 
 type SavedDiagramEntry = {
   id: string;
@@ -819,7 +831,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     setNodes((nds) => [...nds, newNode]);
   };
 
-  const addPhysicalNode = (icon: string, label: string, sublabel: string) => {
+  const addPhysicalNode = (icon: string, label: string, sublabel: string, imageUrl: string) => {
     const newNode = {
       id: `physical-${Date.now()}`,
       type: 'arch',
@@ -829,6 +841,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
         icon,
         sublabel,
         variant: 'physical',
+        uploadedImage: imageUrl,
         imageName: '',
         nameBox: ''
       }
@@ -1214,16 +1227,16 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
               >
                 <ImagePlus className="w-3.5 h-3.5" /> Adicionar foto real
               </button>
-              <button onClick={() => addPhysicalNode('radio', 'Rádio Físico', 'PTP / Backhaul / Torre')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('radio', 'Rádio Físico', 'PTP / Backhaul / Torre', physicalComponentImages.radio)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <RadioTower className="w-3.5 h-3.5 text-[#f6b40b]" /> Rádio físico
               </button>
-              <button onClick={() => addPhysicalNode('radio', 'Antena / Dish', 'Antena externa / enlace')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('radio', 'Antena / Dish', 'Antena externa / enlace', physicalComponentImages.dish)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <RadioTower className="w-3.5 h-3.5 text-[#ff7a00]" /> Antena / Dish
               </button>
-              <button onClick={() => addPhysicalNode('pop', 'Torre / Mastro', 'Estrutura física')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('pop', 'Torre / Mastro', 'Estrutura física', physicalComponentImages.tower)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <Building2 className="w-3.5 h-3.5 text-[#22d3ee]" /> Torre / Mastro
               </button>
-              <button onClick={() => addPhysicalNode('switch', 'Rack / POP', 'Rack, DIO, OLT, switch')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('switch', 'Rack / POP', 'Rack, DIO, OLT, switch', physicalComponentImages.rack)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <Network className="w-3.5 h-3.5 text-[#34d399]" /> Rack / POP
               </button>
               <p className="text-[9px] leading-3 text-slate-500">
