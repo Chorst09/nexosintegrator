@@ -69,6 +69,36 @@ const PROJECT_PHASES = ['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO
 const PROJECT_PHASE_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'SKIPPED'];
 const PROJECT_ROLES = ['PROJECT_MANAGER', 'TECH_LEAD', 'DEVELOPER', 'ANALYST', 'QA', 'ARCHITECT', 'CONSULTANT'];
 
+async function ensureProjectManagerTeamMember(projectId) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, projectManagerId: true }
+  });
+
+  if (!project?.projectManagerId) return null;
+
+  return prisma.projectTeam.upsert({
+    where: {
+      projectId_userId: {
+        projectId: project.id,
+        userId: project.projectManagerId
+      }
+    },
+    update: {
+      role: 'PROJECT_MANAGER',
+      isActive: true
+    },
+    create: {
+      projectId: project.id,
+      userId: project.projectManagerId,
+      role: 'PROJECT_MANAGER',
+      allocationPercent: 100,
+      hourlyCost: 0
+    },
+    include: { user: { select: { id: true, name: true, email: true } } }
+  });
+}
+
 function normalizeProjectStatus(value) {
   const raw = String(value || '').trim().toUpperCase();
   if (raw === 'PLANEJAMENTO') return 'PLANEJADO';
@@ -623,12 +653,21 @@ router.post('/', authenticateToken, async (req, res) => {
         metadata: normalizeProjectMetadata(metadata),
         phases: {
           create: buildProjectPhaseCreates(phases, plannedStartDate)
+        },
+        team: {
+          create: {
+            userId: projectManagerId,
+            role: 'PROJECT_MANAGER',
+            allocationPercent: 100,
+            hourlyCost: 0
+          }
         }
       },
       include: {
         company: { select: { id: true, name: true } },
-        projectManager: { select: { id: true, name: true } },
-        phases: true
+        projectManager: { select: { id: true, name: true, email: true } },
+        phases: true,
+        team: { include: { user: { select: { id: true, name: true, email: true } } } }
       }
     });
 
@@ -677,6 +716,14 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
         projectManagerId: req.user.id,
         createdBy: req.user.id,
         opportunityId: opportunity.id,
+        team: {
+          create: {
+            userId: req.user.id,
+            role: 'PROJECT_MANAGER',
+            allocationPercent: 100,
+            hourlyCost: 0
+          }
+        },
         phases: {
           create: [
             {
@@ -709,8 +756,9 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
       },
       include: {
         company: { select: { id: true, name: true } },
-        projectManager: { select: { id: true, name: true } },
-        phases: true
+        projectManager: { select: { id: true, name: true, email: true } },
+        phases: true,
+        team: { include: { user: { select: { id: true, name: true, email: true } } } }
       }
     });
 
@@ -756,6 +804,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
         phases: { orderBy: { order: 'asc' } }
       }
     });
+
+    if (projectManagerId) {
+      await ensureProjectManagerTeamMember(req.params.id);
+    }
 
     res.json(project);
   } catch (error) {
@@ -1005,6 +1057,8 @@ router.post('/:projectId/timelogs', authenticateToken, async (req, res) => {
 // === EQUIPE ===
 router.get('/:projectId/team', authenticateToken, async (req, res) => {
   try {
+    await ensureProjectManagerTeamMember(req.params.projectId);
+
     const team = await prisma.projectTeam.findMany({
       where: { projectId: req.params.projectId },
       include: { user: { select: { id: true, name: true, email: true } } },
