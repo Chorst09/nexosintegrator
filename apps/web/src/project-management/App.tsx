@@ -285,6 +285,28 @@ function normalizeIssuePriority(value?: string | null): Issue['priority'] {
   return 'Normal';
 }
 
+function getIssueSequence(issue: Issue) {
+  const keyMatch = String(issue.key || '').match(/^[A-Z]+-(\d+)$/i);
+  if (keyMatch) return Number(keyMatch[1]);
+
+  const titleMatch = String(issue.title || '').match(/\b(?:Fase|Etapa)\s*(\d+)\b/i);
+  if (titleMatch) return Number(titleMatch[1]);
+
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function sortIssuesBySequence(items: Issue[]) {
+  return [...items].sort((a, b) => {
+    const sequenceDiff = getIssueSequence(a) - getIssueSequence(b);
+    if (sequenceDiff !== 0) return sequenceDiff;
+
+    const createdDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (createdDiff !== 0) return createdDiff;
+
+    return String(a.title || '').localeCompare(String(b.title || ''), 'pt-BR');
+  });
+}
+
 function mapProjectPhaseToIssue(project: ApiProject, phase: ApiProjectPhase): Issue {
   return {
     id: `phase-${phase.id}`,
@@ -551,10 +573,10 @@ export default function App({ onBack }: { onBack?: () => void }) {
   }, []);
 
   const activeProject = spaces.find(s => s.id === activeSpaceId) || spaces[0];
-  const activeProjectIssues = issues.filter(issue => {
+  const activeProjectIssues = sortIssuesBySequence(issues.filter(issue => {
     if (!activeProject) return false;
     return issue.projectId === activeProject.id;
-  });
+  }));
   const isDashboardFocus = (globalView === 'spaces' && activeView === 'dashboard') || globalView === 'dashboards';
 
   const submitNewSpace = async () => {
@@ -767,7 +789,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
         assignee: data.assignee,
         customFields: data.customFields || []
       };
-      setIssues(prev => [newTask, ...prev.filter(issue => issue.id !== newTask.id)]);
+      setIssues(prev => [...prev.filter(issue => issue.id !== newTask.id), newTask]);
       setIsCreatingTaskGlobal(false);
 
       if (data.phaseKind === 'KICKOFF_INTERNO' || data.phaseKind === 'KICKOFF_EXTERNO') {

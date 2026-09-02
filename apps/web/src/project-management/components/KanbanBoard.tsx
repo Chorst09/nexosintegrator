@@ -56,6 +56,26 @@ const getTitleColor = (id: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+const getIssueSequence = (issue: Issue) => {
+  const keyMatch = String(issue.key || '').match(/^[A-Z]+-(\d+)$/i);
+  if (keyMatch) return Number(keyMatch[1]);
+
+  const titleMatch = String(issue.title || '').match(/\b(?:Fase|Etapa)\s*(\d+)\b/i);
+  if (titleMatch) return Number(titleMatch[1]);
+
+  return Number.MAX_SAFE_INTEGER;
+};
+
+const sortIssuesBySequence = (items: Issue[]) => [...items].sort((a, b) => {
+  const sequenceDiff = getIssueSequence(a) - getIssueSequence(b);
+  if (sequenceDiff !== 0) return sequenceDiff;
+
+  const createdDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  if (createdDiff !== 0) return createdDiff;
+
+  return String(a.title || '').localeCompare(String(b.title || ''), 'pt-BR');
+});
+
 export default function KanbanBoard({
   issues,
   setIssues,
@@ -211,7 +231,7 @@ export default function KanbanBoard({
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar">
         <div className="flex gap-5 items-start h-full pb-4">
           {columns.map(column => {
-            const columnIssues = issues.filter(i => i.status === column.id);
+            const columnIssues = sortIssuesBySequence(issues.filter(i => i.status === column.id));
             const isDragActive = dragOverCol === column.id;
 
             return (
