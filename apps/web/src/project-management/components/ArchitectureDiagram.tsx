@@ -15,6 +15,7 @@ import {
   Edge,
   ConnectionMode,
   ReactFlowProvider,
+  ViewportPortal,
   useReactFlow,
   } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -43,6 +44,8 @@ import {
   Clock3,
   Eye,
   Pencil,
+  PenLine,
+  Undo2,
   Plus,
   X
 } from 'lucide-react';
@@ -254,10 +257,23 @@ type SavedDiagramEntry = {
   templateKey?: string;
   nodes: any[];
   edges: any[];
+  drawings?: DrawingStroke[];
   backgroundImage: string | null;
   backgroundOpacity: number;
   createdAt: string;
   updatedAt: string;
+};
+
+type DrawingPoint = {
+  x: number;
+  y: number;
+};
+
+type DrawingStroke = {
+  id: string;
+  color: string;
+  width: number;
+  points: DrawingPoint[];
 };
 
 const readSavedDiagrams = (): SavedDiagramEntry[] => {
@@ -282,6 +298,7 @@ const buildLegacyDiagramEntry = (): SavedDiagramEntry | null => {
       name: 'Meu Diagrama',
       nodes: parsed.nodes || [],
       edges: parsed.edges || [],
+      drawings: parsed.drawings || [],
       backgroundImage: parsed.backgroundImage || null,
       backgroundOpacity: typeof parsed.backgroundOpacity === 'number' ? parsed.backgroundOpacity : 0.38,
       createdAt: parsed.createdAt || now,
@@ -314,6 +331,12 @@ const cloneDiagram = (diagram: { nodes: any[]; edges: any[] }) => ({
     markerEnd: edge.markerEnd ? { ...edge.markerEnd } : undefined
   }))
 });
+
+const buildStrokePath = (points: DrawingPoint[]) => {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y} L ${points[0].x + 0.01} ${points[0].y + 0.01}`;
+  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+};
 
 const templates = {
   'blank': { nodes: [], edges: [] },
@@ -393,6 +416,10 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
   const initialDiagram = cloneDiagram(templates['fiber-radio']);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialDiagram.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialDiagram.edges);
+  const [drawings, setDrawings] = useState<DrawingStroke[]>([]);
+  const [penEnabled, setPenEnabled] = useState(false);
+  const [penColor, setPenColor] = useState('#f97316');
+  const [penWidth, setPenWidth] = useState(4);
   const [activeTemplate, setActiveTemplate] = useState('fiber-radio');
   const [customNodeName, setCustomNodeName] = useState('');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -413,8 +440,10 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const isDrawingRef = useRef(false);
+  const activeStrokeIdRef = useRef<string | null>(null);
 
-  const { getNodes } = useReactFlow();
+  const { getNodes, screenToFlowPosition } = useReactFlow();
 
   useEffect(() => {
     const saved = readSavedDiagrams();
@@ -433,6 +462,61 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     localStorage.setItem(DIAGRAMS_STORAGE_KEY, JSON.stringify(ordered));
     setSavedDiagrams(ordered);
   }, []);
+
+  const getFlowPointFromPointer = (event: React.PointerEvent<HTMLDivElement>) => (
+    screenToFlowPosition({ x: event.clientX, y: event.clientY })
+  );
+
+  const startDrawing = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!penEnabled || diagramMode !== 'edit') return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const point = getFlowPointFromPointer(event);
+    const strokeId = `stroke-${Date.now()}`;
+    isDrawingRef.current = true;
+    activeStrokeIdRef.current = strokeId;
+    setDrawings((current) => [
+      ...current,
+      {
+        id: strokeId,
+        color: penColor,
+        width: penWidth,
+        points: [point]
+      }
+    ]);
+  };
+
+  const continueDrawing = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDrawingRef.current || !activeStrokeIdRef.current) return;
+    event.preventDefault();
+    const point = getFlowPointFromPointer(event);
+    setDrawings((current) => current.map((stroke) => {
+      if (stroke.id !== activeStrokeIdRef.current) return stroke;
+      const lastPoint = stroke.points[stroke.points.length - 1];
+      if (lastPoint && Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y) < 2) {
+        return stroke;
+      }
+      return { ...stroke, points: [...stroke.points, point] };
+    }));
+  };
+
+  const stopDrawing = (event?: React.PointerEvent<HTMLDivElement>) => {
+    if (event && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    isDrawingRef.current = false;
+    activeStrokeIdRef.current = null;
+  };
+
+  const undoDrawing = () => {
+    setDrawings((current) => current.slice(0, -1));
+  };
+
+  const clearDrawings = () => {
+    if (drawings.length === 0) return;
+    if (!window.confirm('Limpar todas as anotacoes do diagrama?')) return;
+    setDrawings([]);
+  };
 
   const onConnect = useCallback((params: Connection | Edge) => {
     const edgeId = `edge-${params.source}-${params.target}-${Date.now()}`;
@@ -480,6 +564,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
   const loadSavedDiagram = (entry: SavedDiagramEntry, mode: 'edit' | 'view' = 'edit') => {
     setNodes(entry.nodes || []);
     setEdges(entry.edges || []);
+    setDrawings(entry.drawings || []);
     setBackgroundImage(entry.backgroundImage || null);
     setBackgroundOpacity(typeof entry.backgroundOpacity === 'number' ? entry.backgroundOpacity : 0.38);
     setActiveTemplate('saved');
@@ -489,6 +574,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     setDiagramClientName(entry.clientName || '');
     setDiagramProjectName(entry.projectName || '');
     setDiagramMode(mode);
+    setPenEnabled(false);
   };
 
   const loadTemplate = (key: keyof typeof templates | 'saved') => {
@@ -502,12 +588,14 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
       const nextDiagram = cloneDiagram(templates[key]);
       setNodes(nextDiagram.nodes);
       setEdges(nextDiagram.edges);
+      setDrawings([]);
       setActiveDiagramId(null);
       setViewingDiagramId(null);
       setActiveDiagramName(`Modelo ${key}`);
       setDiagramClientName(activeProject?.client || '');
       setDiagramProjectName(activeProject?.name || '');
       setDiagramMode('edit');
+      setPenEnabled(false);
       if (key === 'blank') {
         setBackgroundImage(null);
         setBackgroundOpacity(0.38);
@@ -534,6 +622,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
 
     setNodes(nextDiagram.nodes);
     setEdges(nextDiagram.edges);
+    setDrawings([]);
     setBackgroundImage(null);
     setBackgroundOpacity(0.38);
     setActiveTemplate(templateKey);
@@ -543,6 +632,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     setDiagramClientName(newDiagramForm.clientName.trim());
     setDiagramProjectName(newDiagramForm.projectName.trim());
     setDiagramMode('edit');
+    setPenEnabled(false);
     setNewDiagramFormOpen(false);
   };
 
@@ -562,6 +652,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     const payload = {
       nodes,
       edges,
+      drawings,
       backgroundImage,
       backgroundOpacity,
       clientName: diagramClientName.trim(),
@@ -638,7 +729,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
         },
       } as any);
     }
-    if (exportNodes.length === 0) return;
+    if (exportNodes.length === 0 && drawings.length === 0) return;
 
     // Calculate bounds manually since exports might differ by version
     let minX = Infinity;
@@ -657,6 +748,15 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
       minY = Math.min(minY, n.position.y);
       maxX = Math.max(maxX, n.position.x + width);
       maxY = Math.max(maxY, n.position.y + height);
+    });
+
+    drawings.forEach((stroke) => {
+      stroke.points.forEach((point) => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      });
     });
 
     const padding = 60;
@@ -846,6 +946,54 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
             >Microserviços</button>
           </div>
 
+          {diagramMode === 'edit' && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#263345] bg-[#070b16] p-1">
+              <button
+                type="button"
+                onClick={() => setPenEnabled((current) => !current)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${penEnabled ? 'bg-[#ff7a00] text-white' : 'text-slate-400 hover:bg-[#263345] hover:text-slate-200'}`}
+                title="Caneta para anotacoes"
+              >
+                <PenLine className="h-4 w-4" /> Caneta
+              </button>
+              <input
+                type="color"
+                value={penColor}
+                onChange={(event) => setPenColor(event.target.value)}
+                className="h-7 w-8 cursor-pointer rounded border border-[#263345] bg-[#111827] p-0.5"
+                title="Cor da caneta"
+              />
+              <input
+                type="range"
+                min="2"
+                max="12"
+                step="1"
+                value={penWidth}
+                onChange={(event) => setPenWidth(Number(event.target.value))}
+                className="w-20 accent-[#ff7a00]"
+                title="Espessura da caneta"
+              />
+              <button
+                type="button"
+                onClick={undoDrawing}
+                disabled={drawings.length === 0}
+                className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-[#263345] hover:text-slate-200 disabled:cursor-not-allowed disabled:text-slate-700"
+                title="Desfazer ultimo risco"
+              >
+                <Undo2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={clearDrawings}
+                disabled={drawings.length === 0}
+                className="rounded-md p-1.5 text-red-200 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:text-slate-700"
+                title="Limpar anotacoes"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 border-l border-[#263345] pl-3">
             {(activeDiagramId || viewingDiagramId) && (
               <span className="hidden xl:inline max-w-44 truncate text-xs text-slate-400">
@@ -890,9 +1038,10 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
             onConnect={diagramMode === 'edit' ? onConnect : undefined}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
-            nodesDraggable={diagramMode === 'edit'}
-            nodesConnectable={diagramMode === 'edit'}
-            elementsSelectable={diagramMode === 'edit'}
+            nodesDraggable={diagramMode === 'edit' && !penEnabled}
+            nodesConnectable={diagramMode === 'edit' && !penEnabled}
+            elementsSelectable={diagramMode === 'edit' && !penEnabled}
+            panOnDrag={diagramMode === 'edit' && !penEnabled}
             connectionMode={ConnectionMode.Loose}
             connectionRadius={28}
             connectionLineStyle={{ stroke: '#ff7a00', strokeWidth: 2.5 }}
@@ -907,6 +1056,25 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
               maskColor="rgba(15, 23, 42, 0.7)"
               className="bg-[#111827] border border-[#263345] rounded-md"
             />
+            <ViewportPortal>
+              <svg
+                className="pointer-events-none absolute left-0 top-0 overflow-visible"
+                style={{ width: 1, height: 1, zIndex: 6 }}
+              >
+                {drawings.map((stroke) => (
+                  <path
+                    key={stroke.id}
+                    d={buildStrokePath(stroke.points)}
+                    fill="none"
+                    stroke={stroke.color}
+                    strokeWidth={stroke.width}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={0.92}
+                  />
+                ))}
+              </svg>
+            </ViewportPortal>
 
             <Panel position="top-right" className="w-64 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-120px)]">
               <div className="flex items-center justify-between gap-2">
@@ -1128,6 +1296,16 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
           )}
           </ReactFlow>
         </DiagramSetNodesContext.Provider>
+        {diagramMode === 'edit' && penEnabled && (
+          <div
+            className="absolute inset-0 z-20 cursor-crosshair"
+            onPointerDown={startDrawing}
+            onPointerMove={continueDrawing}
+            onPointerUp={stopDrawing}
+            onPointerCancel={stopDrawing}
+            onPointerLeave={stopDrawing}
+          />
+        )}
       </div>
 
       {newDiagramFormOpen && (
