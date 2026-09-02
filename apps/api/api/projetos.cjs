@@ -518,10 +518,6 @@ router.get('/', authenticateToken, async (req, res) => {
           company: { select: { id: true, name: true, clientType: true } },
           projectManager: { select: { id: true, name: true, email: true } },
           phases: { orderBy: { order: 'asc' } },
-          tasks: {
-            include: { assignedTo: { select: { id: true, name: true } } },
-            orderBy: { createdAt: 'asc' }
-          },
           _count: { select: { tasks: true, milestones: true, team: true } }
         },
         orderBy: { createdAt: 'desc' },
