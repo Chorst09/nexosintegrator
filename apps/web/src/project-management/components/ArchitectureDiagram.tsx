@@ -116,6 +116,7 @@ const ArchNode = ({ id, data, selected }: any) => {
 
   const normalized = getNormalizedName(data.imageName || data.label);
   const customImage = data.uploadedImage || (normalized ? `https://cdn.simpleicons.org/${normalized}/0ea5e9` : null);
+  const isPhysical = data.variant === 'physical';
   const updateNodeData = (patch: Record<string, any>) => {
     const updateNodes = setDiagramNodes || setFlowNodes;
     updateNodes((nds: any[]) => nds.map((n) => (
@@ -153,7 +154,7 @@ const ArchNode = ({ id, data, selected }: any) => {
   }, [customImage]);
 
   return (
-    <div className={`relative bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[190px] flex items-center gap-3 text-slate-200 transition-colors`}>
+    <div className={`relative bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md shadow-lg text-slate-200 transition-colors ${isPhysical ? 'flex min-w-[280px] max-w-[340px] flex-col items-stretch gap-3 p-3' : 'flex min-w-[190px] items-center gap-3 p-4'}`}>
       <Handle id="top-target" type="target" position={Position.Top} className={connectionHandleClass} />
       <Handle id="right-target" type="target" position={Position.Right} className={connectionHandleClass} />
       <Handle id="bottom-target" type="target" position={Position.Bottom} className={connectionHandleClass} />
@@ -164,7 +165,7 @@ const ArchNode = ({ id, data, selected }: any) => {
         </div>
       )}
       <div
-        className={`w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 relative group ${readOnly ? '' : 'cursor-pointer'}`}
+        className={`rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden relative group ${isPhysical ? 'h-40 w-full p-0' : 'h-12 w-12 p-1.5'} ${readOnly ? '' : 'cursor-pointer'}`}
         onClick={(event) => {
           event.stopPropagation();
           if (readOnly) return;
@@ -178,10 +179,13 @@ const ArchNode = ({ id, data, selected }: any) => {
             src={customImage}
             alt={data.label}
             onError={() => setImgError(true)}
-            className="w-full h-full object-contain"
+            className={`${isPhysical ? 'h-full w-full object-cover' : 'h-full w-full object-contain'}`}
           />
         ) : (
-          <Icon className="w-6 h-6" />
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center">
+            <Icon className={isPhysical ? 'h-9 w-9' : 'h-6 w-6'} />
+            {isPhysical && <span className="text-[10px] font-semibold text-slate-500">Enviar foto real</span>}
+          </div>
         )}
         {!readOnly && (
           <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center rounded-lg">
@@ -197,11 +201,11 @@ const ArchNode = ({ id, data, selected }: any) => {
           onClick={(event) => event.stopPropagation()}
         />
       </div>
-      <div className="flex-1">
+      <div className={isPhysical ? 'min-w-0 text-center' : 'flex-1'}>
         <div className="font-bold text-sm leading-tight">{data.label}</div>
         {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
         {!readOnly && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className={`mt-2 flex flex-wrap gap-1.5 ${isPhysical ? 'justify-center' : ''}`}>
             <button
               type="button"
               onClick={(event) => {
@@ -715,6 +719,23 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     setNodes((nds) => [...nds, newNode]);
   };
 
+  const addPhysicalNode = (icon: string, label: string, sublabel: string) => {
+    const newNode = {
+      id: `physical-${Date.now()}`,
+      type: 'arch',
+      position: { x: Math.random() * 320 + 300, y: Math.random() * 260 + 160 },
+      data: {
+        label,
+        icon,
+        sublabel,
+        variant: 'physical',
+        imageName: '',
+        nameBox: ''
+      }
+    };
+    setNodes((nds) => [...nds, newNode]);
+  };
+
   const addCustomNode = () => {
     if (!customNodeName.trim()) return;
     const newNode = {
@@ -738,7 +759,14 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
         id: `node-${Date.now()}`,
         type: 'arch',
         position: { x: Math.random() * 200 + 200, y: Math.random() * 200 + 100 },
-        data: { label: file.name.split('.')[0], icon: 'server', sublabel: 'Imagem Customizada', uploadedImage: dataUrl }
+        data: {
+          label: file.name.split('.')[0],
+          icon: 'radio',
+          sublabel: 'Componente físico',
+          uploadedImage: dataUrl,
+          variant: 'physical',
+          imageName: ''
+        }
       };
       setNodes((nds) => [...nds, newNode]);
     };
@@ -1002,6 +1030,38 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
             <button onClick={() => addNetworkNode('cloud', 'Cloud Service', 'Cloud / SaaS / DC', 'cloud')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
               <Cloud className="w-3.5 h-3.5 text-[#ff7a00]" /> Cloud
             </button>
+
+            <div className="mt-1.5 pt-2 border-t border-[#263345] flex flex-col gap-1.5">
+              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Componentes Físicos</h3>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 bg-[#ff7a00] hover:bg-[#f6b40b] text-white hover:text-[#050914] px-2 py-1.5 rounded-md text-xs font-semibold transition-colors w-full"
+              >
+                <ImagePlus className="w-3.5 h-3.5" /> Adicionar foto real
+              </button>
+              <button onClick={() => addPhysicalNode('radio', 'Rádio Físico', 'PTP / Backhaul / Torre')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+                <RadioTower className="w-3.5 h-3.5 text-[#f6b40b]" /> Rádio físico
+              </button>
+              <button onClick={() => addPhysicalNode('radio', 'Antena / Dish', 'Antena externa / enlace')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+                <RadioTower className="w-3.5 h-3.5 text-[#ff7a00]" /> Antena / Dish
+              </button>
+              <button onClick={() => addPhysicalNode('pop', 'Torre / Mastro', 'Estrutura física')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+                <Building2 className="w-3.5 h-3.5 text-[#22d3ee]" /> Torre / Mastro
+              </button>
+              <button onClick={() => addPhysicalNode('switch', 'Rack / POP', 'Rack, DIO, OLT, switch')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+                <Network className="w-3.5 h-3.5 text-[#34d399]" /> Rack / POP
+              </button>
+              <p className="text-[9px] leading-3 text-slate-500">
+                Use foto real do equipamento. Depois clique em Nome para marcar o ponto, como Paranacidade ou Newage.
+              </p>
+            </div>
 
             <div className="mt-1.5 pt-2 border-t border-[#263345] flex flex-col gap-1.5">
               <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Tecnologia Específica</h3>
