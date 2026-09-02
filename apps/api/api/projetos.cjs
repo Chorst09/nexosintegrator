@@ -40,6 +40,32 @@ function generateProjectNumber() {
   return `PRJ-${year}-${rand}`;
 }
 
+const PROJECT_STATUSES = ['PLANEJADO', 'EM_ANDAMENTO', 'PAUSADO', 'CONCLUIDO', 'CANCELADO'];
+const PROJECT_PHASES = ['SETUP', 'KICKOFF_INTERNO', 'KICKOFF_EXTERNO', 'EXECUCAO', 'MONITORAMENTO', 'ENCERRAMENTO'];
+
+function normalizeProjectStatus(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PLANEJAMENTO') return 'PLANEJADO';
+  if (raw === 'EM EXECUCAO' || raw === 'EM EXECUÇÃO' || raw === 'EM PROGRESSO') return 'EM_ANDAMENTO';
+  if (raw === 'EM RISCO') return 'PAUSADO';
+  if (raw === 'CONCLUÍDO') return 'CONCLUIDO';
+  return PROJECT_STATUSES.includes(raw) ? raw : 'PLANEJADO';
+}
+
+function normalizeProjectPhase(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  return PROJECT_PHASES.includes(raw) ? raw : 'SETUP';
+}
+
+function normalizeProjectMetadata(metadata, fallback = {}) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return fallback;
+  return Object.entries(metadata).reduce((acc, [key, value]) => {
+    if (value === undefined) return acc;
+    acc[key] = typeof value === 'string' ? value.trim() : value;
+    return acc;
+  }, { ...fallback });
+}
+
 // Dashboard / KPIs
 router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
@@ -96,8 +122,13 @@ router.get('/', authenticateToken, async (req, res) => {
       prisma.project.findMany({
         where,
         include: {
-          company: { select: { id: true, name: true } },
+          company: { select: { id: true, name: true, clientType: true } },
           projectManager: { select: { id: true, name: true, email: true } },
+          phases: { orderBy: { order: 'asc' } },
+          tasks: {
+            include: { assignedTo: { select: { id: true, name: true } } },
+            orderBy: { createdAt: 'asc' }
+          },
           _count: { select: { tasks: true, milestones: true, team: true } }
         },
         orderBy: { createdAt: 'desc' },
@@ -150,7 +181,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Criar projeto manualmente
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { name, description, type, companyId, projectManagerId, budget, plannedStartDate, plannedEndDate, opportunityId, contractId } = req.body;
+    const { name, description, type, companyId, projectManagerId, status, phase, budget, plannedStartDate, plannedEndDate, opportunityId, contractId, metadata } = req.body;
 
     if (!name || !type || !companyId || !projectManagerId) {
       return res.status(400).json({ error: 'Nome, tipo, empresa e gestor são obrigatórios' });
@@ -164,6 +195,8 @@ router.post('/', authenticateToken, async (req, res) => {
         name,
         description,
         type,
+        status: normalizeProjectStatus(status),
+        phase: normalizeProjectPhase(phase),
         budget: budget ? parseFloat(budget) : 0,
         plannedStartDate: plannedStartDate ? new Date(plannedStartDate) : null,
         plannedEndDate: plannedEndDate ? new Date(plannedEndDate) : null,
@@ -172,6 +205,7 @@ router.post('/', authenticateToken, async (req, res) => {
         createdBy: req.user.id,
         opportunityId: opportunityId || null,
         contractId: contractId || null,
+        metadata: normalizeProjectMetadata(metadata),
         phases: {
           create: [
             { name: 'Setup Inicial', order: 1 },
@@ -267,28 +301,34 @@ router.post('/from-opportunity/:opportunityId', authenticateToken, async (req, r
 // Atualizar projeto
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { name, description, status, phase, budget, healthScore, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate, projectManagerId } = req.body;
+    const { name, description, status, phase, budget, healthScore, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate, projectManagerId, metadata } = req.body;
 
     const updateData = {};
     if (name) updateData.name = name;
     if (description !== undefined) updateData.description = description;
-    if (status) updateData.status = status;
-    if (phase) updateData.phase = phase;
+    if (status) updateData.status = normalizeProjectStatus(status);
+    if (phase) updateData.phase = normalizeProjectPhase(phase);
     if (budget !== undefined) updateData.budget = parseFloat(budget);
     if (healthScore !== undefined) updateData.healthScore = parseInt(healthScore);
     if (progressPercent !== undefined) updateData.progressPercent = parseInt(progressPercent);
-    if (plannedStartDate) updateData.plannedStartDate = new Date(plannedStartDate);
-    if (plannedEndDate) updateData.plannedEndDate = new Date(plannedEndDate);
-    if (actualStartDate) updateData.actualStartDate = new Date(actualStartDate);
-    if (actualEndDate) updateData.actualEndDate = new Date(actualEndDate);
+    if (plannedStartDate !== undefined) updateData.plannedStartDate = plannedStartDate ? new Date(plannedStartDate) : null;
+    if (plannedEndDate !== undefined) updateData.plannedEndDate = plannedEndDate ? new Date(plannedEndDate) : null;
+    if (actualStartDate !== undefined) updateData.actualStartDate = actualStartDate ? new Date(actualStartDate) : null;
+    if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
     if (projectManagerId) updateData.projectManagerId = projectManagerId;
+    if (metadata !== undefined) updateData.metadata = normalizeProjectMetadata(metadata);
 
     const project = await prisma.project.update({
       where: { id: req.params.id },
       data: updateData,
       include: {
-        company: { select: { id: true, name: true } },
-        projectManager: { select: { id: true, name: true } }
+        company: { select: { id: true, name: true, clientType: true } },
+        projectManager: { select: { id: true, name: true, email: true } },
+        phases: { orderBy: { order: 'asc' } },
+        tasks: {
+          include: { assignedTo: { select: { id: true, name: true } } },
+          orderBy: { createdAt: 'asc' }
+        }
       }
     });
 

@@ -4,7 +4,7 @@ import {
   Search, Plus, Filter, List, Sparkles, ArrowLeft,
   BarChart2, Briefcase, Users, ArrowUpRight, Target, GitBranch, AlertTriangle,
   ClipboardCheck, Lightbulb, Gauge, Layers3, TimerReset, Route, Wand2, Trash2, RotateCcw, Save,
-  Upload, Download
+  Upload, Download, Eye, Pencil
 } from 'lucide-react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
@@ -13,30 +13,22 @@ import type { Issue, Space } from '../types';
 import { buildApiUrl, getAuthHeaders } from '../../config/api';
 
 export function HomeView({
+  projects = [],
+  getPhaseCount,
   onCreateProject,
-  onOpenDashboard
+  onOpenDashboard,
+  onViewProject,
+  onEditProject,
+  onDeleteProject
 }: {
+  projects?: Space[];
+  getPhaseCount?: (projectId: string) => number;
   onCreateProject?: () => void;
   onOpenDashboard?: () => void;
+  onViewProject?: (projectId: string) => void;
+  onEditProject?: (projectId: string) => void;
+  onDeleteProject?: (projectId: string) => void;
 }) {
-  const projectPhotos = [
-    {
-      title: 'Implantação e campo',
-      label: 'Execução',
-      image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80'
-    },
-    {
-      title: 'Planejamento executivo',
-      label: 'Governança',
-      image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=900&q=80'
-    },
-    {
-      title: 'Equipe integrada',
-      label: 'Colaboração',
-      image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80'
-    }
-  ];
-
   return (
     <div className="h-full bg-[#070b16] overflow-y-auto p-8 text-slate-300 custom-scrollbar">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -51,24 +43,24 @@ export function HomeView({
           </div>
         </div>
 
-        <section className="relative min-h-[360px] overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
+        <section className="relative min-h-[300px] overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
           <img
             src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1800&q=80"
             alt="Equipe em sala de planejamento de projetos"
             className="absolute inset-0 h-full w-full object-cover opacity-35"
           />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#070b16_0%,rgba(7,11,22,0.92)_34%,rgba(7,11,22,0.58)_100%)]" />
-          <div className="relative z-10 grid min-h-[360px] gap-6 p-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="relative z-10 grid min-h-[300px] gap-6 p-8 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="flex max-w-3xl flex-col justify-center">
               <span className="mb-4 flex w-fit items-center gap-2 rounded-full border border-[#ff7a00]/35 bg-[#ff7a00]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#ffb15c]">
                 <Briefcase className="h-3.5 w-3.5" />
                 Gestão de Projetos
               </span>
               <h2 className="text-4xl font-black leading-tight text-white">
-                Controle projetos, fases, equipe e decisões em uma visão única.
+                Todos os projetos existentes em uma visão única.
               </h2>
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-300">
-                Organize escopo, cronograma, responsáveis, entregáveis e acompanhamentos com leitura executiva para cada iniciativa em andamento.
+                Visualize, edite ou exclua projetos sem misturar fases entre iniciativas.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <button
@@ -93,9 +85,9 @@ export function HomeView({
             <div className="grid content-center gap-3">
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  ['22', 'Módulos OK', '#22c55e'],
-                  ['3', 'Fases críticas', '#f6b40b'],
-                  ['97%', 'Aderência', '#18c8df']
+                  [String(projects.length), 'Projetos', '#22c55e'],
+                  [String(projects.reduce((total, project) => total + (getPhaseCount?.(project.id) || 0), 0)), 'Fases', '#f6b40b'],
+                  [String(projects.filter(project => project.status === 'EM_ANDAMENTO').length), 'Em andamento', '#18c8df']
                 ].map(([value, label, color]) => (
                   <div key={label} className="rounded-lg border border-[#263345] bg-[#070b16]/80 p-4 backdrop-blur">
                     <p className="text-2xl font-black text-white" style={{ color }}>{value}</p>
@@ -107,25 +99,25 @@ export function HomeView({
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold text-slate-100">Projeto em destaque</p>
-                    <p className="text-xs text-slate-500">Paranacidade · implantação</p>
+                    <p className="text-xs text-slate-500">{projects[0]?.client || projects[0]?.name || 'Nenhum projeto cadastrado'}</p>
                   </div>
-                  <span className="rounded-full bg-[#22c55e]/10 px-3 py-1 text-xs font-bold text-[#22c55e]">Em controle</span>
+                  <span className="rounded-full bg-[#22c55e]/10 px-3 py-1 text-xs font-bold text-[#22c55e]">{projects[0]?.status || 'Novo'}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-[#1f2937]">
                   <div className="h-full w-[68%] rounded-full bg-[linear-gradient(90deg,#ff7a00,#f6b40b,#22c55e)]" />
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3 text-xs">
                   <div>
-                    <p className="font-black text-slate-100">68%</p>
-                    <p className="text-slate-500">Progresso</p>
+                    <p className="font-black text-slate-100">{projects[0]?.type || '-'}</p>
+                    <p className="text-slate-500">Tipo</p>
                   </div>
                   <div>
-                    <p className="font-black text-slate-100">11</p>
+                    <p className="font-black text-slate-100">{projects[0] ? getPhaseCount?.(projects[0].id) || 0 : 0}</p>
                     <p className="text-slate-500">Fases</p>
                   </div>
                   <div>
-                    <p className="font-black text-slate-100">4</p>
-                    <p className="text-slate-500">Equipe</p>
+                    <p className="font-black text-slate-100">{projects[0]?.manager || '-'}</p>
+                    <p className="text-slate-500">Gestor</p>
                   </div>
                 </div>
               </div>
@@ -133,24 +125,97 @@ export function HomeView({
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          {projectPhotos.map(item => (
-            <article key={item.title} className="group overflow-hidden rounded-lg border border-[#263345] bg-[#111827]">
-              <div className="relative h-44 overflow-hidden">
-                <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(7,11,22,0.88))]" />
-                <span className="absolute left-4 top-4 rounded-full bg-[#070b16]/80 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#ffb15c]">
-                  {item.label}
-                </span>
-              </div>
-              <div className="p-5">
-                <h3 className="text-lg font-black text-slate-100">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                  Acompanhe responsabilidades, marcos, riscos e decisões para manter cada entrega visível do início ao encerramento.
-                </p>
-              </div>
-            </article>
-          ))}
+        <section className="rounded-lg border border-[#263345] bg-[#111827]">
+          <div className="flex flex-col gap-3 border-b border-[#263345] p-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-slate-100">Relação de projetos</h2>
+              <p className="mt-1 text-sm text-slate-500">{projects.length} projeto{projects.length !== 1 ? 's' : ''} encontrado{projects.length !== 1 ? 's' : ''}.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onCreateProject}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#ff7a00] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]"
+            >
+              <Plus className="h-4 w-4" />
+              Novo projeto
+            </button>
+          </div>
+
+          {projects.length === 0 ? (
+            <div className="p-10 text-center">
+              <Briefcase className="mx-auto mb-3 h-10 w-10 text-[#ff7a00]" />
+              <h3 className="text-base font-black text-slate-100">Nenhum projeto cadastrado</h3>
+              <p className="mt-2 text-sm text-slate-500">Crie o primeiro projeto para iniciar o planejamento.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[920px] text-left text-sm">
+                <thead className="border-b border-[#263345] text-[11px] font-black uppercase tracking-wide text-[#8f9caf]">
+                  <tr>
+                    <th className="px-5 py-3">Projeto</th>
+                    <th className="px-5 py-3">Cliente</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3">Fases</th>
+                    <th className="px-5 py-3">Gestor</th>
+                    <th className="px-5 py-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#263345]">
+                  {projects.map((project) => (
+                    <tr key={project.id} className="transition-colors hover:bg-[#0d1423]">
+                      <td className="px-5 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-black text-white ${project.color}`}>
+                            {project.initial}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate font-black text-slate-100">{project.name}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{project.number || project.type || 'Projeto'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-300">{project.client || 'Nao informado'}</td>
+                      <td className="px-5 py-4">
+                        <span className="rounded-full border border-[#ff7a00]/35 bg-[#ff7a00]/10 px-2.5 py-1 text-[11px] font-black text-[#ffb15c]">
+                          {project.status || 'PLANEJADO'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 font-black text-[#22c55e]">{getPhaseCount?.(project.id) || 0}</td>
+                      <td className="px-5 py-4 text-slate-300">{project.manager || 'Nao definido'}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onViewProject?.(project.id)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-[#374151] bg-[#070b16] px-3 py-1.5 text-xs font-bold text-slate-200 transition-colors hover:border-[#18c8df] hover:text-white"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-[#18c8df]" />
+                            Visualizar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onEditProject?.(project.id)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-[#374151] bg-[#070b16] px-3 py-1.5 text-xs font-bold text-slate-200 transition-colors hover:border-[#f6b40b] hover:text-white"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-[#f6b40b]" />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteProject?.(project.id)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-[#374151] bg-[#070b16] px-3 py-1.5 text-xs font-bold text-slate-200 transition-colors hover:border-red-500 hover:text-white"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">

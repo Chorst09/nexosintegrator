@@ -22,7 +22,6 @@ import { HomeView, PlannedView, DocsView, WhiteboardsView } from './components/G
 import TaskModal from './components/TaskModal';
 import CreateTaskModal from './components/CreateTaskModal';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
-import { mockIssues } from './data';
 import { Space, Issue } from './types';
 
 function cn(...inputs: ClassValue[]) {
@@ -67,6 +66,35 @@ type ApiProject = {
   opportunityId?: string | null;
   company?: { id?: string; name?: string; clientType?: string } | null;
   projectManager?: { id?: string; name?: string; email?: string } | null;
+  phases?: ApiProjectPhase[];
+  tasks?: ApiProjectTask[];
+};
+
+type ApiProjectPhase = {
+  id: string;
+  name: string;
+  description?: string | null;
+  order?: number;
+  status?: string;
+  plannedStartDate?: string | null;
+  plannedEndDate?: string | null;
+  actualStartDate?: string | null;
+  actualEndDate?: string | null;
+  progressPercent?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type ApiProjectTask = {
+  id: string;
+  title: string;
+  description?: string | null;
+  status?: string;
+  priority?: string;
+  dueDate?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  assignedTo?: { id?: string; name?: string } | null;
 };
 
 const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -177,18 +205,112 @@ function mapProjectToSpace(project: ApiProject, index = 0): Space {
   };
 }
 
+function normalizeIssueStatus(value?: string | null): Issue['status'] {
+  const raw = String(value || '').trim().toUpperCase();
+  if (['IN_PROGRESS', 'IN PROGRESS', 'DOING', 'EM_ANDAMENTO', 'EM EXECUCAO', 'EM EXECUÇÃO'].includes(raw)) return 'EM PROGRESSO';
+  if (['AT_RISK', 'RISK', 'BLOCKED', 'PAUSADO'].includes(raw)) return 'EM RISCO';
+  if (['DONE', 'COMPLETED', 'CONCLUIDO', 'CONCLUÍDO'].includes(raw)) return 'CONCLUÍDO';
+  if (['CANCELLED', 'CANCELED', 'CANCELADO'].includes(raw)) return 'CANCELADO';
+  if (['PLANNED', 'PLANEJADO', 'PLANEJAMENTO'].includes(raw)) return 'PLANEJAMENTO';
+  return 'PENDENTE';
+}
+
+function normalizeIssuePriority(value?: string | null): Issue['priority'] {
+  const raw = String(value || '').trim().toUpperCase();
+  if (['URGENT', 'URGENTE', 'CRITICAL'].includes(raw)) return 'Urgente';
+  if (['HIGH', 'ALTA'].includes(raw)) return 'Alta';
+  if (['LOW', 'BAIXA'].includes(raw)) return 'Baixa';
+  return 'Normal';
+}
+
+function mapProjectPhaseToIssue(project: ApiProject, phase: ApiProjectPhase): Issue {
+  return {
+    id: `phase-${phase.id}`,
+    projectId: project.id,
+    key: phase.order ? `FAS-${String(phase.order).padStart(2, '0')}` : undefined,
+    title: phase.name || 'Fase sem nome',
+    description: phase.description || '',
+    status: normalizeIssueStatus(phase.status),
+    priority: 'Normal',
+    startDate: toDateInputValue(phase.plannedStartDate || phase.actualStartDate),
+    dueDate: toDateInputValue(phase.plannedEndDate || phase.actualEndDate),
+    createdAt: phase.createdAt || project.createdAt || new Date().toISOString(),
+    updatedAt: phase.updatedAt || project.createdAt || new Date().toISOString()
+  };
+}
+
+function mapProjectTaskToIssue(project: ApiProject, task: ApiProjectTask): Issue {
+  const initials = String(task.assignedTo?.name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+
+  return {
+    id: `task-${task.id}`,
+    projectId: project.id,
+    key: undefined,
+    title: task.title || 'Fase sem nome',
+    description: task.description || '',
+    status: normalizeIssueStatus(task.status),
+    priority: normalizeIssuePriority(task.priority),
+    dueDate: toDateInputValue(task.dueDate),
+    assignee: task.assignedTo?.name ? {
+      id: task.assignedTo.id || '',
+      name: task.assignedTo.name,
+      initials: initials || task.assignedTo.name.charAt(0).toUpperCase(),
+      color: 'bg-[#ff7a00]'
+    } : undefined,
+    createdAt: task.createdAt || new Date().toISOString(),
+    updatedAt: task.updatedAt || new Date().toISOString()
+  };
+}
+
+function getStoredProjectIssues(): Issue[] {
+  const saved = localStorage.getItem('pm_issues_v4');
+  if (!saved) return [];
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed.filter((issue) => issue?.projectId) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function projectToForm(project: Space): ProjectForm {
+  return {
+    ...emptyProjectForm,
+    name: project.name || '',
+    type: project.type || 'B2B',
+    companyId: project.companyId || '',
+    client: project.client || '',
+    sponsor: project.sponsor || '',
+    projectManagerId: project.projectManagerId || '',
+    manager: project.manager || '',
+    status: project.status || 'PLANEJADO',
+    phase: project.phase || 'SETUP',
+    priority: project.priority || 'Normal',
+    startDate: project.startDate || '',
+    endDate: project.endDate || '',
+    budget: project.budget || '',
+    opportunityId: project.opportunityId || '',
+    objective: project.objective || '',
+    scope: project.scope || '',
+    deliverables: project.deliverables || '',
+    successCriteria: project.successCriteria || '',
+    risks: project.risks || '',
+    notes: project.notes || ''
+  };
+}
+
 export default function App({ onBack }: { onBack?: () => void }) {
   const navigate = useNavigate();
   const [activeView, setActiveView] = useState<ViewMode>('board');
   const [globalView, setGlobalView] = useState('spaces');
 
-  // Try to load issues from localStorage, fallback to mockIssues
   const [issues, setIssues] = useState<Issue[]>(() => {
-    const saved = localStorage.getItem('pm_issues_v4');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-    return mockIssues;
+    return getStoredProjectIssues();
   });
 
   // Save issues to localStorage whenever they change
@@ -224,6 +346,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
   // New States
   const [selectedTask, setSelectedTask] = useState<Issue | null>(null);
   const [isCreatingSpace, setIsCreatingSpace] = useState(false);
+  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [projectForm, setProjectForm] = useState(emptyProjectForm);
   const [projectFormError, setProjectFormError] = useState('');
 
@@ -247,6 +370,25 @@ export default function App({ onBack }: { onBack?: () => void }) {
       const payload = await response.json();
       const projects = Array.isArray(payload) ? payload : payload.projects || payload.data || [];
       const mapped = Array.isArray(projects) ? projects.map(mapProjectToSpace) : [];
+      const apiIssues = Array.isArray(projects)
+        ? projects.flatMap((project: ApiProject) => {
+            const phaseIssues = Array.isArray(project.phases) ? project.phases.map((phase) => mapProjectPhaseToIssue(project, phase)) : [];
+            const taskIssues = Array.isArray(project.tasks) ? project.tasks.map((task) => mapProjectTaskToIssue(project, task)) : [];
+            return [...phaseIssues, ...taskIssues];
+          })
+        : [];
+      setIssues((current) => {
+        const projectIds = new Set(mapped.map((project) => project.id));
+        const apiIssueIds = new Set(apiIssues.map((issue) => issue.id));
+        const localProjectIssues = current.filter((issue) => (
+          issue.projectId
+          && projectIds.has(issue.projectId)
+          && !String(issue.id).startsWith('phase-')
+          && !String(issue.id).startsWith('task-')
+          && !apiIssueIds.has(issue.id)
+        ));
+        return [...apiIssues, ...localProjectIssues];
+      });
       setSpaces(mapped);
       setExpandedSpaces((prev) => {
         const next = { ...prev };
@@ -307,8 +449,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
   const activeProject = spaces.find(s => s.id === activeSpaceId) || spaces[0];
   const activeProjectIssues = issues.filter(issue => {
     if (!activeProject) return false;
-    if (issue.projectId === activeProject.id) return true;
-    return !issue.projectId && activeProject.id === spaces[0]?.id;
+    return issue.projectId === activeProject.id;
   });
   const isDashboardFocus = (globalView === 'spaces' && activeView === 'dashboard') || globalView === 'dashboards';
 
@@ -322,11 +463,11 @@ export default function App({ onBack }: { onBack?: () => void }) {
       return;
     }
 
-    if (isCreatingSpace) {
+    if (isCreatingSpace || editingSpaceId) {
       try {
         setProjectFormError('');
-        const response = await fetch(buildApiUrl('/projetos'), {
-          method: 'POST',
+        const response = await fetch(buildApiUrl(editingSpaceId ? `/projetos/${editingSpaceId}` : '/projetos'), {
+          method: editingSpaceId ? 'PUT' : 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
             name,
@@ -355,25 +496,84 @@ export default function App({ onBack }: { onBack?: () => void }) {
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(payload.error || `Erro ${response.status} ao criar projeto`);
+          throw new Error(payload.error || `Erro ${response.status} ao ${editingSpaceId ? 'atualizar' : 'criar'} projeto`);
         }
 
-        const newSpace = mapProjectToSpace(payload, spaces.length);
-        setSpaces(prev => [newSpace, ...prev.filter(project => project.id !== newSpace.id)]);
-        setActiveSpaceId(newSpace.id);
-        setExpandedSpaces(prev => ({ ...prev, [newSpace.id]: true }));
+        const savedSpace = mapProjectToSpace(payload, spaces.findIndex((project) => project.id === payload.id));
+        setSpaces(prev => editingSpaceId
+          ? prev.map(project => project.id === savedSpace.id ? { ...project, ...savedSpace } : project)
+          : [savedSpace, ...prev.filter(project => project.id !== savedSpace.id)]
+        );
+        setActiveSpaceId(savedSpace.id);
+        setExpandedSpaces(prev => ({ ...prev, [savedSpace.id]: true }));
         setActiveView('dashboard');
         setGlobalView('spaces');
-        navigate(`/projetos/${newSpace.id}`);
+        navigate(`/projetos/${savedSpace.id}`);
       } catch (error) {
-        console.error('Erro ao criar projeto:', error);
-        setProjectFormError(error instanceof Error ? error.message : 'Erro ao criar projeto');
+        console.error('Erro ao salvar projeto:', error);
+        setProjectFormError(error instanceof Error ? error.message : 'Erro ao salvar projeto');
         return;
       }
     }
     setIsCreatingSpace(false);
+    setEditingSpaceId(null);
     setProjectForm(emptyProjectForm);
     setProjectFormError('');
+  };
+
+  const openProject = (projectId: string, view: ViewMode = 'dashboard') => {
+    setActiveSpaceId(projectId);
+    setGlobalView('spaces');
+    setActiveView(view);
+    navigate(`/projetos/${projectId}`);
+  };
+
+  const editProject = (projectId: string) => {
+    const project = spaces.find((item) => item.id === projectId);
+    if (!project) return;
+    setProjectForm(projectToForm(project));
+    setEditingSpaceId(projectId);
+    setIsCreatingSpace(false);
+    setProjectFormError('');
+  };
+
+  const deleteProject = async (projectId: string) => {
+    const project = spaces.find((item) => item.id === projectId);
+    if (!project) return;
+    const confirmed = window.confirm(`Excluir o projeto "${project.name}"? Esta ação remove o projeto e suas fases.`);
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(buildApiUrl(`/projetos/${projectId}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Erro ${response.status} ao excluir projeto`);
+      }
+      setSpaces(prev => prev.filter(item => item.id !== projectId));
+      setIssues(prev => prev.filter(issue => issue.projectId !== projectId));
+      setExpandedSpaces(prev => {
+        const next = { ...prev };
+        delete next[projectId];
+        return next;
+      });
+      setActiveSpaceId(current => {
+        if (current !== projectId) return current;
+        return spaces.find(item => item.id !== projectId)?.id || '';
+      });
+      if (activeSpaceId === projectId) {
+        setGlobalView('home');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir projeto:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao excluir projeto');
+    }
+  };
+
+  const getProjectIssueCount = (projectId: string) => {
+    return issues.filter(issue => issue.projectId === projectId).length;
   };
 
   const toggleSpace = (id: string) => {
@@ -464,7 +664,10 @@ export default function App({ onBack }: { onBack?: () => void }) {
         </div>
 
         <div className="p-3 flex-1 overflow-y-auto">
-          <div className="flex items-center gap-2 text-slate-400 hover:bg-[#1f2937] p-1.5 rounded cursor-pointer mb-4">
+          <div
+            className="flex items-center gap-2 text-slate-400 hover:bg-[#1f2937] p-1.5 rounded cursor-pointer mb-4"
+            onClick={() => setGlobalView('home')}
+          >
             <LayoutTemplate className="w-4 h-4" />
             <span className="text-sm">Todos os projetos</span>
           </div>
@@ -499,7 +702,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
                         <ListIcon className="w-4 h-4" />
                         <span className="text-sm">Fases</span>
                       </div>
-                      <span className="text-xs text-slate-500">{activeSpaceId === space.id ? issues.length : 0}</span>
+                      <span className="text-xs text-slate-500">{getProjectIssueCount(space.id)}</span>
                     </div>
                   </div>
                 )}
@@ -675,8 +878,8 @@ export default function App({ onBack }: { onBack?: () => void }) {
               </button>
             </div>
           )}
-          {activeView === 'board' && activeProject && <KanbanBoard issues={issues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} />}
-          {activeView === 'list' && activeProject && <ListView issues={issues} onTaskClick={setSelectedTask} />}
+          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} />}
+          {activeView === 'list' && activeProject && <ListView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
           {activeView === 'dashboard' && (
             <Dashboard
               projects={spaces}
@@ -688,10 +891,10 @@ export default function App({ onBack }: { onBack?: () => void }) {
             />
           )}
           {activeView === 'team' && <TeamView />}
-          {activeView === 'calendar' && <CalendarView issues={issues} onTaskClick={setSelectedTask} />}
-          {activeView === 'gantt' && <GanttView issues={issues} />}
+          {activeView === 'calendar' && <CalendarView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
+          {activeView === 'gantt' && <GanttView issues={activeProjectIssues} />}
           {activeView === 'activity' && <ActivityView />}
-          {activeView === 'workload' && <WorkloadView issues={issues} />}
+          {activeView === 'workload' && <WorkloadView issues={activeProjectIssues} />}
         </div>
 
           </>
@@ -700,6 +903,8 @@ export default function App({ onBack }: { onBack?: () => void }) {
           <div className="flex-1 overflow-hidden relative bg-[#070b16]">
             {globalView === 'home' && (
               <HomeView
+                projects={spaces}
+                getPhaseCount={getProjectIssueCount}
                 onCreateProject={() => {
                   setIsCreatingSpace(true);
                   setGlobalView('spaces');
@@ -708,6 +913,9 @@ export default function App({ onBack }: { onBack?: () => void }) {
                   setGlobalView('spaces');
                   setActiveView('dashboard');
                 }}
+                onViewProject={(projectId) => openProject(projectId, 'dashboard')}
+                onEditProject={editProject}
+                onDeleteProject={deleteProject}
               />
             )}
             {globalView === 'planned' && (
@@ -766,8 +974,9 @@ export default function App({ onBack }: { onBack?: () => void }) {
         />
       )}
 
-      {isCreatingSpace && (
+      {(isCreatingSpace || editingSpaceId) && (
         <ProjectCreateModal
+          mode={editingSpaceId ? 'edit' : 'create'}
           form={projectForm}
           error={projectFormError}
           companies={companies}
@@ -779,6 +988,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
           }}
           onCancel={() => {
             setIsCreatingSpace(false);
+            setEditingSpaceId(null);
             setProjectForm(emptyProjectForm);
             setProjectFormError('');
           }}
@@ -790,6 +1000,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
 }
 
 function ProjectCreateModal({
+  mode = 'create',
   form,
   error,
   companies,
@@ -799,6 +1010,7 @@ function ProjectCreateModal({
   onCancel,
   onSubmit
 }: {
+  mode?: 'create' | 'edit';
   form: ProjectForm;
   error: string;
   companies: CompanyOption[];
@@ -828,11 +1040,15 @@ function ProjectCreateModal({
                   <Briefcase className="h-5 w-5" />
                 </span>
                 <span className="rounded-full border border-[#f6b40b]/40 bg-[#f6b40b]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-[#f6b40b]">
-                  Novo projeto
+                  {mode === 'edit' ? 'Editar projeto' : 'Novo projeto'}
                 </span>
               </div>
-              <h2 className="text-2xl font-black text-slate-100">Cadastro completo do projeto</h2>
-              <p className="mt-1 max-w-2xl text-sm text-slate-400">Escopo, objetivo, responsáveis e critérios entram antes da criação das fases.</p>
+              <h2 className="text-2xl font-black text-slate-100">
+                {mode === 'edit' ? 'Editar cadastro do projeto' : 'Cadastro completo do projeto'}
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm text-slate-400">
+                {mode === 'edit' ? 'Atualize escopo, objetivo, responsáveis e governança do projeto.' : 'Escopo, objetivo, responsáveis e critérios entram antes da criação das fases.'}
+              </p>
             </div>
             <button
               type="button"
@@ -996,7 +1212,7 @@ function ProjectCreateModal({
             Cancelar
           </button>
           <button type="button" onClick={onSubmit} className="rounded-md bg-[#ff7a00] px-5 py-2 text-sm font-black text-white shadow-[0_0_24px_rgba(255,122,0,0.2)] transition-colors hover:bg-[#f6b40b] hover:text-[#050914]">
-            Criar projeto
+            {mode === 'edit' ? 'Salvar alterações' : 'Criar projeto'}
           </button>
         </div>
       </div>
