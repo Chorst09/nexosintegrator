@@ -116,6 +116,12 @@ const ArchNode = ({ id, data, selected }: any) => {
 
   const normalized = getNormalizedName(data.imageName || data.label);
   const customImage = data.uploadedImage || (normalized ? `https://cdn.simpleicons.org/${normalized}/0ea5e9` : null);
+  const updateNodeData = (patch: Record<string, any>) => {
+    const updateNodes = setDiagramNodes || setFlowNodes;
+    updateNodes((nds: any[]) => nds.map((n) => (
+      n.id === id ? { ...n, data: { ...n.data, ...patch } } : n
+    )));
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
@@ -126,13 +132,7 @@ const ArchNode = ({ id, data, selected }: any) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      const updateNodes = setDiagramNodes || setFlowNodes;
-      updateNodes((nds: any[]) => nds.map((n) => {
-        if (n.id === id) {
-          return { ...n, data: { ...n.data, uploadedImage: dataUrl } };
-        }
-        return n;
-      }));
+      updateNodeData({ uploadedImage: dataUrl });
     };
     reader.readAsDataURL(file);
     if (fileInputRef.current) {
@@ -140,16 +140,29 @@ const ArchNode = ({ id, data, selected }: any) => {
     }
   };
 
+  const editNameBox = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (readOnly) return;
+    const nextValue = window.prompt('Nome do ponto/local do componente', data.nameBox || data.siteName || '');
+    if (nextValue === null) return;
+    updateNodeData({ nameBox: nextValue.trim() });
+  };
+
   useEffect(() => {
     setImgError(false);
   }, [customImage]);
 
   return (
-    <div className={`bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[190px] flex items-center gap-3 text-slate-200 transition-colors`}>
+    <div className={`relative bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[190px] flex items-center gap-3 text-slate-200 transition-colors`}>
       <Handle id="top-target" type="target" position={Position.Top} className={connectionHandleClass} />
       <Handle id="right-target" type="target" position={Position.Right} className={connectionHandleClass} />
       <Handle id="bottom-target" type="target" position={Position.Bottom} className={connectionHandleClass} />
       <Handle id="left-target" type="target" position={Position.Left} className={connectionHandleClass} />
+      {data.nameBox && (
+        <div className="absolute -top-9 left-1/2 min-w-[130px] -translate-x-1/2 rounded-md border border-[#ff7a00]/70 bg-[#070b16] px-3 py-1.5 text-center text-xs font-black text-slate-100 shadow-lg shadow-black/30">
+          {data.nameBox}
+        </div>
+      )}
       <div
         className={`w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 relative group ${readOnly ? '' : 'cursor-pointer'}`}
         onClick={(event) => {
@@ -188,18 +201,29 @@ const ArchNode = ({ id, data, selected }: any) => {
         <div className="font-bold text-sm leading-tight">{data.label}</div>
         {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
         {!readOnly && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              fileInputRef.current?.click();
-            }}
-            onMouseDown={(event) => event.stopPropagation()}
-            className="mt-2 inline-flex items-center gap-1 rounded border border-[#263345] px-2 py-0.5 text-[10px] font-semibold text-slate-400 transition-colors hover:border-[#ff7a00]/70 hover:text-[#ff7a00]"
-          >
-            <Upload className="h-3 w-3" />
-            Imagem
-          </button>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded border border-[#263345] px-2 py-0.5 text-[10px] font-semibold text-slate-400 transition-colors hover:border-[#ff7a00]/70 hover:text-[#ff7a00]"
+            >
+              <Upload className="h-3 w-3" />
+              Imagem
+            </button>
+            <button
+              type="button"
+              onClick={editNameBox}
+              onMouseDown={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded border border-[#263345] px-2 py-0.5 text-[10px] font-semibold text-slate-400 transition-colors hover:border-[#ff7a00]/70 hover:text-[#ff7a00]"
+            >
+              <Pencil className="h-3 w-3" />
+              Nome
+            </button>
+          </div>
         )}
       </div>
       <Handle id="top-source" type="source" position={Position.Top} className={connectionHandleClass} />
