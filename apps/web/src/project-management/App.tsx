@@ -1382,7 +1382,7 @@ export default function App({ onBack }: { onBack?: () => void }) {
                 }}
               />
             )}
-            {globalView === 'whiteboards' && <WhiteboardsView />}
+            {globalView === 'whiteboards' && <WhiteboardsView activeProject={activeProject} />}
           </div>
         )}
       </main>

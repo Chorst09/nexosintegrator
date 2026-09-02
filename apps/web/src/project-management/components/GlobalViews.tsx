@@ -1094,11 +1094,11 @@ export function DocsView({
   );
 }
 
-export function WhiteboardsView() {
+export function WhiteboardsView({ activeProject = null }: { activeProject?: Space | null }) {
   const [activeBoard, setActiveBoard] = useState<string | null>(null);
 
   if (activeBoard === 'Diagrama de Arquitetura') {
-    return <ArchitectureDiagram onBack={() => setActiveBoard(null)} />;
+    return <ArchitectureDiagram activeProject={activeProject} onBack={() => setActiveBoard(null)} />;
   }
 
   if (activeBoard === 'Mapeamento de Processo') {

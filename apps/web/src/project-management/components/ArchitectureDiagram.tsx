@@ -13,6 +13,7 @@ import {
   MarkerType,
   Connection,
   Edge,
+  ConnectionMode,
   ReactFlowProvider,
   useReactFlow,
   } from '@xyflow/react';
@@ -41,8 +42,11 @@ import {
   FolderOpen,
   Clock3,
   Eye,
-  Pencil
+  Pencil,
+  Plus,
+  X
 } from 'lucide-react';
+import type { Space } from '../types';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
@@ -80,6 +84,19 @@ const BackgroundImageNode = ({ data }: any) => (
 );
 
 const DiagramSetNodesContext = React.createContext<any>(null);
+
+const connectionHandleClass = [
+  'h-3.5',
+  'w-3.5',
+  'border-2',
+  'border-[#111827]',
+  'bg-[#ff7a00]',
+  'opacity-80',
+  'transition-all',
+  'hover:scale-125',
+  'hover:opacity-100',
+  'hover:shadow-[0_0_12px_rgba(255,122,0,0.8)]'
+].join(' ');
 
 const ArchNode = ({ id, data, selected }: any) => {
   const [imgError, setImgError] = useState(false);
@@ -129,7 +146,10 @@ const ArchNode = ({ id, data, selected }: any) => {
 
   return (
     <div className={`bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md p-4 shadow-lg min-w-[190px] flex items-center gap-3 text-slate-200 transition-colors`}>
-      <Handle type="target" position={Position.Top} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
+      <Handle id="top-target" type="target" position={Position.Top} className={connectionHandleClass} />
+      <Handle id="right-target" type="target" position={Position.Right} className={connectionHandleClass} />
+      <Handle id="bottom-target" type="target" position={Position.Bottom} className={connectionHandleClass} />
+      <Handle id="left-target" type="target" position={Position.Left} className={connectionHandleClass} />
       <div
         className={`w-12 h-12 rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden p-1.5 relative group ${readOnly ? '' : 'cursor-pointer'}`}
         onClick={(event) => {
@@ -182,7 +202,10 @@ const ArchNode = ({ id, data, selected }: any) => {
           </button>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3 border-2 border-[#111827] bg-[#ff7a00]" />
+      <Handle id="top-source" type="source" position={Position.Top} className={connectionHandleClass} />
+      <Handle id="right-source" type="source" position={Position.Right} className={connectionHandleClass} />
+      <Handle id="bottom-source" type="source" position={Position.Bottom} className={connectionHandleClass} />
+      <Handle id="left-source" type="source" position={Position.Left} className={connectionHandleClass} />
     </div>
   );
 };
@@ -198,6 +221,9 @@ const LEGACY_DIAGRAM_STORAGE_KEY = 'saved_diagram';
 type SavedDiagramEntry = {
   id: string;
   name: string;
+  clientName?: string;
+  projectName?: string;
+  templateKey?: string;
   nodes: any[];
   edges: any[];
   backgroundImage: string | null;
@@ -247,6 +273,19 @@ const defaultEdgeOptions = {
     color: '#374151',
   },
 };
+
+const cloneDiagram = (diagram: { nodes: any[]; edges: any[] }) => ({
+  nodes: diagram.nodes.map((node) => ({
+    ...node,
+    position: { ...node.position },
+    data: { ...node.data }
+  })),
+  edges: diagram.edges.map((edge) => ({
+    ...edge,
+    style: edge.style ? { ...edge.style } : undefined,
+    markerEnd: edge.markerEnd ? { ...edge.markerEnd } : undefined
+  }))
+});
 
 const templates = {
   'blank': { nodes: [], edges: [] },
@@ -322,9 +361,10 @@ const templates = {
   }
 };
 
-function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(templates['fiber-radio'].nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(templates['fiber-radio'].edges);
+function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => void; activeProject?: Space | null }) {
+  const initialDiagram = cloneDiagram(templates['fiber-radio']);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialDiagram.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialDiagram.edges);
   const [activeTemplate, setActiveTemplate] = useState('fiber-radio');
   const [customNodeName, setCustomNodeName] = useState('');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -334,6 +374,15 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
   const [viewingDiagramId, setViewingDiagramId] = useState<string | null>(null);
   const [activeDiagramName, setActiveDiagramName] = useState('Diagrama sem titulo');
   const [diagramMode, setDiagramMode] = useState<'edit' | 'view'>('edit');
+  const [diagramClientName, setDiagramClientName] = useState(activeProject?.client || '');
+  const [diagramProjectName, setDiagramProjectName] = useState(activeProject?.name || '');
+  const [newDiagramFormOpen, setNewDiagramFormOpen] = useState(false);
+  const [newDiagramForm, setNewDiagramForm] = useState({
+    name: activeProject?.name ? `Arquitetura - ${activeProject.name}` : 'Novo Diagrama de Arquitetura',
+    clientName: activeProject?.client || '',
+    projectName: activeProject?.name || '',
+    templateKey: 'blank'
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
@@ -357,7 +406,16 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     setSavedDiagrams(ordered);
   }, []);
 
-  const onConnect = useCallback((params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
+  const onConnect = useCallback((params: Connection | Edge) => {
+    const edgeId = `edge-${params.source}-${params.target}-${Date.now()}`;
+    setEdges((eds) => addEdge({
+      ...params,
+      id: edgeId,
+      type: 'smoothstep',
+      style: { stroke: '#ff7a00', strokeWidth: 2.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#ff7a00' }
+    }, eds));
+  }, [setEdges]);
 
   const flowNodes = React.useMemo(() => {
     const diagramNodes = nodes.map((node) => ({
@@ -400,6 +458,8 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     setActiveDiagramId(mode === 'edit' ? entry.id : null);
     setViewingDiagramId(mode === 'view' ? entry.id : null);
     setActiveDiagramName(entry.name);
+    setDiagramClientName(entry.clientName || '');
+    setDiagramProjectName(entry.projectName || '');
     setDiagramMode(mode);
   };
 
@@ -411,17 +471,51 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
         loadSavedDiagram(latest);
       }
     } else {
-      setNodes(templates[key].nodes);
-      setEdges(templates[key].edges);
+      const nextDiagram = cloneDiagram(templates[key]);
+      setNodes(nextDiagram.nodes);
+      setEdges(nextDiagram.edges);
       setActiveDiagramId(null);
       setViewingDiagramId(null);
       setActiveDiagramName(`Modelo ${key}`);
+      setDiagramClientName(activeProject?.client || '');
+      setDiagramProjectName(activeProject?.name || '');
       setDiagramMode('edit');
       if (key === 'blank') {
         setBackgroundImage(null);
         setBackgroundOpacity(0.38);
       }
     }
+  };
+
+  const openNewDiagramForm = () => {
+    setNewDiagramForm({
+      name: activeProject?.name ? `Arquitetura - ${activeProject.name}` : 'Novo Diagrama de Arquitetura',
+      clientName: activeProject?.client || diagramClientName || '',
+      projectName: activeProject?.name || diagramProjectName || '',
+      templateKey: 'blank'
+    });
+    setNewDiagramFormOpen(true);
+  };
+
+  const createNewDiagram = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const templateKey = newDiagramForm.templateKey as keyof typeof templates;
+    const selectedTemplate = templates[templateKey] || templates.blank;
+    const nextDiagram = cloneDiagram(selectedTemplate);
+    const name = newDiagramForm.name.trim() || 'Diagrama sem titulo';
+
+    setNodes(nextDiagram.nodes);
+    setEdges(nextDiagram.edges);
+    setBackgroundImage(null);
+    setBackgroundOpacity(0.38);
+    setActiveTemplate(templateKey);
+    setActiveDiagramId(null);
+    setViewingDiagramId(null);
+    setActiveDiagramName(name);
+    setDiagramClientName(newDiagramForm.clientName.trim());
+    setDiagramProjectName(newDiagramForm.projectName.trim());
+    setDiagramMode('edit');
+    setNewDiagramFormOpen(false);
   };
 
   const saveDiagram = () => {
@@ -431,16 +525,20 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
     }
 
     const now = new Date().toISOString();
-    const defaultName = activeDiagramId ? activeDiagramName : `Diagrama ${savedDiagrams.length + 1}`;
-    const requestedName = window.prompt('Nome do diagrama', defaultName);
-    if (requestedName === null) return;
+    if (!activeDiagramId && (!activeDiagramName || /^Modelo |Diagrama sem titulo$/i.test(activeDiagramName))) {
+      openNewDiagramForm();
+      return;
+    }
 
-    const name = requestedName.trim() || 'Diagrama sem titulo';
+    const name = activeDiagramName.trim() || 'Diagrama sem titulo';
     const payload = {
       nodes,
       edges,
       backgroundImage,
       backgroundOpacity,
+      clientName: diagramClientName.trim(),
+      projectName: diagramProjectName.trim(),
+      templateKey: activeTemplate,
       updatedAt: now,
     };
 
@@ -659,6 +757,13 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={openNewDiagramForm}
+            className="flex items-center gap-2 rounded-md bg-[#ff7a00] px-3 py-1.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-[#f6b40b] hover:text-[#050914]"
+          >
+            <Plus className="h-4 w-4" /> Novo Diagrama
+          </button>
           <div className="flex items-center gap-2 bg-[#070b16] p-1 rounded-lg border border-[#263345]">
             {savedDiagrams.length > 0 && (
               <button
@@ -736,6 +841,9 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
             nodesDraggable={diagramMode === 'edit'}
             nodesConnectable={diagramMode === 'edit'}
             elementsSelectable={diagramMode === 'edit'}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={28}
+            connectionLineStyle={{ stroke: '#ff7a00', strokeWidth: 2.5 }}
             colorMode="dark"
             fitView
             className="bg-[#070b16]"
@@ -780,6 +888,11 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
                           <Clock3 className="h-3 w-3" />
                           <span>{new Date(entry.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
                         </div>
+                        {(entry.clientName || entry.projectName) && (
+                          <div className="mt-1 truncate text-[10px] text-slate-400">
+                            {[entry.clientName, entry.projectName].filter(Boolean).join(' • ')}
+                          </div>
+                        )}
                       </button>
                       <div className="mt-2 flex items-center gap-1.5">
                         <button
@@ -817,6 +930,29 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
 
           {diagramMode === 'edit' && (
           <Panel position="top-left" className="w-56 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-1.5 max-h-[calc(100vh-120px)] overflow-y-auto">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Diagrama</h3>
+            <input
+              type="text"
+              value={activeDiagramName}
+              onChange={(event) => setActiveDiagramName(event.target.value)}
+              className="bg-[#070b16] border border-[#263345] rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff7a00]"
+              placeholder="Nome do diagrama"
+            />
+            <input
+              type="text"
+              value={diagramClientName}
+              onChange={(event) => setDiagramClientName(event.target.value)}
+              className="bg-[#070b16] border border-[#263345] rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff7a00]"
+              placeholder="Nome do cliente"
+            />
+            <input
+              type="text"
+              value={diagramProjectName}
+              onChange={(event) => setDiagramProjectName(event.target.value)}
+              className="bg-[#070b16] border border-[#263345] rounded-md px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-[#ff7a00]"
+              placeholder="Nome do projeto"
+            />
+            <div className="my-1 h-px bg-[#263345]" />
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Componentes</h3>
             <button onClick={() => addNetworkNode('fiber', 'Fibra Óptica', 'Backbone / FO / DIO', 'fiber')} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
               <Cable className="w-3.5 h-3.5 text-[#22d3ee]" /> Fibra / DIO
@@ -909,11 +1045,97 @@ function ArchitectureDiagramContent({ onBack }: { onBack: () => void }) {
           </ReactFlow>
         </DiagramSetNodesContext.Provider>
       </div>
+
+      {newDiagramFormOpen && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={createNewDiagram}
+            className="w-full max-w-lg rounded-xl border border-[#263345] bg-[#111827] p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#ff7a00]">Novo Diagrama</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-100">Diagrama de Arquitetura</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewDiagramFormOpen(false)}
+                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-[#263345] hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-300">
+                Nome do diagrama
+                <input
+                  type="text"
+                  value={newDiagramForm.name}
+                  onChange={(event) => setNewDiagramForm((current) => ({ ...current, name: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-[#263345] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-[#ff7a00]"
+                  required
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-300">
+                Nome do cliente
+                <input
+                  type="text"
+                  value={newDiagramForm.clientName}
+                  onChange={(event) => setNewDiagramForm((current) => ({ ...current, clientName: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-[#263345] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-[#ff7a00]"
+                  required
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-300">
+                Nome do projeto
+                <input
+                  type="text"
+                  value={newDiagramForm.projectName}
+                  onChange={(event) => setNewDiagramForm((current) => ({ ...current, projectName: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-[#263345] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-[#ff7a00]"
+                  required
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-300">
+                Modelo inicial
+                <select
+                  value={newDiagramForm.templateKey}
+                  onChange={(event) => setNewDiagramForm((current) => ({ ...current, templateKey: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-[#263345] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-[#ff7a00]"
+                >
+                  <option value="blank">Em Branco</option>
+                  <option value="fiber-radio">Fibra + Rádio</option>
+                  <option value="switch-ap">Switches + APs</option>
+                  <option value="3-tier">Web 3-Tier</option>
+                  <option value="microservices">Microserviços</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setNewDiagramFormOpen(false)}
+                className="rounded-md border border-[#263345] px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-[#263345] hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="rounded-md bg-[#ff7a00] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#f6b40b] hover:text-[#050914]"
+              >
+                Criar Diagrama
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function ArchitectureDiagram(props: { onBack: () => void }) {
+export default function ArchitectureDiagram(props: { onBack: () => void; activeProject?: Space | null }) {
   return (
     <ReactFlowProvider>
       <ArchitectureDiagramContent {...props} />
