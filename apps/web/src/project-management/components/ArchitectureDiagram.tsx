@@ -86,6 +86,114 @@ const BackgroundImageNode = ({ data }: any) => (
   </div>
 );
 
+const PhysicalDeviceShape = ({ type }: { type: string }) => {
+  if (type === 'tower') {
+    return (
+      <svg viewBox="0 0 220 260" className="h-64 w-56 overflow-visible drop-shadow-[0_18px_24px_rgba(0,0,0,0.45)]">
+        <defs>
+          <linearGradient id="towerSteel" x1="0" x2="1">
+            <stop offset="0%" stopColor="#cbd5e1" />
+            <stop offset="50%" stopColor="#64748b" />
+            <stop offset="100%" stopColor="#f8fafc" />
+          </linearGradient>
+        </defs>
+        <path d="M88 244 L110 22 L132 244 Z" fill="rgba(15,23,42,0.3)" stroke="url(#towerSteel)" strokeWidth="5" />
+        <path d="M91 218 H129 M94 190 H126 M97 160 H123 M100 132 H120 M103 104 H117 M106 76 H114" stroke="#94a3b8" strokeWidth="4" />
+        <path d="M92 218 L126 190 M128 218 L94 190 M95 190 L123 160 M125 190 L97 160 M98 160 L120 132 M122 160 L100 132 M101 132 L117 104 M119 132 L103 104 M104 104 L114 76 M116 104 L106 76" stroke="#f97316" strokeWidth="3" />
+        <path d="M110 22 V2" stroke="#e2e8f0" strokeWidth="4" strokeLinecap="round" />
+        <ellipse cx="56" cy="95" rx="23" ry="36" fill="#e5e7eb" stroke="#64748b" strokeWidth="4" transform="rotate(-18 56 95)" />
+        <path d="M76 96 H104" stroke="#94a3b8" strokeWidth="5" strokeLinecap="round" />
+        <ellipse cx="164" cy="125" rx="25" ry="38" fill="#f1f5f9" stroke="#64748b" strokeWidth="4" transform="rotate(16 164 125)" />
+        <path d="M137 125 H115" stroke="#94a3b8" strokeWidth="5" strokeLinecap="round" />
+        <rect x="36" y="38" width="14" height="50" rx="4" fill="#cbd5e1" stroke="#64748b" strokeWidth="3" />
+        <rect x="170" y="58" width="14" height="58" rx="4" fill="#cbd5e1" stroke="#64748b" strokeWidth="3" />
+      </svg>
+    );
+  }
+
+  if (type === 'rack') {
+    return (
+      <svg viewBox="0 0 280 220" className="h-56 w-72 overflow-visible drop-shadow-[0_18px_24px_rgba(0,0,0,0.45)]">
+        <defs>
+          <linearGradient id="rackMetal" x1="0" x2="1">
+            <stop offset="0%" stopColor="#020617" />
+            <stop offset="48%" stopColor="#1e293b" />
+            <stop offset="100%" stopColor="#475569" />
+          </linearGradient>
+        </defs>
+        <rect x="36" y="8" width="208" height="204" rx="10" fill="url(#rackMetal)" stroke="#64748b" strokeWidth="5" />
+        {[36, 68, 100, 132].map((y) => (
+          <g key={y}>
+            <rect x="58" y={y} width="164" height="20" rx="4" fill="#0f172a" stroke="#334155" strokeWidth="2" />
+            {Array.from({ length: 10 }).map((_, index) => (
+              <rect key={index} x={72 + index * 13} y={y + 5} width="8" height="8" rx="1.5" fill={index % 3 === 0 ? '#22d3ee' : '#94a3b8'} />
+            ))}
+            <circle cx="210" cy={y + 10} r="3" fill="#22c55e" />
+          </g>
+        ))}
+        <path d="M82 58 C82 86 158 78 158 105 C158 132 92 119 92 148" fill="none" stroke="#38bdf8" strokeWidth="5" strokeLinecap="round" />
+        <path d="M116 58 C116 92 190 80 190 118 C190 154 126 138 126 166" fill="none" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
+        <rect x="62" y="172" width="156" height="22" rx="4" fill="#020617" stroke="#334155" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  if (type === 'dish') {
+    return (
+      <svg viewBox="0 0 300 190" className="h-48 w-80 overflow-visible drop-shadow-[0_18px_24px_rgba(0,0,0,0.45)]">
+        <defs>
+          <radialGradient id="dishFace" cx="45%" cy="45%" r="70%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="64%" stopColor="#cbd5e1" />
+            <stop offset="100%" stopColor="#64748b" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="110" cy="92" rx="78" ry="72" fill="url(#dishFace)" stroke="#475569" strokeWidth="5" />
+        <ellipse cx="112" cy="92" rx="42" ry="38" fill="none" stroke="#94a3b8" strokeWidth="3" opacity="0.55" />
+        <circle cx="112" cy="92" r="8" fill="#64748b" />
+        <path d="M166 92 H214" stroke="#94a3b8" strokeWidth="10" strokeLinecap="round" />
+        <rect x="207" y="62" width="48" height="62" rx="10" fill="#e5e7eb" stroke="#64748b" strokeWidth="5" />
+        <path d="M255 93 H286" stroke="#64748b" strokeWidth="9" strokeLinecap="round" />
+        <path d="M76 150 L52 184 M139 150 L162 184" stroke="#64748b" strokeWidth="6" strokeLinecap="round" />
+        <path d="M204 76 C184 62 180 40 176 22" fill="none" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
+        <path d="M214 70 C198 50 197 34 197 14" fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 320 190" className="h-48 w-80 overflow-visible drop-shadow-[0_18px_24px_rgba(0,0,0,0.45)]">
+      <defs>
+        <linearGradient id="radioBody" x1="0" x2="1">
+          <stop offset="0%" stopColor="#f8fafc" />
+          <stop offset="55%" stopColor="#cbd5e1" />
+          <stop offset="100%" stopColor="#64748b" />
+        </linearGradient>
+        <radialGradient id="radioDish" cx="42%" cy="42%" r="70%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="62%" stopColor="#dbe3ec" />
+          <stop offset="100%" stopColor="#94a3b8" />
+        </radialGradient>
+      </defs>
+      <ellipse cx="220" cy="95" rx="64" ry="58" fill="url(#radioDish)" stroke="#64748b" strokeWidth="5" />
+      <rect x="58" y="54" width="94" height="82" rx="16" fill="url(#radioBody)" stroke="#64748b" strokeWidth="5" />
+      <rect x="22" y="66" width="48" height="58" rx="12" fill="#cbd5e1" stroke="#64748b" strokeWidth="5" />
+      {[0, 1, 2, 3].map((index) => (
+        <path key={index} d={`M${34 + index * 7} 78 V112`} stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" />
+      ))}
+      <circle cx="112" cy="95" r="25" fill="#e5e7eb" stroke="#94a3b8" strokeWidth="4" />
+      <path d="M152 95 H178" stroke="#64748b" strokeWidth="9" strokeLinecap="round" />
+      <path d="M178 72 H268" stroke="#64748b" strokeWidth="6" strokeLinecap="round" />
+      <path d="M178 118 H268" stroke="#64748b" strokeWidth="6" strokeLinecap="round" />
+      <path d="M268 72 H302 M268 118 H302" stroke="#94a3b8" strokeWidth="7" strokeLinecap="round" />
+      <path d="M86 44 C95 18 118 18 128 44" fill="none" stroke="#cbd5e1" strokeWidth="6" strokeLinecap="round" />
+      <path d="M70 44 C84 4 132 4 148 44" fill="none" stroke="#cbd5e1" strokeWidth="5" strokeLinecap="round" />
+      <path d="M252 36 C272 50 284 70 286 95" fill="none" stroke="#f97316" strokeWidth="4" strokeLinecap="round" opacity="0.85" />
+      <path d="M262 22 C292 44 308 70 310 98" fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" opacity="0.75" />
+    </svg>
+  );
+};
+
 const DiagramSetNodesContext = React.createContext<any>(null);
 
 const connectionHandleClass = [
@@ -120,6 +228,7 @@ const ArchNode = ({ id, data, selected }: any) => {
   const normalized = getNormalizedName(data.imageName || data.label);
   const customImage = data.uploadedImage || (normalized ? `https://cdn.simpleicons.org/${normalized}/0ea5e9` : null);
   const isPhysical = data.variant === 'physical';
+  const usesDeviceShape = isPhysical && data.physicalType && !data.uploadedImage;
   const updateNodeData = (patch: Record<string, any>) => {
     const updateNodes = setDiagramNodes || setFlowNodes;
     updateNodes((nds: any[]) => nds.map((n) => (
@@ -157,7 +266,7 @@ const ArchNode = ({ id, data, selected }: any) => {
   }, [customImage]);
 
   return (
-    <div className={`relative bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md shadow-lg text-slate-200 transition-colors ${isPhysical ? 'flex min-w-[280px] max-w-[340px] flex-col items-stretch gap-3 p-3' : 'flex min-w-[190px] items-center gap-3 p-4'}`}>
+    <div className={`relative text-slate-200 transition-colors ${usesDeviceShape ? `flex min-w-[330px] flex-col items-center gap-1 rounded-md border border-transparent bg-transparent p-2 ${selected ? 'shadow-[0_0_0_2px_rgba(255,122,0,0.8)]' : ''}` : `bg-[#111827] border ${selected ? 'border-[#ff7a00] shadow-[0_0_15px_rgba(14,165,233,0.3)]' : 'border-[#263345]'} rounded-md shadow-lg ${isPhysical ? 'flex min-w-[280px] max-w-[340px] flex-col items-stretch gap-3 p-3' : 'flex min-w-[190px] items-center gap-3 p-4'}`}`}>
       <Handle id="top-target" type="target" position={Position.Top} className={connectionHandleClass} />
       <Handle id="right-target" type="target" position={Position.Right} className={connectionHandleClass} />
       <Handle id="bottom-target" type="target" position={Position.Bottom} className={connectionHandleClass} />
@@ -168,7 +277,7 @@ const ArchNode = ({ id, data, selected }: any) => {
         </div>
       )}
       <div
-        className={`rounded-lg bg-[#070b16] border border-[#263345] text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden relative group ${isPhysical ? 'h-40 w-full p-0' : 'h-12 w-12 p-1.5'} ${readOnly ? '' : 'cursor-pointer'}`}
+        className={`text-[#ff7a00] flex items-center justify-center shrink-0 overflow-hidden relative group ${usesDeviceShape ? 'h-52 w-80 overflow-visible rounded-none bg-transparent p-0' : `rounded-lg bg-[#070b16] border border-[#263345] ${isPhysical ? 'h-40 w-full p-0' : 'h-12 w-12 p-1.5'}`} ${readOnly ? '' : 'cursor-pointer'}`}
         onClick={(event) => {
           event.stopPropagation();
           if (readOnly) return;
@@ -177,13 +286,15 @@ const ArchNode = ({ id, data, selected }: any) => {
         onMouseDown={(event) => event.stopPropagation()}
         title={readOnly ? 'Imagem do componente' : 'Clique para alterar a imagem'}
       >
-        {customImage && !imgError ? (
+        {usesDeviceShape ? (
+          <PhysicalDeviceShape type={data.physicalType} />
+        ) : customImage && !imgError ? (
           <img
             src={customImage}
             alt={data.label}
             crossOrigin="anonymous"
             onError={() => setImgError(true)}
-            className={`${isPhysical ? 'h-full w-full object-cover' : 'h-full w-full object-contain'}`}
+            className={`${isPhysical ? 'h-full w-full object-contain' : 'h-full w-full object-contain'}`}
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center">
@@ -206,8 +317,8 @@ const ArchNode = ({ id, data, selected }: any) => {
         />
       </div>
       <div className={isPhysical ? 'min-w-0 text-center' : 'flex-1'}>
-        <div className="font-bold text-sm leading-tight">{data.label}</div>
-        {data.sublabel && <div className="text-[10px] text-slate-400 mt-0.5">{data.sublabel}</div>}
+        <div className={`font-bold leading-tight ${usesDeviceShape ? 'inline-flex rounded-md border border-[#263345] bg-[#070b16]/90 px-3 py-1 text-xs shadow-lg shadow-black/30' : 'text-sm'}`}>{data.label}</div>
+        {data.sublabel && <div className={`${usesDeviceShape ? 'mt-1 text-[9px]' : 'mt-0.5 text-[10px]'} text-slate-400`}>{data.sublabel}</div>}
         {!readOnly && (
           <div className={`mt-2 flex flex-wrap gap-1.5 ${isPhysical ? 'justify-center' : ''}`}>
             <button
@@ -831,7 +942,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     setNodes((nds) => [...nds, newNode]);
   };
 
-  const addPhysicalNode = (icon: string, label: string, sublabel: string, imageUrl: string) => {
+  const addPhysicalNode = (icon: string, label: string, sublabel: string, physicalType: string, referenceImage: string) => {
     const newNode = {
       id: `physical-${Date.now()}`,
       type: 'arch',
@@ -841,7 +952,8 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
         icon,
         sublabel,
         variant: 'physical',
-        uploadedImage: imageUrl,
+        physicalType,
+        referenceImage,
         imageName: '',
         nameBox: ''
       }
@@ -1227,16 +1339,16 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
               >
                 <ImagePlus className="w-3.5 h-3.5" /> Adicionar foto real
               </button>
-              <button onClick={() => addPhysicalNode('radio', 'Rádio Físico', 'PTP / Backhaul / Torre', physicalComponentImages.radio)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('radio', 'Rádio Físico', 'PTP / Backhaul / Torre', 'radio', physicalComponentImages.radio)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <RadioTower className="w-3.5 h-3.5 text-[#f6b40b]" /> Rádio físico
               </button>
-              <button onClick={() => addPhysicalNode('radio', 'Antena / Dish', 'Antena externa / enlace', physicalComponentImages.dish)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('radio', 'Antena / Dish', 'Antena externa / enlace', 'dish', physicalComponentImages.dish)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <RadioTower className="w-3.5 h-3.5 text-[#ff7a00]" /> Antena / Dish
               </button>
-              <button onClick={() => addPhysicalNode('pop', 'Torre / Mastro', 'Estrutura física', physicalComponentImages.tower)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('pop', 'Torre / Mastro', 'Estrutura física', 'tower', physicalComponentImages.tower)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <Building2 className="w-3.5 h-3.5 text-[#22d3ee]" /> Torre / Mastro
               </button>
-              <button onClick={() => addPhysicalNode('switch', 'Rack / POP', 'Rack, DIO, OLT, switch', physicalComponentImages.rack)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
+              <button onClick={() => addPhysicalNode('switch', 'Rack / POP', 'Rack, DIO, OLT, switch', 'rack', physicalComponentImages.rack)} className="flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-[#263345] px-2 py-1.5 rounded-md transition-colors text-left">
                 <Network className="w-3.5 h-3.5 text-[#34d399]" /> Rack / POP
               </button>
               <p className="text-[9px] leading-3 text-slate-500">
