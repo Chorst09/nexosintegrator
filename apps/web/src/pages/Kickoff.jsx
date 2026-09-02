@@ -1082,7 +1082,7 @@ const KickoffFormModal = ({ onClose, onSaved, meeting, initialContext = null }) 
   const inputClass = "w-full px-3 py-2 border border-gray-300 dark:border-[color:var(--crm-border)] rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-y-0 left-0 right-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-3 lg:left-[312px] lg:p-6">
       <div className="bg-white dark:bg-[var(--crm-surface)] rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
         <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">
@@ -1767,7 +1767,7 @@ const KickoffDetailModal = ({ meeting, onClose, onMeetingChange, onRefresh }) =>
   ];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-y-0 left-0 right-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-3 lg:left-[312px] lg:p-6">
       <div className="bg-white dark:bg-[var(--crm-surface)] rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-gray-200 dark:border-[color:var(--crm-border)] flex-shrink-0">
