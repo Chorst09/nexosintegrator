@@ -864,19 +864,23 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    // Verificar permissões
-    if (solicitacao.solicitanteId !== req.user.userId && req.user.role !== 'ADMIN') {
+    // Verificar permissões - apenas ADMIN ou o próprio solicitante
+    const isAdmin = req.user.role === 'ADMIN';
+    const isOwner = solicitacao.solicitanteId === req.user.userId;
+
+    if (!isAdmin && !isOwner) {
       return res.status(403).json({
         success: false,
         message: 'Sem permissão para excluir esta solicitação'
       });
     }
 
-    // Não permitir exclusão de solicitações finalizadas
-    if (solicitacao.status === 'FINALIZADA') {
+    // ADMIN pode excluir qualquer orçamento, independente do status
+    // Usuário comum só pode excluir se não estiver finalizada (mantém segurança)
+    if (!isAdmin && solicitacao.status === 'FINALIZADA') {
       return res.status(400).json({
         success: false,
-        message: 'Não é possível excluir solicitações finalizadas'
+        message: 'Não é possível excluir solicitações finalizadas. Contate um administrador.'
       });
     }
 
