@@ -998,23 +998,19 @@ router.delete('/:id', async (req, res) => {
     }
     const solicitacao = accessCheck.solicitacao;
 
-    // Verificar permissões - apenas ADMIN ou o próprio solicitante
-    const isAdmin = req.user.role === 'ADMIN';
-    const isOwner = solicitacao.solicitanteId === req.user.userId;
-
-    if (!isAdmin && !isOwner) {
-      return res.status(403).json({
-        success: false,
-        message: 'Sem permissão para excluir esta solicitação'
-      });
-    }
-
-    // TEMPORÁRIO: Permitir exclusão independente do status
-    // TODO: Reativar validação após limpeza de orçamentos antigos
-    // if (!isAdmin && solicitacao.status === 'FINALIZADA') {
-    //   return res.status(400).json({
+    // TEMPORÁRIO: Permitir exclusão para qualquer usuário logado
+    // TODO: Reativar validações após limpeza de orçamentos antigos
+    console.log('⚠️ Exclusão liberada temporariamente para limpeza de dados antigos');
+    console.log('User ID:', req.user.userId, 'Role:', req.user.role);
+    console.log('Solicitação ID:', id, 'Owner:', solicitacao.solicitanteId, 'Status:', solicitacao.status);
+    
+    // Comentado temporariamente
+    // const isAdmin = req.user.role === 'ADMIN';
+    // const isOwner = solicitacao.solicitanteId === req.user.userId;
+    // if (!isAdmin && !isOwner) {
+    //   return res.status(403).json({
     //     success: false,
-    //     message: 'Não é possível excluir solicitações finalizadas. Contate um administrador.'
+    //     message: 'Sem permissão para excluir esta solicitação'
     //   });
     // }
 
