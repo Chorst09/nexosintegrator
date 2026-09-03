@@ -555,6 +555,7 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
   const [diagramClientName, setDiagramClientName] = useState(activeProject?.client || '');
   const [diagramProjectName, setDiagramProjectName] = useState(activeProject?.name || '');
   const [newDiagramFormOpen, setNewDiagramFormOpen] = useState(false);
+  const [savedDiagramsModalOpen, setSavedDiagramsModalOpen] = useState(false);
   const [newDiagramForm, setNewDiagramForm] = useState({
     name: activeProject?.name ? `Arquitetura - ${activeProject.name}` : 'Novo Diagrama de Arquitetura',
     clientName: activeProject?.client || '',
@@ -1034,6 +1035,21 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Botão para abrir modal de Diagramas Salvos */}
+          <button
+            type="button"
+            onClick={() => setSavedDiagramsModalOpen(true)}
+            className="flex items-center gap-2 rounded-md bg-[#070b16] border border-[#263345] px-3 py-1.5 text-sm font-semibold text-slate-300 hover:border-[#ff7a00] hover:text-white transition-colors"
+            title="Ver diagramas salvos"
+          >
+            <FolderOpen className="h-4 w-4" />
+            Diagramas Salvos
+            {savedDiagrams.length > 0 && (
+              <span className="ml-1 rounded-full bg-[#ff7a00] px-2 py-0.5 text-[10px] font-bold text-white">
+                {savedDiagrams.length}
+              </span>
+            )}
+          </button>
           <button
             type="button"
             onClick={openNewDiagramForm}
@@ -1201,78 +1217,6 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
               </svg>
             </ViewportPortal>
 
-            <Panel position="top-right" className="w-64 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-2 max-h-[calc(100vh-120px)]">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Diagramas Salvos</h3>
-                <span className="rounded bg-[#070b16] px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-                  {savedDiagrams.length}
-                </span>
-              </div>
-
-              {savedDiagrams.length === 0 ? (
-                <div className="rounded-md border border-dashed border-[#263345] bg-[#070b16]/70 px-2 py-3 text-[11px] leading-4 text-slate-500">
-                  Salve o primeiro diagrama para ele aparecer aqui.
-                </div>
-              ) : (
-                <div className="flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
-                  {savedDiagrams.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className={`rounded-md border px-2 py-2 transition-colors ${activeDiagramId === entry.id ? 'border-[#ff7a00]/70 bg-[#ff7a00]/10' : viewingDiagramId === entry.id ? 'border-[#22d3ee]/70 bg-[#22d3ee]/10' : 'border-[#263345] bg-[#070b16]/70 hover:border-[#3b4b63]'}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => loadSavedDiagram(entry, 'view')}
-                        className="w-full text-left"
-                      >
-                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#ff7a00]" />
-                          <span className="truncate">{entry.name}</span>
-                        </div>
-                        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-500">
-                          <Clock3 className="h-3 w-3" />
-                          <span>{new Date(entry.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                        </div>
-                        {(entry.clientName || entry.projectName) && (
-                          <div className="mt-1 truncate text-[10px] text-slate-400">
-                            {[entry.clientName, entry.projectName].filter(Boolean).join(' • ')}
-                          </div>
-                        )}
-                      </button>
-                      <div className="mt-2 flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => loadSavedDiagram(entry, 'view')}
-                          className="flex-1 rounded border border-[#263345] px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:border-[#ff7a00]/70 hover:text-white"
-                        >
-                          <span className="inline-flex items-center justify-center gap-1">
-                            <Eye className="h-3 w-3" /> Visualizar
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => loadSavedDiagram(entry, 'edit')}
-                          className="flex-1 rounded border border-[#263345] px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors hover:border-[#ff7a00]/70 hover:text-white"
-                        >
-                          <span className="inline-flex items-center justify-center gap-1">
-                            <Pencil className="h-3 w-3" /> Editar
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteSavedDiagram(entry.id)}
-                          className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-200 transition-colors hover:bg-red-500/20"
-                          title="Excluir diagrama"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Panel>
-
           {diagramMode === 'edit' && (
           <Panel position="top-left" className="w-56 bg-[#111827]/90 backdrop-blur-md border border-[#263345] p-2 rounded-md shadow-xl flex flex-col gap-1.5 max-h-[calc(100vh-120px)] overflow-y-auto">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Diagrama</h3>
@@ -1432,6 +1376,137 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
           />
         )}
       </div>
+
+      {/* Modal de Diagramas Salvos */}
+      {savedDiagramsModalOpen && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-lg border border-[#263345] bg-[#111827] shadow-2xl">
+            {/* Header do Modal */}
+            <div className="flex items-center justify-between border-b border-[#263345] bg-[#070b16] px-6 py-4">
+              <h2 className="text-lg font-bold text-slate-100 flex items-center gap-3">
+                <FolderOpen className="w-5 h-5 text-[#ff7a00]" />
+                Diagramas Salvos
+                <span className="ml-2 rounded-full bg-[#ff7a00] px-3 py-1 text-sm font-bold text-white">
+                  {savedDiagrams.length}
+                </span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSavedDiagramsModalOpen(false)}
+                className="rounded-md p-2 text-slate-400 transition-colors hover:bg-[#263345] hover:text-slate-200"
+                title="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(85vh - 80px)' }}>
+              {savedDiagrams.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <FolderOpen className="h-16 w-16 text-slate-600 mb-4" />
+                  <p className="text-lg font-semibold text-slate-300 mb-2">
+                    Nenhum diagrama salvo ainda
+                  </p>
+                  <p className="text-sm text-slate-500 max-w-md">
+                    Crie seu primeiro diagrama de arquitetura e salve para ele aparecer aqui.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {savedDiagrams.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`group relative flex flex-col rounded-lg border transition-all hover:shadow-xl ${
+                        activeDiagramId === entry.id
+                          ? 'border-[#ff7a00] bg-[#ff7a00]/10 shadow-lg shadow-[#ff7a00]/20'
+                          : viewingDiagramId === entry.id
+                          ? 'border-[#22d3ee] bg-[#22d3ee]/10 shadow-lg shadow-[#22d3ee]/20'
+                          : 'border-[#263345] bg-[#070b16] hover:border-[#ff7a00]/50'
+                      }`}
+                    >
+                      {/* Badge de Status */}
+                      {(activeDiagramId === entry.id || viewingDiagramId === entry.id) && (
+                        <div className="absolute -top-2 -right-2 z-10">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-white shadow-lg ${
+                            activeDiagramId === entry.id ? 'bg-[#ff7a00]' : 'bg-[#22d3ee]'
+                          }`}>
+                            {activeDiagramId === entry.id ? '✏️ Editando' : '👁️ Visualizando'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Conteúdo do Card */}
+                      <div className="flex flex-col flex-1 p-4">
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="rounded-md bg-[#ff7a00]/20 p-2">
+                            <Layers className="h-5 w-5 text-[#ff7a00]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-slate-100 text-sm mb-1 line-clamp-2">
+                              {entry.name}
+                            </h3>
+                            {(entry.clientName || entry.projectName) && (
+                              <p className="text-xs text-slate-400 truncate">
+                                {[entry.clientName, entry.projectName].filter(Boolean).join(' • ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          <span>
+                            {new Date(entry.updatedAt).toLocaleString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+
+                        {/* Botões de Ação */}
+                        <div className="flex items-center gap-2 mt-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              loadSavedDiagram(entry, 'view');
+                              setSavedDiagramsModalOpen(false);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-md border border-[#263345] bg-[#070b16] px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-[#22d3ee] hover:bg-[#22d3ee]/10 hover:text-white"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Visualizar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              loadSavedDiagram(entry, 'edit');
+                              setSavedDiagramsModalOpen(false);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-md border border-[#ff7a00]/30 bg-[#ff7a00]/10 px-3 py-2 text-xs font-semibold text-[#ff7a00] transition-colors hover:border-[#ff7a00] hover:bg-[#ff7a00]/20 hover:text-white"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteSavedDiagram(entry.id)}
+                            className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-red-400 transition-colors hover:border-red-500 hover:bg-red-500/20 hover:text-red-200"
+                            title="Excluir diagrama"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {newDiagramFormOpen && (
         <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">

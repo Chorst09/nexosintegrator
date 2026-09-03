@@ -3,8 +3,10 @@ import { Issue, Column, IssueStatus, User } from '../types';
 import { mockColumns } from '../data';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Flag, Paperclip, Calendar, MoreHorizontal, Plus, GripVertical, User as UserIcon, CheckSquare, MessageSquare, CircleDashed, Circle, CheckCircle2, Pencil } from 'lucide-react';
+import { Flag, Paperclip, Calendar, MoreHorizontal, Plus, GripVertical, User as UserIcon, CheckSquare, MessageSquare, CircleDashed, Circle, CheckCircle2, Pencil, FileDown, Printer } from 'lucide-react';
 import CreateTaskModal from './CreateTaskModal';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -110,6 +112,50 @@ export default function KanbanBoard({
 
   const [isCreatingTask, setIsCreatingTask] = useState<boolean>(false);
   const [newTaskStatus, setNewTaskStatus] = useState<IssueStatus | null>(null);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+
+  const exportToPDF = async () => {
+    if (!boardContainerRef.current || isExportingPDF) return;
+
+    setIsExportingPDF(true);
+
+    try {
+      // Captura o container do board como imagem
+      const dataUrl = await toPng(boardContainerRef.current, {
+        cacheBust: true,
+        backgroundColor: '#070b16',
+        pixelRatio: 2, // Melhor qualidade
+      });
+
+      // Cria PDF em paisagem para melhor visualização do Kanban
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 297; // A4 landscape width in mm
+      const imgHeight = 210; // A4 landscape height in mm
+
+      pdf.addImage(dataUrl, 'PNG', 0, 0, imgWidth, imgHeight);
+      
+      // Nome do arquivo com timestamp
+      const timestamp = new Date().toISOString().slice(0, 10);
+      pdf.save(`quadro-kanban-${timestamp}.pdf`);
+
+      alert('PDF exportado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+      alert('Erro ao exportar PDF. Tente novamente.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const printBoard = () => {
+    window.print();
+  };
 
   const handleColumnTitleChange = (id: IssueStatus, newTitle: string) => {
     if (!newTitle.trim()) {
@@ -230,9 +276,39 @@ export default function KanbanBoard({
 
   return (
     <div className="h-full flex flex-col bg-[#070b16] overflow-hidden text-slate-300 font-sans">
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar">
-        <div className="flex gap-5 items-start h-full pb-4">
-          {columns.map(column => {
+      <style>{printStyles}</style>
+      {/* Toolbar com botões de exportação */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-[#263345] bg-[#111827]/50">
+        <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+          <span>Quadro Kanban</span>
+          <span className="text-xs text-slate-500 font-normal">
+            {issues.length} {issues.length === 1 ? 'tarefa' : 'tarefas'}
+          </span>
+        </h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={printBoard}
+            disabled={isExportingPDF}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-[#070b16] border border-[#263345] rounded-md hover:border-[#ff7a00] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Imprimir quadro"
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir
+          </button>
+          <button
+            onClick={exportToPDF}
+            disabled={isExportingPDF}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-[#ff7a00] rounded-md hover:bg-[#f6b40b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Exportar para PDF"
+          >
+            <FileDown className="w-4 h-4" />
+            {isExportingPDF ? 'Exportando...' : 'Exportar PDF'}
+          </button>
+        </div>
+      </div>
+
+      <div ref={boardContainerRef} id="kanban-board-container" className="flex-1 overflow-x-auto overflow-y-hidden p-6 custom-scrollbar">
+        <div className="flex gap-5 items-start h-full pb-4">{columns.map(column => {
             const columnIssues = sortIssuesBySequence(issues.filter(i => i.status === column.id));
             const isDragActive = dragOverCol === column.id;
 
@@ -469,3 +545,25 @@ export default function KanbanBoard({
     </div>
   );
 }
+
+
+// Estilos para impressão
+const printStyles = `
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #kanban-board-container, #kanban-board-container * {
+    visibility: visible;
+  }
+  #kanban-board-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+`;
