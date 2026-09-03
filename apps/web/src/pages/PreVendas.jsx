@@ -420,6 +420,38 @@ export default function PreVendas() {
     }
   };
 
+  const handleDeleteSolicitacao = async (solicitacaoId) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta solicitação?')) {
+      return;
+    }
+
+    try {
+      const response = await axios.delete(buildApiUrl(`/pre-vendas/${solicitacaoId}`), {
+        headers: getAuthHeaders()
+      });
+
+      if (response.data.success) {
+        setSolicitacoes((prev) => prev.filter((item) => item.id !== solicitacaoId));
+        alert('Solicitação excluída com sucesso!');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir solicitação:', error);
+      
+      if (error.response?.status === 403) {
+        alert('Você não tem permissão para excluir esta solicitação. Apenas o solicitante ou administradores podem excluir.');
+      } else if (error.response?.status === 400) {
+        alert(error.response?.data?.message || 'Não é possível excluir solicitações finalizadas.');
+      } else if (error.response?.status === 404) {
+        alert('Solicitação não encontrada.');
+        // Remove da lista local mesmo assim
+        setSolicitacoes((prev) => prev.filter((item) => item.id !== solicitacaoId));
+      } else {
+        alert('Erro ao excluir solicitação. Tente novamente.');
+      }
+    }
+  };
+
+
   const loadPrevendasCadastros = async () => {
     try {
       setCadastrosLoading(true);
@@ -1493,11 +1525,7 @@ export default function PreVendas() {
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => {
-                              if (window.confirm('Tem certeza que deseja excluir esta solicitação?')) {
-                                setSolicitacoes((prev) => prev.filter((item) => item.id !== solicitacao.id));
-                              }
-                            }}
+                            onClick={() => handleDeleteSolicitacao(solicitacao.id)}
                             className="p-2 text-slate-300 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                             title="Excluir"
                           >
