@@ -95,12 +95,11 @@ export default function Topbar({ onMenuClick }) {
         </button>
 
         <div
-          className="relative hidden h-[5.15rem] min-w-0 flex-1 overflow-hidden rounded-[24px] border border-cyan-200/12 bg-cover bg-center shadow-[0_24px_54px_-36px_rgba(34,211,238,0.58),inset_0_1px_0_rgba(255,255,255,0.04)] md:block"
+          className="relative hidden h-[5.15rem] min-w-0 flex-1 overflow-hidden rounded-[24px] border border-[#0b2a35]/70 bg-cover bg-center shadow-[0_24px_54px_-36px_rgba(34,211,238,0.58)] md:block"
           style={{ backgroundImage: "url('/b2g/govflow-header.png')" }}
         >
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,7,13,0.82)_0%,rgba(5,9,18,0.56)_36%,rgba(9,34,42,0.20)_70%,rgba(35,211,238,0.26)_100%)]" />
-          <div className="absolute inset-x-10 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(125,238,255,0.58),transparent)]" />
-          <div className="absolute left-3 top-1/2 max-w-[min(30rem,56%)] -translate-y-1/2 rounded-[16px] border border-white/[0.04] bg-[#05070d]/34 px-5 py-2.5 shadow-[0_22px_44px_-26px_rgba(0,0,0,0.95)] backdrop-blur-sm">
+          <div className="absolute left-3 top-1/2 max-w-[min(30rem,56%)] -translate-y-1/2 rounded-[16px] bg-[#05070d]/34 px-5 py-2.5 shadow-[0_22px_44px_-26px_rgba(0,0,0,0.95)] backdrop-blur-sm">
             <div className="text-[10px] font-semibold uppercase tracking-[0.42em] text-cyan-50/78">Sistema</div>
             <div className="mt-0.5 truncate text-xl font-black leading-none text-white">{headerTitle}</div>
             <div className="mt-1 max-w-full truncate text-[11px] font-semibold text-slate-300/88">{meta.subtitle}</div>

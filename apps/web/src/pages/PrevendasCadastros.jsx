@@ -11,6 +11,7 @@ import {
   FileDown,
   FileText,
   Globe2,
+  Image,
   Link2,
   Mail,
   Package,
@@ -23,6 +24,7 @@ import {
   Trash2,
   User,
   Users,
+  Upload,
   X
 } from 'lucide-react';
 
@@ -77,6 +79,7 @@ const defaultRegistry = {
 
 const defaultPartnerForm = {
   nome: '',
+  logoUrl: '',
   razaoSocial: '',
   cnpj: '',
   contato: '',
@@ -135,6 +138,7 @@ const defaultOpportunityForm = {
 };
 
 const OPPORTUNITY_TERM_OPTIONS = ['12', '24', '36', '48', '60'];
+const MAX_LOGO_FILE_SIZE = 1024 * 1024;
 
 const toCurrency = (value) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
@@ -434,6 +438,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
       return [
         item.nome,
+        item.logoUrl,
         item.razaoSocial,
         item.cnpj,
         item.contato,
@@ -513,6 +518,7 @@ export default function PrevendasCadastros({ forcedTab = null }) {
     } else {
       setPartnerForm({
         nome: item.nome || '',
+        logoUrl: item.logoUrl || item.logo || '',
         razaoSocial: item.razaoSocial || '',
         cnpj: item.cnpj || '',
         contato: item.contato || '',
@@ -1073,6 +1079,90 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
   const inputClassName = 'w-full rounded-lg border border-slate-600/50 bg-slate-950/60 px-3 py-2 text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50';
 
+  const handleLogoFileChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Selecione uma imagem para o logo.');
+      return;
+    }
+
+    if (file.size > MAX_LOGO_FILE_SIZE) {
+      alert('O logo deve ter no máximo 1 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPartnerForm((prev) => ({ ...prev, logoUrl: String(reader.result || '') }));
+    };
+    reader.onerror = () => {
+      alert('Não foi possível carregar o logo selecionado.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const renderLogoUploader = (label = 'Logo') => (
+    <div className="rounded-xl border border-slate-700/60 bg-slate-950/35 p-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex h-24 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-600/60 bg-slate-900/70">
+          {partnerForm.logoUrl ? (
+            <img
+              src={partnerForm.logoUrl}
+              alt={`Logo ${partnerForm.nome || label}`}
+              className="h-full w-full object-contain p-2"
+            />
+          ) : (
+            <Image className="h-9 w-9 text-slate-500" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-slate-300">{label}</p>
+          <p className="mt-1 text-xs text-slate-500">PNG, JPG, SVG ou WebP até 1 MB.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/30">
+              <Upload className="h-4 w-4" />
+              Inserir logo
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLogoFileChange}
+                className="sr-only"
+              />
+            </label>
+            {partnerForm.logoUrl && (
+              <button
+                type="button"
+                onClick={() => setPartnerForm((prev) => ({ ...prev, logoUrl: '' }))}
+                className="rounded-lg border border-rose-500/40 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-500/20"
+              >
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPartnerLogo = (item, sizeClassName = 'h-14 w-20') => (
+    item.logoUrl || item.logo ? (
+      <div className={`${sizeClassName} flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-600/50 bg-white/95`}>
+        <img
+          src={item.logoUrl || item.logo}
+          alt={`Logo ${item.nome || 'parceiro'}`}
+          className="h-full w-full object-contain p-1.5"
+        />
+      </div>
+    ) : (
+      <div className={`${sizeClassName} flex shrink-0 items-center justify-center rounded-lg border border-slate-700/60 bg-slate-900/60`}>
+        <Image className="h-6 w-6 text-slate-500" />
+      </div>
+    )
+  );
+
   const renderDistributorForm = () => (
     <div className="relative space-y-5">
       <button
@@ -1088,6 +1178,8 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         <h2 className="text-3xl font-semibold text-white">{editingItem ? 'Editar Distribuidor' : 'Novo Distribuidor'}</h2>
         <p className="mt-1 text-slate-400">Cadastre dados de contato, acessos e marcas atendidas.</p>
       </div>
+
+      {renderLogoUploader('Logo do distribuidor')}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <label className="space-y-1.5">
@@ -1337,6 +1429,8 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         <h2 className="text-3xl font-semibold text-white">{editingItem ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h2>
         <p className="mt-1 text-slate-400">Cadastre os dados principais, informações de portal e procedimentos de RO.</p>
       </div>
+
+      {renderLogoUploader('Logo do fornecedor')}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
         <label className="space-y-1.5">
@@ -1631,9 +1725,12 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
         <section className="crm-gradient-hero rounded-2xl px-8 py-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
-              <p className="mt-4 text-3xl text-cyan-50">Distribuidor</p>
+            <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+              {renderPartnerLogo(item, 'h-24 w-36')}
+              <div className="min-w-0">
+                <h3 className="break-words text-5xl font-semibold text-white">{item.nome || '-'}</h3>
+                <p className="mt-4 text-3xl text-cyan-50">Distribuidor</p>
+              </div>
             </div>
             <span className="w-fit rounded-full border border-emerald-200/25 bg-emerald-400/24 px-8 py-4 text-3xl font-semibold text-white shadow-[0_18px_44px_-24px_rgba(16,185,129,0.75)] backdrop-blur-md">
               {statusLabel}
@@ -1830,9 +1927,12 @@ export default function PrevendasCadastros({ forcedTab = null }) {
 
         <section className="crm-gradient-hero rounded-2xl px-8 py-10">
           <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-5xl font-semibold text-white">{item.nome || '-'}</h3>
-              <p className="mt-4 text-3xl text-cyan-100">Fornecedor</p>
+            <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+              {renderPartnerLogo(item, 'h-24 w-36')}
+              <div className="min-w-0">
+                <h3 className="break-words text-5xl font-semibold text-white">{item.nome || '-'}</h3>
+                <p className="mt-4 text-3xl text-cyan-100">Fornecedor</p>
+              </div>
             </div>
             <span className="w-fit rounded-full border border-emerald-200/25 bg-emerald-400/24 px-8 py-4 text-3xl font-semibold text-white shadow-[0_18px_44px_-24px_rgba(16,185,129,0.75)] backdrop-blur-md">
               {statusLabel}
@@ -2023,40 +2123,43 @@ export default function PrevendasCadastros({ forcedTab = null }) {
         {activeRows.map((item) => (
           <div key={item.id} className="crm-gradient-glass rounded-xl p-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="text-base font-semibold text-white">{item.nome}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[11px] ${badgeClassForStatus(item.status)}`}>
-                    {item.status || 'ATIVO'}
-                  </span>
-                </div>
-
-                <p className="text-sm text-slate-300">
-                  {item.razaoSocial || 'Razão social não informada'}
-                  {item.cnpj ? ` • CNPJ ${item.cnpj}` : ''}
-                </p>
-
-                <p className="mt-1 text-sm text-slate-300">
-                  Contato: {item.contato || '-'} • {item.email || '-'} • {item.telefone || '-'}
-                </p>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  {item.cidade || '-'} / {item.estado || '-'}
-                  {item.site ? ` • ${item.site}` : ''}
-                </p>
-
-                {Array.isArray(item.categorias) && item.categorias.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {item.categorias.map((categoria) => (
-                      <span
-                        key={`${item.id}-${categoria}`}
-                        className="rounded-full border border-cyan-300/25 bg-cyan-300/12 px-2 py-0.5 text-[11px] text-cyan-100"
-                      >
-                        {categoria}
-                      </span>
-                    ))}
+              <div className="flex min-w-0 flex-1 gap-3">
+                {renderPartnerLogo(item)}
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="text-base font-semibold text-white">{item.nome}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] ${badgeClassForStatus(item.status)}`}>
+                      {item.status || 'ATIVO'}
+                    </span>
                   </div>
-                )}
+
+                  <p className="text-sm text-slate-300">
+                    {item.razaoSocial || 'Razão social não informada'}
+                    {item.cnpj ? ` • CNPJ ${item.cnpj}` : ''}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-300">
+                    Contato: {item.contato || '-'} • {item.email || '-'} • {item.telefone || '-'}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    {item.cidade || '-'} / {item.estado || '-'}
+                    {item.site ? ` • ${item.site}` : ''}
+                  </p>
+
+                  {Array.isArray(item.categorias) && item.categorias.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {item.categorias.map((categoria) => (
+                        <span
+                          key={`${item.id}-${categoria}`}
+                          className="rounded-full border border-cyan-300/25 bg-cyan-300/12 px-2 py-0.5 text-[11px] text-cyan-100"
+                        >
+                          {categoria}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

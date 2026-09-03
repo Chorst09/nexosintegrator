@@ -223,12 +223,16 @@ app.use(express.urlencoded({ extended: true }));
 // ou erros inesperados deixem requisições pendentes, consumindo
 // conexões do pool do Prisma e causando 502 no nginx.
 const REQUEST_TIMEOUT = parseInt(process.env.REQUEST_TIMEOUT || '25000', 10);
+const AI_ANALYSIS_REQUEST_TIMEOUT = parseInt(process.env.AI_ANALYSIS_REQUEST_TIMEOUT || '150000', 10);
 app.use((req, res, next) => {
   // Não aplica timeout ao health check
   if (req.path === '/health') return next();
 
-  res.setTimeout(REQUEST_TIMEOUT, () => {
-    console.error(`⏰ Request timeout (${REQUEST_TIMEOUT}ms): ${req.method} ${req.path}`);
+  const requestTimeout = req.path.startsWith('/api/ai-analysis/')
+    ? AI_ANALYSIS_REQUEST_TIMEOUT
+    : REQUEST_TIMEOUT;
+  res.setTimeout(requestTimeout, () => {
+    console.error(`⏰ Request timeout (${requestTimeout}ms): ${req.method} ${req.path}`);
     if (!res.headersSent) {
       res.status(503).json({ error: 'Tempo limite da requisição excedido' });
     }

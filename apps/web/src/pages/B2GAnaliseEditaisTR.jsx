@@ -8,14 +8,6 @@ import {
 } from 'lucide-react';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 
-const API_KEYS = {
-  gemini: 'AIzaSyBxDlaZFzQ-4xmXzqZ36sDLtcVIRXe9HPk',
-  groq: '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',
-  mistral: 'Vjx0JiXn3teksaferkwlKkyDYuiZ4Lne'
-};
-
-const GEMINI_MODEL = 'gemini-2.5-flash';
-
 const toText = (value) => {
   if (typeof value === 'string') return value.trim();
   if (value === null || value === undefined) return '';
@@ -26,6 +18,9 @@ const toTextArray = (value) => {
   if (!Array.isArray(value)) return [];
   return value.map((item) => toText(item)).filter(Boolean);
 };
+
+const isUnknownText = (value) =>
+  /^(n[aã]o identificado|n[aã]o informado|n\/a|na|nd|-|--)?$/i.test(toText(value));
 
 const toSafeFileName = (value) =>
   String(value || '')
@@ -259,11 +254,212 @@ const normalizeTrResult = (result) => {
 const normalizeResultForPersistence = (result, mode) =>
   mode === 'tr' ? normalizeTrResult(result) : normalizeEditalResult(result);
 
+const fileToDataUri = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Não foi possível preparar o PDF para análise.'));
+    reader.readAsDataURL(file);
+  });
+
+const backendRiskToRaw = (risk, index) => {
+  if (typeof risk === 'string') {
+    return {
+      titulo: `Risco ${index + 1}`,
+      descricao: risk,
+      severidade: /cr[ií]tic|alto|alta|grave|impedit/i.test(risk) ? 'alta' : 'media'
+    };
+  }
+
+  return {
+    titulo: toText(risk?.title || risk?.titulo) || `Risco ${index + 1}`,
+    descricao: toText(risk?.description || risk?.descricao || risk) || 'Não identificado',
+    severidade: toText(risk?.severity || risk?.severidade) || 'media'
+  };
+};
+
+const compactTrQuantity = (quantity) => {
+  const text = toText(quantity);
+  if (isUnknownText(text)) return '';
+  const unitOnly = text.match(/^(\d+(?:[\.,]\d+)?)\s*(?:un|und|unid\.?|unidade|unidades)$/i);
+  return unitOnly ? unitOnly[1] : text;
+};
+
+const normalizeComparableText = (value) =>
+  toText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractTrItemHighlights = (name, specs) => {
+  const source = `${name || ''} ${specs || ''}`;
+  const nameText = normalizeComparableText(name);
+  if (/\b(\d{1,4}\s*portas?|i[3579]|ryzen|ssd|\d+\s*gb|poe|gigabit|10g|wi\s*fi)\b/i.test(name || '')) {
+    return [];
+  }
+
+  const highlights = [];
+  const patterns = [
+    /\b\d{1,4}\s*portas?\b/gi,
+    /\b(?:core\s*)?i[3579](?:-\d{3,5}[a-z]*)?\b/gi,
+    /\bryzen\s*[3579](?:\s+\d{3,5}[a-z]*)?\b/gi,
+    /\b\d+\s*gb\s*(?:ram|mem[oó]ria)?\b/gi,
+    /\bssd\s*\d+\s*(?:gb|tb)\b/gi,
+    /\bpoe\+?\b/gi,
+    /\bgigabit\b/gi,
+    /\b10g\b/gi,
+    /\bgerenci[aá]vel\b/gi,
+    /\bwi-?fi\s*\d?\b/gi
+  ];
+
+  patterns.forEach((pattern) => {
+    Array.from(source.matchAll(pattern)).forEach((match) => {
+      const token = toText(match[0]).toLowerCase();
+      const key = normalizeComparableText(token);
+      const processorShort = key.match(/\bi([3579])\b/)?.[0] || '';
+      if (
+        !key ||
+        nameText.includes(key) ||
+        (processorShort && nameText.includes(processorShort)) ||
+        highlights.some((item) => normalizeComparableText(item) === key)
+      ) return;
+      highlights.push(token);
+    });
+  });
+
+  return highlights.slice(0, 1);
+};
+
+const isTrCatalogNoise = (name, specs) => {
+  const text = normalizeComparableText(`${name || ''} ${specs || ''}`);
+  const hasProductSignal = /\b(switch|desktop|notebook|computador|servidor|storage|roteador|firewall|access\s+point|appliance|software|licenca|sistema|plataforma|impressora|scanner|monitor|tablet|camera|equipamento|servico)\b/.test(text);
+  const hasQuantity = /\b\d+(?:[\.,]\d+)?\b/.test(text);
+  const hasTocNoise = /[.]{5,}/.test(`${name || ''} ${specs || ''}`) ||
+    /\b(preambulo|sumario|indice|disponibilidade financeira|parametros para a licitacao|elementos instrutores|retirada e alteracoes do edital|publicidade dos atos|habilitacao|julgamento|sancoes|penalidades|valor maximo para a contratacao)\b/.test(text);
+
+  return hasTocNoise && !(hasProductSignal && hasQuantity);
+};
+
+const formatTrItemDisplayName = ({ name, quantity, specs }) => {
+  const baseName = toText(name).replace(/\s+/g, ' ');
+  const quantityText = compactTrQuantity(quantity);
+  const highlights = extractTrItemHighlights(baseName, specs);
+  const alreadyHasQuantity = quantityText && normalizeComparableText(baseName).startsWith(normalizeComparableText(quantityText));
+  const label = [alreadyHasQuantity ? '' : quantityText, baseName, ...highlights]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return label || baseName || 'Item técnico não identificado';
+};
+
+const stripTrItemNameFromSpecs = (name, specs) => {
+  const baseName = toText(name);
+  const text = toText(specs) || 'Especificação não identificada';
+  if (!baseName) return text;
+  const escaped = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`^${escaped}\\s*[:\\-–]?\\s*`, 'i'), '').trim() || text;
+};
+
+const buildTrSpecsDisplaySummary = (items, fallbackSummary) => {
+  if (!items.length) {
+    const fallback = toText(fallbackSummary);
+    if (fallback && !isTrCatalogNoise(fallback, '')) return fallback;
+    return 'Nenhum produto, serviço ou item técnico foi identificado com segurança no TR.';
+  }
+
+  return [
+    'Resumo técnico dos produtos e especificações identificados no TR:',
+    ...items.map((item, index) => `${index + 1}. ${item.item}: ${stripTrItemNameFromSpecs(item.rawName, item.desc)}`)
+  ].join('\n');
+};
+
+const backendResultToRawResult = (mode, data) => {
+  const result = data && typeof data === 'object' ? data : {};
+
+  if (mode === 'tr') {
+    const productItems = (Array.isArray(result.items) ? result.items : [])
+      .map((item, index) => {
+        const name = toText(item?.name || item?.item) || `Item técnico ${index + 1}`;
+        const quantity = toText(item?.quantity || item?.qtd || item?.quantidade) || 'Não identificado';
+        const specs = toText(item?.specs || item?.description || item?.desc) || 'Especificação não identificada';
+
+        return {
+          item: formatTrItemDisplayName({ name, quantity, specs }),
+          rawName: name,
+          desc: specs,
+          qtd: quantity
+        };
+      })
+      .filter((item) => item.item && !isUnknownText(item.item) && !isTrCatalogNoise(item.item, item.desc));
+    const productSummary = buildTrSpecsDisplaySummary(productItems, result.trSummary);
+    const total = Number(result?.complianceOverview?.totalRequirements) || 0;
+    const met = Number(result?.complianceOverview?.metRequirements) || 0;
+    const score = total > 0 ? Math.round((met / total) * 10) : 7;
+
+    return {
+      _tipo: 'tr',
+      identificacao: {
+        orgao: 'Não identificado',
+        objeto: productItems.length ? productItems.map((item) => item.item).join(', ') : 'Itens técnicos não identificados'
+      },
+      resumo_especificacoes: productSummary,
+      itens_tr: productItems,
+      riscos: [],
+      pontuacao_viabilidade: score
+    };
+  }
+
+  const general = result.general || {};
+  const deadlines = result.deadlines || {};
+  const requirements = result.requirements || {};
+  const requirementRows = [
+    ['Jurídica', requirements.legal],
+    ['Técnica', requirements.technical],
+    ['Econômico-financeira', requirements.economic],
+    ['Fiscal', requirements.fiscal]
+  ].flatMap(([categoria, rows]) =>
+    (Array.isArray(rows) ? rows : []).map((requisito) => ({ categoria, requisito }))
+  );
+
+  return {
+    _tipo: 'edital',
+    identificacao: {
+      data_sessao: [general.openingDate, general.openingTime].filter((value) => !isUnknownText(value)).join(' ') || 'Não identificado',
+      orgao: toText(general.agency) || 'Não identificado',
+      modalidade: toText(general.modality) || 'Não identificado',
+      portal: toText(general.portal) || 'Não identificado',
+      objeto: toText(general.objectSummary) || 'Resumo não disponível.'
+    },
+    prazos: [
+      { titulo: 'Publicação', descricao: deadlines.publicationDate },
+      { titulo: 'Impugnação', descricao: deadlines.impugnationDeadline },
+      { titulo: 'Esclarecimentos', descricao: deadlines.clarificationDeadline },
+      { titulo: 'Proposta', descricao: deadlines.proposalDeadline },
+      { titulo: 'Vigência/Contrato', descricao: deadlines.contractTerm }
+    ].filter((row) => !isUnknownText(row.descricao)),
+    exigencias: requirementRows,
+    documentacao: [],
+    itens_tr: (Array.isArray(result.items) ? result.items : []).map((item) => ({
+      item: toText(item?.name) || 'Item não identificado',
+      desc: toText(item?.specs) || 'Não identificado',
+      qtd: toText(item?.quantity) || 'Não identificado'
+    })),
+    riscos: (Array.isArray(result.risks) ? result.risks : []).map(backendRiskToRaw),
+    pontuacao_viabilidade: 7
+  };
+};
+
 const B2GAnaliseEditaisTR = () => {
   const navigate = useNavigate();
   const [view, setView] = useState('dashboard');
   const [modoAnalise, setModoAnalise] = useState('edital');
   const [editalText, setEditalText] = useState('');
+  const [fileDataUri, setFileDataUri] = useState('');
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -310,139 +506,76 @@ const B2GAnaliseEditaisTR = () => {
     setFileName(file.name);
     setResult(null);
     setNormalizedResult(null);
+    setFileDataUri('');
     setCreatedNoticeId('');
     setActionFeedback({ type: '', message: '' });
     addLog(`Lendo arquivo: ${file.name}...`);
     try {
-      const text = await extractTextFromPDF(file);
+      const [text, dataUri] = await Promise.all([
+        extractTextFromPDF(file),
+        fileToDataUri(file)
+      ]);
       setEditalText(text);
+      setFileDataUri(dataUri);
       addLog('Texto extraído com sucesso.', 'success');
     } catch (_error) {
       addLog('Erro ao ler PDF.', 'error');
     }
   };
 
-  const fetchAPI = async (provider, prompt) => {
-    const key = API_KEYS[provider];
-    const systemPrompt = 'Aja como um Auditor Sênior de Licitações. Analise o texto e retorne um objeto JSON completo e exaustivo. Não economize palavras nas descrições técnicas. Retorne apenas o JSON bruto, sem markdown.';
-
-    let response;
-    if (provider === 'gemini') {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-      response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] }
-        })
-      });
-    } else {
-      const url = provider === 'groq'
-        ? 'https://api.groq.com/openai/v1/chat/completions'
-        : 'https://api.mistral.ai/v1/chat/completions';
-      const saferPrompt = prompt.slice(0, 25000);
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${key}`
-        },
-        body: JSON.stringify({
-          model: provider === 'groq' ? 'llama-3.3-70b-versatile' : 'mistral-large-latest',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: saferPrompt }
-          ],
-          response_format: { type: 'json_object' }
-        })
-      });
-    }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData?.error?.message || `Status ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = provider === 'gemini'
-      ? data.candidates?.[0]?.content?.parts?.[0]?.text
-      : data.choices?.[0]?.message?.content;
-
-    if (!text) {
-      throw new Error('A IA não retornou conteúdo para análise.');
-    }
-
-    const startIdx = text.indexOf('{');
-    const endIdx = text.lastIndexOf('}') + 1;
-    if (startIdx < 0 || endIdx <= startIdx) {
-      throw new Error('A IA não retornou JSON válido.');
-    }
-    return JSON.parse(text.substring(startIdx, endIdx));
-  };
-
   const runAnalysis = async () => {
-    if (!editalText) {
+    const hasDocument = modoAnalise === 'tr' ? Boolean(fileDataUri) : Boolean(editalText);
+    if (!hasDocument) {
       addLog('Por favor, selecione um documento.', 'error');
       return;
     }
 
     setLoading(true);
     addLog(`Iniciando análise profunda de ${modoAnalise.toUpperCase()}...`);
+    addLog(modoAnalise === 'tr'
+      ? 'Enviando PDF para extração técnica no backend...'
+      : 'Executando o mecanismo original de análise de editais...');
 
-    const structure = modoAnalise === 'edital'
-      ? `{
-      "identificacao": { "data_sessao": "data", "orgao": "nome", "modalidade": "modalidade", "portal": "portal", "objeto": "objeto" },
-      "prazos": [{"titulo": "prazo", "descricao": "desc"}],
-      "exigencias": [{"categoria": "tipo", "requisito": "desc"}],
-      "documentacao": [{"tipo": "tipo", "doc": "nome", "obrigatorio": true}],
-      "itens_tr": [{"item": "nome", "desc": "especificacao tecnica detalhada e completa", "qtd": "valor"}],
-      "riscos": [{"titulo": "risco", "descricao": "desc", "severidade": "alta|media"}],
-      "pontuacao_viabilidade": 8
-    }`
-      : `{
-      "identificacao": { "orgao": "nome do órgão", "objeto": "descrição completa do objeto licitado" },
-      "resumo_especificacoes": "Um texto extremamente detalhado, com vários parágrafos, abordando: 1. Requisitos Técnicos Mínimos. 2. Normas Técnicas e Padrões de Qualidade (ABNT, ISO, etc). 3. Garantias e Assistência Técnica. 4. Níveis de Serviço (SLA) exigidos. 5. Obrigações acessórias da contratada.",
-      "itens_tr": [{"item": "nome exato do item", "desc": "descrição técnica exaustiva conforme consta no TR, incluindo marca/modelo de referência se houver", "qtd": "quantidade total e unidade de medida"}],
-      "riscos": [{"titulo": "alerta técnico", "descricao": "detalhamento de possíveis dificuldades de atendimento ou exigências desproporcionais", "severidade": "alta|media"}],
-      "pontuacao_viabilidade": 7
-    }`;
+    try {
+      const endpoint = modoAnalise === 'tr' ? '/ai-analysis/tr' : '/ai-analysis/edital-legacy';
+      const payload = modoAnalise === 'tr'
+        ? {
+            fileDataUri,
+            analyzedModelName: fileName.replace(/\.pdf$/i, '') || 'Documento TR',
+            analyzedModelManufacturer: '',
+            analyzedModelSpecs: 'Especificações do modelo não informadas pelo usuário.'
+          }
+        : { documentText: editalText.slice(0, 60000) };
 
-    const prompt = `Analise este documento (${modoAnalise.toUpperCase()}) de forma exaustiva.
-    Não resuma demais. Traga o máximo de detalhamento possível para que um técnico possa avaliar a viabilidade de atendimento sem precisar ler o PDF original.
-
-    Retorne este JSON:
-    ${structure}
-
-    TEXTO DO DOCUMENTO: ${editalText.slice(0, 60000)}`;
-
-    const providers = [
-      { id: 'gemini', name: 'Gemini' },
-      { id: 'groq', name: 'Groq' },
-      { id: 'mistral', name: 'Mistral' }
-    ];
-
-    for (const p of providers) {
-      try {
-        addLog(`Consultando inteligência via ${p.name}...`);
-        const res = await fetchAPI(p.id, prompt);
-        const normalized = normalizeResultForPersistence(res, modoAnalise);
-        setResult({ ...res, _tipo: modoAnalise });
-        setNormalizedResult(normalized);
-        setCreatedNoticeId('');
-        setActionFeedback({ type: '', message: '' });
-        setView('detail');
-        setLoading(false);
-        setActiveTab(modoAnalise === 'tr' ? 'resumo especificações' : 'geral');
-        addLog(`Sucesso! Análise detalhada concluída via ${p.name}.`, 'success');
-        return;
-      } catch (e) {
-        addLog(`${p.name} falhou: ${e.message}`, 'error');
+      const response = await fetch(buildApiUrl(endpoint), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || 'Falha na análise de edital/TR.');
       }
-    }
 
-    setLoading(false);
-    addLog('Falha total na análise. Tente um trecho menor ou verifique as chaves.', 'error');
+      const rawResult = modoAnalise === 'tr'
+        ? backendResultToRawResult('tr', data)
+        : { ...data, _tipo: 'edital' };
+      const normalized = normalizeResultForPersistence(rawResult, modoAnalise);
+      setResult(rawResult);
+      setNormalizedResult(normalized);
+      setCreatedNoticeId('');
+      setActionFeedback({ type: '', message: '' });
+      setView('detail');
+      setActiveTab(modoAnalise === 'tr' ? 'resumo especificações' : 'geral');
+      addLog(modoAnalise === 'tr'
+        ? 'Sucesso! Extração técnica do TR concluída.'
+        : 'Sucesso! Análise detalhada do edital concluída pelo mecanismo original.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha total na análise.';
+      addLog(message, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const scoreFromResult = (mode, normalizedData, rawResult) => {
@@ -610,18 +743,18 @@ const B2GAnaliseEditaisTR = () => {
             <h3 className="text-white font-bold text-lg flex items-center gap-3">
               <Info className="w-5 h-5 text-sky-400" /> Detalhamento Técnico do TR
             </h3>
-            <div className="bg-[#1e293b]/40 p-8 rounded-[2.5rem] border border-slate-800 leading-relaxed text-slate-300 text-sm whitespace-pre-wrap">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/55 p-6 text-sm leading-relaxed text-slate-300 whitespace-pre-wrap">
               {result.resumo_especificacoes || 'Não foi possível consolidar as especificações técnicas detalhadas.'}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-sky-500/5 p-6 rounded-3xl border border-sky-500/10">
+              <div className="rounded-2xl border border-sky-500/10 bg-sky-500/5 p-5">
                 <h4 className="text-[10px] font-black text-sky-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                   <ShieldAlert className="w-3 h-3" /> Conformidade Normativa
                 </h4>
                 <p className="text-xs text-slate-400 leading-relaxed">Verifique se as certificações exigidas no resumo acima estão vigentes para sua empresa.</p>
               </div>
-              <div className="bg-emerald-500/5 p-6 rounded-3xl border border-emerald-500/10">
+              <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/5 p-5">
                 <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                   <ListChecks className="w-3 h-3" /> Próximos Passos
                 </h4>
@@ -637,16 +770,16 @@ const B2GAnaliseEditaisTR = () => {
               <h3 className="text-white font-bold text-lg mb-6 flex items-center gap-2">Identificação do Certame</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 {result.identificacao?.data_sessao && (
-                  <div className="bg-[#1e293b]/40 p-6 rounded-3xl border border-slate-800 flex items-start gap-4">
-                    <div className="p-3 bg-slate-800 rounded-2xl text-sky-400 shadow-inner"><Calendar className="w-5 h-5" /></div>
+                  <div className="flex items-start gap-4 rounded-2xl border border-slate-800 bg-slate-900/55 p-5">
+                    <div className="rounded-xl bg-slate-800 p-3 text-sky-300 shadow-inner"><Calendar className="w-5 h-5" /></div>
                     <div>
                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Data da Sessão</span>
                       <p className="text-white font-bold text-base mt-1">{result.identificacao.data_sessao}</p>
                     </div>
                   </div>
                 )}
-                <div className="bg-[#1e293b]/40 p-6 rounded-3xl border border-slate-800 flex items-start gap-4">
-                  <div className="p-3 bg-slate-800 rounded-2xl text-sky-400 shadow-inner"><Building2 className="w-5 h-5" /></div>
+                <div className="flex items-start gap-4 rounded-2xl border border-slate-800 bg-slate-900/55 p-5">
+                  <div className="rounded-xl bg-slate-800 p-3 text-sky-300 shadow-inner"><Building2 className="w-5 h-5" /></div>
                   <div>
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Órgão Licitante</span>
                     <p className="text-white font-bold text-base mt-1">{result.identificacao?.orgao || 'Não identificado'}</p>
@@ -665,7 +798,7 @@ const B2GAnaliseEditaisTR = () => {
                 {result.identificacao?.portal && (
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase mb-3 block tracking-widest">Plataforma Eletrônica</label>
-                    <div className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/55 p-4">
                       <Globe className="w-4 h-4 text-sky-500" />
                       <p className="text-sky-400 text-sm font-bold">{result.identificacao.portal}</p>
                     </div>
@@ -673,7 +806,7 @@ const B2GAnaliseEditaisTR = () => {
                 )}
                 <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase mb-3 block tracking-widest">Objeto Principal Analisado</label>
-                  <p className="text-slate-300 text-sm leading-relaxed bg-[#1e293b]/30 p-6 rounded-[2rem] border border-slate-800/50 shadow-inner italic">
+                  <p className="rounded-2xl border border-slate-800/70 bg-slate-900/45 p-5 text-sm leading-relaxed text-slate-300 shadow-inner italic">
                     "{result.identificacao?.objeto || 'Resumo não disponível.'}"
                   </p>
                 </div>
@@ -685,13 +818,15 @@ const B2GAnaliseEditaisTR = () => {
         return (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-white font-bold text-lg">Catálogo Técnico de Itens</h3>
+              <h3 className="text-white font-bold text-lg">
+                {result?._tipo === 'tr' ? 'Itens Identificados no TR' : 'Catálogo Técnico de Itens'}
+              </h3>
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-800 px-3 py-1 rounded-full">
                 {result.itens_tr?.length || 0} Itens Mapeados
               </span>
             </div>
             {result.itens_tr?.map((item, i) => (
-              <div key={i} className="bg-[#1e293b]/40 p-6 rounded-[2rem] border border-slate-800 flex flex-col gap-4 hover:bg-slate-800/60 transition-all group">
+              <div key={i} className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/55 p-5 transition-all hover:bg-slate-800/60 group">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400 font-black text-xs">
@@ -699,13 +834,17 @@ const B2GAnaliseEditaisTR = () => {
                     </div>
                     <div className="text-sm text-white font-black uppercase tracking-tight">{item.item}</div>
                   </div>
-                  <div className="text-xs font-black text-sky-400 bg-sky-500/10 px-4 py-1.5 rounded-full border border-sky-500/20 shadow-lg shadow-sky-500/5">
-                    Qtd: {item.qtd}
+                  {result?._tipo !== 'tr' && (
+                    <div className="text-xs font-black text-sky-400 bg-sky-500/10 px-4 py-1.5 rounded-full border border-sky-500/20 shadow-lg shadow-sky-500/5">
+                      Qtd: {item.qtd}
+                    </div>
+                  )}
+                </div>
+                {result?._tipo !== 'tr' && (
+                  <div className="text-xs text-slate-400 leading-relaxed font-medium bg-black/30 p-5 rounded-2xl border border-slate-800/50">
+                    {item.desc}
                   </div>
-                </div>
-                <div className="text-xs text-slate-400 leading-relaxed font-medium bg-black/30 p-5 rounded-2xl border border-slate-800/50">
-                  {item.desc}
-                </div>
+                )}
               </div>
             )) || <p className="text-slate-500 italic p-10 text-center">Nenhum item processado no catálogo.</p>}
           </div>
@@ -714,8 +853,8 @@ const B2GAnaliseEditaisTR = () => {
         return (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
             {result.prazos?.map((p, i) => (
-              <div key={i} className="bg-[#1e293b]/40 p-5 rounded-3xl border border-slate-800 flex items-start gap-4">
-                <div className="p-3 bg-sky-500/10 rounded-2xl text-sky-400"><Clock className="w-5 h-5" /></div>
+              <div key={i} className="flex items-start gap-4 rounded-2xl border border-slate-800 bg-slate-900/55 p-5">
+                <div className="rounded-xl bg-sky-500/10 p-3 text-sky-300"><Clock className="w-5 h-5" /></div>
                 <div>
                   <h4 className="text-white font-black text-sm uppercase tracking-tight">{p.titulo}</h4>
                   <p className="text-slate-400 text-xs mt-2 leading-relaxed">{p.descricao}</p>
@@ -728,8 +867,8 @@ const B2GAnaliseEditaisTR = () => {
         return (
           <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-500">
             {result.exigencias?.map((e, i) => (
-              <div key={i} className="bg-[#1e293b]/40 p-5 rounded-3xl border border-slate-800 flex items-start gap-4">
-                <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400 mt-1"><ListChecks className="w-4 h-4" /></div>
+              <div key={i} className="flex items-start gap-4 rounded-2xl border border-slate-800 bg-slate-900/55 p-5">
+                <div className="mt-1 rounded-xl bg-emerald-500/10 p-2 text-emerald-300"><ListChecks className="w-4 h-4" /></div>
                 <div>
                   <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">{e.categoria}</span>
                   <p className="text-slate-300 text-sm mt-1 font-medium">{e.requisito}</p>
@@ -743,7 +882,7 @@ const B2GAnaliseEditaisTR = () => {
           <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-500">
             <h3 className="text-white font-bold text-lg mb-4">Checklist de Documentação Obrigatória</h3>
             {result.documentacao?.map((doc, i) => (
-              <div key={i} className="bg-[#1e293b]/40 p-5 rounded-3xl border border-slate-800 flex items-center justify-between">
+              <div key={i} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/55 p-5">
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-2xl ${doc.obrigatorio ? 'bg-sky-500/10 text-sky-400 shadow-lg shadow-sky-500/5' : 'bg-slate-800 text-slate-500'}`}>
                     <FileCheck className="w-5 h-5" />
@@ -768,8 +907,8 @@ const B2GAnaliseEditaisTR = () => {
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
             <h3 className="text-white font-bold text-lg mb-4">Mapa de Riscos e Fragilidades</h3>
             {result.riscos?.map((r, i) => (
-              <div key={i} className="bg-red-500/5 p-6 rounded-[2.5rem] border border-red-500/20 flex items-start gap-5">
-                <div className={`p-4 rounded-2xl shrink-0 ${r.severidade === 'alta' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
+              <div key={i} className="flex items-start gap-5 rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
+                <div className={`shrink-0 rounded-xl p-4 ${r.severidade === 'alta' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
                   <ShieldAlert className="w-6 h-6" />
                 </div>
                 <div>
@@ -790,147 +929,219 @@ const B2GAnaliseEditaisTR = () => {
     }
   };
 
-  const Sidebar = () => (
-    <div className="w-72 bg-[#111827] border-r border-slate-800 p-8 flex flex-col gap-8 shadow-2xl z-30">
-      <div className="flex items-center gap-3 text-sky-400 font-black text-2xl tracking-tighter mb-4">
-        <div className="bg-sky-500 p-2 rounded-xl text-[#111827] shadow-lg shadow-sky-500/20">
-          <Layers className="w-6 h-6" />
+  const MetricCard = ({ icon: Icon, label, value, tone = 'sky' }) => {
+    const tones = {
+      sky: 'border-sky-400/15 bg-sky-400/10 text-sky-300',
+      emerald: 'border-emerald-400/15 bg-emerald-400/10 text-emerald-300',
+      amber: 'border-amber-400/15 bg-amber-400/10 text-amber-300'
+    };
+
+    return (
+      <div className="rounded-2xl border border-slate-800/80 bg-slate-900/55 p-5 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.95)]">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
+            <h4 className="mt-2 text-4xl font-black leading-none text-white">{value}</h4>
+          </div>
+          <div className={`flex h-12 w-12 items-center justify-center rounded-xl border ${tones[tone] || tones.sky}`}>
+            <Icon className="h-6 w-6" />
+          </div>
         </div>
-        <span>Analisa.ai</span>
       </div>
-      <nav className="space-y-3">
-        <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-4 p-4 rounded-2xl text-sm font-bold transition-all ${view === 'dashboard' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-lg shadow-sky-500/5' : 'text-slate-500 hover:bg-slate-800/50'}`}>
-          <LayoutDashboard className="w-5 h-5" /> Dashboard
+    );
+  };
+
+  const Sidebar = () => (
+    <div className="w-64 shrink-0 border-r border-slate-800/80 bg-[#101723] p-6 shadow-2xl z-30">
+      <div className="mb-8 flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500 text-[#08111f] shadow-lg shadow-sky-500/20">
+          <Layers className="h-6 w-6" />
+        </div>
+        <div>
+          <div className="text-lg font-black tracking-tight text-white">Analisa.ai</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-sky-300/70">B2G Intelligence</div>
+        </div>
+      </div>
+      <nav className="space-y-2">
+        <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all ${view === 'dashboard' ? 'bg-sky-500/10 text-sky-300 border border-sky-400/20 shadow-lg shadow-sky-500/5' : 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300'}`}>
+          <LayoutDashboard className="h-5 w-5" /> Dashboard
         </button>
-        <button onClick={() => setView('history')} className={`w-full flex items-center gap-4 p-4 rounded-2xl text-sm font-bold transition-all ${view === 'history' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-lg shadow-sky-500/5' : 'text-slate-500 hover:bg-slate-800/50'}`}>
-          <History className="w-5 h-5" /> Histórico
+        <button onClick={() => setView('history')} className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all ${view === 'history' ? 'bg-sky-500/10 text-sky-300 border border-sky-400/20 shadow-lg shadow-sky-500/5' : 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300'}`}>
+          <History className="h-5 w-5" /> Histórico
         </button>
       </nav>
 
-      <div className="mt-auto p-6 bg-slate-900/50 rounded-3xl border border-slate-800">
-        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Suporte e Dicas</div>
-        <p className="text-[10px] text-slate-600 leading-relaxed italic">Para análises de TR, utilize PDFs com texto selecionável para melhor precisão técnica.</p>
+      <div className="mt-8 rounded-2xl border border-slate-800/80 bg-slate-950/35 p-4">
+        <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Precisão</div>
+        <p className="text-xs leading-relaxed text-slate-400">Use PDFs com texto selecionável para melhorar a extração técnica e reduzir falhas de leitura.</p>
       </div>
     </div>
   );
 
   const Dashboard = () => (
-    <div className="flex-1 p-8 overflow-y-auto bg-[#0f172a] custom-scrollbar">
-      <div className="mb-12">
-        <h1 className="text-4xl font-black text-white flex items-center gap-4 tracking-tight">
-          <Zap className="w-10 h-10 text-sky-400 fill-sky-400/20" /> Análise de Licitações com IA
-        </h1>
-        <p className="text-slate-400 mt-3 text-lg font-medium opacity-80">Extraia informações do edital completo ou gere caderno técnico exaustivo do TR.</p>
+    <div className="flex-1 overflow-y-auto bg-[#0d1422] p-6 custom-scrollbar lg:p-8">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-400/15 bg-sky-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">
+            <Zap className="h-3.5 w-3.5" /> Auditoria assistida por IA
+          </div>
+          <h1 className="text-3xl font-black tracking-tight text-white lg:text-4xl">Análise de Licitações com IA</h1>
+          <p className="mt-3 max-w-3xl text-sm font-medium leading-relaxed text-slate-400 lg:text-base">Extraia informações do edital completo ou gere um caderno técnico do Termo de Referência com rastreabilidade operacional.</p>
+        </div>
+        <div className="flex w-fit rounded-xl border border-slate-800 bg-slate-950/45 p-1">
+          <button onClick={() => setModoAnalise('edital')} className={`rounded-lg px-4 py-2 text-xs font-black uppercase transition-all ${modoAnalise === 'edital' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}>Edital</button>
+          <button onClick={() => setModoAnalise('tr')} className={`rounded-lg px-4 py-2 text-xs font-black uppercase transition-all ${modoAnalise === 'tr' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}>TR</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        <div className="lg:col-span-5 bg-[#1e293b]/40 rounded-[3rem] p-10 border border-slate-800/50 border-dashed relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="mb-8">
-              <label className="text-[11px] font-black text-slate-500 uppercase mb-4 block tracking-widest">Selecione o Modo Operacional</label>
-              <div className="flex bg-[#0f172a] p-1.5 rounded-2xl border border-slate-800 shadow-inner">
-                <button onClick={() => setModoAnalise('edital')} className={`flex-1 py-3 px-6 rounded-xl text-xs font-black uppercase tracking-tighter transition-all ${modoAnalise === 'edital' ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}>Edital Completo</button>
-                <button onClick={() => setModoAnalise('tr')} className={`flex-1 py-3 px-6 rounded-xl text-xs font-black uppercase tracking-tighter transition-all ${modoAnalise === 'tr' ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/20' : 'text-slate-500 hover:text-slate-300'}`}>Análise de TR</button>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div className="xl:col-span-5">
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 shadow-2xl shadow-slate-950/25">
+            <div className="border-b border-slate-800 bg-slate-950/35 px-6 py-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Documento base</p>
+                  <h2 className="mt-1 text-xl font-black text-white">{modoAnalise === 'edital' ? 'Importar edital' : 'Analisar TR'}</h2>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
+                  {modoAnalise === 'edital' ? <Upload className="h-6 w-6" /> : <FileSearch className="h-6 w-6" />}
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-center text-center py-6">
-              <div className="w-20 h-20 bg-sky-500/10 rounded-[2rem] flex items-center justify-center mb-6 text-sky-400 border border-sky-500/20 shadow-inner">
-                {modoAnalise === 'edital' ? <Upload className="w-10 h-10" /> : <FileSearch className="w-10 h-10" />}
-              </div>
-              <h3 className="text-2xl font-black text-white mb-2">{modoAnalise === 'edital' ? 'Importar Edital' : 'Extrair Termo de Referência'}</h3>
-              <p className="text-slate-500 text-xs mb-10 leading-relaxed font-medium">Suporta PDF até 20MB. O motor de IA prioriza o Gemini para análise de alta fidelidade técnica.</p>
-
+            <div className="p-6">
               <input type="file" ref={editalFileRef} className="hidden" accept=".pdf" onChange={handleFileUpload} />
 
-              <div className="w-full space-y-4">
-                <button onClick={() => editalFileRef.current.click()} className="w-full bg-white text-[#0f172a] font-black py-4 px-8 rounded-2xl transition-all shadow-xl hover:scale-[1.02] active:scale-98">
-                  {fileName ? `✓ ${fileName.slice(0, 20)}...` : 'SELECIONAR DOCUMENTO PDF'}
-                </button>
+              <button
+                onClick={() => editalFileRef.current.click()}
+                className="group flex min-h-[180px] w-full flex-col items-center justify-center rounded-2xl border border-dashed border-sky-400/25 bg-[#0b1220] p-8 text-center transition-all hover:border-sky-300/55 hover:bg-sky-400/5"
+              >
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300 transition-transform group-hover:scale-105">
+                  <Upload className="h-8 w-8" />
+                </div>
+                <div className="max-w-full break-words text-base font-black text-white">
+                  {fileName || 'Selecionar documento PDF'}
+                </div>
+                <div className="mt-2 max-w-sm text-xs leading-relaxed text-slate-500">
+                  PDF até 20MB. O conteúdo será extraído localmente antes da auditoria por IA.
+                </div>
+              </button>
 
-                <button onClick={runAnalysis} disabled={loading || !editalText} className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-800 text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-sky-500/20 flex items-center justify-center gap-3 disabled:shadow-none hover:scale-[1.02] active:scale-98">
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />}
-                  <span>{loading ? 'PROCESSANDO ANÁLISE...' : 'EXECUTAR AUDITORIA IA'}</span>
-                </button>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-4">
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Modo</div>
+                  <div className="mt-2 text-sm font-bold text-slate-200">{modoAnalise === 'edital' ? 'Edital completo' : 'Termo de Referência'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/35 p-4">
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Status</div>
+                  <div className={`mt-2 text-sm font-bold ${fileDataUri ? 'text-emerald-300' : 'text-slate-400'}`}>{fileDataUri ? 'Pronto para auditar' : 'Aguardando PDF'}</div>
+                </div>
+              </div>
+
+              <button onClick={runAnalysis} disabled={loading || !fileDataUri} className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl bg-sky-500 px-6 py-4 text-sm font-black uppercase text-white shadow-xl shadow-sky-500/20 transition-all hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none">
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5 fill-current" />}
+                <span>{loading ? 'Processando análise...' : 'Executar auditoria IA'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="xl:col-span-7">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <MetricCard icon={CheckCircle} label="Total analisados" value="2" tone="emerald" />
+            <MetricCard icon={AlertTriangle} label="Inconformidades" value="0" tone="amber" />
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/55 shadow-2xl shadow-slate-950/20">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-800 bg-slate-950/35 px-6 py-4">
+              <div className="flex items-center gap-2 text-sky-300">
+                <Code className="h-4 w-4" />
+                <span className="text-[10px] font-black uppercase tracking-[0.18em]">Fluxo multi-API</span>
+              </div>
+              <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[10px] font-bold text-slate-400">{logs.length} eventos</span>
+            </div>
+            <div className="h-[260px] overflow-y-auto p-6 font-mono text-[11px] custom-scrollbar">
+              <div className="space-y-3">
+                {logs.length === 0 && <span className="text-slate-600 italic">Aguardando entrada de dados...</span>}
+                {logs.map((log, i) => (
+                  <div key={i} className={`flex gap-3 rounded-xl border border-slate-800/70 bg-slate-950/30 px-3 py-2 ${log.type === 'error' ? 'text-red-300' : log.type === 'success' ? 'text-emerald-300' : 'text-slate-400'}`}>
+                    <span className="shrink-0 font-bold text-slate-600">{log.time}</span>
+                    <span className="leading-relaxed">{log.msg}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-500/5 rounded-full blur-3xl -mr-32 -mt-32" />
-        </div>
 
-        <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-[#1e293b]/60 rounded-[2.5rem] p-10 border border-slate-800/50 shadow-xl flex items-center gap-6">
-            <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-400 border border-emerald-500/20 shadow-inner"><CheckCircle className="w-8 h-8" /></div>
-            <div>
-              <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Analisados</p>
-              <h4 className="text-5xl font-black text-white tracking-tighter">2</h4>
-            </div>
-          </div>
-          <div className="bg-[#1e293b]/60 rounded-[2.5rem] p-10 border border-slate-800/50 shadow-xl flex items-center gap-6">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-400 border border-amber-500/20 shadow-inner"><AlertTriangle className="w-8 h-8" /></div>
-            <div>
-              <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Inconformidades</p>
-              <h4 className="text-5xl font-black text-white tracking-tighter">0</h4>
-            </div>
-          </div>
-          <div className="md:col-span-2 bg-[#0f172a] rounded-[2.5rem] p-8 border border-slate-800 h-72 overflow-y-auto font-mono text-[10px] custom-scrollbar shadow-inner relative">
-            <div className="flex items-center gap-2 mb-6 text-sky-500 border-b border-slate-800 pb-4 sticky top-0 bg-[#0f172a] z-10">
-              <Code className="w-4 h-4" /> <span className="font-bold uppercase tracking-widest">Fluxo de Contingência Multi-API</span>
-            </div>
-            <div className="space-y-3">
-              {logs.length === 0 && <span className="opacity-20 italic">Aguardando entrada de dados...</span>}
-              {logs.map((log, i) => (
-                <div key={i} className={`flex gap-3 animate-in fade-in slide-in-from-left-2 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  <span className="opacity-30 shrink-0 font-bold">{log.time}</span>
-                  <span className="leading-relaxed">{log.msg}</span>
-                </div>
-              ))}
-            </div>
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+            {[
+              ['Extração', 'PDF convertido em texto para leitura estruturada.', FileText],
+              ['Auditoria', 'IA identifica prazos, riscos, itens e requisitos.', Search],
+              ['Conversão', 'Resultado pode virar resumo ou oportunidade B2G.', ChevronRight]
+            ].map(([title, text, Icon]) => (
+              <div key={title} className="rounded-2xl border border-slate-800 bg-slate-900/45 p-5">
+                <Icon className="mb-4 h-5 w-5 text-sky-300" />
+                <h3 className="text-sm font-black text-white">{title}</h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">{text}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
     </div>
   );
 
+  const HistoryView = () => (
+    <div className="flex-1 overflow-y-auto bg-[#0d1422] p-8 custom-scrollbar">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8">
+        <History className="mb-4 h-8 w-8 text-sky-300" />
+        <h2 className="text-2xl font-black text-white">Histórico de análises</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">As análises salvas ficam disponíveis no módulo Resumos de Edital, com escopo por usuário e empresa.</p>
+      </div>
+    </div>
+  );
+
   const DetailView = () => (
-    <div className="flex-1 flex flex-col min-h-[76vh] overflow-hidden bg-[#0f172a] rounded-3xl border border-slate-800">
-      <header className="bg-[#0f172a] border-b border-slate-800 p-8 flex items-center justify-between shadow-2xl z-20">
-        <div className="flex items-center gap-8">
-          <button onClick={() => setView('dashboard')} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-2xl text-white transition-all shadow-xl hover:scale-110 active:scale-95">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-black text-white tracking-tight">Análise Estratégica: {fileName || 'documento.pdf'}</h1>
-              <div className="flex gap-2">
-                <span className="px-3 py-1 bg-sky-500/10 text-sky-400 rounded-full text-[10px] font-black border border-sky-500/20 italic uppercase tracking-widest">
-                  {result?._tipo === 'tr' ? 'Termo de Referência' : 'Edital'}
-                </span>
-                <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-[10px] font-black border border-emerald-500/20 italic uppercase tracking-widest">Auditado via IA</span>
+    <div className="flex-1 flex flex-col min-h-[76vh] overflow-hidden bg-[#0d1422]">
+      <header className="border-b border-slate-800 bg-slate-900/75 p-6 shadow-2xl z-20 lg:p-8">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 items-start gap-5">
+            <button onClick={() => setView('dashboard')} className="shrink-0 rounded-xl bg-slate-800 p-3 text-white shadow-xl transition-all hover:bg-slate-700 active:scale-95">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <h1 className="min-w-0 break-words text-2xl font-black tracking-tight text-white">Análise Estratégica: {fileName || 'documento.pdf'}</h1>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-sky-300">
+                    {result?._tipo === 'tr' ? 'Termo de Referência' : 'Edital'}
+                  </span>
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-300">Auditado via IA</span>
+                </div>
               </div>
+              <p className="mt-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                <Clock className="w-3 h-3" /> Processado em {new Date().toLocaleDateString()}
+              </p>
             </div>
-            <p className="text-[10px] text-slate-500 font-bold uppercase mt-2 tracking-widest flex items-center gap-2">
-              <Clock className="w-3 h-3" /> Processado em {new Date().toLocaleDateString()}
-            </p>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleSaveToResumos}
-            disabled={savingToResumos || !result}
-            className="flex items-center gap-3 bg-[#1e293b] text-slate-300 font-black py-3 px-6 rounded-2xl border border-slate-700 text-xs hover:bg-slate-800 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {savingToResumos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            SALVAR EM RESUMOS
-          </button>
-          <button
-            onClick={handleConvertToOpportunity}
-            disabled={convertingToOpportunity || !result}
-            className="flex items-center gap-3 bg-sky-500 text-white font-black py-3 px-8 rounded-2xl shadow-xl shadow-sky-500/20 text-xs hover:bg-sky-600 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {convertingToOpportunity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
-            CONVERTER EM OPORTUNIDADE
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleSaveToResumos}
+              disabled={savingToResumos || !result}
+              className="flex items-center gap-3 rounded-xl border border-slate-700 bg-[#1e293b] px-5 py-3 text-xs font-black text-slate-300 shadow-lg transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingToResumos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              SALVAR EM RESUMOS
+            </button>
+            <button
+              onClick={handleConvertToOpportunity}
+              disabled={convertingToOpportunity || !result}
+              className="flex items-center gap-3 rounded-xl bg-sky-500 px-6 py-3 text-xs font-black text-white shadow-xl shadow-sky-500/20 transition-all hover:bg-sky-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {convertingToOpportunity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
+              CONVERTER EM OPORTUNIDADE
+            </button>
+          </div>
         </div>
       </header>
 
@@ -944,21 +1155,20 @@ const B2GAnaliseEditaisTR = () => {
         </div>
       ) : null}
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden bg-[#0f172a]">
-        <div className="p-10 border-r border-slate-800 overflow-y-auto bg-slate-950/20 flex flex-col items-center custom-scrollbar">
-          <div className="w-full max-w-2xl mb-8 p-6 bg-slate-900/40 rounded-[3rem] border border-slate-800/50 shadow-inner">
-            <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-6 block text-center">Pré-visualização do Documento</label>
-            <div className="aspect-[1/1.41] bg-slate-950 border border-slate-800 rounded-2xl flex flex-col items-center justify-center p-16 text-slate-600 shadow-2xl relative overflow-hidden group">
+      <div className="flex-1 grid grid-cols-1 overflow-hidden bg-[#0d1422] xl:grid-cols-[minmax(320px,0.8fr)_minmax(520px,1.2fr)]">
+        <div className="overflow-y-auto border-r border-slate-800 bg-slate-950/20 p-6 custom-scrollbar lg:p-8">
+          <div className="mx-auto w-full max-w-xl rounded-2xl border border-slate-800/80 bg-slate-900/45 p-5 shadow-inner">
+            <label className="mb-5 block text-center text-[11px] font-black uppercase tracking-widest text-slate-500">Pré-visualização do Documento</label>
+            <div className="aspect-[1/1.28] bg-slate-950 border border-slate-800 rounded-2xl flex flex-col items-center justify-center p-10 text-slate-600 shadow-2xl relative overflow-hidden group">
               <FileText className="w-24 h-24 opacity-5 mb-6 group-hover:scale-110 transition-transform duration-500" />
               <h4 className="font-black text-slate-500 text-xl tracking-tight">Visor PDF Desabilitado</h4>
               <p className="text-[11px] max-w-xs mt-3 opacity-30 text-center leading-relaxed font-medium">Ambiente de segurança: A renderização nativa de arquivos PDF externos está restrita neste módulo.</p>
-              <div className="absolute inset-0 bg-sky-500/2 rounded-full blur-3xl" />
             </div>
           </div>
         </div>
 
-        <div className="p-10 overflow-y-auto space-y-10 bg-[#0f172a] custom-scrollbar">
-          <div className="flex items-center bg-[#1e293b]/50 p-1.5 rounded-2xl border border-slate-800 mb-10 overflow-x-auto scrollbar-hide sticky top-0 z-20 shadow-2xl backdrop-blur-md">
+        <div className="overflow-y-auto bg-[#0d1422] p-6 custom-scrollbar lg:p-8">
+          <div className="sticky top-0 z-20 mb-8 flex items-center overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-2xl backdrop-blur-md scrollbar-hide">
             {['GERAL', 'RESUMO ESPECIFICAÇÕES', 'PRAZOS', 'EXIGENCIAS', 'DOCUMENTAÇÃO', 'ITENS / TR', 'RISCOS / IA'].map((tab) => {
               if (tab === 'RESUMO ESPECIFICAÇÕES' && result?._tipo !== 'tr') return null;
               if ((tab === 'PRAZOS' || tab === 'DOCUMENTAÇÃO') && result?._tipo === 'tr') return null;
@@ -967,7 +1177,7 @@ const B2GAnaliseEditaisTR = () => {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab.toLowerCase())}
-                  className={`whitespace-nowrap flex-1 py-3 px-6 rounded-xl text-[9px] font-black uppercase transition-all tracking-tighter ${activeTab === tab.toLowerCase() ? 'bg-slate-800 text-sky-400 shadow-xl border border-slate-700' : 'text-slate-500 hover:text-slate-300'}`}
+                  className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-[9px] font-black uppercase transition-all ${activeTab === tab.toLowerCase() ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/10' : 'text-slate-500 hover:text-slate-300'}`}
                 >
                   {tab}
                 </button>
@@ -977,10 +1187,10 @@ const B2GAnaliseEditaisTR = () => {
 
           <div className="pb-10">{renderTabContent()}</div>
 
-          <div className="bg-sky-600/5 p-8 rounded-[3rem] border border-sky-500/10 mt-12 shadow-inner relative overflow-hidden">
+          <div className="relative mt-10 overflow-hidden rounded-2xl border border-sky-500/10 bg-sky-600/5 p-6 shadow-inner">
             <div className="relative z-10">
               <div className="flex items-center gap-4 mb-6">
-                <div className="p-3 bg-sky-500/20 rounded-2xl text-sky-400">
+                <div className="rounded-xl bg-sky-500/20 p-3 text-sky-300">
                   <ShieldAlert className="w-6 h-6" />
                 </div>
                 <h4 className="text-lg font-black text-white uppercase tracking-tight">Avaliação de Aderência Técnica</h4>
@@ -991,7 +1201,6 @@ const B2GAnaliseEditaisTR = () => {
               </div>
               <p className="text-xs text-slate-500 italic leading-relaxed font-medium">Este índice é calculado comparando as capacidades padrão do mercado contra as exigências críticas extraídas automaticamente deste documento pela inteligência artificial.</p>
             </div>
-            <div className="absolute bottom-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl" />
           </div>
         </div>
       </div>
@@ -1002,6 +1211,7 @@ const B2GAnaliseEditaisTR = () => {
     <div className="flex min-h-[80vh] bg-[#0f172a] text-slate-200 overflow-hidden select-none font-sans rounded-3xl border border-slate-800">
       {view !== 'detail' && <Sidebar />}
       {view === 'dashboard' && <Dashboard />}
+      {view === 'history' && <HistoryView />}
       {view === 'detail' && <DetailView />}
       <style dangerouslySetInnerHTML={{ __html: `
         .scrollbar-hide::-webkit-scrollbar { display: none; }

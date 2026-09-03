@@ -70,6 +70,7 @@ const normalizeBasePartner = (input = {}, preserve = {}) => {
   return {
     id: toString(input.id || preserve.id) || crypto.randomUUID(),
     nome: toString(input.nome, preserve.nome || ''),
+    logoUrl: toString(input.logoUrl || input.logo, preserve.logoUrl || preserve.logo || ''),
     razaoSocial: toString(input.razaoSocial, preserve.razaoSocial || ''),
     cnpj: toString(input.cnpj, preserve.cnpj || ''),
     contato: toString(input.contato, preserve.contato || ''),

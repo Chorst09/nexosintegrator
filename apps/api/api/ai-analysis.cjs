@@ -493,6 +493,18 @@ const ANALYSIS_SCHEMAS = {
         },
         required: ['modelName', 'providedSpecs']
       },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            quantity: { type: 'string' },
+            specs: { type: 'string' }
+          },
+          required: ['name', 'quantity', 'specs']
+        }
+      },
       termRequirements: {
         type: 'array',
         items: { type: 'string' }
@@ -532,7 +544,7 @@ const ANALYSIS_SCHEMAS = {
         required: ['totalRequirements', 'metRequirements', 'fullCompliance']
       }
     },
-    required: ['analysisType', 'trSummary', 'analyzedModel', 'termRequirements', 'technicalNotebook', 'compliantEquipment', 'complianceOverview']
+    required: ['analysisType', 'trSummary', 'analyzedModel', 'items', 'termRequirements', 'technicalNotebook', 'compliantEquipment', 'complianceOverview']
   }
 };
 
@@ -705,9 +717,15 @@ const buildTemplatePrompt = ({ mode, payload }) => {
     inputExample,
     '',
     'SE mode == "tr":',
-    '- Analise SOMENTE requisitos técnicos e funcionais do TR (ignore itens administrativos/jurídicos).',
-    '- Compare cada requisito com modelo e datasheet.',
-    '- technicalNotebook deve ter no mínimo 5 linhas.',
+    '- Sua tarefa principal é EXCLUSIVAMENTE extrair o catálogo técnico do Edital/TR.',
+    '- items[] deve conter APENAS produtos, equipamentos, softwares, licenças, serviços, lotes ou itens contratados.',
+    '- items[].name deve ser curto e comercial, sem título de seção. Exemplo: "switch 48 portas", "desktop i7", "licença de software".',
+    '- items[].quantity deve trazer a quantidade e unidade quando houver. Exemplo: "500", "10 unidades", "25 licenças".',
+    '- items[].specs deve trazer o resumo técnico completo do item: capacidade, portas, processador, memória, armazenamento, módulos, licenças, garantia técnica, suporte, instalação, compatibilidade e requisitos mínimos.',
+    '- trSummary deve ser somente um resumo completo das especificações dos produtos/itens encontrados, agrupado por item.',
+    '- NÃO inclua em items[] ou trSummary: preâmbulo, sumário/índice, disponibilidade financeira, parâmetros da licitação, elementos instrutores, retirada/alteração do edital, publicidade dos atos, prazos, vigência, documentos, habilitação, julgamento, sanções, multas ou obrigações administrativas.',
+    '- NÃO faça recomendação comercial, aderência do modelo, análise jurídica ou análise geral do edital no trSummary.',
+    '- technicalNotebook deve conter apenas requisitos técnicos diretamente ligados aos produtos, quando existirem.',
     '- meetsRequirement deve ser EXATAMENTE "ATENDE" ou "NAO_ATENDE".',
     '- datasheetEvidence deve sempre ser preenchido no formato:',
     '  - ATENDE: "TR exige [requisito]. Modelo possui [evidência objetiva]"',
@@ -735,6 +753,13 @@ const buildTemplatePrompt = ({ mode, payload }) => {
         manufacturer: '{{analyzedModelManufacturer}}',
         providedSpecs: '{{analyzedModelSpecs}}'
       },
+      items: [
+        {
+          name: '',
+          quantity: '',
+          specs: ''
+        }
+      ],
       termRequirements: [],
       technicalNotebook: [
         {
@@ -793,6 +818,7 @@ const buildGeminiSchemaHint = (mode) =>
         analysisType: 'tr',
         trSummary: 'string',
         analyzedModel: { modelName: 'string', manufacturer: 'string', providedSpecs: 'string' },
+        items: [{ name: 'string', quantity: 'string', specs: 'string' }],
         termRequirements: ['string'],
         technicalNotebook: [
           {
@@ -814,6 +840,83 @@ const parseGeminiTextContent = (json) => {
     .map((part) => (typeof part?.text === 'string' ? part.text : ''))
     .join('\n')
     .trim();
+};
+
+const buildLegacyEditalPrompt = (documentText) => {
+  const structure = `{
+      "identificacao": { "data_sessao": "data", "orgao": "nome", "modalidade": "modalidade", "portal": "portal", "objeto": "objeto" },
+      "prazos": [{"titulo": "prazo", "descricao": "desc"}],
+      "exigencias": [{"categoria": "tipo", "requisito": "desc"}],
+      "documentacao": [{"tipo": "tipo", "doc": "nome", "obrigatorio": true}],
+      "itens_tr": [{"item": "nome", "desc": "especificacao tecnica detalhada e completa", "qtd": "valor"}],
+      "riscos": [{"titulo": "risco", "descricao": "desc", "severidade": "alta|media"}],
+      "pontuacao_viabilidade": 8
+    }`;
+
+  return `Analise este documento (EDITAL) de forma exaustiva.
+    Não resuma demais. Traga o máximo de detalhamento possível para que um técnico possa avaliar a viabilidade de atendimento sem precisar ler o PDF original.
+
+    Retorne este JSON:
+    ${structure}
+
+    TEXTO DO DOCUMENTO: ${cleanText(documentText, 60000)}`;
+};
+
+const runGeminiLegacyEdital = async ({ documentText, maxRetries = 3, baseDelayMs = 3000 }) => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+
+  const model = process.env.GEMINI_MODEL || process.env.GOOGLE_MODEL || 'gemini-2.5-flash';
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const systemPrompt = 'Aja como um Auditor Sênior de Licitações. Analise o texto e retorne um objeto JSON completo e exaustivo. Não economize palavras nas descrições técnicas. Retorne apenas o JSON bruto, sem markdown.';
+  const prompt = buildLegacyEditalPrompt(documentText);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 140000);
+  let lastError = null;
+
+  try {
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: 'application/json'
+          }
+        }),
+        signal: controller.signal
+      });
+
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(normalizeLine(json?.error?.message || '') || `Gemini HTTP ${response.status}`);
+      }
+
+      const parsed = tryParseJsonObject(parseGeminiTextContent(json));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      throw new Error('Gemini não retornou JSON válido para a análise do edital.');
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        const isLastAttempt = attempt >= maxRetries - 1;
+        if (!shouldRetryByMessage(message) || isLastAttempt || controller.signal.aborted) break;
+
+        const waitMs = retryDelayMsFromMessage(message, baseDelayMs * Math.pow(2, attempt));
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (lastError) {
+    console.warn('Falha no fluxo compatível de edital.', lastError instanceof Error ? lastError.message : lastError);
+  }
+  return null;
 };
 
 const runGeminiStructured = async ({ mode, payload, maxRetries = 3, baseDelayMs = 3000 }) => {
@@ -1375,10 +1478,428 @@ const isAdministrativeOrLegalRequirementLine = (value) => {
   return /\b(habilitacao|juridic|fiscal|certidao|trabalhista|balanco|patrimonio|impugnacao|recurso|multa|penalidade|garantia\s+contratual|assinatura|documentacao|proposta\s+comercial|regularidade|prazo\s+de\s+pagamento)\b/.test(text);
 };
 
+const isTrAdministrativeOrLegalLine = (value) => {
+  const text = normalizePlainText(value);
+  if (!text) return false;
+  return isAdministrativeOrLegalRequirementLine(value) ||
+    /\b(justificativa|fundamentacao|estudo\s+tecnico\s+preliminar|estimativa|valor\s+estimado|pesquisa\s+de\s+precos|dotacao|criterio\s+de\s+julgamento|fiscalizacao|gestao\s+do\s+contrato|recebimento)\b/.test(text);
+};
+
 const hasTechnicalOrFunctionalSignal = (value) => {
   const text = normalizePlainText(value);
   if (!text) return false;
   return /\b(requisito|funcional|tecnico|tecnica|desempenho|capacidade|compatibil|integrac|api|interface|plataforma|sistema|software|hardware|processador|memoria|armazenamento|seguranca|criptografia|autenticacao|latencia|disponibilidade|sla|suporte|instalacao|implantacao|treinamento|garantia\s+tecnica)\b/.test(text);
+};
+
+const TR_ITEM_UNIT_SOURCE =
+  'un|und|unid\\.?|unidade(?:s)?|licen[cç]as?|servi[cç]os?|kit|kits|meses?|anos?|postos?|usu[aá]rios?|pacotes?|caixas?|pe[cç]as?|m2|m²|metros?';
+const TR_ITEM_QUANTITY_PATTERN = new RegExp(`(\\d+(?:[\\.,]\\d+)?)\\s*(${TR_ITEM_UNIT_SOURCE})\\b`, 'i');
+const TR_ITEM_ROW_PATTERN = new RegExp(`^(?:item|lote|grupo)?\\s*(\\d{1,4}(?:[.\\-]\\d{1,4})?)\\s+(.{8,260}?)\\s+(\\d+(?:[\\.,]\\d+)?)\\s*(${TR_ITEM_UNIT_SOURCE})\\b(?:\\s+(.{0,240}))?$`, 'i');
+const TR_ITEM_ROW_NO_UNIT_PATTERN = /^((?:item|lote|grupo)?\s*\d{1,4}(?:[.\-]\d{1,4})*)\s+(.{8,260}?)\s+(\d+(?:[\.,]\d+)?)$/i;
+const TR_ITEM_QUANTITY_LINE_PATTERN = new RegExp(`^(.{8,260}?)\\s+(\\d+(?:[\\.,]\\d+)?)\\s*(${TR_ITEM_UNIT_SOURCE})\\b(?:\\s+(.{0,240}))?$`, 'i');
+const TR_LEADING_QUANTITY_ITEM_PATTERN = new RegExp(`^(\\d+(?:[\\.,]\\d+)?)(?:\\s*(${TR_ITEM_UNIT_SOURCE}))?\\s+(.{4,260})$`, 'i');
+const TR_ITEM_SECTION_REGEX =
+  /\b(itens?|lotes?|objeto(?:\s+da\s+contrata[cç][aã]o)?|descri[cç][aã]o(?:\s+do\s+objeto)?|especifica[cç][oõ]es?\s+t[eé]cnicas?|termo\s+de\s+refer[eê]ncia|planilha|tabela|rela[cç][aã]o\s+de\s+itens?|quantitativos?)\b/i;
+const TR_SECTION_END_REGEX =
+  /\b(prazos?|vig[êe]ncia|pagamento|san[cç][oõ]es?|penalidades?|habilita[cç][aã]o|qualifica[cç][aã]o|crit[eé]rios?\s+de\s+julgamento|fiscaliza[cç][aã]o|gest[aã]o\s+do\s+contrato|dota[cç][aã]o|assinatura|garantia\s+contratual|reajuste|recebimento|justificativa|fundamenta[cç][aã]o|estimativa|valor\s+estimado|pesquisa\s+de\s+pre[cç]os|obriga[cç][oõ]es?)\b/i;
+const TR_SPEC_SIGNAL_REGEX =
+  /\b(especifica[cç][aã]o|caracter[ií]stica|requisito|m[ií]nimo|capacidade|desempenho|compat[ií]vel|processador|mem[oó]ria|armazenamento|interface|porta|api|m[oó]dulo|usu[aá]rios?|licen[cç]a|software|sistema|plataforma|equipamento|material|dimens[oõ]es?|pot[êe]ncia|voltagem|resolu[cç][aã]o|certifica[cç][aã]o|norma|garantia\s+t[eé]cnica|suporte|instala[cç][aã]o|implanta[cç][aã]o|treinamento)\b/i;
+const TR_NON_ITEM_TITLE_REGEX =
+  /^(?:preambulo|sumario|indice|disponibilidade\s+financeira|parametros?\s+para\s+a\s+licitacao|elementos\s+instrutores|retirada\s+e\s+alteracoes\s+do\s+edital|publicidade\s+dos\s+atos|condicoes\s+de\s+participacao|credenciamento|impugnacao|esclarecimentos?|recursos?|propostas?|habilitacao|julgamento|adjudicacao|homologacao|contratacao|contrato|pagamento|sancoes?|penalidades?|anexos?|minuta|modelo\s+de\s+proposta|termo\s+de\s+contrato|aviso\s+de\s+licitacao|edital|justificativa|fundamentacao|estudo\s+tecnico\s+preliminar|valor\s+estimado|pesquisa\s+de\s+precos)\b/;
+
+const isTrTableHeaderLine = (line) => {
+  const text = normalizePlainText(line);
+  if (!text) return false;
+  const hasColumns = /\b(item|descricao|especificacao|qtd|quantidade|unid|unidade|valor unitario|valor total)\b/.test(text);
+  return hasColumns && text.split(/\s+/).length <= 12 && !/\d+(?:[\.,]\d+)?/.test(text);
+};
+
+const stripLeadingSectionNumber = (value) =>
+  normalizePlainText(value)
+    .replace(/^[\s\d.()-]+/, '')
+    .replace(/[·•]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isLikelyTocLine = (line) => {
+  const raw = normalizeLine(line);
+  if (!raw) return false;
+
+  const normalized = normalizePlainText(raw).replace(/\s+/g, ' ');
+  if (/^(sumario|indice)\b/.test(normalized)) return true;
+
+  const hasDotLeader = /(?:\.|\u2024|\u2026){5,}/.test(raw);
+  const endsWithPage = /\b\d{1,4}\s*$/.test(raw);
+  if (hasDotLeader && endsWithPage) return true;
+
+  const sectionRefs = raw.match(/\b\d{1,2}\.?\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ0-9\s,/()\-]{4,}/g) || [];
+  if (hasDotLeader && sectionRefs.length >= 1) return true;
+  if (sectionRefs.length >= 2 && /\b\d{1,4}\s*$/.test(raw)) return true;
+
+  return false;
+};
+
+const isTrNonItemHeading = (line) => {
+  const raw = normalizeLine(line);
+  if (!raw) return false;
+  if (isLikelyTocLine(raw)) return true;
+  if (TR_ITEM_QUANTITY_PATTERN.test(raw) || /:\s*\S.{10,}/.test(raw)) return false;
+
+  const normalized = stripLeadingSectionNumber(raw)
+    .replace(/[.]{2,}/g, ' ')
+    .replace(/\s+\d{1,4}$/, '')
+    .trim();
+  if (!normalized) return true;
+  if (TR_NON_ITEM_TITLE_REGEX.test(normalized)) return true;
+  if (/^especificacoes(?:\s*,?\s*quantitativos?)?(?:\s+e\s+valor\s+maximo.*)?$/.test(normalized)) return true;
+  if (/^(?:objeto|descricao\s+do\s+objeto|itens?|lotes?|relacao\s+de\s+itens?|quantitativos?|tabela|planilha)$/.test(normalized)) return true;
+
+  const withoutDigits = raw.replace(/\d+/g, '').trim();
+  const isShortUppercaseHeading =
+    withoutDigits.length >= 6 &&
+    withoutDigits.length <= 90 &&
+    withoutDigits === withoutDigits.toUpperCase() &&
+    !hasStrongItemSignal(raw) &&
+    !TR_SPEC_SIGNAL_REGEX.test(raw);
+
+  return isShortUppercaseHeading;
+};
+
+const getTrSearchLines = (lines) =>
+  (Array.isArray(lines) ? lines : [])
+    .map(normalizeLine)
+    .filter((line) => line && !isLikelyTocLine(line));
+
+const isLikelyNextTrItemLine = (line) => {
+  const text = normalizeLine(line);
+  if (!text) return false;
+  if (TR_ITEM_ROW_PATTERN.test(text)) return true;
+  return /^(?:item|lote|grupo)\s*\d{1,4}(?:[.\-]\d{1,4})*\s*[:\-.)]?\s+\S+/i.test(text) ||
+    /^\d{1,4}(?:[.\-]\d{1,4})+\s*[:\-.)]?\s+\S+/i.test(text);
+};
+
+const hasNearbyTrItemSection = (lines, index) => {
+  const start = Math.max(0, index - 8);
+  for (let i = start; i <= index; i += 1) {
+    const line = lines[i] || '';
+    if (!isLikelyTocLine(line) && TR_ITEM_SECTION_REGEX.test(line)) return true;
+  }
+  return false;
+};
+
+const sanitizeTrItemName = (value) => {
+  let text = normalizeLine(
+    String(value || '')
+      .replace(/^(?:item|lote|grupo)\s*\d{1,4}(?:[.\-]\d{1,4})*\s*[:\-.)]?\s*/i, '')
+      .replace(/^\d{1,4}(?:[.\-]\d{1,4})*\s*[:\-.)]?\s*/, '')
+      .replace(/^(?:descri[cç][aã]o|especifica[cç][aã]o|objeto(?:\s+da\s+contrata[cç][aã]o)?|produto|servi[cç]o|solu[cç][aã]o)\s*[:\-–]\s*/i, '')
+      .replace(TR_ITEM_QUANTITY_PATTERN, ' ')
+  );
+
+  text = text
+    .replace(/\b(?:qtd|quantidade|unid(?:ade)?|valor\s+(?:unit[aá]rio|total))\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (text.length > 180) {
+    const compact = text.match(/^(.{40,180}?)(?:\s+-\s+|\s+com\s+|\s+contendo\s+|\s+conforme\s+)/i);
+    text = normalizeLine(compact?.[1] || text.slice(0, 180));
+  }
+
+  return text;
+};
+
+const normalizeTrItemSpecs = (value) => {
+  const text = normalizeLine(value || '');
+  if (!text) return 'Conforme edital/TR';
+  return text.length > 700 ? `${text.slice(0, 700).trim()}...` : text;
+};
+
+const extractTrSpecsWindow = (lines, startIndex, maxLines = 5) => {
+  const specs = [];
+
+  for (let i = startIndex; i < lines.length && specs.length < maxLines; i += 1) {
+    const line = normalizeLine(lines[i] || '');
+    if (!line || isTrTableHeaderLine(line)) continue;
+    if (isLikelyTocLine(line) || isTrNonItemHeading(line)) continue;
+    if (TR_ITEM_SECTION_REGEX.test(line) && !TR_SPEC_SIGNAL_REGEX.test(line) && !hasStrongItemSignal(line)) continue;
+    if (i > startIndex && isLikelyNextTrItemLine(line)) break;
+    if (TR_SECTION_END_REGEX.test(line) && !hasStrongItemSignal(line) && !TR_SPEC_SIGNAL_REGEX.test(line)) break;
+    if (line.length < 6 || line.length > 420) continue;
+    if (isTrAdministrativeOrLegalLine(line) && !hasTechnicalOrFunctionalSignal(line) && !hasStrongItemSignal(line)) {
+      continue;
+    }
+
+    if (
+      hasStrongItemSignal(line) ||
+      hasTechnicalOrFunctionalSignal(line) ||
+      TR_SPEC_SIGNAL_REGEX.test(line) ||
+      /[:;]/.test(line) ||
+      line.length >= 24
+    ) {
+      specs.push(line);
+    }
+  }
+
+  return normalizeTrItemSpecs(unique(specs).join(' '));
+};
+
+const shouldAcceptTrItemCandidate = (name, quantity = '', specs = '', context = '') => {
+  const signalCorpus = `${name || ''} ${specs || ''} ${context || ''}`;
+  const hasExplicitQuantity = !isUnknownText(quantity) && /\d/.test(String(quantity || ''));
+  const normalizedName = stripLeadingSectionNumber(name);
+  if (isLikelyTocLine(signalCorpus)) return false;
+  if (TR_NON_ITEM_TITLE_REGEX.test(normalizedName)) return false;
+  if (isTrNonItemHeading(name) && !hasExplicitQuantity) return false;
+  if (!hasExplicitQuantity && !hasStrongItemSignal(signalCorpus) && !TR_SPEC_SIGNAL_REGEX.test(signalCorpus)) return false;
+  const acceptanceContext = hasStrongItemSignal(signalCorpus) ? `${specs} ${context}` : name;
+  return shouldAcceptItemCandidate(name, quantity, acceptanceContext);
+};
+
+const compactTrQuantity = (quantity) => {
+  const text = normalizeLine(quantity || '');
+  if (isUnknownText(text)) return '';
+  const unitOnly = text.match(/^(\d+(?:[\.,]\d+)?)\s*(?:un|und|unid\.?|unidade|unidades)$/i);
+  if (unitOnly) return unitOnly[1];
+  return text;
+};
+
+const extractTrPrimarySpecTokens = (name, specs) => {
+  const text = `${name || ''} ${specs || ''}`;
+  const normalizedName = normalizeItemName(name);
+  if (/\b(\d{1,4}\s*portas?|i[3579]|ryzen|ssd|\d+\s*gb|poe|gigabit|10g|wi\s*fi)\b/i.test(name || '')) {
+    return [];
+  }
+
+  const tokens = [];
+  const patterns = [
+    /\b\d{1,4}\s*portas?\b/gi,
+    /\b(?:core\s*)?i[3579](?:-\d{3,5}[a-z]*)?\b/gi,
+    /\bryzen\s*[3579](?:\s+\d{3,5}[a-z]*)?\b/gi,
+    /\b\d+\s*gb\s*(?:ram|mem[oó]ria)?\b/gi,
+    /\bssd\s*\d+\s*(?:gb|tb)\b/gi,
+    /\b\d+\s*(?:gb|tb)\s*(?:ssd|armazenamento)\b/gi,
+    /\bpoe\+?\b/gi,
+    /\bgigabit\b/gi,
+    /\b10g\b/gi,
+    /\bgerenci[aá]vel\b/gi,
+    /\bwi-?fi\s*\d?\b/gi
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const token = normalizeLine(match[0].toLowerCase());
+      const key = normalizeItemName(token);
+      const processorShort = key.match(/\bi([3579])\b/)?.[0] || '';
+      if (
+        token &&
+        !tokens.some((existing) => normalizeItemName(existing) === key) &&
+        !normalizedName.includes(key) &&
+        (!processorShort || !normalizedName.includes(processorShort))
+      ) {
+        tokens.push(token);
+      }
+      if (tokens.length >= 1) return tokens;
+    }
+  }
+
+  return tokens;
+};
+
+const buildTrShortItemLabel = (item) => {
+  const quantity = compactTrQuantity(item?.quantity);
+  const name = sanitizeTrItemName(item?.name || '');
+  const specs = normalizeTrItemSpecs(item?.specs || '');
+  const specTokens = extractTrPrimarySpecTokens(name, specs);
+  const parts = [quantity, name, ...specTokens].filter(Boolean);
+  return normalizeLine(parts.join(' ')) || name || 'Item não identificado';
+};
+
+const escapeRegExp = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const stripTrItemNameFromSpecs = (item) => {
+  const name = sanitizeTrItemName(item?.name || '');
+  const specs = normalizeTrItemSpecs(item?.specs || '');
+  if (!name || !specs) return specs || 'Especificação não identificada';
+  return normalizeLine(specs.replace(new RegExp(`^${escapeRegExp(name)}\\s*[:\\-–]?\\s*`, 'i'), '')) ||
+    specs ||
+    'Especificação não identificada';
+};
+
+const buildTrProductSpecsSummary = (items, fallbackSummary = '') => {
+  const validItems = normalizeTrItems(items, []);
+  if (validItems.length === 0) {
+    const fallback = normalizeLine(fallbackSummary || '');
+    if (fallback && !/(ader[eê]ncia|recomenda[cç][aã]o|modelo|licita[cç][aã]o|habilita[cç][aã]o|preambulo|sum[aá]rio|[.]{5,})/i.test(fallback)) {
+      return fallback;
+    }
+    return 'Nenhum produto, serviço ou item técnico foi identificado com segurança no TR.';
+  }
+
+  return [
+    'Resumo técnico dos produtos e especificações identificados no TR:',
+    ...validItems.map((item, index) => {
+      const label = buildTrShortItemLabel(item);
+      const specs = stripTrItemNameFromSpecs(item);
+      return `${index + 1}. ${label}: ${specs}`;
+    })
+  ].join('\n');
+};
+
+const extractTrItemsFromLines = (lines) => {
+  const items = [];
+  const seen = new Set();
+  const objectCandidates = [];
+  const searchLines = getTrSearchLines(lines);
+
+  const pushTrItem = (rawName, rawQuantity, rawSpecs = 'Conforme edital/TR', context = '') => {
+    const name = sanitizeTrItemName(rawName);
+    const quantity = normalizeLine(rawQuantity || 'Não identificado') || 'Não identificado';
+    const specs = normalizeTrItemSpecs(rawSpecs || context || 'Conforme edital/TR');
+    const signalCorpus = `${name} ${specs}`;
+
+    if (!name || !shouldAcceptTrItemCandidate(name, quantity, specs, context)) return;
+    if (isTrAdministrativeOrLegalLine(name) && !hasStrongItemSignal(signalCorpus) && !TR_SPEC_SIGNAL_REGEX.test(signalCorpus)) return;
+
+    const key = normalizeItemName(name);
+    if (!key || seen.has(key)) return;
+
+    seen.add(key);
+    items.push({ name, quantity, specs });
+  };
+
+  for (let i = 0; i < searchLines.length; i += 1) {
+    const line = normalizeLine(searchLines[i] || '');
+    if (!line || isTrTableHeaderLine(line) || isTrNonItemHeading(line)) continue;
+
+    const specsWindow = () => extractTrSpecsWindow(searchLines, i + 1, 5);
+    const quantityFromLine = line.match(TR_ITEM_QUANTITY_PATTERN);
+    const nearbyItemSection = hasNearbyTrItemSection(searchLines, i);
+
+    const objectLine = line.match(/^(?:objeto(?:\s+da\s+contrata[cç][aã]o)?|descri[cç][aã]o\s+do\s+objeto)\s*[:\-–]\s*(.{10,420})$/i);
+    if (objectLine) {
+      objectCandidates.push({
+        name: objectLine[1],
+        quantity: quantityFromLine ? `${quantityFromLine[1]} ${quantityFromLine[2]}` : 'Não identificado',
+        specs: specsWindow() || objectLine[1],
+        context: line
+      });
+    }
+
+    const inlineProduct = line.match(/^(?:produto|servi[cç]o|solu[cç][aã]o|equipamento|software)\s*[:\-–]\s*(.{8,360})$/i);
+    if (inlineProduct) {
+      pushTrItem(
+        inlineProduct[1],
+        quantityFromLine ? `${quantityFromLine[1]} ${quantityFromLine[2]}` : 'Não identificado',
+        specsWindow() || inlineProduct[1],
+        line
+      );
+      continue;
+    }
+
+    const tableRow = line.match(TR_ITEM_ROW_PATTERN);
+    if (tableRow) {
+      const trailingSpecs = normalizeLine(tableRow[5] || '');
+      const specs = normalizeTrItemSpecs([tableRow[2], trailingSpecs, specsWindow()].filter(Boolean).join(' '));
+      pushTrItem(tableRow[2], `${tableRow[3]} ${tableRow[4]}`, specs, line);
+      continue;
+    }
+
+    const tableRowNoUnit = line.match(TR_ITEM_ROW_NO_UNIT_PATTERN);
+    if (tableRowNoUnit && nearbyItemSection) {
+      const specs = normalizeTrItemSpecs([tableRowNoUnit[2], specsWindow()].filter(Boolean).join(' '));
+      pushTrItem(tableRowNoUnit[2], tableRowNoUnit[3], specs, line);
+      continue;
+    }
+
+    const itemWithExplicitQuantity = line.match(/(?:item|produto|servi[cç]o|solu[cç][aã]o)\s*[:\-–]\s*(.{8,220}?)\s+(?:qtd|qtde|quantidade)\s*[:\-–]?\s*(\d+(?:[\.,]\d+)?)\s*([a-zçãáéíóú².]+)?/i);
+    if (itemWithExplicitQuantity) {
+      const unit = normalizeLine(itemWithExplicitQuantity[3] || 'un');
+      pushTrItem(itemWithExplicitQuantity[1], `${itemWithExplicitQuantity[2]} ${unit}`, specsWindow() || itemWithExplicitQuantity[1], line);
+      continue;
+    }
+
+    const leadingQuantity = line.match(TR_LEADING_QUANTITY_ITEM_PATTERN);
+    if (leadingQuantity && (nearbyItemSection || hasStrongItemSignal(line) || TR_SPEC_SIGNAL_REGEX.test(line))) {
+      const unit = normalizeLine(leadingQuantity[2] || '');
+      const quantity = [leadingQuantity[1], unit].filter(Boolean).join(' ');
+      const specs = normalizeTrItemSpecs([leadingQuantity[3], specsWindow()].filter(Boolean).join(' '));
+      pushTrItem(leadingQuantity[3], quantity, specs, line);
+      continue;
+    }
+
+    const quantityLine = line.match(TR_ITEM_QUANTITY_LINE_PATTERN);
+    if (quantityLine && (nearbyItemSection || hasStrongItemSignal(line) || TR_SPEC_SIGNAL_REGEX.test(line))) {
+      const specs = normalizeTrItemSpecs([quantityLine[1], quantityLine[4] || '', specsWindow()].filter(Boolean).join(' '));
+      pushTrItem(quantityLine[1], `${quantityLine[2]} ${quantityLine[3]}`, specs, line);
+      continue;
+    }
+
+    const numbered = line.match(/^(?:item|lote|grupo)\s*(\d{1,4}(?:[.\-]\d{1,4})*)\s*[:\-.)]?\s*(.{8,360})$/i) ||
+      (nearbyItemSection ? line.match(/^(\d{1,4}(?:[.\-]\d{1,4})*)\s*[:\-.)]?\s*(.{8,360})$/) : null);
+    if (numbered) {
+      const candidate = numbered[2];
+      const specs = specsWindow();
+      if (nearbyItemSection || hasStrongItemSignal(candidate) || TR_SPEC_SIGNAL_REGEX.test(`${candidate} ${specs}`)) {
+        pushTrItem(
+          candidate,
+          quantityFromLine ? `${quantityFromLine[1]} ${quantityFromLine[2]}` : 'Não identificado',
+          specs || candidate,
+          line
+        );
+      }
+    }
+
+    if (items.length >= 30) break;
+  }
+
+  if (items.length === 0) {
+    for (const item of objectCandidates) {
+      pushTrItem(item.name, item.quantity, item.specs, item.context);
+      if (items.length >= 6) break;
+    }
+  }
+
+  if (items.length === 0) {
+    for (const item of extractEditalItemsFromLines(searchLines)) {
+      pushTrItem(item.name, item.quantity, item.specs, `${item.name} ${item.specs}`);
+      if (items.length >= 20) break;
+    }
+  }
+
+  if (items.length === 0) {
+    const objectSummary = detectObjectSummary(searchLines.join('\n'));
+    if (objectSummary && (hasStrongItemSignal(objectSummary) || TR_SPEC_SIGNAL_REGEX.test(objectSummary))) {
+      pushTrItem(objectSummary, 'Não identificado', objectSummary, objectSummary);
+    }
+  }
+
+  return items.slice(0, 30);
+};
+
+const normalizeTrItems = (value, fallbackItems = []) => {
+  const normalizeList = (source) => (Array.isArray(source) ? source : [])
+    .map((item) => {
+      const name = sanitizeTrItemName(item?.name || item?.item || item?.produto || item?.servico || item?.description || '');
+      const quantity = normalizeLine(item?.quantity || item?.qtd || item?.quantidade || 'Não identificado') || 'Não identificado';
+      const specs = normalizeTrItemSpecs(item?.specs || item?.especificacoes || item?.description || item?.desc || item?.descricao || 'Conforme edital/TR');
+      return { name, quantity, specs };
+    })
+    .filter((item) => {
+      const signalCorpus = `${item.name} ${item.specs}`;
+      if (!item.name || !shouldAcceptTrItemCandidate(item.name, item.quantity, item.specs, signalCorpus)) return false;
+      return true;
+    });
+
+  const seen = new Set();
+  return [...normalizeList(fallbackItems), ...normalizeList(value)]
+    .filter((item) => {
+      const key = normalizeItemName(item.name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 30);
 };
 
 const ensureTrNotebookMinimum = (rows, termRequirements = []) => {
@@ -1446,6 +1967,7 @@ const buildTrFallbackResponse = (payload, reason) => {
       manufacturer: normalizeLine(payload.analyzedModelManufacturer || 'Não identificado') || 'Não identificado',
       providedSpecs: normalizeLine(payload.analyzedModelSpecs || 'Não identificado') || 'Não identificado'
     },
+    items: [],
     termRequirements,
     technicalNotebook: technicalNotebook.map((item) => ({
       ...item,
@@ -1461,17 +1983,18 @@ const buildTrFallbackResponse = (payload, reason) => {
 };
 
 const extractTrRequirements = (text) => {
-  const lines = splitLines(text);
+  const lines = getTrSearchLines(splitLines(text));
   const requirements = [];
   const technicalCandidates = [];
 
   for (const line of lines) {
+    if (isLikelyTocLine(line) || isTrNonItemHeading(line)) continue;
     const lower = line.toLowerCase();
     const looksLikeRequirement =
       /\b(deve|devera|deverá|obrigat[oó]rio|minim[oa]|suportar|compat[ií]vel|comprovar|atender)\b/.test(lower) ||
       /\brequisito\b/.test(lower);
     const hasTechnicalSignal = hasTechnicalOrFunctionalSignal(line);
-    const isLegalOrAdmin = isAdministrativeOrLegalRequirementLine(line);
+    const isLegalOrAdmin = isTrAdministrativeOrLegalLine(line);
 
     if (hasTechnicalSignal && line.length >= 12 && line.length <= 360) {
       technicalCandidates.push(line);
@@ -1490,7 +2013,14 @@ const extractTrRequirements = (text) => {
 };
 
 const heuristicsTr = (payload, trText, datasheetText = '') => {
-  const extractedRequirements = extractTrRequirements(trText);
+  const itemCandidates = extractTrItemsFromLines(splitLines(trText));
+  const itemRequirements = itemCandidates
+    .map((item) => normalizeTrRequirementText(`${item.name}: ${item.specs}`))
+    .filter((item) => !isUnknownText(item));
+  const extractedRequirements = unique([
+    ...extractTrRequirements(trText),
+    ...itemRequirements
+  ]).slice(0, 30);
   const corpus = `${payload.analyzedModelSpecs || ''} ${datasheetText || ''}`.toLowerCase();
 
   const notebookRows = extractedRequirements.slice(0, 12).map((requirement) => {
@@ -1536,12 +2066,11 @@ const heuristicsTr = (payload, trText, datasheetText = '') => {
     : [];
 
   const trSummary = [
-    `TR analisado para o modelo ${normalizeLine(payload.analyzedModelName || 'Não identificado') || 'Não identificado'}.`,
-    `Aderência identificada em ${metRequirements} de ${totalRequirements} requisitos avaliados.`,
-    complianceRate >= 0.6
-      ? 'Recomendação: seguir para avaliação comercial detalhada.'
-      : 'Recomendação: revisar lacunas técnicas antes de avançar.'
-  ].join(' ');
+    buildTrProductSpecsSummary(itemCandidates),
+    itemCandidates.length > 0
+      ? `Total de itens identificados: ${itemCandidates.length}.`
+      : ''
+  ].filter(Boolean).join('\n\n');
 
   return {
     analysisType: 'tr',
@@ -1551,6 +2080,7 @@ const heuristicsTr = (payload, trText, datasheetText = '') => {
       manufacturer: normalizeLine(payload.analyzedModelManufacturer || 'Não identificado') || 'Não identificado',
       providedSpecs: normalizeLine(payload.analyzedModelSpecs || 'Não identificado') || 'Não identificado'
     },
+    items: itemCandidates,
     termRequirements,
     technicalNotebook,
     compliantEquipment,
@@ -1591,11 +2121,18 @@ const normalizeTrResponse = (candidate, fallback, payload) => {
 
   const fallbackNotebook = Array.isArray(fallback?.technicalNotebook) ? fallback.technicalNotebook : [];
   const initialNotebook = notebook.length ? notebook : fallbackNotebook;
+  const items = normalizeTrItems(candidate.items, fallback?.items);
   const initialRequirements = ensureArray(candidate.termRequirements).length
     ? ensureArray(candidate.termRequirements, 30)
     : ensureArray(fallback?.termRequirements, 30);
+  const itemRequirements = items
+    .map((item) => normalizeTrRequirementText(`${item.name}: ${item.specs}`))
+    .filter((item) => !isUnknownText(item));
 
-  const { technicalNotebook, termRequirements } = ensureTrNotebookMinimum(initialNotebook, initialRequirements);
+  const { technicalNotebook, termRequirements } = ensureTrNotebookMinimum(
+    initialNotebook,
+    unique([...initialRequirements, ...itemRequirements]).slice(0, 40)
+  );
   const metRequirements = technicalNotebook.filter((item) => item.meetsRequirement === 'ATENDE').length;
   const totalRequirements = technicalNotebook.length;
   const fullCompliance = totalRequirements > 0 && metRequirements === totalRequirements;
@@ -1613,12 +2150,13 @@ const normalizeTrResponse = (candidate, fallback, payload) => {
 
   return {
     analysisType: 'tr',
-    trSummary: normalizeLine(candidate.trSummary || fallback.trSummary || 'Resumo de TR não identificado.'),
+    trSummary: buildTrProductSpecsSummary(items, candidate.trSummary || fallback.trSummary),
     analyzedModel: {
       modelName: normalizeLine(candidate?.analyzedModel?.modelName || payload.analyzedModelName || 'Não identificado') || 'Não identificado',
       manufacturer: normalizeLine(candidate?.analyzedModel?.manufacturer || payload.analyzedModelManufacturer || 'Não identificado') || 'Não identificado',
       providedSpecs: normalizeLine(candidate?.analyzedModel?.providedSpecs || payload.analyzedModelSpecs || 'Não identificado') || 'Não identificado'
     },
+    items,
     termRequirements,
     technicalNotebook,
     compliantEquipment,
@@ -1629,6 +2167,27 @@ const normalizeTrResponse = (candidate, fallback, payload) => {
     }
   };
 };
+
+router.post('/edital-legacy', requireRole(USER_ALLOWED_ROLES), async (req, res) => {
+  try {
+    const documentText = cleanText(req.body?.documentText || '', 60000);
+    if (!documentText) {
+      return res.status(400).json({ message: 'Texto do edital não informado.' });
+    }
+
+    const result = await runGeminiLegacyEdital({ documentText });
+    if (res.headersSent || res.writableEnded) return;
+    if (!result) {
+      return res.status(502).json({ message: 'Não foi possível concluir a análise do edital com o mecanismo original.' });
+    }
+
+    return res.json(result);
+  } catch (error) {
+    if (res.headersSent || res.writableEnded) return;
+    const message = error instanceof Error ? error.message : 'Falha ao processar edital.';
+    return res.status(500).json({ message });
+  }
+});
 
 router.post('/edital', requireRole(USER_ALLOWED_ROLES), async (req, res) => {
   try {

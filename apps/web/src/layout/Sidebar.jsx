@@ -455,8 +455,7 @@ export default function Sidebar({
       <div className={['relative overflow-hidden border-b border-[#0b2a35]/70 py-5', collapsed ? 'px-5 lg:px-3' : 'px-5'].join(' ')}>
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_88%_0%,rgba(35,211,238,0.20)_0%,transparent_48%),linear-gradient(180deg,rgba(13,31,48,0.72)_0%,rgba(5,10,18,0.18)_100%)]" />
 
-        <div className={['relative flex items-center justify-center overflow-hidden rounded-[22px] border border-cyan-200/12 bg-[linear-gradient(135deg,rgba(12,35,54,0.88)_0%,rgba(8,18,31,0.92)_54%,rgba(20,67,79,0.72)_100%)] shadow-[0_22px_48px_-34px_rgba(34,211,238,0.62),inset_0_1px_0_rgba(255,255,255,0.04)]', collapsed ? 'h-[4.6rem] lg:h-14' : 'h-[4.6rem]'].join(' ')}>
-          <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(125,238,255,0.32),transparent)]" />
+        <div className={['relative flex items-center justify-center overflow-hidden rounded-[22px] border border-[#0b2a35]/70 bg-[linear-gradient(135deg,rgba(12,35,54,0.88)_0%,rgba(8,18,31,0.92)_54%,rgba(20,67,79,0.72)_100%)] shadow-[0_22px_48px_-34px_rgba(34,211,238,0.62)]', collapsed ? 'h-[4.6rem] lg:h-14' : 'h-[4.6rem]'].join(' ')}>
           {resolvePublicUrl(branding.logoUrl) ? (
             <img
               src={resolvePublicUrl(branding.logoUrl)}
