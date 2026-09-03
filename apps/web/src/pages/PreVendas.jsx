@@ -426,27 +426,40 @@ export default function PreVendas() {
     }
 
     try {
-      const response = await axios.delete(buildApiUrl(`/pre-vendas/${solicitacaoId}`), {
+      console.log('🗑️ Tentando excluir solicitação:', solicitacaoId);
+      const url = buildApiUrl(`/pre-vendas/${solicitacaoId}`);
+      console.log('📍 URL da requisição:', url);
+      
+      const response = await axios.delete(url, {
         headers: getAuthHeaders()
       });
 
+      console.log('✅ Resposta da API:', response.data);
+
       if (response.data.success) {
         setSolicitacoes((prev) => prev.filter((item) => item.id !== solicitacaoId));
-        alert('Solicitação excluída com sucesso!');
+        alert('✅ Solicitação excluída com sucesso!');
+      } else {
+        alert('⚠️ A API retornou sucesso=false. Verifique os logs.');
       }
     } catch (error) {
-      console.error('Erro ao excluir solicitação:', error);
+      console.error('❌ Erro ao excluir solicitação:', error);
+      console.error('📊 Status:', error.response?.status);
+      console.error('📄 Dados:', error.response?.data);
+      console.error('🔗 URL:', error.config?.url);
+      
+      const errorMsg = error.response?.data?.message || error.message;
       
       if (error.response?.status === 403) {
-        alert('Você não tem permissão para excluir esta solicitação. Apenas o solicitante ou administradores podem excluir.');
+        alert(`🚫 Sem Permissão\n\n${errorMsg}\n\nApenas o solicitante ou administradores podem excluir esta solicitação.`);
       } else if (error.response?.status === 400) {
-        alert(error.response?.data?.message || 'Não é possível excluir solicitações finalizadas.');
+        alert(`⚠️ Ação Não Permitida\n\n${errorMsg}\n\nNão é possível excluir solicitações finalizadas.`);
       } else if (error.response?.status === 404) {
-        alert('Solicitação não encontrada.');
+        alert(`❓ Não Encontrado\n\n${errorMsg}\n\nA solicitação foi removida da lista.`);
         // Remove da lista local mesmo assim
         setSolicitacoes((prev) => prev.filter((item) => item.id !== solicitacaoId));
       } else {
-        alert('Erro ao excluir solicitação. Tente novamente.');
+        alert(`❌ Erro ao Excluir\n\nStatus: ${error.response?.status || 'desconhecido'}\nMensagem: ${errorMsg}\n\nVerifique o console para mais detalhes.`);
       }
     }
   };
