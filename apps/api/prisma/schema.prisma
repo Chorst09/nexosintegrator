@@ -2070,3 +2070,84 @@ model ProjectB2BConfig {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// === INTEGRAÇÃO PNCP ===
+model LicitacaoPncp {
+  // Campos de identificação PNCP
+  id                          String   @id @default(uuid())
+  numeroControlePncp          String   @unique @map("numero_controle_pncp") // Chave única do PNCP
+  numeroCompra                String?  @map("numero_compra")
+  anoCompra                   Int?     @map("ano_compra")
+  processo                    String?
+  sequencialCompra            Int?     @map("sequencial_compra")
+  
+  // Informações básicas da licitação
+  objetoCompra                String?  @map("objeto_compra")
+  informacaoComplementar      String?  @map("informacao_complementar")
+  valorTotalEstimado          Decimal  @default(0) @map("valor_total_estimado") @db.Decimal(15, 4)
+  valorTotalHomologado        Decimal  @default(0) @map("valor_total_homologado") @db.Decimal(15, 4)
+  srp                         Boolean  @default(false) // Sistema de Registro de Preços
+  
+  // Tipo de instrumento e modalidade
+  tipoInstrumentoConvocatorioId   Int?     @map("tipo_instrumento_convocatorio_id")
+  tipoInstrumentoConvocatorioNome String?  @map("tipo_instrumento_convocatorio_nome")
+  modalidadeId                    Int?     @map("modalidade_id")
+  modalidadeNome                  String?  @map("modalidade_nome")
+  modoDisputaId                   Int?     @map("modo_disputa_id")
+  modoDisputaNome                 String?  @map("modo_disputa_nome")
+  
+  // Situação da licitação
+  situacaoCompraId            Int?     @map("situacao_compra_id")
+  situacaoCompraNome          String?  @map("situacao_compra_nome")
+  
+  // Amparo legal (estrutura JSON)
+  amparoLegal                 Json?    @map("amparo_legal")
+  
+  // Datas importantes
+  dataAberturaProposta        DateTime? @map("data_abertura_proposta")
+  dataEncerramentoProposta    DateTime? @map("data_encerramento_proposta")
+  dataPublicacaoPncp          DateTime? @map("data_publicacao_pncp") @db.Date
+  dataInclusaoPncp            DateTime? @map("data_inclusao_pncp") @db.Date
+  dataAtualizacaoPncp         DateTime? @map("data_atualizacao_pncp") @db.Date
+  
+  // Dados do órgão (estrutura JSON)
+  orgaoEntidade               Json?    @map("orgao_entidade")
+  unidadeOrgao                Json?    @map("unidade_orgao")
+  
+  // Dados do órgão sub-rogado (estrutura JSON)
+  orgaoSubRogado              Json?    @map("orgao_sub_rogado")
+  unidadeSubRogada            Json?    @map("unidade_sub_rogada")
+  
+  // Informações complementares
+  usuarioNome                 String?  @map("usuario_nome")
+  linkSistemaOrigem           String?  @map("link_sistema_origem")
+  justificativaPresencial     String?  @map("justificativa_presencial")
+  
+  // Campos de controle interno
+  origemDados                 String   @default("PNCP_API") @map("origem_dados")
+  statusProcessamento         StatusProcessamentoPncp @default(NOVO) @map("status_processamento")
+  metadataProcessamento       Json?    @map("metadata_processamento")
+  hashVerificacao             String?  @map("hash_verificacao")
+  
+  // Timestamps padrão
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  @@index([numeroControlePncp])
+  @@index([dataPublicacaoPncp])
+  @@index([modalidadeId, modalidadeNome])
+  @@index([situacaoCompraId])
+  @@index([dataAberturaProposta, dataEncerramentoProposta])
+  @@index([valorTotalEstimado])
+  @@index([statusProcessamento, createdAt])
+  @@index([anoCompra])
+  @@map("licitacoes_pncp")
+}
+
+// === ENUMS PARA LICITAÇÕES PNCP ===
+enum StatusProcessamentoPncp {
+  NOVO
+  PROCESSADO
+  ERRO
+  REPROCESSAR
+}
