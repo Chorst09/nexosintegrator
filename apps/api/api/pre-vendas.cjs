@@ -875,14 +875,14 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    // TEMPORÁRIO: Permitir exclusão independente do status
-    // TODO: Reativar validação após limpeza de orçamentos antigos
-    // if (!isAdmin && solicitacao.status === 'FINALIZADA') {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: 'Não é possível excluir solicitações finalizadas. Contate um administrador.'
-    //   });
-    // }
+    // ADMIN pode excluir qualquer orçamento, independente do status
+    // Usuário comum só pode excluir se não estiver finalizada
+    if (!isAdmin && solicitacao.status === 'FINALIZADA') {
+      return res.status(400).json({
+        success: false,
+        message: 'Não é possível excluir solicitações finalizadas. Contate um administrador.'
+      });
+    }
 
     await prisma.preSalesRequest.delete({
       where: { id }
