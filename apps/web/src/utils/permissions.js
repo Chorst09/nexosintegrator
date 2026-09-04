@@ -35,6 +35,26 @@ export const ROLE_POLICY_MODULES = [
     description: 'Quando ativo, o usuário vê apenas oportunidades criadas por ele.'
   },
   {
+    key: 'simulador',
+    label: 'Simulador',
+    description: 'Acesso às calculadoras de precificação e ferramentas de simulação.'
+  },
+  {
+    key: 'simuladorViewPricing',
+    label: 'Ver Tabelas de Preços (Simulador)',
+    description: 'Permite visualizar tabelas de preços nas calculadoras.'
+  },
+  {
+    key: 'simuladorViewCommissions',
+    label: 'Ver Comissões (Simulador)',
+    description: 'Permite visualizar comissões nas calculadoras.'
+  },
+  {
+    key: 'simuladorViewDRE',
+    label: 'Ver DRE (Simulador)',
+    description: 'Permite visualizar Demonstrativo de Resultados nas calculadoras.'
+  },
+  {
     key: 'manufacturerRegistry',
     label: 'Registro no Fabricante',
     description: 'Gestão de deal registration com fabricantes.'
@@ -68,6 +88,10 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: false,
     ownOpportunitiesOnly: true,
+    simulador: true,
+    simuladorViewPricing: false,
+    simuladorViewCommissions: false,
+    simuladorViewDRE: false,
     manufacturerRegistry: true,
     documentation: true,
     strategicReports: true,
@@ -77,6 +101,7 @@ export const ROLE_ACCESS_POLICY = {
     accessB2B: true,
     accessB2G: false,
     accessPreSales: false,
+    accessSimulador: true,
     accessManagement: false,
     accessAutomation: false
   },
@@ -86,6 +111,10 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: false,
     ownOpportunitiesOnly: true,
+    simulador: true,
+    simuladorViewPricing: false,
+    simuladorViewCommissions: false,
+    simuladorViewDRE: false,
     manufacturerRegistry: false,
     documentation: false,
     strategicReports: false,
@@ -95,6 +124,7 @@ export const ROLE_ACCESS_POLICY = {
     accessB2B: false,
     accessB2G: false,
     accessPreSales: true,
+    accessSimulador: true,
     accessManagement: false,
     accessAutomation: false
   },
@@ -104,6 +134,10 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: true,
     ownOpportunitiesOnly: false,
+    simulador: true,
+    simuladorViewPricing: true,
+    simuladorViewCommissions: true,
+    simuladorViewDRE: true,
     manufacturerRegistry: true,
     documentation: true,
     strategicReports: true,
@@ -113,6 +147,7 @@ export const ROLE_ACCESS_POLICY = {
     accessB2B: true,
     accessB2G: true,
     accessPreSales: true,
+    accessSimulador: true,
     accessManagement: true,
     accessAutomation: true
   },
@@ -122,6 +157,10 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: true,
     ownOpportunitiesOnly: false,
+    simulador: true,
+    simuladorViewPricing: true,
+    simuladorViewCommissions: true,
+    simuladorViewDRE: true,
     manufacturerRegistry: true,
     documentation: true,
     strategicReports: true,
@@ -131,6 +170,7 @@ export const ROLE_ACCESS_POLICY = {
     accessB2B: true,
     accessB2G: true,
     accessPreSales: true,
+    accessSimulador: true,
     accessManagement: true,
     accessAutomation: true
   }
@@ -183,6 +223,7 @@ export const getUserAccess = (user) => {
       accessB2B: true,
       accessB2G: true,
       accessPreSales: true,
+      accessSimulador: true,
       accessManagement: true,
       accessAutomation: true
     };
@@ -192,6 +233,7 @@ export const getUserAccess = (user) => {
     accessB2B: user.accessB2B !== undefined ? Boolean(user.accessB2B) : policy.accessB2B,
     accessB2G: user.accessB2G !== undefined ? Boolean(user.accessB2G) : policy.accessB2G,
     accessPreSales: user.accessPreSales !== undefined ? Boolean(user.accessPreSales) : policy.accessPreSales,
+    accessSimulador: user.accessSimulador !== undefined ? Boolean(user.accessSimulador) : policy.accessSimulador,
     accessManagement: user.accessManagement !== undefined ? Boolean(user.accessManagement) : policy.accessManagement,
     accessAutomation: user.accessAutomation !== undefined ? Boolean(user.accessAutomation) : policy.accessAutomation
   };
@@ -220,6 +262,10 @@ export const moduleFromPath = (pathname = '') => {
   }
   if (path.startsWith('/configuracoes')) {
     return 'SETTINGS';
+  }
+
+  if (path.startsWith('/simuladores')) {
+    return 'SIMULADOR';
   }
 
   if (
@@ -282,13 +328,20 @@ export const canAccessModule = (user, moduleName) => {
   if (mod === 'SETTINGS') {
     return role === ROLES.ADMIN || role === ROLES.MASTER;
   }
+  if (mod === 'SIMULADOR') {
+    return Boolean(getUserPermissions(user).simulador);
+  }
 
   const access = getUserAccess(user);
   if (mod === 'B2B') return access.accessB2B;
   if (mod === 'B2G') return access.accessB2G;
   if (mod === 'PRE_SALES') return access.accessPreSales;
+  if (mod === 'SIMULADOR') return access.accessSimulador;
   if (mod === 'GESTAO' || mod === 'MANAGEMENT') return access.accessManagement;
   if (mod === 'AUTOMATION' || mod === 'AUTOMACOES') return access.accessAutomation;
+
+  return false;
+};
 
   return false;
 };

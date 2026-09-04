@@ -34,6 +34,11 @@ export interface RolePermissions {
   canManageUsers: boolean;
   canEditCommissions: boolean; // ← IMPORTANTE: Controla acesso a Tabela de Preços, Comissões e DRE
   canAccessGestaoOportunidades: boolean;
+  // Simulador specific permissions
+  canAccessSimulador: boolean;
+  canViewSimuladorPricing: boolean;
+  canViewSimuladorCommissions: boolean;
+  canViewSimuladorDRE: boolean;
 }
 
 const normalizeRoleToken = (value: string): string =>
@@ -96,6 +101,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: true,
     canEditCommissions: true, // ✅ MASTER vê Tabela de Preços, Comissões e DRE
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: true,
+    canViewSimuladorCommissions: true,
+    canViewSimuladorDRE: true,
   },
   admin: {
     canAccessCalculators: true,
@@ -108,6 +117,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: true,
     canEditCommissions: true, // ✅ ADMIN vê Tabela de Preços, Comissões e DRE
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: true,
+    canViewSimuladorCommissions: true,
+    canViewSimuladorDRE: true,
   },
   manager: {
     canAccessCalculators: true,
@@ -120,6 +133,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: true, // ✅ MANAGER vê Tabela de Preços, Comissões e DRE
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: true,
+    canViewSimuladorCommissions: true,
+    canViewSimuladorDRE: true,
   },
   director: {
     canAccessCalculators: true,
@@ -132,6 +149,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false, // ❌ DIRECTOR não vê tabs avançadas
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
   user: {
     canAccessCalculators: true,
@@ -144,6 +165,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false, // ❌ USER não vê tabs avançadas
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
   pre_sales: {
     canAccessCalculators: true,
@@ -156,6 +181,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false, // ❌ PRE_SALES não vê tabs avançadas
     canAccessGestaoOportunidades: false,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
   seller: {
     canAccessCalculators: true,
@@ -168,6 +197,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false, // ❌ SELLER não vê tabs avançadas
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
   pending: {
     canAccessCalculators: false,
@@ -180,6 +213,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false,
     canAccessGestaoOportunidades: false,
+    canAccessSimulador: false,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
 };
 

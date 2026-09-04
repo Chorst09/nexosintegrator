@@ -133,6 +133,7 @@ const MODULE_ACCESS_ITEMS = [
   { key: 'accessB2B', label: 'B2B', description: 'CRM comercial, empresas, oportunidades e propostas.' },
   { key: 'accessB2G', label: 'B2G', description: 'Licitações, editais, análises e pipeline de governo.' },
   { key: 'accessPreSales', label: 'Pré-vendas', description: 'Solicitações, orçamentos, calculadoras e apoio técnico.' },
+  { key: 'accessSimulador', label: 'Simulador', description: 'Calculadoras avançadas de precificação e simulações.' },
   { key: 'accessManagement', label: 'Gestão', description: 'Projetos, kickoff, pós-venda e relatórios operacionais.' },
   { key: 'accessAutomation', label: 'Automações', description: 'Fluxos automáticos, integrações e jornadas.' }
 ];
@@ -145,6 +146,7 @@ const constrainAccessToCompanyModules = (access, company) => {
     accessB2B: Boolean(access.accessB2B && companyAccess.accessB2B),
     accessB2G: Boolean(access.accessB2G && companyAccess.accessB2G),
     accessPreSales: Boolean(access.accessPreSales && companyAccess.accessPreSales),
+    accessSimulador: Boolean(access.accessSimulador && companyAccess.accessSimulador),
     accessManagement: Boolean(access.accessManagement && companyAccess.accessManagement),
     accessAutomation: Boolean(access.accessAutomation && companyAccess.accessAutomation)
   };

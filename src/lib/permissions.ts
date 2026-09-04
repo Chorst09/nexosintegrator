@@ -26,6 +26,11 @@ export interface RolePermissions {
   canManageUsers: boolean;
   canEditCommissions: boolean;
   canAccessGestaoOportunidades: boolean;
+  // Simulador specific permissions
+  canAccessSimulador: boolean;
+  canViewSimuladorPricing: boolean;
+  canViewSimuladorCommissions: boolean;
+  canViewSimuladorDRE: boolean;
 }
 
 const normalizeRoleToken = (value: string): string =>
@@ -70,6 +75,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: true,
     canEditCommissions: true,
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: true,
+    canViewSimuladorCommissions: true,
+    canViewSimuladorDRE: true,
   },
   director: {
     canAccessCalculators: true,
@@ -82,6 +91,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false,
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: true,
+    canViewSimuladorCommissions: true,
+    canViewSimuladorDRE: true,
   },
   user: {
     canAccessCalculators: true,
@@ -94,6 +107,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false,
     canAccessGestaoOportunidades: true,
+    canAccessSimulador: true,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
   pending: {
     canAccessCalculators: false,
@@ -106,6 +123,10 @@ export const ROLE_PERMISSIONS: Record<CanonicalUserRole, RolePermissions> = {
     canManageUsers: false,
     canEditCommissions: false,
     canAccessGestaoOportunidades: false,
+    canAccessSimulador: false,
+    canViewSimuladorPricing: false,
+    canViewSimuladorCommissions: false,
+    canViewSimuladorDRE: false,
   },
 };
 
