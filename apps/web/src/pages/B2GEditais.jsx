@@ -90,6 +90,7 @@ import { B2GOpportunityDetailModal, B2GOpportunityEditModal, parseB2GData } from
 import B2GOpportunityAlerts from '../components/B2GOpportunityAlerts';
 import PresentationControls from '../components/PresentationControls';
 import PipelineDashboardModel from '../components/PipelineDashboardModel';
+import FiltrosTIAvancados from '../components/FiltrosTIAvancados';
 import { buildApiUrl, getAuthHeaders } from '../config/api';
 import { isCompanyInClientType, isOpportunityInClientType } from '../utils/businessModel';
 import { hydrateActivityFlow } from '../utils/activityFlow';
@@ -1525,6 +1526,11 @@ export default function B2GEditais() {
     organization: '',
     stateCode: '',
     modality: ''
+  });
+  const [filtrosTI, setFiltrosTI] = useState({
+    categoriasSelecionadas: [],
+    termoLivre: '',
+    ativo: false
   });
   const [dashboardTemperatureFilter, setDashboardTemperatureFilter] = useState('ALL');
   const [dashboardPhaseFilter, setDashboardPhaseFilter] = useState('ALL');
@@ -5792,6 +5798,54 @@ export default function B2GEditais() {
     );
   };
 
+  // Função para buscar editais com filtros TI
+  const handleBuscarComFiltrosTI = async (filtros) => {
+    try {
+      setLoading(true);
+      
+      const payload = {
+        categorias: filtros.categoriasSelecionadas,
+        termoLivre: filtros.termoLivre,
+        uf: advancedFilters.stateCode,
+        pagina: 1,
+        tamanhoPagina: 50
+      };
+
+      const response = await fetch(buildApiUrl('/api/filtros-ti/buscar'), {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Integrar resultados com o sistema existente
+          const editaisFiltrados = result.data.editais || [];
+          setNotices(editaisFiltrados);
+          
+          setFeedback({
+            type: 'success',
+            message: `Encontrados ${editaisFiltrados.length} editais com filtros TI aplicados`
+          });
+        }
+      } else {
+        throw new Error('Erro na busca com filtros TI');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar com filtros TI:', error);
+      setFeedback({
+        type: 'error',
+        message: 'Erro ao aplicar filtros TI. Usando busca tradicional.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {feedback.message && (
@@ -5813,7 +5867,22 @@ export default function B2GEditais() {
           Carregando módulo B2G...
         </div>
       ) : activeTab === 'dashboard' ? (
-        renderB2GStrategicDashboardV2()
+        <div className="space-y-4">
+          {/* Filtros TI Avançados */}
+          <FiltrosTIAvancados
+            categoriasSelecionadas={filtrosTI.categoriasSelecionadas}
+            termoLivre={filtrosTI.termoLivre}
+            ativo={filtrosTI.ativo}
+            onFiltrosChange={(novosFiltros) => {
+              setFiltrosTI(novosFiltros);
+              // Aplicar filtros TI quando ativo
+              if (novosFiltros.ativo && (novosFiltros.categoriasSelecionadas.length > 0 || novosFiltros.termoLivre.trim())) {
+                handleBuscarComFiltrosTI(novosFiltros);
+              }
+            }}
+          />
+          {renderB2GStrategicDashboardV2()}
+        </div>
       ) : activeTab === 'leads' ? (
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
