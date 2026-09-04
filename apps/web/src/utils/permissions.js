@@ -343,9 +343,6 @@ export const canAccessModule = (user, moduleName) => {
   return false;
 };
 
-  return false;
-};
-
 export const getDefaultRouteForUser = (user) => {
   if (!user) return '/login';
   const role = toCanonicalRole(user.role);
