@@ -5,7 +5,7 @@
  * Fontes:
  * 1. PNCP - Portal Nacional de Contratações Públicas (API oficial)
  * 2. ComprasNet - Portal de Compras do Governo Federal
- * 3. Licitações-e (Banco do Brasil)
+ * 3. Imprensa Nacional (DOU) - avisos, editais e contratações da Seção 3
  */
 
 const express = require('express');
@@ -212,12 +212,38 @@ const isWithinDateRange = (dateValue, dataInicio, dataFim) => {
   return true;
 };
 
+const CLOSED_STATUS_PATTERN = /(encerrad|cancelad|revogad|suspens|anulad|fracassad|desert|homologad|adjudicad)/i;
+
+const parseDateTime = (value, endOfDay = false) => {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const brMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  const normalized = brMatch
+    ? `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}T${brMatch[4] || (endOfDay ? '23' : '00')}:${brMatch[5] || (endOfDay ? '59' : '00')}:${brMatch[6] || (endOfDay ? '59' : '00')}`
+    : (/^\d{4}-\d{2}-\d{2}$/.test(text.slice(0, 10)) && text.length <= 10
+      ? `${text.slice(0, 10)}T${endOfDay ? '23:59:59' : '00:00:00'}`
+      : text);
+  const date = new Date(normalized);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const isEditalVigente = (item) => {
+  const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
+  if (encerramento) return encerramento.getTime() >= Date.now();
+
+  const status = String(item?.status || '').trim().toLowerCase();
+  if (!status) return true;
+  return !CLOSED_STATUS_PATTERN.test(status);
+};
+
 // ─── PNCP - Publicações ───────────────────────────────────────────────────────
 
 const PNCP_BASE = 'https://pncp.gov.br/api/consulta/v1';
 const DADOS_ABERTOS_CONTRATACOES_URL = 'https://dadosabertos.compras.gov.br/modulo-contratacoes/1_consultarContratacoes_PNCP_14133';
 const PORTAL_TRANSPARENCIA_API_BASE = 'https://api.portaldatransparencia.gov.br/api-de-dados';
 const TRANSPARENCIA_CURITIBA_URL = 'https://www.transparencia.curitiba.pr.gov.br/sgp/licitacoes.aspx';
+const DOU_SEARCH_URL = 'https://www.in.gov.br/consulta/-/buscar/dou';
 
 const DADOS_ABERTOS_PNCP_MODALIDADES = {
   licitacao: [5, 6],
@@ -262,6 +288,94 @@ const sourceId = (...parts) => parts
   .filter(Boolean)
   .join('-')
   .slice(0, 180);
+
+const splitSearchTerms = (value) => String(value || '')
+  .split(/[\n,]+/)
+  .map((term) => term.trim())
+  .filter((term) => term.length >= 3)
+  .filter((term, index, terms) => terms.findIndex((other) => other.toLocaleLowerCase('pt-BR') === term.toLocaleLowerCase('pt-BR')) === index);
+
+const extractDouDeadline = (content, publicationDate) => {
+  const publicationTs = parseDateTime(publicationDate)?.getTime();
+  const dates = [...String(content || '').matchAll(/\b(\d{2}\/\d{2}\/\d{4})\b/g)]
+    .map((match) => parseDateTime(match[1], true))
+    .filter(Boolean)
+    .filter((date) => !publicationTs || (date.getTime() >= publicationTs && date.getTime() <= publicationTs + (370 * 24 * 60 * 60 * 1000)));
+  return dates[0]?.toISOString() || null;
+};
+
+// A busca do DOU retorna os resultados dentro de um script JSON da página oficial.
+async function buscarDOU({ objeto, termos = '', dataInicio, dataFim, tamanhoPagina = 20 }) {
+  const resultados = [];
+  const errors = [];
+  const limit = clampNumber(tamanhoPagina, 10, 100, 20);
+  const start = dataInicio || diasAtras(30);
+  const end = dataFim || hoje();
+  const terms = splitSearchTerms(termos);
+  if (objeto?.trim()) terms.unshift(objeto.trim());
+  const queries = [...new Set(terms.length ? terms : ['licitação'])].slice(0, 12);
+
+  for (const query of queries) {
+    if (resultados.length >= limit) break;
+    try {
+      const url = new URL(DOU_SEARCH_URL);
+      url.searchParams.set('q', query);
+      url.searchParams.set('s', 'do3');
+      url.searchParams.set('exactDate', 'personalizado');
+      url.searchParams.set('sortType', '0');
+      url.searchParams.set('delta', String(Math.min(100, Math.max(20, limit))));
+      url.searchParams.set('publishFrom', toBRDate(start).replaceAll('/', '-'));
+      url.searchParams.set('publishTo', toBRDate(end).replaceAll('/', '-'));
+
+      const res = await fetchWithRetry(url.toString(), {
+        headers: {
+          Accept: 'text/html,application/xhtml+xml',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
+          'User-Agent': 'Mozilla/5.0 (compatible; NexosCRM/2.0)'
+        }
+      }, { timeoutMs: 18000, retries: 1 });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const html = await res.text();
+      const jsonText = html.match(/<script[^>]+id=["'][^"']*BuscaDouPortlet_params["'][^>]*>\s*({[\s\S]*?})\s*<\/script>/i)?.[1];
+      const items = jsonText ? JSON.parse(jsonText).jsonArray : [];
+      if (!Array.isArray(items)) throw new Error('resposta sem resultados estruturados');
+
+      for (const item of items) {
+        const title = cleanHtmlText(item.title || 'Publicação no DOU');
+        const content = cleanHtmlText(item.content || '');
+        const publicationDate = normalizeDateText(item.pubDate) || item.pubDate || null;
+        if (!matchObjeto(`${title} ${content}`, query)) continue;
+        if (!isWithinDateRange(publicationDate, dataInicio, dataFim)) continue;
+
+        resultados.push({
+          id: `dou-${item.classPK || sourceId(item.urlTitle, title, item.pubDate)}`,
+          fonte: 'Imprensa Nacional (DOU)',
+          fonteLogo: '📰',
+          titulo: title,
+          orgao: Array.isArray(item.hierarchyList) ? item.hierarchyList.join(' / ') : cleanHtmlText(item.hierarchyStr || ''),
+          modalidade: cleanHtmlText(item.artType || 'Publicação DOU'),
+          uf: '',
+          municipio: '',
+          valor: null,
+          dataPublicacao: publicationDate,
+          dataAbertura: null,
+          dataEncerramento: extractDouDeadline(content, publicationDate),
+          numero: title.match(/\bN[ºo.]?\s*([\d./-]+)/i)?.[1] || '',
+          ano: String(item.pubDate || '').match(/\b(20\d{2})\b/)?.[1] || '',
+          link: item.urlTitle ? `https://www.in.gov.br/web/dou/-/${item.urlTitle}` : DOU_SEARCH_URL,
+          status: 'Publicado no DOU',
+          resumo: content
+        });
+        if (resultados.length >= limit) break;
+      }
+    } catch (err) {
+      errors.push(`Imprensa Nacional (DOU): ${err.message || 'falha na consulta'}`);
+    }
+  }
+
+  return { resultados: deduplicar(resultados), errors };
+}
 
 async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20, dataInicio, dataFim }) {
   const resultados = [];
@@ -1128,6 +1242,15 @@ router.get('/fontes', auth, (req, res) => {
         url: 'https://comprasnet.gov.br'
       },
       {
+        id: 'dou',
+        nome: 'Imprensa Nacional (DOU)',
+        descricao: 'Avisos, editais e contratações da Seção 3 do Diário Oficial da União',
+        logo: '📰',
+        tipo: 'federal',
+        status: 'ativo',
+        url: 'https://www.in.gov.br'
+      },
+      {
         id: 'curitiba-ecompras',
         nome: 'e-Compras Curitiba',
         descricao: 'Portal de Compras Eletrônicas do Município de Curitiba',
@@ -1229,8 +1352,10 @@ router.get('/search', auth, async (req, res) => {
     fontes = 'pncp,comprasnet',
     ordem = 'data_desc',
     incluirPropostas = 'true',
+    apenasVigentes = 'false',
     cidade = '',
-    codigoOrgao = ''
+    codigoOrgao = '',
+    termos = ''
   } = req.query;
 
   const fontesAtivas = String(fontes).toLowerCase().split(',').map(f => f.trim());
@@ -1257,6 +1382,13 @@ router.get('/search', auth, async (req, res) => {
       promises.push(
         buscarComprasNet({ objeto, uf, pagina: Number(pagina), tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
           .catch(err => ({ resultados: [], errors: [`ComprasNet: ${err.message}`] }))
+      );
+    }
+
+    if (fontesAtivas.includes('dou')) {
+      promises.push(
+        buscarDOU({ objeto, termos, tamanhoPagina: Number(tamanhoPagina), dataInicio, dataFim })
+          .catch(err => ({ resultados: [], errors: [`Imprensa Nacional (DOU): ${err.message}`] }))
       );
     }
 
@@ -1296,11 +1428,14 @@ router.get('/search', auth, async (req, res) => {
     }
 
     const deduplicados = deduplicar(todosResultados);
-    const ordenados = ordenar(deduplicados, ordem);
+    const filtrados = apenasVigentes === 'true'
+      ? deduplicados.filter(isEditalVigente)
+      : deduplicados;
+    const ordenados = ordenar(filtrados, ordem);
 
     // Estatísticas por fonte
     const porFonte = {};
-    for (const item of deduplicados) {
+    for (const item of filtrados) {
       porFonte[item.fonte] = (porFonte[item.fonte] || 0) + 1;
     }
 

@@ -35,6 +35,7 @@ const FONTES_CONFIG = [
   { id: 'contratacoes14133', nome: 'Contratações Lei 14.133', descricao: 'Contratações PNCP via Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '⚖️', defaultActive: false },
   { id: 'arp', nome: 'Atas de Registro de Preço', descricao: 'Atas ARP vigentes do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📋', defaultActive: false },
   { id: 'pregoes', nome: 'Pregões (SIASG)', descricao: 'Pregões legados do Compras.gov.br', metodo: 'API REST', sync: 'Tempo Real', icon: '📢', defaultActive: false },
+  { id: 'dou', nome: 'Imprensa Nacional (DOU)', descricao: 'Avisos, editais e contratações publicados no Diário Oficial da União', metodo: 'Consulta oficial', sync: 'Tempo Real', icon: '📰' },
   { id: 'curitiba-ecompras', nome: 'e-Compras Curitiba', descricao: 'Portal de Compras Eletrônicas do Município de Curitiba', metodo: 'Portal público', sync: 'Sob demanda', icon: '🏙️', defaultActive: false }
 ];
 
@@ -76,7 +77,7 @@ const ORDENS = [
 ];
 
 const CATEGORIAS_PRODUTO_TI = [
-  { id: 'microcomputadores', label: 'Microcomputadores', keywords: ['microcomputador', 'computador', 'desktop', 'cpu', 'gabinete'] },
+  { id: 'microcomputadores', label: 'Computadores e Desktops', keywords: ['microcomputador', 'microcomputadores', 'computador', 'computadores', 'desktop', 'pc', 'computador de mesa', 'all in one', 'all-in-one', 'cpu', 'gabinete'] },
   { id: 'workstations', label: 'Workstations', keywords: ['workstation', 'estação de trabalho', 'estacao de trabalho'] },
   { id: 'monitores', label: 'Monitores', keywords: ['monitor', 'display'] },
   { id: 'teclados', label: 'Teclados', keywords: ['teclado'] },
@@ -91,11 +92,11 @@ const CATEGORIAS_PRODUTO_TI = [
   { id: 'roteadores', label: 'Roteadores', keywords: ['roteador', 'router'] },
   { id: 'impressoras', label: 'Impressoras', keywords: ['impressora', 'printer', 'scanner', 'multifuncional', 'plotter'] },
   { id: 'ups_nobreak', label: 'UPS/Nobreaks', keywords: ['nobreak', 'no-break', 'fonte ininterrupta'] },
-  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'ssd', 'nas', 'disco rígido', 'disco rigido', 'disco sólido'] },
+  { id: 'armazenamento', label: 'Armazenamento', keywords: ['storage', 'ssd', 'hd', 'nas', 'san', 'backup', 'disco rígido', 'disco rigido', 'disco sólido', 'disco solido'] },
   { id: 'firewall', label: 'Firewalls', keywords: ['firewall', 'firewall utm', 'utm'] },
-  { id: 'software', label: 'Software/Licenças', keywords: ['software', 'licença de uso', 'licenca de uso'] },
+  { id: 'software', label: 'Software/Licenças', keywords: ['software', 'licença de uso', 'licenca de uso', 'saas', 'sistema de informação', 'sistema de informacao'] },
   { id: 'cameras', label: 'Câmeras/CFTV', keywords: ['cftv', 'videomonitoramento', 'câmera de segurança', 'camera de seguranca'] },
-  { id: 'infra_rede', label: 'Infra de Rede', keywords: ['rack', 'patch panel', 'cabeamento estruturado', 'fibra óptica', 'fibra optica'] },
+  { id: 'infra_rede', label: 'Infra de Rede', keywords: ['rack', 'patch panel', 'cabeamento estruturado', 'fibra óptica', 'fibra optica', 'cabo de rede', 'cabeamento de rede'] },
   { id: 'equipamento_informatica', label: 'Equip. de Informática', keywords: ['informática', 'informatica', 'suprimento de informática', 'equipamento de ti'] },
 ];
 
@@ -105,6 +106,31 @@ const kwMatch = (texto, kw) => {
     try { return new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(texto); } catch { return texto.includes(kw); }
   }
   return texto.includes(kw);
+};
+
+const STATUS_ENCERRADO_PATTERN = /(encerrad|cancelad|revogad|suspens|anulad|fracassad|desert|homologad|adjudicad)/i;
+
+const parseDateTime = (value, endOfDay = false) => {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const brMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  const normalized = brMatch
+    ? `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}T${brMatch[4] || (endOfDay ? '23' : '00')}:${brMatch[5] || (endOfDay ? '59' : '00')}:${brMatch[6] || (endOfDay ? '59' : '00')}`
+    : (/^\d{4}-\d{2}-\d{2}$/.test(text.slice(0, 10)) && text.length <= 10
+      ? `${text.slice(0, 10)}T${endOfDay ? '23:59:59' : '00:00:00'}`
+      : text);
+  const date = new Date(normalized);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const isEditalVigente = (item) => {
+  const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
+  if (encerramento) return encerramento.getTime() >= Date.now();
+
+  const status = String(item?.status || '').trim().toLowerCase();
+  if (!status) return true;
+  return !STATUS_ENCERRADO_PATTERN.test(status);
 };
 
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
@@ -282,7 +308,7 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
   }
 }
 
-async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20, incluirPropostas = true }) {
+async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20, incluirPropostas = true, apenasVigentes = false }) {
   const url = new URL(buildApiUrl('/b2g-search/search'), window.location.origin);
   url.searchParams.set('fontes', 'pncp');
   url.searchParams.set('objeto', objeto || '');
@@ -291,6 +317,7 @@ async function buscarPNCPProxy({ objeto, uf, dataInicio, dataFim, tamanhoPagina 
   url.searchParams.set('dataFim', dataFim || '');
   url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(tamanhoPagina), 50)));
   url.searchParams.set('incluirPropostas', incluirPropostas ? 'true' : 'false');
+  url.searchParams.set('apenasVigentes', apenasVigentes ? 'true' : 'false');
 
   const res = await fetch(url.toString(), {
     headers: getAuthHeaders(),
@@ -544,11 +571,15 @@ async function buscarFonteB2GSearch(fonte, params) {
   const url = new URL(buildApiUrl('/b2g-search/search'), window.location.origin);
   url.searchParams.set('fontes', fonte);
   url.searchParams.set('objeto', params.objeto || '');
+  if (Array.isArray(params.termosProduto) && params.termosProduto.length > 0) {
+    url.searchParams.set('termos', params.termosProduto.join(','));
+  }
   url.searchParams.set('uf', params.uf || '');
   url.searchParams.set('cidade', params.cidade || '');
   url.searchParams.set('dataInicio', params.dataInicio || '');
   url.searchParams.set('dataFim', params.dataFim || '');
   url.searchParams.set('ordem', params.ordem || 'data_desc');
+  url.searchParams.set('apenasVigentes', params.apenasVigentes ? 'true' : 'false');
   url.searchParams.set('tamanhoPagina', Math.max(10, Math.min(Number(params.tamanhoPagina || 50), 100)));
 
   const res = await fetch(url.toString(), {
@@ -564,6 +595,7 @@ async function buscarFonteB2GSearch(fonte, params) {
 
   if (data.length === 0 && Array.isArray(payload?.erros) && payload.erros.length > 0) {
     console.debug(`${fonte} retornou sem resultados nesta consulta:`, payload.erros.slice(0, 2).join('; '));
+    if (fonte === 'dou') throw new Error(payload.erros.slice(0, 2).join('; '));
   }
 
   return data;
@@ -755,7 +787,7 @@ function CardEdital({
   onToggleGerenciada,
   onAbrirSalvarLead
 }) {
-  const vigente = item.status && !['encerrado', 'cancelado', 'revogado'].includes(item.status.toLowerCase());
+  const vigente = isEditalVigente(item);
 
   return (
     <div className={`bg-white dark:bg-slate-800/60 rounded-xl shadow-sm border hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition duration-200 overflow-hidden group ${vigente ? 'border-slate-200 dark:border-slate-700' : 'border-slate-200 dark:border-slate-700 opacity-80'}`}>
@@ -1209,8 +1241,7 @@ export default function PortalBusca() {
   // Filtro local por cidade e vigente (client-side após busca)
   const resultadosFiltrados = resultados.filter(item => {
     if (apenasVigentes) {
-      const status = String(item.status || '').toLowerCase();
-      if (['encerrado', 'cancelado', 'revogado'].includes(status)) return false;
+      if (!isEditalVigente(item)) return false;
     }
     if (cidade.trim()) {
       const mun = String(item.municipio || '').toLowerCase();
@@ -1266,6 +1297,7 @@ export default function PortalBusca() {
 
       const params = {
         objeto: objetoFinal,
+        termosProduto: [...termosCategorias, ...termosCustom],
         uf,
         cidade,
         dataInicio,
@@ -1304,6 +1336,9 @@ export default function PortalBusca() {
       }
       if (fontesAtivas.includes('pregoes')) {
         promises.push(executarFonte('Pregões', buscarPregoes(params)));
+      }
+      if (fontesAtivas.includes('dou')) {
+        promises.push(executarFonte('Imprensa Nacional (DOU)', buscarFonteB2GSearch('dou', { ...params, objeto: objeto.trim() })));
       }
       if (fontesAtivas.includes('curitiba-ecompras')) {
         promises.push(executarFonte('e-Compras Curitiba', buscarCuritibaECompras(params)));

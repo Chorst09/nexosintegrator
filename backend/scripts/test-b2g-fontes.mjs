@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
 import crypto from 'node:crypto';
 
 const baseURL = (process.env.B2G_TEST_BASE_URL || 'http://127.0.0.1:3001').replace(/\/$/, '');
@@ -79,6 +80,19 @@ const tests = [
     path: '/api/b2g-search/search?fontes=pncp&tamanhoPagina=10&incluirPropostas=false',
     auth: true,
     validate: body => `${requireResults(body, 'PNCP Oficial').length} resultados`
+  },
+  {
+    label: 'Imprensa Nacional (DOU)',
+    path: '/api/b2g-search/search?fontes=dou&termos=computador,desktop,notebook&dataInicio=2025-05-01&dataFim=2025-05-31&tamanhoPagina=10',
+    auth: true,
+    validate: body => {
+      const data = requireResults(body, 'Imprensa Nacional (DOU)');
+      const invalid = data.find(item => item.fonte !== 'Imprensa Nacional (DOU)' || !item.link?.includes('in.gov.br/web/dou/-/'));
+      if (invalid) throw new Error('DOU retornou item sem fonte ou link oficial');
+      const unrelated = data.find(item => !/computador|desktop|notebook/i.test(`${item.titulo || ''} ${item.resumo || ''}`));
+      if (unrelated) throw new Error('DOU retornou item fora das palavras-chave TI informadas');
+      return `${data.length} resultados oficiais`;
+    }
   },
   {
     label: 'ComprasNet',
