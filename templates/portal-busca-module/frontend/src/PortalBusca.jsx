@@ -187,8 +187,8 @@ async function buscarPNCPPublicacao({ objeto, uf, dataInicio, dataFim, tamanhoPa
               municipio: item.unidadeOrgao?.municipioNome || '',
               valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
               dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
-              dataAbertura: item.dataAberturaProposta,
-              dataEncerramento: item.dataEncerramentoProposta,
+              dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+              dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
               numero: item.numeroCompra || '',
               ano: item.anoCompra || '',
               link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
@@ -257,9 +257,9 @@ async function buscarPNCPProposta({ objeto, uf, dataInicio, dataFim, tamanhoPagi
             uf: item.unidadeOrgao?.ufSigla || uf || '',
             municipio: item.unidadeOrgao?.municipioNome || '',
             valor: item.valorTotalEstimado ? Number(item.valorTotalEstimado) : null,
-            dataPublicacao: item.dataPublicacaoPncp,
-            dataAbertura: item.dataAberturaProposta,
-            dataEncerramento: item.dataEncerramentoProposta,
+            dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
+            dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+            dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
             numero: item.numeroCompra || '',
             ano: item.anoCompra || '',
             link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
@@ -578,7 +578,15 @@ const formatCurrency = (value) => {
 
 const formatDate = (value) => {
   if (!value) return null;
-  try { return new Date(value).toLocaleDateString('pt-BR'); } catch { return value; }
+  try {
+    const text = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text) && text.length === 10) {
+      const [year, month, day] = text.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString('pt-BR');
+    }
+    return new Date(text).toLocaleDateString('pt-BR');
+  } catch { return value; }
 };
 
 const deduplicar = (items) => {

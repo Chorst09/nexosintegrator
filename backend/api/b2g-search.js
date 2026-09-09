@@ -219,60 +219,42 @@ const parseDateTime = (value, endOfDay = false) => {
   const text = String(value).trim();
   if (!text) return null;
   const brMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
-  const normalized = brMatch
-    ? `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}T${brMatch[4] || (endOfDay ? '23' : '00')}:${brMatch[5] || (endOfDay ? '59' : '00')}:${brMatch[6] || (endOfDay ? '59' : '00')}`
-    : (/^\d{4}-\d{2}-\d{2}$/.test(text.slice(0, 10)) && text.length <= 10
-      ? `${text.slice(0, 10)}T${endOfDay ? '23:59:59' : '00:00:00'}`
-      : text);
-  const date = new Date(normalized);
+  if (brMatch) {
+    const iso = `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}T${brMatch[4] || (endOfDay ? '23' : '00')}:${brMatch[5] || (endOfDay ? '59' : '00')}:${brMatch[6] || (endOfDay ? '59' : '00')}`;
+    const date = new Date(iso);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text) && text.length === 10) {
+    const [year, month, day] = text.split('-').map(Number);
+    const date = new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  const date = new Date(text);
   return Number.isFinite(date.getTime()) ? date : null;
 };
 
 const isEditalVigente = (item) => {
-  // 1. PRIORIDADE MÁXIMA: Se tem data de encerramento, só ela decide
-  const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
-  
-  if (encerramento) {
-    return encerramento.getTime() >= Date.now();
-  }
+  if (!item) return false;
 
-  // 2. SEM DATA DE ENCERRAMENTO: Ser mais rigoroso
-  // Verificar se tem data de publicação/abertura RECENTE (últimos 6 meses)
-  const dataReferencia = parseDateTime(
-    item?.dataPublicacao || item?.dataAbertura || item?.dataAberturaProposta, 
-    false
-  );
-  
-  if (dataReferencia) {
-    // Editais com mais de 6 meses são considerados não vigentes
-    const seisMesesAtras = Date.now() - (6 * 30 * 24 * 60 * 60 * 1000);
-    if (dataReferencia.getTime() < seisMesesAtras) {
-      return false;
-    }
-  }
-
-  // 3. Verificar status - só considera vigente se status for explicitamente ativo
   const status = String(item?.status || '').trim().toLowerCase();
-  
-  if (!status) {
-    return false;
+  if (CLOSED_STATUS_PATTERN.test(status)) return false;
+
+  const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
+  if (encerramento) return encerramento.getTime() >= Date.now();
+
+  const abertura = parseDateTime(item?.dataAbertura || item?.dataAberturaProposta, false);
+  if (abertura && abertura.getTime() >= Date.now()) return true;
+
+  const publicacao = parseDateTime(item?.dataPublicacao, false);
+  if (publicacao) {
+    const DOZE_MESES = 12 * 30 * 24 * 60 * 60 * 1000;
+    if (publicacao.getTime() < Date.now() - DOZE_MESES) return false;
   }
-  
-  // 4. Status deve indicar que está aberto/ativo
-  const statusAtivo = /\b(aberto|ativo|em\s*andamento|vigente|publicado)\b/i.test(status);
-  const statusEncerrado = CLOSED_STATUS_PATTERN.test(status);
-  
-  // Se tem status de encerrado, definitivamente não vigente
-  if (statusEncerrado) {
-    return false;
-  }
-  
-  // Se não tem data de referência E não tem status ativo explícito, não vigente
-  if (!dataReferencia && !statusAtivo) {
-    return false;
-  }
-  
-  return true;
+
+  const STATUS_ATIVO = /\b(aberto|ativo|em\s*(andamento|proposta|andamento|lance|pregao|sessao|sessao\s+publica)|vigente|publicado|divulgac|recebiment|recebendo|proposta|pregao|lancamento|em\s+pregao|aberta|lanca|edicao|aberto\s+para|novos?|interesse|selecao)\b/i.test(status);
+  const statusFiltro = !status || STATUS_ATIVO;
+
+  return statusFiltro;
 };
 
 // ─── PNCP - Publicações ───────────────────────────────────────────────────────
@@ -438,8 +420,8 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
       municipio: item.unidadeOrgao?.municipioNome || '',
       valor: formatCurrency(item.valorTotalEstimado),
       dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
-      dataAbertura: item.dataAberturaProposta,
-      dataEncerramento: item.dataEncerramentoProposta,
+      dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+      dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
       numero: item.numeroCompra || '',
       ano: item.anoCompra || '',
       numeroControlePNCP: item.numeroControlePNCP || '',
@@ -508,9 +490,9 @@ async function buscarPNCPProposta({ objeto, uf, pagina = 1, tamanhoPagina = 20, 
         uf: item.unidadeOrgao?.ufSigla || uf || '',
         municipio: item.unidadeOrgao?.municipioNome || '',
         valor: formatCurrency(item.valorTotalEstimado),
-        dataPublicacao: item.dataPublicacaoPncp,
-        dataAbertura: item.dataAberturaProposta,
-        dataEncerramento: item.dataEncerramentoProposta,
+        dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
+        dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+        dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
         numero: item.numeroCompra || '',
         ano: item.anoCompra || '',
         numeroControlePNCP: item.numeroControlePNCP || '',
@@ -554,9 +536,9 @@ const normalizeDadosAbertosPNCP = (item, { objeto, uf }) => {
     uf: itemUf,
     municipio: item.unidadeOrgaoMunicipioNome || '',
     valor: formatCurrency(item.valorTotalEstimado),
-    dataPublicacao: item.dataPublicacaoPncp || null,
-    dataAbertura: item.dataAberturaPropostaPncp || null,
-    dataEncerramento: item.dataEncerramentoPropostaPncp || null,
+    dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp || null,
+    dataAbertura: toISODate(item.dataAberturaPropostaPncp) || item.dataAberturaPropostaPncp || null,
+    dataEncerramento: toISODate(item.dataEncerramentoPropostaPncp) || item.dataEncerramentoPropostaPncp || null,
     numero: item.numeroCompra || '',
     ano: item.anoCompraPncp || '',
     numeroControlePNCP: item.numeroControlePNCP || '',
@@ -694,7 +676,7 @@ async function buscarComprasNet({ objeto, uf, pagina = 1, tamanhoPagina = 20, da
           municipio: extractMunicipioFromAddress(item.endereco_entrega_edital),
           valor: formatCurrency(item.valor_estimado_total || item.valor_homologado_total),
           dataPublicacao: item.data_publicacao || null,
-          dataAbertura: item.data_abertura_proposta || null,
+          dataAbertura: toISODate(item.data_abertura_proposta) || item.data_abertura_proposta || null,
           dataEncerramento: null,
           numero: String(item.numero_aviso || ''),
           ano: String(item.id_compra || '').slice(-4),
@@ -984,8 +966,8 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
             municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
             valor: formatCurrency(item.valorTotalEstimado),
             dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
-            dataAbertura: item.dataAberturaProposta,
-            dataEncerramento: item.dataEncerramentoProposta,
+            dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+            dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
             numero: item.numeroCompra || '',
             ano: item.anoCompra || '',
             link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
@@ -1125,9 +1107,9 @@ async function buscarPortalTransparenciaFederalFallback({ objeto, uf, dataInicio
           uf: item.unidadeOrgaoUfSigla || uf || '',
           municipio: item.unidadeOrgaoMunicipioNome || '',
           valor: formatCurrency(item.valorTotalEstimado),
-          dataPublicacao: item.dataPublicacaoPncp || null,
-          dataAbertura: item.dataAberturaPropostaPncp || null,
-          dataEncerramento: item.dataEncerramentoPropostaPncp || null,
+          dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp || null,
+          dataAbertura: toISODate(item.dataAberturaPropostaPncp) || item.dataAberturaPropostaPncp || null,
+          dataEncerramento: toISODate(item.dataEncerramentoPropostaPncp) || item.dataEncerramentoPropostaPncp || null,
           numero: item.numeroCompra || '',
           ano: item.anoCompraPncp || '',
           numeroControlePNCP: item.numeroControlePNCP || '',
