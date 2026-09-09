@@ -1968,7 +1968,22 @@ export default function PortalBusca() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Fontes</p>
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">{fontesAtivas.length} ativas</span>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">{fontesAtivas.length} ativas</span>
+                        <button
+                          onClick={() => {
+                            const todosSelecionados = fontesDisponiveis.every(f => fontesAtivas.includes(f.id));
+                            if (todosSelecionados) {
+                              setFontesAtivas([]);
+                            } else {
+                              setFontesAtivas(fontesDisponiveis.map(f => f.id));
+                            }
+                          }}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 transition-colors px-2 py-0.5 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-md"
+                        >
+                          {fontesDisponiveis.every(f => fontesAtivas.includes(f.id)) ? 'Limpar' : 'Selecionar todos'}
+                        </button>
+                      </div>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {fontesDisponiveis.map(f => (
@@ -1983,7 +1998,22 @@ export default function PortalBusca() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700/70 dark:bg-slate-800/45">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Produtos TI</p>
-                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-bold text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-200">{categoriasProdutoTI.length} selecionados</span>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-bold text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-200">{categoriasProdutoTI.length} selecionados</span>
+                        <button
+                          onClick={() => {
+                            const todosSelecionados = CATEGORIAS_PRODUTO_TI.every(cat => categoriasProdutoTI.includes(cat.id));
+                            if (todosSelecionados) {
+                              setCategoriasProdutoTI([]);
+                            } else {
+                              setCategoriasProdutoTI(CATEGORIAS_PRODUTO_TI.map(cat => cat.id));
+                            }
+                          }}
+                          className="text-[10px] font-bold text-cyan-600 hover:text-cyan-800 dark:text-cyan-400 dark:hover:text-cyan-200 transition-colors px-2 py-0.5 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 rounded-md"
+                        >
+                          {CATEGORIAS_PRODUTO_TI.every(cat => categoriasProdutoTI.includes(cat.id)) ? 'Limpar' : 'Selecionar todos'}
+                        </button>
+                      </div>
                     </div>
                     <div className="max-h-[148px] overflow-y-auto pr-1">
                       <div className="flex flex-wrap gap-2">
