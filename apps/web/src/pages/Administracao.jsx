@@ -76,20 +76,21 @@ const resolveAccessByRole = (role, currentAccess) => {
   const normalizedRole = normalizeRole(role);
 
   if (normalizedRole === 'MASTER') {
-    return { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true };
+    return { accessB2B: true, accessB2G: true, accessPreSales: true, accessSimulador: true, accessManagement: true, accessAutomation: true };
   }
 
   const defaults = {
-    ADMIN: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
-    MANAGER: { accessB2B: true, accessB2G: true, accessPreSales: true, accessManagement: true, accessAutomation: true },
-    DIRECTOR: { accessB2B: true, accessB2G: true, accessPreSales: false, accessManagement: true, accessAutomation: false },
-    PRE_SALES: { accessB2B: false, accessB2G: false, accessPreSales: true, accessManagement: false, accessAutomation: false },
-    USER: { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false }
-  }[normalizedRole] || { accessB2B: true, accessB2G: false, accessPreSales: false, accessManagement: false, accessAutomation: false };
+    ADMIN: { accessB2B: true, accessB2G: true, accessPreSales: true, accessSimulador: true, accessManagement: true, accessAutomation: true },
+    MANAGER: { accessB2B: true, accessB2G: true, accessPreSales: true, accessSimulador: true, accessManagement: true, accessAutomation: true },
+    DIRECTOR: { accessB2B: true, accessB2G: true, accessPreSales: false, accessSimulador: true, accessManagement: true, accessAutomation: false },
+    PRE_SALES: { accessB2B: false, accessB2G: false, accessPreSales: true, accessSimulador: true, accessManagement: false, accessAutomation: false },
+    USER: { accessB2B: true, accessB2G: false, accessPreSales: false, accessSimulador: true, accessManagement: false, accessAutomation: false }
+  }[normalizedRole] || { accessB2B: true, accessB2G: false, accessPreSales: false, accessSimulador: true, accessManagement: false, accessAutomation: false };
 
   const accessB2B = currentAccess.accessB2B !== undefined ? Boolean(currentAccess.accessB2B) : defaults.accessB2B;
   const accessB2G = currentAccess.accessB2G !== undefined ? Boolean(currentAccess.accessB2G) : defaults.accessB2G;
   const accessPreSales = currentAccess.accessPreSales !== undefined ? Boolean(currentAccess.accessPreSales) : defaults.accessPreSales;
+  const accessSimulador = currentAccess.accessSimulador !== undefined ? Boolean(currentAccess.accessSimulador) : defaults.accessSimulador;
   const accessManagement = currentAccess.accessManagement !== undefined ? Boolean(currentAccess.accessManagement) : defaults.accessManagement;
   const accessAutomation = currentAccess.accessAutomation !== undefined ? Boolean(currentAccess.accessAutomation) : defaults.accessAutomation;
 
@@ -97,6 +98,7 @@ const resolveAccessByRole = (role, currentAccess) => {
     accessB2B,
     accessB2G,
     accessPreSales,
+    accessSimulador,
     accessManagement,
     accessAutomation
   };
@@ -107,12 +109,14 @@ const normalizeCompanyModuleAccess = (company) => {
   const accessB2B = company.accessB2B !== undefined ? Boolean(company.accessB2B) : true;
   const accessB2G = company.accessB2G !== undefined ? Boolean(company.accessB2G) : false;
   const accessPreSales = company.accessPreSales !== undefined ? Boolean(company.accessPreSales) : false;
+  const accessSimulador = company.accessSimulador !== undefined ? Boolean(company.accessSimulador) : true;
   const accessManagement = company.accessManagement !== undefined ? Boolean(company.accessManagement) : false;
   const accessAutomation = company.accessAutomation !== undefined ? Boolean(company.accessAutomation) : false;
   return {
     accessB2B,
     accessB2G,
     accessPreSales,
+    accessSimulador,
     accessManagement,
     accessAutomation
   };
@@ -124,6 +128,7 @@ const companyModuleBadges = (company = {}) => {
     access.accessB2B && 'B2B',
     access.accessB2G && 'B2G',
     access.accessPreSales && 'Pré-vendas',
+    access.accessSimulador && 'Simulador',
     access.accessManagement && 'Gestão',
     access.accessAutomation && 'Automações'
   ].filter(Boolean);

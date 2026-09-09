@@ -35,7 +35,7 @@ export const ROLE_POLICY_MODULES = [
     description: 'Quando ativo, o usuário vê apenas oportunidades criadas por ele.'
   },
   {
-    key: 'simulador',
+    key: 'accessSimulador',
     label: 'Simulador',
     description: 'Acesso às calculadoras de precificação e ferramentas de simulação.'
   },
@@ -88,7 +88,7 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: false,
     ownOpportunitiesOnly: true,
-    simulador: true,
+    accessSimulador: true,
     simuladorViewPricing: false,
     simuladorViewCommissions: false,
     simuladorViewDRE: false,
@@ -111,7 +111,7 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: false,
     ownOpportunitiesOnly: true,
-    simulador: true,
+    accessSimulador: true,
     simuladorViewPricing: false,
     simuladorViewCommissions: false,
     simuladorViewDRE: false,
@@ -134,7 +134,7 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: true,
     ownOpportunitiesOnly: false,
-    simulador: true,
+    accessSimulador: true,
     simuladorViewPricing: true,
     simuladorViewCommissions: true,
     simuladorViewDRE: true,
@@ -157,7 +157,7 @@ export const ROLE_ACCESS_POLICY = {
     opportunities: true,
     publicOpportunities: true,
     ownOpportunitiesOnly: false,
-    simulador: true,
+    accessSimulador: true,
     simuladorViewPricing: true,
     simuladorViewCommissions: true,
     simuladorViewDRE: true,
@@ -329,7 +329,7 @@ export const canAccessModule = (user, moduleName) => {
     return role === ROLES.ADMIN || role === ROLES.MASTER;
   }
   if (mod === 'SIMULADOR') {
-    return Boolean(getUserPermissions(user).simulador);
+    return Boolean(getUserPermissions(user).accessSimulador);
   }
 
   const access = getUserAccess(user);

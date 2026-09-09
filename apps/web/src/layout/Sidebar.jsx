@@ -302,11 +302,14 @@ export default function Sidebar({
         // Logic for USER and SELLER roles.
         if (role === ROLES.USER || role === ROLES.SELLER) {
           if (section.id === 'vendas' && access.accessB2B) {
+            const allowedPaths = ['/dashboard', '/empresas', '/oportunidades', '/atividades', '/leads'];
+            // Add simuladores if user has access to simulador
+            if (access.accessSimulador) {
+              allowedPaths.push('/simuladores');
+            }
             return {
               ...section,
-              items: section.items.filter((item) =>
-                ['/dashboard', '/empresas', '/oportunidades', '/atividades', '/leads'].includes(item.path)
-              )
+              items: section.items.filter((item) => allowedPaths.includes(item.path))
             };
           }
           if (section.id === 'b2g' && access.accessB2G) return section;

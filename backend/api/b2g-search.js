@@ -232,8 +232,12 @@ const isEditalVigente = (item) => {
   const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
   if (encerramento) return encerramento.getTime() >= Date.now();
 
+  // CORREÇÃO: Se não há data de encerramento definida, verificar status
+  // Só considerar vigente se houver status explícito de ativo/aberto
   const status = String(item?.status || '').trim().toLowerCase();
-  if (!status) return true;
+  if (!status) return false; // Mudança: sem status definido = não vigente
+  
+  // Considerar vigente apenas se status NÃO indica encerramento
   return !CLOSED_STATUS_PATTERN.test(status);
 };
 
