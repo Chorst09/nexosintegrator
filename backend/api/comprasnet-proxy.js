@@ -146,6 +146,12 @@ const DADOS_ABERTOS_MODALIDADES = {
 
 const toDadosAbertosDate = (value, fallback) => toISODate(value || fallback) || toISODate(fallback);
 
+const matchObjeto = (texto, objeto) => {
+  if (!objeto || String(objeto).trim().length < 2) return true;
+  const hay = String(texto || '').toLowerCase();
+  return String(objeto).toLowerCase().split(/\s+/).filter(t => t.length > 2).some(t => hay.includes(t));
+};
+
 const normalizeDadosAbertosToPNCP = (item) => ({
   numeroControlePNCP: item.numeroControlePNCP || '',
   orgaoEntidade: {
@@ -181,51 +187,64 @@ const fetchDadosAbertosContratacoes = async ({ tipo, qs, dataInicio, dataFim, pa
   const dataF = toDadosAbertosDate(dataFim, hoje());
   const modalidades = DADOS_ABERTOS_MODALIDADES[tipo] || DADOS_ABERTOS_MODALIDADES.licitacao;
   const requestSize = tipo === 'arp' ? Math.min(Math.max(size * 5, 50), 500) : size;
+  const MAX_PAGES = tipo === 'arp' ? 3 : 1;
+  const PAGE_SIZE = Math.min(requestSize, 500);
   const data = [];
   const erros = [];
 
   for (const codigoModalidade of modalidades) {
     if (data.length >= size) break;
 
-    const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
-    url.searchParams.set('pagina', String(page));
-    url.searchParams.set('tamanhoPagina', String(Math.max(10, Math.min(requestSize, 500))));
-    url.searchParams.set('dataPublicacaoPncpInicial', dataI);
-    url.searchParams.set('dataPublicacaoPncpFinal', dataF);
-    url.searchParams.set('codigoModalidade', String(codigoModalidade));
-    if (qs.uf) url.searchParams.set('unidadeOrgaoUfSigla', qs.uf);
+    for (let pg = page; pg < page + MAX_PAGES && data.length < size; pg++) {
+      const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
+      url.searchParams.set('pagina', String(pg));
+      url.searchParams.set('tamanhoPagina', String(Math.max(10, PAGE_SIZE)));
+      url.searchParams.set('dataPublicacaoPncpInicial', dataI);
+      url.searchParams.set('dataPublicacaoPncpFinal', dataF);
+      url.searchParams.set('codigoModalidade', String(codigoModalidade));
+      if (qs.uf) url.searchParams.set('unidadeOrgaoUfSigla', qs.uf);
 
-    const key = url.toString();
-    const cached = readCache(key);
-    if (cached) {
-      data.push(...cached);
-      continue;
-    }
-
-    try {
-      const response = await fetchWithRetry(key, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'NexosCRM/2.0'
-        }
-      }, { timeoutMs: 15000, retries: 0 });
-
-      if (!response.ok) {
-        const text = String(await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 120);
-        erros.push(`Dados Abertos modalidade ${codigoModalidade}: HTTP ${response.status}${text ? ` - ${text}` : ''}`);
-        continue;
+      const key = url.toString();
+      const cached = readCache(key);
+      if (cached) {
+        const filtered = cached.filter(item => !qs.objeto || matchObjeto(`${item.objetoCompra || ''} ${item.informacaoComplementar || ''}`, qs.objeto));
+        data.push(...filtered);
+        break;
       }
 
-      const payload = await response.json().catch(() => null);
-      const rows = Array.isArray(payload?.resultado)
-        ? payload.resultado
-          .filter(item => tipo !== 'arp' || item.srp === true)
-          .map(normalizeDadosAbertosToPNCP)
-        : [];
-      writeCache(key, rows);
-      data.push(...rows);
-    } catch (err) {
-      erros.push(`Dados Abertos modalidade ${codigoModalidade}: ${err.message || 'falha na consulta'}`);
+      try {
+        const response = await fetchWithRetry(key, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'NexosCRM/2.0'
+          }
+        }, { timeoutMs: 20000, retries: 0 });
+
+        if (!response.ok) {
+          if (pg === page) {
+            const text = String(await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 120);
+            erros.push(`Dados Abertos modalidade ${codigoModalidade}: HTTP ${response.status}${text ? ` - ${text}` : ''}`);
+          }
+          break;
+        }
+
+        const payload = await response.json().catch(() => null);
+        const rows = Array.isArray(payload?.resultado)
+          ? payload.resultado
+            .filter(item => tipo !== 'arp' || item.srp === true)
+            .map(normalizeDadosAbertosToPNCP)
+            .filter(item => !qs.objeto || matchObjeto(`${item.objetoCompra || ''} ${item.informacaoComplementar || ''}`, qs.objeto))
+          : [];
+
+        if (rows.length > 0) writeCache(key, rows);
+        data.push(...rows);
+        if (payload?.resultado?.length < PAGE_SIZE) break;
+      } catch (err) {
+        if (pg === page) {
+          erros.push(`Dados Abertos modalidade ${codigoModalidade}: ${err.message || 'falha na consulta'}`);
+        }
+        break;
+      }
     }
   }
 
@@ -236,6 +255,7 @@ router.get('/', async (req, res) => {
   const qs = req.query;
   const tipo = qs.tipo || 'licitacao';
   const modalidades = MODALIDADES[tipo] || MODALIDADES.licitacao;
+  const objeto = String(qs.objeto || '').trim();
 
   try {
     const dataInicioParam = String(qs.dataInicio || '').trim();
@@ -249,17 +269,15 @@ router.get('/', async (req, res) => {
 
     const allResults = [];
     const erros = [];
-    const consultas = tipo === 'licitacao' || tipo === 'contratacoes14133' || tipo === 'arp'
-      ? [null, ...modalidades]
-      : modalidades;
+    const consultas = tipo === 'arp' ? modalidades : [null, ...modalidades];
     const seen = new Set();
-    const pncpRequestSize = tipo === 'arp' ? Math.min(Math.max(size * 5, 50), 100) : size;
+    const pncpRequestSize = tipo === 'arp' ? 50 : size;
 
     for (const mod of consultas) {
       const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
       url.searchParams.set('dataInicial', dataI);
       url.searchParams.set('dataFinal', dataF);
-      url.searchParams.set('pagina', page);
+      url.searchParams.set('pagina', Math.max(10, page));
       url.searchParams.set('tamanhoPagina', pncpRequestSize);
       if (mod) url.searchParams.set('codigoModalidadeContratacao', mod);
       if (qs.uf) url.searchParams.set('uf', qs.uf);
@@ -270,6 +288,7 @@ router.get('/', async (req, res) => {
 
       for (const row of item.data || []) {
         if (tipo === 'arp' && row.srp !== true) continue;
+        if (objeto && !matchObjeto(`${row.objetoCompra || ''} ${row.informacaoComplementar || ''}`, objeto)) continue;
         const key = row.numeroControlePNCP || `${row.anoCompra}-${row.numeroCompra}-${row.orgaoEntidade?.cnpj}`;
         if (seen.has(key)) continue;
         seen.add(key);

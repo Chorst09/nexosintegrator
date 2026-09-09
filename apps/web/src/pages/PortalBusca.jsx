@@ -132,25 +132,27 @@ const parseDateTime = (value, endOfDay = false) => {
 const isEditalVigente = (item) => {
   if (!item) return false;
 
+  // 1. Se tem status explicitamente encerrado, rejeitar
   const status = String(item?.status || '').trim().toLowerCase();
   if (STATUS_ENCERRADO_PATTERN.test(status)) return false;
 
+  // 2. Se tem data de encerramento, ela decide
   const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
   if (encerramento) return encerramento.getTime() >= Date.now();
 
+  // 3. Se tem data de abertura futura, é vigente
   const abertura = parseDateTime(item?.dataAbertura || item?.dataAberturaProposta, false);
   if (abertura && abertura.getTime() >= Date.now()) return true;
 
+  // 4. Se tem data de publicação muito antiga (mais de 1 ano), rejeitar
   const publicacao = parseDateTime(item?.dataPublicacao, false);
   if (publicacao) {
-    const DOZE_MESES = 12 * 30 * 24 * 60 * 60 * 1000;
-    if (publicacao.getTime() < Date.now() - DOZE_MESES) return false;
+    const UM_ANO = 365 * 24 * 60 * 60 * 1000;
+    if (publicacao.getTime() < Date.now() - UM_ANO) return false;
   }
 
-  const STATUS_ATIVO = /\b(aberto|ativo|em\s*(andamento|proposta|lance|pregao|sessao|sessao\s+publica)|vigente|publicado|divulgac|recebiment|recebendo|proposta|pregao|lancamento|em\s+pregao|aberta|lanca|edicao|aberto\s+para|novos?|interesse|selecao)\b/i.test(status);
-  const statusFiltro = !status || STATUS_ATIVO;
-
-  return statusFiltro;
+  // 5. Se chegou aqui, considerar vigente (padrão permissivo)
+  return true;
 };
 
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
@@ -380,6 +382,7 @@ const extrairMunicipioEndereco = (endereco) => {
 async function buscarComprasGovProxy(tipo, params) {
   const url = new URL(buildApiUrl('/comprasnet-proxy'), window.location.origin);
   if (tipo) url.searchParams.set('tipo', tipo);
+  if (params.objeto) url.searchParams.set('objeto', params.objeto);
   if (params.dataInicio) url.searchParams.set('dataInicio', params.dataInicio);
   if (params.dataFim) url.searchParams.set('dataFim', params.dataFim);
   if (params.uf) url.searchParams.set('uf', params.uf);
@@ -400,7 +403,7 @@ async function buscarComprasGovProxy(tipo, params) {
 
 async function buscarComprasNet({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
   try {
-    const items = await buscarComprasGovProxy('licitacao', { dataInicio, dataFim, tamanhoPagina });
+    const items = await buscarComprasGovProxy('licitacao', { objeto, dataInicio, dataFim, tamanhoPagina });
 
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
@@ -432,7 +435,7 @@ async function buscarComprasNet({ objeto, uf, dataInicio, dataFim, tamanhoPagina
 
 async function buscarComprasGovDispensas({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
   try {
-    const items = await buscarComprasGovProxy('dispensas', { dataInicio, dataFim, tamanhoPagina });
+    const items = await buscarComprasGovProxy('dispensas', { objeto, dataInicio, dataFim, tamanhoPagina });
 
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
@@ -464,7 +467,7 @@ async function buscarComprasGovDispensas({ objeto, uf, dataInicio, dataFim, tama
 
 async function buscarContratacoes14133({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
   try {
-    const items = await buscarComprasGovProxy('contratacoes14133', { uf, dataInicio, dataFim, tamanhoPagina });
+    const items = await buscarComprasGovProxy('contratacoes14133', { objeto, uf, dataInicio, dataFim, tamanhoPagina });
 
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto))
@@ -496,7 +499,7 @@ async function buscarContratacoes14133({ objeto, uf, dataInicio, dataFim, tamanh
 
 async function buscarAtasRegistroPreco({ objeto, uf, dataInicio, dataFim, tamanhoPagina = 20 }) {
   try {
-    const items = await buscarComprasGovProxy('arp', { dataInicio, dataFim, tamanhoPagina });
+    const items = await buscarComprasGovProxy('arp', { objeto, dataInicio, dataFim, tamanhoPagina });
 
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidade?.razaoSocial}`, objeto))
@@ -528,7 +531,7 @@ async function buscarAtasRegistroPreco({ objeto, uf, dataInicio, dataFim, tamanh
 
 async function buscarPregoes({ objeto, uf, dataInicio, tamanhoPagina = 20 }) {
   try {
-    const items = await buscarComprasGovProxy('pregoes', { dataInicio, tamanhoPagina });
+    const items = await buscarComprasGovProxy('pregoes', { objeto, dataInicio, tamanhoPagina });
 
     return items
       .filter(item => matchObjeto(`${item.objetoCompra} ${item.orgaoEntidade?.razaoSocial}`, objeto))

@@ -236,25 +236,27 @@ const parseDateTime = (value, endOfDay = false) => {
 const isEditalVigente = (item) => {
   if (!item) return false;
 
+  // 1. Se tem status explicitamente encerrado, rejeitar
   const status = String(item?.status || '').trim().toLowerCase();
   if (CLOSED_STATUS_PATTERN.test(status)) return false;
 
+  // 2. Se tem data de encerramento, ela decide
   const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
   if (encerramento) return encerramento.getTime() >= Date.now();
 
+  // 3. Se tem data de abertura futura, é vigente
   const abertura = parseDateTime(item?.dataAbertura || item?.dataAberturaProposta, false);
   if (abertura && abertura.getTime() >= Date.now()) return true;
 
+  // 4. Se tem data de publicação muito antiga (mais de 1 ano), rejeitar
   const publicacao = parseDateTime(item?.dataPublicacao, false);
   if (publicacao) {
-    const DOZE_MESES = 12 * 30 * 24 * 60 * 60 * 1000;
-    if (publicacao.getTime() < Date.now() - DOZE_MESES) return false;
+    const UM_ANO = 365 * 24 * 60 * 60 * 1000;
+    if (publicacao.getTime() < Date.now() - UM_ANO) return false;
   }
 
-  const STATUS_ATIVO = /\b(aberto|ativo|em\s*(andamento|proposta|andamento|lance|pregao|sessao|sessao\s+publica)|vigente|publicado|divulgac|recebiment|recebendo|proposta|pregao|lancamento|em\s+pregao|aberta|lanca|edicao|aberto\s+para|novos?|interesse|selecao)\b/i.test(status);
-  const statusFiltro = !status || STATUS_ATIVO;
-
-  return statusFiltro;
+  // 5. Se chegou aqui, considerar vigente (padrão permissivo)
+  return true;
 };
 
 // ─── PNCP - Publicações ───────────────────────────────────────────────────────
@@ -403,7 +405,7 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
   const dataI = dataInicio ? String(dataInicio).replaceAll('-', '') : diasAtras(30);
   const dataF = dataFim ? String(dataFim).replaceAll('-', '') : hoje();
   const limit = clampNumber(tamanhoPagina, 10, 50, 20);
-  const page = clampNumber(pagina, 1, 500, 1);
+  const page = clampNumber(pagina, 10, 500, 10);
   const startedAt = Date.now();
 
   const normalize = (items, label) => items
@@ -444,9 +446,9 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
     return normalize(items, label);
   };
 
-  const consultas = [{ modCode: '' }];
-  const modalidadesPrioritarias = objeto?.trim() || uf ? [6] : [];
-  modalidadesPrioritarias.forEach(modCode => consultas.push({ modCode }));
+  const consultas = objeto?.trim() || uf
+    ? [6, 8, 9, 4, 5].map(modCode => ({ modCode }))
+    : DADOS_ABERTOS_PNCP_MODALIDADES.pncp.map(modCode => ({ modCode }));
 
   for (const consulta of consultas) {
     if (resultados.length >= limit || Date.now() - startedAt > 17000) break;
@@ -552,7 +554,8 @@ async function buscarPNCPDadosAbertos({ objeto, uf, pagina = 1, tamanhoPagina = 
   const resultados = [];
   const errors = [];
   const limit = clampNumber(tamanhoPagina, 10, 50, 20);
-  const page = clampNumber(pagina, 1, 500, 1);
+  const PAGE_SIZE = Math.min(limit * 10, 500);
+  const MAX_PAGES = 3;
   const fallbackInicio = !dataInicio && !dataFim ? diasAtras(365) : diasAtras(30);
   const dataI = toDadosAbertosDate(dataInicio, fallbackInicio);
   const dataF = toDadosAbertosDate(dataFim, hoje());
@@ -560,37 +563,44 @@ async function buscarPNCPDadosAbertos({ objeto, uf, pagina = 1, tamanhoPagina = 
   for (const codigoModalidade of modalidades) {
     if (resultados.length >= limit) break;
 
-    try {
-      const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
-      url.searchParams.set('pagina', String(page));
-      url.searchParams.set('tamanhoPagina', String(limit));
-      url.searchParams.set('dataPublicacaoPncpInicial', dataI);
-      url.searchParams.set('dataPublicacaoPncpFinal', dataF);
-      url.searchParams.set('codigoModalidade', String(codigoModalidade));
-      if (uf) url.searchParams.set('unidadeOrgaoUfSigla', uf);
+    for (let page = 1; page <= MAX_PAGES && resultados.length < limit; page++) {
+      try {
+        const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
+        url.searchParams.set('pagina', String(page));
+        url.searchParams.set('tamanhoPagina', String(PAGE_SIZE));
+        url.searchParams.set('dataPublicacaoPncpInicial', dataI);
+        url.searchParams.set('dataPublicacaoPncpFinal', dataF);
+        url.searchParams.set('codigoModalidade', String(codigoModalidade));
+        if (uf) url.searchParams.set('unidadeOrgaoUfSigla', uf);
 
-      const res = await fetchWithRetry(url.toString(), {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'NexosCRM/2.0'
+        const res = await fetchWithRetry(url.toString(), {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'NexosCRM/2.0'
+          }
+        }, { timeoutMs: 20000, retries: 0 });
+
+        if (!res.ok) {
+          if (page === 1) {
+            const text = cleanHtmlText(await res.text().catch(() => '')).slice(0, 120);
+            errors.push(`PNCP Dados Abertos modalidade ${codigoModalidade}: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
+          }
+          break;
         }
-      }, { timeoutMs: 15000, retries: 0 });
 
-      if (!res.ok) {
-        const text = cleanHtmlText(await res.text().catch(() => '')).slice(0, 120);
-        errors.push(`PNCP Dados Abertos modalidade ${codigoModalidade}: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
-        continue;
-      }
+        const payload = await safeJson(res);
+        const items = Array.isArray(payload?.resultado) ? payload.resultado : [];
+        if (items.length === 0) break;
 
-      const payload = await safeJson(res);
-      const items = Array.isArray(payload?.resultado) ? payload.resultado : [];
-      for (const item of items) {
-        const normalized = normalizeDadosAbertosPNCP(item, { objeto, uf });
-        if (normalized) resultados.push(normalized);
-        if (resultados.length >= limit) break;
+        for (const item of items) {
+          const normalized = normalizeDadosAbertosPNCP(item, { objeto, uf });
+          if (normalized) resultados.push(normalized);
+          if (resultados.length >= limit) break;
+        }
+      } catch (err) {
+        if (page === 1) errors.push(`PNCP Dados Abertos modalidade ${codigoModalidade}: ${err.message || 'falha na consulta'}`);
+        break;
       }
-    } catch (err) {
-      errors.push(`PNCP Dados Abertos modalidade ${codigoModalidade}: ${err.message || 'falha na consulta'}`);
     }
   }
 
@@ -938,47 +948,51 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
     const requestSize = Math.max(50, limit);
     const maxPages = 3;
 
-    for (let pagina = 1; pagina <= maxPages && resultados.length < limit; pagina += 1) {
-      try {
-        const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
-        url.searchParams.set('dataInicial', dataI);
-        url.searchParams.set('dataFinal', dataF);
-        url.searchParams.set('uf', 'PR');
-        url.searchParams.set('pagina', pagina);
-        url.searchParams.set('tamanhoPagina', requestSize);
+    for (const modCode of DADOS_ABERTOS_PNCP_MODALIDADES.licitacao) {
+      if (resultados.length >= limit) break;
+      for (let pagina = 1; pagina <= maxPages && resultados.length < limit; pagina += 1) {
+        try {
+          const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
+          url.searchParams.set('dataInicial', dataI);
+          url.searchParams.set('dataFinal', dataF);
+          url.searchParams.set('uf', 'PR');
+          url.searchParams.set('codigoModalidadeContratacao', modCode);
+          url.searchParams.set('pagina', Math.max(10, pagina));
+          url.searchParams.set('tamanhoPagina', requestSize);
 
-        const items = await fetchPNCPItems(url, `e-Compras Curitiba PNCP pagina ${pagina}`, { timeoutMs: 8000 });
+          const items = await fetchPNCPItems(url, `e-Compras Curitiba PNCP pagina ${pagina} (modalidade ${modCode})`, { timeoutMs: 8000 });
 
-        for (const item of items) {
-          const cidade = String(item.unidadeOrgao?.municipioNome || '').toLowerCase();
-          if (cidade && !cidade.includes('curitiba')) continue;
-          if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto)) continue;
+          for (const item of items) {
+            const cidade = String(item.unidadeOrgao?.municipioNome || '').toLowerCase();
+            if (cidade && !cidade.includes('curitiba')) continue;
+            if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto)) continue;
 
-          resultados.push({
-            id: item.numeroControlePNCP || `pncp-curitiba-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
-            fonte: 'e-Compras Curitiba (PNCP)',
-            fonteLogo: '🏙️',
-            titulo: item.objetoCompra || 'Sem descrição',
-            orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-            cnpjOrgao: item.orgaoEntidade?.cnpj || '',
-            modalidade: item.modalidadeNome || '',
-            uf: 'PR',
-            municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
-            valor: formatCurrency(item.valorTotalEstimado),
-            dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
-            dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
-            dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
-            numero: item.numeroCompra || '',
-            ano: item.anoCompra || '',
-            link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-            status: item.situacaoCompraNome || 'Publicado'
-          });
+            resultados.push({
+              id: item.numeroControlePNCP || `pncp-curitiba-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+              fonte: 'e-Compras Curitiba (PNCP)',
+              fonteLogo: '🏙️',
+              titulo: item.objetoCompra || 'Sem descrição',
+              orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+              cnpjOrgao: item.orgaoEntidade?.cnpj || '',
+              modalidade: item.modalidadeNome || '',
+              uf: 'PR',
+              municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
+              valor: formatCurrency(item.valorTotalEstimado),
+              dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
+              dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+              dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
+              numero: item.numeroCompra || '',
+              ano: item.anoCompra || '',
+              link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+              status: item.situacaoCompraNome || 'Publicado'
+            });
 
-          if (resultados.length >= limit) break;
+            if (resultados.length >= limit) break;
+          }
+        } catch (err) {
+          errors.push(`e-Compras Curitiba (PNCP página ${pagina}, modalidade ${modCode}): ${err.message}`);
+          break;
         }
-      } catch (err) {
-        errors.push(`e-Compras Curitiba (PNCP página ${pagina}): ${err.message}`);
-        break;
       }
     }
   } catch (err) {
@@ -1050,8 +1064,35 @@ async function buscarTransparenciaCuritiba({ objeto, uf, cidade, dataInicio, dat
 
     return { resultados, errors };
   } catch (err) {
-    return { resultados, errors: [`Transparência Curitiba: ${err.message}`] };
+    errors.push(`Transparência Curitiba: ${err.message}`);
   }
+
+  if (resultados.length === 0) {
+    try {
+      const daResult = await buscarPNCPDadosAbertos({
+        objeto,
+        uf: 'PR',
+        dataInicio,
+        dataFim,
+        tamanhoPagina: Math.max(10, Math.min(Number(tamanhoPagina) || 20, 50)),
+        modalidades: DADOS_ABERTOS_PNCP_MODALIDADES.pncp
+      });
+      for (const item of daResult.resultados || []) {
+        const municipio = String(item.municipio || '').toLowerCase();
+        if (municipio && !municipio.includes('curitiba')) continue;
+        resultados.push({
+          ...item,
+          fonte: 'Transparência Curitiba',
+          fonteLogo: '🏙️',
+          id: `tc-${item.id}`
+        });
+        if (resultados.length >= Math.max(10, Math.min(Number(tamanhoPagina) || 20, 50))) break;
+      }
+      errors.push(...(daResult.errors || []));
+    } catch (_) {}
+  }
+
+  return { resultados, errors };
 }
 
 // ─── Portal da Transparência Federal - API oficial da CGU ────────────────────
@@ -1060,7 +1101,8 @@ async function buscarPortalTransparenciaFederalFallback({ objeto, uf, dataInicio
   const resultados = [];
   const errors = [];
   const limit = clampNumber(tamanhoPagina, 10, 50, 20);
-  const requestSize = Math.min(Math.max(limit * 5, 50), 500);
+  const PAGE_SIZE = 500;
+  const MAX_PAGES = 3;
   const fallbackInicio = !dataInicio && !dataFim ? diasAtras(365) : diasAtras(30);
   const dataI = toDadosAbertosDate(dataInicio, fallbackInicio);
   const dataF = toDadosAbertosDate(dataFim, hoje());
@@ -1068,59 +1110,63 @@ async function buscarPortalTransparenciaFederalFallback({ objeto, uf, dataInicio
   for (const codigoModalidade of DADOS_ABERTOS_PNCP_MODALIDADES.licitacao) {
     if (resultados.length >= limit) break;
 
-    try {
-      const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
-      url.searchParams.set('pagina', '1');
-      url.searchParams.set('tamanhoPagina', String(requestSize));
-      url.searchParams.set('dataPublicacaoPncpInicial', dataI);
-      url.searchParams.set('dataPublicacaoPncpFinal', dataF);
-      url.searchParams.set('codigoModalidade', String(codigoModalidade));
-      if (uf) url.searchParams.set('unidadeOrgaoUfSigla', uf);
+    for (let page = 1; page <= MAX_PAGES && resultados.length < limit; page++) {
+      try {
+        const url = new URL(DADOS_ABERTOS_CONTRATACOES_URL);
+        url.searchParams.set('pagina', String(page));
+        url.searchParams.set('tamanhoPagina', String(PAGE_SIZE));
+        url.searchParams.set('dataPublicacaoPncpInicial', dataI);
+        url.searchParams.set('dataPublicacaoPncpFinal', dataF);
+        url.searchParams.set('codigoModalidade', String(codigoModalidade));
+        if (uf) url.searchParams.set('unidadeOrgaoUfSigla', uf);
 
-      const res = await fetchWithRetry(url.toString(), {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'NexosCRM/2.0'
+        const res = await fetchWithRetry(url.toString(), {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'NexosCRM/2.0'
+          }
+        }, { timeoutMs: 20000, retries: 0 });
+
+        if (!res.ok) {
+          if (page === 1) errors.push(`Portal Transparência Federal fallback: HTTP ${res.status}`);
+          break;
         }
-      }, { timeoutMs: 15000, retries: 0 });
 
-      if (!res.ok) {
-        errors.push(`Portal Transparência Federal fallback: HTTP ${res.status}`);
-        continue;
+        const payload = await safeJson(res);
+        const items = Array.isArray(payload?.resultado) ? payload.resultado : [];
+        if (items.length === 0) break;
+
+        for (const item of items) {
+          if (item.orgaoEntidadeEsferaId !== 'F') continue;
+          if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidadeRazaoSocial} ${item.unidadeOrgaoNomeUnidade}`, objeto)) continue;
+
+          resultados.push({
+            id: item.numeroControlePNCP || `transparencia-federal-${item.idCompra || item.anoCompraPncp || ''}-${item.numeroCompra || ''}`,
+            fonte: 'Portal Transparência Federal',
+            fonteLogo: '🔎',
+            titulo: item.objetoCompra || 'Licitação federal',
+            orgao: item.orgaoEntidadeRazaoSocial || item.unidadeOrgaoNomeUnidade || '',
+            cnpjOrgao: item.orgaoEntidadeCnpj || '',
+            modalidade: item.modalidadeNome || '',
+            uf: item.unidadeOrgaoUfSigla || uf || '',
+            municipio: item.unidadeOrgaoMunicipioNome || '',
+            valor: formatCurrency(item.valorTotalEstimado),
+            dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp || null,
+            dataAbertura: toISODate(item.dataAberturaPropostaPncp) || item.dataAberturaPropostaPncp || null,
+            dataEncerramento: toISODate(item.dataEncerramentoPropostaPncp) || item.dataEncerramentoPropostaPncp || null,
+            numero: item.numeroCompra || '',
+            ano: item.anoCompraPncp || '',
+            numeroControlePNCP: item.numeroControlePNCP || '',
+            link: pncpLink(item.orgaoEntidadeCnpj, item.anoCompraPncp, item.sequencialCompraPncp),
+            status: item.situacaoCompraNomePncp || 'Divulgada no PNCP'
+          });
+
+          if (resultados.length >= limit) break;
+        }
+      } catch (err) {
+        if (page === 1) errors.push(`Portal Transparência Federal fallback: ${err.message || 'falha na consulta'}`);
+        break;
       }
-
-      const payload = await safeJson(res);
-      const items = Array.isArray(payload?.resultado) ? payload.resultado : [];
-
-      for (const item of items) {
-        if (item.orgaoEntidadeEsferaId !== 'F') continue;
-        if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar} ${item.orgaoEntidadeRazaoSocial} ${item.unidadeOrgaoNomeUnidade}`, objeto)) continue;
-
-        resultados.push({
-          id: item.numeroControlePNCP || `transparencia-federal-${item.idCompra || item.anoCompraPncp || ''}-${item.numeroCompra || ''}`,
-          fonte: 'Portal Transparência Federal',
-          fonteLogo: '🔎',
-          titulo: item.objetoCompra || 'Licitação federal',
-          orgao: item.orgaoEntidadeRazaoSocial || item.unidadeOrgaoNomeUnidade || '',
-          cnpjOrgao: item.orgaoEntidadeCnpj || '',
-          modalidade: item.modalidadeNome || '',
-          uf: item.unidadeOrgaoUfSigla || uf || '',
-          municipio: item.unidadeOrgaoMunicipioNome || '',
-          valor: formatCurrency(item.valorTotalEstimado),
-          dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp || null,
-          dataAbertura: toISODate(item.dataAberturaPropostaPncp) || item.dataAberturaPropostaPncp || null,
-          dataEncerramento: toISODate(item.dataEncerramentoPropostaPncp) || item.dataEncerramentoPropostaPncp || null,
-          numero: item.numeroCompra || '',
-          ano: item.anoCompraPncp || '',
-          numeroControlePNCP: item.numeroControlePNCP || '',
-          link: pncpLink(item.orgaoEntidadeCnpj, item.anoCompraPncp, item.sequencialCompraPncp),
-          status: item.situacaoCompraNomePncp || 'Divulgada no PNCP'
-        });
-
-        if (resultados.length >= limit) break;
-      }
-    } catch (err) {
-      errors.push(`Portal Transparência Federal fallback: ${err.message || 'falha na consulta'}`);
     }
   }
 

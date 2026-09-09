@@ -269,7 +269,7 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
   const dataI = dataInicio ? String(dataInicio).replaceAll('-', '') : diasAtras(30);
   const dataF = dataFim ? String(dataFim).replaceAll('-', '') : hoje();
   const limit = clampNumber(tamanhoPagina, 10, 50, 20);
-  const page = clampNumber(pagina, 1, 500, 1);
+  const page = clampNumber(pagina, 10, 500, 10);
   const startedAt = Date.now();
 
   const normalize = (items, label) => items
@@ -310,9 +310,9 @@ async function buscarPNCPPublicacao({ objeto, uf, pagina = 1, tamanhoPagina = 20
     return normalize(items, label);
   };
 
-  const consultas = [{ modCode: '' }];
-  const modalidadesPrioritarias = objeto?.trim() || uf ? [6] : [];
-  modalidadesPrioritarias.forEach(modCode => consultas.push({ modCode }));
+  const consultas = objeto?.trim() || uf
+    ? [6, 8, 9, 4, 5].map(modCode => ({ modCode }))
+    : DADOS_ABERTOS_PNCP_MODALIDADES.pncp.map(modCode => ({ modCode }));
 
   for (const consulta of consultas) {
     if (resultados.length >= limit || Date.now() - startedAt > 17000) break;
@@ -804,47 +804,51 @@ async function buscarPNCPCuritibaFallback({ objeto, dataInicio, dataFim, tamanho
     const requestSize = Math.max(50, limit);
     const maxPages = 3;
 
-    for (let pagina = 1; pagina <= maxPages && resultados.length < limit; pagina += 1) {
-      try {
-        const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
-        url.searchParams.set('dataInicial', dataI);
-        url.searchParams.set('dataFinal', dataF);
-        url.searchParams.set('uf', 'PR');
-        url.searchParams.set('pagina', pagina);
-        url.searchParams.set('tamanhoPagina', requestSize);
+    for (const modCode of DADOS_ABERTOS_PNCP_MODALIDADES.licitacao) {
+      if (resultados.length >= limit) break;
+      for (let pagina = 1; pagina <= maxPages && resultados.length < limit; pagina += 1) {
+        try {
+          const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
+          url.searchParams.set('dataInicial', dataI);
+          url.searchParams.set('dataFinal', dataF);
+          url.searchParams.set('uf', 'PR');
+          url.searchParams.set('codigoModalidadeContratacao', modCode);
+url.searchParams.set('pagina', Math.max(10, pagina));
+          url.searchParams.set('tamanhoPagina', requestSize);
 
-        const items = await fetchPNCPItems(url, `e-Compras Curitiba PNCP pagina ${pagina}`, { timeoutMs: 8000 });
+          const items = await fetchPNCPItems(url, `e-Compras Curitiba PNCP pagina ${pagina} (modalidade ${modCode})`, { timeoutMs: 8000 });
 
-        for (const item of items) {
-          const cidade = String(item.unidadeOrgao?.municipioNome || '').toLowerCase();
-          if (cidade && !cidade.includes('curitiba')) continue;
-          if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto)) continue;
+          for (const item of items) {
+            const cidade = String(item.unidadeOrgao?.municipioNome || '').toLowerCase();
+            if (cidade && !cidade.includes('curitiba')) continue;
+            if (!matchObjeto(`${item.objetoCompra} ${item.informacaoComplementar}`, objeto)) continue;
 
-          resultados.push({
-            id: item.numeroControlePNCP || `pncp-curitiba-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
-            fonte: 'e-Compras Curitiba (PNCP)',
-            fonteLogo: '🏙️',
-            titulo: item.objetoCompra || 'Sem descrição',
-            orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
-            cnpjOrgao: item.orgaoEntidade?.cnpj || '',
-            modalidade: item.modalidadeNome || '',
-            uf: 'PR',
-            municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
-            valor: formatCurrency(item.valorTotalEstimado),
-            dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
-            dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
-            dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
-            numero: item.numeroCompra || '',
-            ano: item.anoCompra || '',
-            link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
-            status: item.situacaoCompraNome || 'Publicado'
-          });
+            resultados.push({
+              id: item.numeroControlePNCP || `pncp-curitiba-${item.anoCompra}-${item.numeroCompra}-${item.orgaoEntidade?.cnpj}`,
+              fonte: 'e-Compras Curitiba (PNCP)',
+              fonteLogo: '🏙️',
+              titulo: item.objetoCompra || 'Sem descrição',
+              orgao: item.orgaoEntidade?.razaoSocial || item.unidadeOrgao?.nomeUnidade || '',
+              cnpjOrgao: item.orgaoEntidade?.cnpj || '',
+              modalidade: item.modalidadeNome || '',
+              uf: 'PR',
+              municipio: item.unidadeOrgao?.municipioNome || 'Curitiba',
+              valor: formatCurrency(item.valorTotalEstimado),
+              dataPublicacao: toISODate(item.dataPublicacaoPncp) || item.dataPublicacaoPncp,
+              dataAbertura: toISODate(item.dataAberturaProposta) || item.dataAberturaProposta,
+              dataEncerramento: toISODate(item.dataEncerramentoProposta) || item.dataEncerramentoProposta,
+              numero: item.numeroCompra || '',
+              ano: item.anoCompra || '',
+              link: item.linkSistemaOrigem || `https://pncp.gov.br/app/editais/${item.orgaoEntidade?.cnpj}/${item.anoCompra}/${item.sequencialCompra}`,
+              status: item.situacaoCompraNome || 'Publicado'
+            });
 
-          if (resultados.length >= limit) break;
+            if (resultados.length >= limit) break;
+          }
+        } catch (err) {
+          errors.push(`e-Compras Curitiba (PNCP página ${pagina}, modalidade ${modCode}): ${err.message}`);
+          break;
         }
-      } catch (err) {
-        errors.push(`e-Compras Curitiba (PNCP página ${pagina}): ${err.message}`);
-        break;
       }
     }
   } catch (err) {

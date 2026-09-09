@@ -253,13 +253,13 @@ router.get('/', async (req, res) => {
       ? [null, ...modalidades]
       : modalidades;
     const seen = new Set();
-    const pncpRequestSize = tipo === 'arp' ? Math.min(Math.max(size * 5, 50), 100) : size;
+    const pncpRequestSize = tipo === 'arp' ? 50 : size;
 
     for (const mod of consultas) {
       const url = new URL(`${PNCP_BASE}/contratacoes/publicacao`);
       url.searchParams.set('dataInicial', dataI);
       url.searchParams.set('dataFinal', dataF);
-      url.searchParams.set('pagina', page);
+      url.searchParams.set('pagina', Math.max(10, page));
       url.searchParams.set('tamanhoPagina', pncpRequestSize);
       if (mod) url.searchParams.set('codigoModalidadeContratacao', mod);
       if (qs.uf) url.searchParams.set('uf', qs.uf);
