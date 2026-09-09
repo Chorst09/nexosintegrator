@@ -229,15 +229,28 @@ const parseDateTime = (value, endOfDay = false) => {
 };
 
 const isEditalVigente = (item) => {
+  // 1. Verificar data de encerramento primeiro (mais importante)
   const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
-  if (encerramento) return encerramento.getTime() >= Date.now();
+  if (encerramento) {
+    // Se tem data de encerramento, só é vigente se ainda não passou
+    return encerramento.getTime() >= Date.now();
+  }
 
-  // CORREÇÃO: Se não há data de encerramento definida, verificar status
-  // Só considerar vigente se houver status explícito de ativo/aberto
+  // 2. Se não tem data de encerramento, verificar data de abertura
+  const abertura = parseDateTime(item?.dataAbertura || item?.dataAberturaProposta || item?.dataPublicacao, false);
+  if (abertura) {
+    // Um edital com abertura muito antiga (mais de 1 ano) provavelmente já encerrou
+    const umAnoAtras = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    if (abertura.getTime() < umAnoAtras) {
+      return false; // Edital muito antigo, provavelmente encerrado
+    }
+  }
+
+  // 3. Verificar status se não conseguiu determinar pelas datas
   const status = String(item?.status || '').trim().toLowerCase();
-  if (!status) return false; // Mudança: sem status definido = não vigente
+  if (!status) return false; // Sem status definido = não vigente
   
-  // Considerar vigente apenas se status NÃO indica encerramento
+  // 4. Considerar vigente apenas se status NÃO indica encerramento
   return !CLOSED_STATUS_PATTERN.test(status);
 };
 
