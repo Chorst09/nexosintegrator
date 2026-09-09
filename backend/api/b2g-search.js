@@ -229,29 +229,50 @@ const parseDateTime = (value, endOfDay = false) => {
 };
 
 const isEditalVigente = (item) => {
-  // 1. Verificar data de encerramento primeiro (mais importante)
+  // 1. PRIORIDADE MÁXIMA: Se tem data de encerramento, só ela decide
   const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
+  
   if (encerramento) {
-    // Se tem data de encerramento, só é vigente se ainda não passou
     return encerramento.getTime() >= Date.now();
   }
 
-  // 2. Se não tem data de encerramento, verificar data de abertura
-  const abertura = parseDateTime(item?.dataAbertura || item?.dataAberturaProposta || item?.dataPublicacao, false);
-  if (abertura) {
-    // Um edital com abertura muito antiga (mais de 1 ano) provavelmente já encerrou
-    const umAnoAtras = Date.now() - (365 * 24 * 60 * 60 * 1000);
-    if (abertura.getTime() < umAnoAtras) {
-      return false; // Edital muito antigo, provavelmente encerrado
+  // 2. SEM DATA DE ENCERRAMENTO: Ser mais rigoroso
+  // Verificar se tem data de publicação/abertura RECENTE (últimos 6 meses)
+  const dataReferencia = parseDateTime(
+    item?.dataPublicacao || item?.dataAbertura || item?.dataAberturaProposta, 
+    false
+  );
+  
+  if (dataReferencia) {
+    // Editais com mais de 6 meses são considerados não vigentes
+    const seisMesesAtras = Date.now() - (6 * 30 * 24 * 60 * 60 * 1000);
+    if (dataReferencia.getTime() < seisMesesAtras) {
+      return false;
     }
   }
 
-  // 3. Verificar status se não conseguiu determinar pelas datas
+  // 3. Verificar status - só considera vigente se status for explicitamente ativo
   const status = String(item?.status || '').trim().toLowerCase();
-  if (!status) return false; // Sem status definido = não vigente
   
-  // 4. Considerar vigente apenas se status NÃO indica encerramento
-  return !CLOSED_STATUS_PATTERN.test(status);
+  if (!status) {
+    return false;
+  }
+  
+  // 4. Status deve indicar que está aberto/ativo
+  const statusAtivo = /\b(aberto|ativo|em\s*andamento|vigente|publicado)\b/i.test(status);
+  const statusEncerrado = CLOSED_STATUS_PATTERN.test(status);
+  
+  // Se tem status de encerrado, definitivamente não vigente
+  if (statusEncerrado) {
+    return false;
+  }
+  
+  // Se não tem data de referência E não tem status ativo explícito, não vigente
+  if (!dataReferencia && !statusAtivo) {
+    return false;
+  }
+  
+  return true;
 };
 
 // ─── PNCP - Publicações ───────────────────────────────────────────────────────

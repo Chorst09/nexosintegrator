@@ -125,29 +125,80 @@ const parseDateTime = (value, endOfDay = false) => {
 };
 
 const isEditalVigente = (item) => {
-  // 1. Verificar data de encerramento primeiro (mais importante)
-  const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
-  if (encerramento) {
-    // Se tem data de encerramento, só é vigente se ainda não passou
-    return encerramento.getTime() >= Date.now();
-  }
-
-  // 2. Se não tem data de encerramento, verificar data de abertura
-  const abertura = parseDateTime(item?.dataAbertura || item?.dataAberturaProposta || item?.dataPublicacao, false);
-  if (abertura) {
-    // Um edital com abertura muito antiga (mais de 1 ano) provavelmente já encerrou
-    const umAnoAtras = Date.now() - (365 * 24 * 60 * 60 * 1000);
-    if (abertura.getTime() < umAnoAtras) {
-      return false; // Edital muito antigo, provavelmente encerrado
-    }
-  }
-
-  // 3. Verificar status se não conseguiu determinar pelas datas
-  const status = String(item?.status || '').trim().toLowerCase();
-  if (!status) return false; // Sem status definido = não vigente
+  console.log('🔍 VERIFICANDO VIGÊNCIA:', {
+    titulo: item.titulo || item.objetoCompra,
+    dataEncerramento: item.dataEncerramento,
+    dataPrazo: item.dataPrazo,
+    prazo: item.prazo,
+    dataAbertura: item.dataAbertura,
+    dataPublicacao: item.dataPublicacao,
+    status: item.status
+  });
   
-  // 4. Considerar vigente apenas se status NÃO indica encerramento
-  return !STATUS_ENCERRADO_PATTERN.test(status);
+  // 1. PRIORIDADE MÁXIMA: Se tem data de encerramento, só ela decide
+  const encerramento = parseDateTime(item?.dataEncerramento || item?.dataPrazo || item?.prazo, true);
+  console.log('📅 DATA ENCERRAMENTO PARSED:', encerramento);
+  
+  if (encerramento) {
+    const resultado = encerramento.getTime() >= Date.now();
+    console.log('⏰ DECISÃO POR DATA ENCERRAMENTO:', { resultado, agora: new Date(), encerramento });
+    return resultado;
+  }
+
+  // 2. SEM DATA DE ENCERRAMENTO: Ser mais rigoroso
+  // Verificar se tem data de publicação/abertura RECENTE (últimos 6 meses)
+  const dataReferencia = parseDateTime(
+    item?.dataPublicacao || item?.dataAbertura || item?.dataAberturaProposta, 
+    false
+  );
+  console.log('📅 DATA REFERÊNCIA (pub/abertura):', dataReferencia);
+  
+  if (dataReferencia) {
+    // Editais com mais de 6 meses são considerados não vigentes
+    const seisMesesAtras = Date.now() - (6 * 30 * 24 * 60 * 60 * 1000);
+    if (dataReferencia.getTime() < seisMesesAtras) {
+      console.log('❌ EDITAL ANTIGO (>6 meses):', { 
+        dataReferencia, 
+        seisMesesAtras: new Date(seisMesesAtras) 
+      });
+      return false;
+    }
+    console.log('✅ EDITAL RECENTE (<6 meses)');
+  }
+
+  // 3. Verificar status - só considera vigente se status for explicitamente ativo
+  const status = String(item?.status || '').trim().toLowerCase();
+  console.log('📊 STATUS:', status);
+  
+  if (!status) {
+    console.log('❌ SEM STATUS - NÃO VIGENTE');
+    return false;
+  }
+  
+  // 4. Status deve indicar que está aberto/ativo
+  const statusAtivo = /\b(aberto|ativo|em\s*andamento|vigente|publicado)\b/i.test(status);
+  const statusEncerrado = STATUS_ENCERRADO_PATTERN.test(status);
+  
+  console.log('📊 ANÁLISE STATUS:', { 
+    statusAtivo, 
+    statusEncerrado, 
+    statusOriginal: status 
+  });
+  
+  // Se tem status de encerrado, definitivamente não vigente
+  if (statusEncerrado) {
+    console.log('❌ STATUS ENCERRADO');
+    return false;
+  }
+  
+  // Se não tem data de referência E não tem status ativo explícito, não vigente
+  if (!dataReferencia && !statusAtivo) {
+    console.log('❌ SEM DATA E SEM STATUS ATIVO');
+    return false;
+  }
+  
+  console.log('✅ CONSIDERADO VIGENTE');
+  return true;
 };
 
 // ─── PNCP API (chamada direta do browser — sem CORS issues pois é API pública) ─
@@ -1268,8 +1319,17 @@ export default function PortalBusca() {
 
   // Filtro local por cidade e vigente (client-side após busca)
   const resultadosFiltrados = resultados.filter(item => {
+    console.log('🔍 FILTRANDO ITEM:', {
+      titulo: item.titulo || item.objetoCompra,
+      apenasVigentes,
+      isVigente: isEditalVigente(item)
+    });
+    
     if (apenasVigentes) {
-      if (!isEditalVigente(item)) return false;
+      if (!isEditalVigente(item)) {
+        console.log('❌ ITEM REJEITADO - NÃO VIGENTE');
+        return false;
+      }
     }
     if (cidade.trim()) {
       const mun = String(item.municipio || '').toLowerCase();
@@ -1296,6 +1356,19 @@ export default function PortalBusca() {
     });
 
   const handleBuscar = useCallback(async () => {
+    console.log('🔍 INICIANDO BUSCA:', {
+      objeto,
+      uf,
+      cidade,
+      dataInicio,
+      dataFim,
+      dataPrazoInicio,
+      dataPrazoFim,
+      apenasVigentes,
+      categoriasProdutoTI,
+      fontesAtivas
+    });
+    
     const hasAdvancedFilter = [
       cidade,
       dataInicio,
@@ -1304,6 +1377,8 @@ export default function PortalBusca() {
       dataPrazoFim,
       numeroEdital
     ].some(value => String(value || '').trim());
+
+    console.log('📊 FILTROS:', { hasAdvancedFilter, apenasVigentes });
 
     if (!objeto.trim() && !uf && !hasAdvancedFilter && !apenasVigentes && !comEdital && !comMonitoramentoChat && categoriasProdutoTI.length === 0 && !produtoCustom.trim()) {
       setErro('Informe ao menos um termo, número, período ou filtro de localização/status/produto.');
