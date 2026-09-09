@@ -828,13 +828,24 @@ function CardEdital({
                 disabled={salvandoGerenciada}
                 className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition ${
                   gerenciada
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30'
+                    ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30'
                     : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30'
                 } disabled:cursor-wait disabled:opacity-70`}
                 title={gerenciada ? 'Remover de Licitações Gerenciadas' : 'Adicionar em Licitações Gerenciadas'}
               >
-                {salvandoGerenciada ? <Loader2 size={14} className="animate-spin" /> : gerenciada ? <CheckCircle size={14} /> : <Plus size={14} />}
-                {salvandoGerenciada ? 'Salvando...' : gerenciada ? 'Licitação adicionada' : 'Adicionar licitação'}
+                {salvandoGerenciada ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : gerenciada ? (
+                  <X size={14} />
+                ) : (
+                  <Plus size={14} />
+                )}
+                {salvandoGerenciada 
+                  ? 'Salvando...' 
+                  : gerenciada 
+                    ? 'Deixar de gerenciar' 
+                    : 'Adicionar licitação'
+                }
               </button>
             )}
 
