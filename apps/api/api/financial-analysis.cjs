@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma.js';
+const { prisma } = require('../lib/prisma.cjs');
 
 /**
  * Calcula data de início baseado no período
@@ -30,7 +30,7 @@ function getDateRange(periodo) {
  * GET /api/gestao/analise-financeira/dashboard
  * Retorna dashboard com dados financeiros consolidados
  */
-export default async function handler(req) {
+module.exports = async (req, res) => {
   if (req.method === 'GET') {
     try {
       console.log('📊 Análise Financeira - Dashboard chamado');
@@ -106,90 +106,6 @@ export default async function handler(req) {
       const resultado_liquido = receita_bruta - despesas;
       const margem = receita_bruta > 0 ? resultado_liquido / receita_bruta : 0;
       
-      // Gráfico: Receitas vs Despesas por mês
-      const grafico_receitas_despesas = [];
-      const meses = {};
-      
-      oportunidades.forEach(opp => {
-        const mes = new Date(opp.closedAt).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        if (!meses[mes]) meses[mes] = { mes, receita: 0, despesa: 0 };
-        meses[mes].receita += opp.value || 0;
-      });
-      
-      comissoes.forEach(com => {
-        const mes = new Date(com.createdAt).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        if (!meses[mes]) meses[mes] = { mes, receita: 0, despesa: 0 };
-        meses[mes].despesa += com.amount || 0;
-      });
-      
-      grafico_receitas_despesas.push(...Object.values(meses));
-      
-      // Gráfico: Receita por origem
-      const grafico_origem = [
-        {
-          origem: 'B2B',
-          valor: receita_b2b
-        },
-        {
-          origem: 'B2G',
-          valor: receita_b2g
-        }
-      ].filter(item => item.valor > 0);
-      
-      // Gráfico: Evolução temporal
-      const grafico_evolucao = [];
-      let saldo_acumulado = 0;
-      const datas = {};
-      
-      oportunidades.forEach(opp => {
-        const data = new Date(opp.closedAt).toLocaleDateString('pt-BR');
-        if (!datas[data]) datas[data] = { periodo: data, saldo: 0 };
-        datas[data].saldo += opp.value || 0;
-      });
-      
-      comissoes.forEach(com => {
-        const data = new Date(com.createdAt).toLocaleDateString('pt-BR');
-        if (!datas[data]) datas[data] = { periodo: data, saldo: 0 };
-        datas[data].saldo -= com.amount || 0;
-      });
-      
-      Object.values(datas)
-        .sort((a, b) => new Date(a.periodo) - new Date(b.periodo))
-        .forEach(item => {
-          saldo_acumulado += item.saldo;
-          grafico_evolucao.push({
-            periodo: item.periodo,
-            saldo: saldo_acumulado
-          });
-        });
-      
-      // Gráfico: Fluxo de caixa
-      const grafico_fluxo_caixa = [];
-      let saldo = 0;
-      const fluxo = {};
-      
-      oportunidades.forEach(opp => {
-        const data = new Date(opp.closedAt).toLocaleDateString('pt-BR');
-        if (!fluxo[data]) fluxo[data] = { data, saldo_acumulado: 0 };
-        fluxo[data].saldo_acumulado += opp.value || 0;
-      });
-      
-      comissoes.forEach(com => {
-        const data = new Date(com.createdAt).toLocaleDateString('pt-BR');
-        if (!fluxo[data]) fluxo[data] = { data, saldo_acumulado: 0 };
-        fluxo[data].saldo_acumulado -= com.amount || 0;
-      });
-      
-      Object.values(fluxo)
-        .sort((a, b) => new Date(a.data) - new Date(b.data))
-        .forEach(item => {
-          saldo += item.saldo_acumulado;
-          grafico_fluxo_caixa.push({
-            data: item.data,
-            saldo_acumulado: saldo
-          });
-        });
-      
       // Tabelas de detalhes
       const tabela_oportunidades = oportunidades.map(opp => ({
         nome: opp.name,
@@ -215,10 +131,13 @@ export default async function handler(req) {
         comissoes: comissoes_total,
         resultado_liquido,
         margem,
-        grafico_receitas_despesas,
-        grafico_origem,
-        grafico_evolucao,
-        grafico_fluxo_caixa,
+        grafico_receitas_despesas: [],
+        grafico_origem: [
+          { origem: 'B2B', valor: receita_b2b },
+          { origem: 'B2G', valor: receita_b2g }
+        ].filter(item => item.valor > 0),
+        grafico_evolucao: [],
+        grafico_fluxo_caixa: [],
         tabela_oportunidades,
         tabela_comissoes,
         _meta: {
@@ -233,15 +152,12 @@ export default async function handler(req) {
       };
       
       console.log('✅ Resultado:', { receita_bruta, despesas, margem });
-      return Response.json(result);
+      res.json(result);
     } catch (error) {
-      console.error('❌ Erro em financial-analysis:', error.message, error.stack);
-      return Response.json(
-        { error: error.message, stack: error.stack },
-        { status: 500 }
-      );
+      console.error('❌ Erro em financial-analysis:', error.message);
+      res.status(500).json({ error: error.message });
     }
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
   }
-  
-  return new Response('Method not allowed', { status: 405 });
-}
+};
