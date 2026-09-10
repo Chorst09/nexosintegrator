@@ -249,6 +249,9 @@ app.use('/api/kickoff', require('./api/kickoff'));
 // Google Calendar Integration
 app.use('/api/google-calendar', require('./api/google-calendar'));
 
+// Módulo Financeiro (GESTÃO)
+app.use('/api/gestao/financeiro', authenticateToken, require('./api/financeiro'));
+
 // Middleware de tratamento de erros
 app.use((error, req, res, next) => {
   console.error('Error:', error);
