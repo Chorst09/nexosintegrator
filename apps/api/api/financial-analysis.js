@@ -33,6 +33,8 @@ function getDateRange(periodo) {
 export default async function handler(req) {
   if (req.method === 'GET') {
     try {
+      console.log('📊 Análise Financeira - Dashboard chamado');
+      
       const { periodo = 'mes', dataInicio, dataFim, vendedor, origem } = req.query || {};
       
       // Montar filtros
@@ -205,7 +207,7 @@ export default async function handler(req) {
         data: new Date(com.createdAt).toLocaleDateString('pt-BR')
       }));
       
-      return Response.json({
+      const result = {
         receita_bruta,
         receita_b2b,
         receita_b2g,
@@ -228,11 +230,14 @@ export default async function handler(req) {
           total_oportunidades: oportunidades.length,
           total_comissoes: comissoes.length
         }
-      });
+      };
+      
+      console.log('✅ Resultado:', { receita_bruta, despesas, margem });
+      return Response.json(result);
     } catch (error) {
-      console.error('Erro em financial-analysis:', error);
+      console.error('❌ Erro em financial-analysis:', error.message, error.stack);
       return Response.json(
-        { error: error.message },
+        { error: error.message, stack: error.stack },
         { status: 500 }
       );
     }
