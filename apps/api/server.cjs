@@ -270,6 +270,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/pre-vendas', preVendasRoutes);
 app.use('/api/pre-sales-pocs', preSalesPocsRoutes);
 app.use('/api/b2g', b2gRoutes);
+app.use('/api/b2g-search', require('./api/b2g-search.cjs'));
+app.use('/api/filtros-ti', require('./api/filtros-ti-search.cjs'));
 app.use('/api/ai-analysis', aiAnalysisRoutes);
 app.use('/api/analyses', savedAnalysesRoutes);
 app.use('/api/companies', companiesDocumentsRoutes);
