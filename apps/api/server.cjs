@@ -355,6 +355,7 @@ app.use('/api/activities', handleLegacyAPI('./api/activities.js'));
 // app.use('/api/products', handleLegacyAPI('./api/products.js')); // Agora usando CommonJS
 // app.use('/api/proposals', handleLegacyAPI('./api/proposals.js')); // Agora usando CommonJS
 app.use('/api/commissions', handleLegacyAPI('./api/commissions.js'));
+app.use('/api/gestao/analise-financeira', handleLegacyAPI('./api/financial-analysis.js'));
 app.use('/api/users', handleLegacyAPI('./api/users.js'));
 app.use('/api/dashboard', handleLegacyAPI('./api/dashboard.js'));
 app.use('/api/leadScoring', handleLegacyAPI('./api/leadScoring.js'));
