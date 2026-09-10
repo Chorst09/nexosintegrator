@@ -6,6 +6,13 @@ const fs = require('fs');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth.cjs');
 
+// Helper para validar e criar Date seguro
+const toValidDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return !isNaN(date.getTime()) ? date : null;
+};
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = path.join(__dirname, '../uploads/projects');
@@ -890,10 +897,10 @@ router.put('/:projectId/phases/:phaseId', authenticateToken, async (req, res) =>
     if (status) updateData.status = normalizeProjectPhaseStatus(status);
     if (order !== undefined) updateData.order = parseInt(order);
     if (progressPercent !== undefined) updateData.progressPercent = parseInt(progressPercent);
-    if (plannedStartDate !== undefined) updateData.plannedStartDate = plannedStartDate ? new Date(plannedStartDate) : null;
-    if (plannedEndDate !== undefined) updateData.plannedEndDate = plannedEndDate ? new Date(plannedEndDate) : null;
-    if (actualStartDate !== undefined) updateData.actualStartDate = actualStartDate ? new Date(actualStartDate) : null;
-    if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
+    if (plannedStartDate !== undefined) updateData.plannedStartDate = toValidDate(plannedStartDate);
+    if (plannedEndDate !== undefined) updateData.plannedEndDate = toValidDate(plannedEndDate);
+    if (actualStartDate !== undefined) updateData.actualStartDate = toValidDate(actualStartDate);
+    if (actualEndDate !== undefined) updateData.actualEndDate = toValidDate(actualEndDate);
 
     const existingPhase = await prisma.projectPhase.findFirst({
       where: { id: req.params.phaseId, projectId: req.params.projectId },
@@ -966,7 +973,7 @@ router.post('/:projectId/tasks', authenticateToken, async (req, res) => {
         description,
         status: status || 'TODO',
         priority: priority || 'MEDIUM',
-        dueDate: dueDate ? new Date(dueDate) : null,
+        dueDate: toValidDate(dueDate),
         assignedToId: assignedToId || null,
         phaseId: phaseId || null,
         milestoneId: milestoneId || null,
@@ -996,7 +1003,7 @@ router.put('/:projectId/tasks/:taskId', authenticateToken, async (req, res) => {
       if (status === 'DONE') updateData.completedAt = new Date();
     }
     if (priority) updateData.priority = priority;
-    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    if (dueDate !== undefined) updateData.dueDate = toValidDate(dueDate);
     if (assignedToId !== undefined) updateData.assignedToId = assignedToId || null;
     if (phaseId !== undefined) updateData.phaseId = phaseId || null;
     if (milestoneId !== undefined) updateData.milestoneId = milestoneId || null;
@@ -1055,7 +1062,11 @@ router.get('/:projectId/timelogs', authenticateToken, async (req, res) => {
     const where = { projectId: req.params.projectId };
     if (userId) where.userId = userId;
     if (startDate && endDate) {
-      where.logDate = { gte: new Date(startDate), lte: new Date(endDate) };
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        where.logDate = { gte: start, lte: end };
+      }
     }
 
     const timelogs = await prisma.projectTimelog.findMany({
@@ -1080,12 +1091,17 @@ router.post('/:projectId/timelogs', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Tarefa, data e horas são obrigatórios' });
     }
 
+    const validLogDate = new Date(logDate);
+    if (isNaN(validLogDate.getTime())) {
+      return res.status(400).json({ error: 'Data inválida' });
+    }
+
     const timelog = await prisma.projectTimelog.create({
       data: {
         projectId: req.params.projectId,
         taskId,
         userId: userId || req.user.id,
-        logDate: new Date(logDate),
+        logDate: validLogDate,
         hours: parseFloat(hours),
         description,
         billable: billable !== false
@@ -1428,7 +1444,7 @@ router.post('/:projectId/billings', authenticateToken, async (req, res) => {
         amount: parseFloat(amount),
         tax: tax ? parseFloat(tax) : 0,
         totalAmount: parseFloat(amount) + (tax ? parseFloat(tax) : 0),
-        dueDate: dueDate ? new Date(dueDate) : null,
+        dueDate: toValidDate(dueDate),
         invoiceNumber: invoiceNumber || null
       }
     });
