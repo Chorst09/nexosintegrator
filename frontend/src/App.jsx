@@ -20,6 +20,7 @@ import Integracoes from './pages/Integracoes';
 import FuncionalidadesAvancadas from './pages/FuncionalidadesAvancadas';
 import MetasPerformance from './pages/MetasPerformance';
 import Kickoff from './pages/Kickoff';
+import Financeiro from './pages/Financeiro';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -75,6 +76,7 @@ export default function App() {
                     <Route path="/integracoes" element={<Integracoes />} />
                     <Route path="/funcionalidades-avancadas" element={<FuncionalidadesAvancadas />} />
                     <Route path="/kickoff" element={<Kickoff />} />
+                    <Route path="/financeiro" element={<Financeiro />} />
                   </Routes>
                 </main>
               </div>

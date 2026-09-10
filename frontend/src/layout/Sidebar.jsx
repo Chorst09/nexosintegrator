@@ -66,6 +66,7 @@ export default function Sidebar() {
       items: [
         { path: '/produtos', label: 'Produtos', icon: '📦', description: 'Catálogo de produtos' },
         { path: '/comissoes', label: 'Comissões', icon: '💰', description: 'Comissionamento' },
+        { path: '/financeiro', label: 'Financeiro', icon: '💸', description: 'Contas a receber e pagar' },
         { path: '/metas-performance', label: 'Metas & Performance', icon: '🎯', description: 'Metas e automações avançadas' },
         { path: '/kickoff', label: 'Gestão de Kickoff', icon: '🚀', description: 'Reuniões estratégicas do projeto' },
         { path: '/pos-venda', label: 'Pós-Venda', icon: '🤝', description: 'Suporte e relacionamento' },
