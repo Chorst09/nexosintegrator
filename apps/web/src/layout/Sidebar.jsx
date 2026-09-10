@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   Archive,
   BadgeDollarSign,
+  BarChart3,
   Beaker,
   BookOpenCheck,
   Building2,
@@ -195,6 +196,7 @@ export default function Sidebar({
       items: [
         { path: '/produtos', label: 'Produtos', icon: Package, accent: 'from-indigo-300/95 via-blue-400/85 to-cyan-400/85 text-white shadow-blue-500/30', description: 'Catalogo e itens' },
         { path: '/vendedores', label: 'Vendedores', icon: UsersRound, accent: 'from-lime-300/95 via-emerald-400/85 to-cyan-400/85 text-slate-950 shadow-emerald-500/30', description: 'Equipe e cadastro' },
+        { path: '/analise-financeira', label: 'Análise Financeira', icon: BarChart3, accent: 'from-cyan-300/95 via-sky-400/85 to-blue-500/90 text-white shadow-cyan-500/35', description: 'Dashboard financeiro e análise' },
         { path: '/comissoes', label: 'Comissoes', icon: Coins, accent: 'from-yellow-200/95 via-amber-400/90 to-orange-400/85 text-slate-950 shadow-amber-500/30', description: 'Pagamentos e regras' },
         { path: '/metas-performance', label: 'Metas & Performance', icon: Trophy, accent: 'from-orange-300/95 via-amber-400/90 to-yellow-300/85 text-slate-950 shadow-orange-500/30', description: 'Metas e indicadores' },
         { path: '/kickoff', label: 'Gestão de Kickoff', icon: Rocket, accent: 'from-rose-300/95 via-orange-400/90 to-amber-300/90 text-slate-950 shadow-orange-500/30', description: 'Reuniões estratégicas do projeto' },

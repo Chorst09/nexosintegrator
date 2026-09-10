@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import DashboardModernized from './pages/DashboardModernized';
 import Empresas from './pages/Empresas';
 import Oportunidades from './pages/Oportunidades';
+import AnaliseFinanceira from './pages/AnaliseFinanceira';
 import Comissoes from './pages/Comissoes';
 import Atividades from './pages/Atividades';
 import Simuladores from './pages/Simuladores';
@@ -433,6 +434,15 @@ export default function App() {
             element={
               <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.PRE_SALES, ROLES.USER]}>
                 <Navigate to="/prevendas-distribuidores" replace />
+              </RoleGuard>
+            }
+          />
+
+          <Route
+            path="analise-financeira"
+            element={
+              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.DIRECTOR, ROLES.MANAGER]}>
+                <AnaliseFinanceira />
               </RoleGuard>
             }
           />
