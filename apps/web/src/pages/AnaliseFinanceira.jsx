@@ -16,7 +16,7 @@ const AnaliseFinanceira = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   // Filtros
-  const [periodo, setPeriodo] = useState('mes');
+  const [periodo, setPeriodo] = useState('trimestre');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [vendedor, setVendedor] = useState('');
