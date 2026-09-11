@@ -1362,6 +1362,7 @@ enum Role {
   SELLER
   USER
   PRE_SALES
+  USER_B2B
 }
 
 enum Stage {
