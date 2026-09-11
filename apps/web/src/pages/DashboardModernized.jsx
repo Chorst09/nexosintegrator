@@ -28,7 +28,7 @@ import '../styles/dashboardEffects.css';
 const DashboardModernized = () => {
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
-  const [timeRange, setTimeRange] = useState('30d');
+  const [timeRange, setTimeRange] = useState('quarter');
   const [selectedManager, setSelectedManager] = useState('');
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
