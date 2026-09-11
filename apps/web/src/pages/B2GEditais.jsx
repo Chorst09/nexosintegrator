@@ -1535,6 +1535,7 @@ export default function B2GEditais() {
   const [dashboardTemperatureFilter, setDashboardTemperatureFilter] = useState('ALL');
   const [dashboardPhaseFilter, setDashboardPhaseFilter] = useState('ALL');
   const [dashboardPeriod, setDashboardPeriod] = useState('30');
+  const [dashboardOwnerFilter, setDashboardOwnerFilter] = useState('ALL');
 
   const activeTab = PATH_TAB_MAP[location.pathname] || 'dashboard';
   const pageMeta = TAB_PAGE_META[activeTab] || TAB_PAGE_META.dashboard;
@@ -2235,9 +2236,12 @@ export default function B2GEditais() {
       if (dashboardPhaseFilter !== 'ALL' && item.__columnId !== dashboardPhaseFilter) {
         return false;
       }
+      if (dashboardOwnerFilter !== 'ALL' && item.ownerId !== dashboardOwnerFilter) {
+        return false;
+      }
       return true;
     });
-  }, [dashboardOpportunities, dashboardPhaseFilter, dashboardTemperatureFilter]);
+  }, [dashboardOpportunities, dashboardPhaseFilter, dashboardTemperatureFilter, dashboardOwnerFilter]);
 
   const dashboardTotals = useMemo(() => {
     let pipelineValue = 0;
@@ -5046,6 +5050,69 @@ export default function B2GEditais() {
             </div>
           </div>
 
+          {/* Lista de oportunidades ao filtrar por temperatura */}
+          {dashboardTemperatureFilter !== 'ALL' && (
+            <div className="mt-4 rounded-[18px] border border-[#74b9f353] bg-[#0b2243]/85 p-4">
+              <h4 className="mb-3 text-base font-black text-[#dcecff]">
+                Oportunidades com temperatura {dashboardTemperatureFilter}%
+                <span className="ml-2 text-sm font-medium text-[#8fd1ff]">({dashboardTemperatureRows.length})</span>
+              </h4>
+              {dashboardTemperatureRows.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#74b9f353] p-6 text-center text-sm italic text-[#a9c6e3]">
+                  Nenhuma oportunidade para esta temperatura.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-[#74b9f353] text-[10px] uppercase tracking-[0.08em] text-[#9fb9d7]">
+                        <th className="px-2 py-2 text-left">Oportunidade</th>
+                        <th className="px-2 py-2 text-left">Órgão / Empresa</th>
+                        <th className="px-2 py-2 text-left">Vendedor</th>
+                        <th className="px-2 py-2 text-right">Valor</th>
+                        <th className="px-2 py-2 text-center">Fase</th>
+                        <th className="px-2 py-2 text-center">Temp.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboardTemperatureRows.map((item) => (
+                        <tr key={item.id} className="border-b border-[#74b9f322] transition-colors hover:bg-[#0b2243]/50">
+                          <td className="px-2 py-2 font-medium text-[#eaf4ff] max-w-[200px] truncate">{item.__title}</td>
+                          <td className="px-2 py-2 text-[#aac6e4] max-w-[160px] truncate">{item.__organization}</td>
+                          <td className="px-2 py-2 text-[#aac6e4]">{item.owner?.name || '-'}</td>
+                          <td className="px-2 py-2 text-right font-semibold text-[#5eb0ff]">{formatCurrencyNoCents(item.__value)}</td>
+                          <td className="px-2 py-2 text-center">
+                            <span className="inline-block rounded-full border border-[#74b9f353] bg-[#0b2243]/75 px-2 py-0.5 text-[9px]">
+                              {item.__stageLabel}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <span className="inline-block rounded-full px-2 py-0.5 text-[9px] font-bold"
+                              style={{
+                                background: item.__temperatureBand === 0 ? 'rgba(59,130,246,0.2)' :
+                                  item.__temperatureBand <= 25 ? 'rgba(251,191,36,0.2)' :
+                                  item.__temperatureBand <= 50 ? 'rgba(249,115,22,0.2)' :
+                                  item.__temperatureBand <= 75 ? 'rgba(239,68,68,0.2)' :
+                                  'rgba(34,197,94,0.2)',
+                                color: item.__temperatureBand === 0 ? '#93c5fd' :
+                                  item.__temperatureBand <= 25 ? '#fcd34d' :
+                                  item.__temperatureBand <= 50 ? '#fdba74' :
+                                  item.__temperatureBand <= 75 ? '#fca5a5' :
+                                  '#86efac'
+                              }}
+                            >
+                              {item.__temperatureBand}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.95fr_0.95fr]">
             <div className="rounded-[18px] border border-[#74b9f353] bg-[#0b2243]/85 p-4">
               <h4 className="text-lg md:text-xl font-black text-[#dcecff]">Top editais por valor</h4>
@@ -5522,6 +5589,12 @@ export default function B2GEditais() {
               <select value={dashboardPeriod} onChange={(event) => setDashboardPeriod(event.target.value)} aria-label="Período">
                 {PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
+              <select value={dashboardOwnerFilter} onChange={(event) => setDashboardOwnerFilter(event.target.value)} aria-label="Vendedor">
+                <option value="ALL">Todos os vendedores</option>
+                {[...new Map(opportunities.filter(o => o.owner?.id).map(o => [o.owner.id, o.owner])).values()].map((owner) => (
+                  <option key={owner.id} value={owner.id}>{owner.name}</option>
+                ))}
+              </select>
               <select value={dashboardPhaseFilter} onChange={(event) => setDashboardPhaseFilter(event.target.value)} aria-label="Fase">
                 {dashboardPhaseOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
@@ -5868,19 +5941,6 @@ export default function B2GEditais() {
         </div>
       ) : activeTab === 'dashboard' ? (
         <div className="space-y-4">
-          {/* Filtros TI Avançados */}
-          <FiltrosTIAvancados
-            categoriasSelecionadas={filtrosTI.categoriasSelecionadas}
-            termoLivre={filtrosTI.termoLivre}
-            ativo={filtrosTI.ativo}
-            onFiltrosChange={(novosFiltros) => {
-              setFiltrosTI(novosFiltros);
-              // Aplicar filtros TI quando ativo
-              if (novosFiltros.ativo && (novosFiltros.categoriasSelecionadas.length > 0 || novosFiltros.termoLivre.trim())) {
-                handleBuscarComFiltrosTI(novosFiltros);
-              }
-            }}
-          />
           {renderB2GStrategicDashboardV2()}
         </div>
       ) : activeTab === 'leads' ? (

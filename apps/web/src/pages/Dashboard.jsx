@@ -1328,14 +1328,17 @@ export default function Dashboard() {
         </section>
 
         {/* Oportunidades Filtradas */}
-        <section className="rounded-xl border border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))] p-3.5 text-[#d9edff]">
+        <section className={`rounded-xl border p-3.5 text-[#d9edff] ${selectedTemperature ? 'border-[#87d5ff] bg-[linear-gradient(140deg,rgba(14,47,87,0.97),rgba(8,29,58,0.99))]' : 'border-[#78c5ff50] bg-[linear-gradient(140deg,rgba(14,47,87,0.93),rgba(8,29,58,0.96))]'}`}>
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h3 className="text-base font-black text-[#dcecff]">
-                Oportunidades
+                {selectedTemperature
+                  ? `Oportunidades com temperatura ${selectedTemperature}%`
+                  : 'Oportunidades'}
               </h3>
               <p className="text-xs text-[#aac6e4]">
                 {filteredOpportunities.length} oportunidade{filteredOpportunities.length !== 1 ? 's' : ''} encontrada{filteredOpportunities.length !== 1 ? 's' : ''}
+                {selectedTemperature && ` · filtrado por temperatura ${selectedTemperature}%`}
               </p>
             </div>
             <Target className="h-4 w-4 text-[#8fd1ff]" />
