@@ -243,6 +243,9 @@ app.use('/api/prevendas-cadastros', authenticateToken, handleLegacyAPI('./api/pr
 app.use('/api/analyses', authenticateToken, require('./api/saved-analyses.cjs'));
 app.use('/api/ai-analysis', authenticateToken, require('./api/ai-analysis.cjs'));
 
+// Gestão Financeira
+app.use('/api/gestao/analise-financeira', authenticateToken, require('./api/financial-analysis.js'));
+
 // Gestão de Kickoff
 app.use('/api/kickoff', require('./api/kickoff'));
 
