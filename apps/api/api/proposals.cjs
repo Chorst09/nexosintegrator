@@ -1,6 +1,7 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth.cjs');
+const { getTenantId } = require('../lib/access-control.cjs');
 
 const router = express.Router();
 
@@ -15,9 +16,16 @@ router.get('/', authenticateToken, async (req, res) => {
     if (status) where.status = status;
     if (type) where.type = type;
 
-    // Filtrar por permissão
+    // Isolamento por tenant — cada empresa vê apenas suas próprias propostas
+    const tenantId = getTenantId(req.user);
+    if (tenantId) {
+      where.opportunity = { tenantCompanyId: tenantId };
+    }
+
+    // Filtrar por permissão de papel (SELLER vê apenas as próprias)
     if (req.user.role === 'SELLER') {
       where.opportunity = {
+        ...(where.opportunity || {}),
         ownerId: req.user.userId
       };
     }

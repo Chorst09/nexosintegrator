@@ -9,33 +9,33 @@ function getUserRegionId(user = {}) {
   return user.regionId || null;
 }
 
+// Retorna o tenantCompanyId do usuário (null para MASTER = acesso global)
+function getTenantId(user = {}) {
+  if (isMaster(user)) return null;
+  return user.tenantCompanyId || null;
+}
+
 function buildCompanyScopeWhere(user = {}) {
-  if (isGlobalOperator(user)) return {};
-
-  const regionId = getUserRegionId(user);
-  if (!regionId) return { id: '__no_access__' };
-
-  return { regionId };
+  const tenantId = getTenantId(user);
+  // MASTER vê tudo; demais usuários veem apenas seu tenant
+  if (!tenantId) return {};
+  return { tenantCompanyId: tenantId };
 }
 
 function buildContractScopeWhere(user = {}) {
-  if (isGlobalOperator(user)) return {};
-
-  const regionId = getUserRegionId(user);
-  if (!regionId) return { id: '__no_access__' };
-
+  const tenantId = getTenantId(user);
+  if (!tenantId) return {};
   return {
     company: {
-      regionId
+      tenantCompanyId: tenantId
     }
   };
 }
 
 function canAccessCompanyRecord(user = {}, company = {}) {
-  if (isGlobalOperator(user)) return true;
-
-  const regionId = getUserRegionId(user);
-  return Boolean(regionId && company?.regionId === regionId);
+  const tenantId = getTenantId(user);
+  if (!tenantId) return true; // MASTER
+  return String(company?.tenantCompanyId || '') === tenantId;
 }
 
 async function canAccessCompany(prisma, user, companyId) {
@@ -104,6 +104,7 @@ async function canAccessContractAttachment(prisma, user, attachmentId) {
 
 module.exports = {
   isGlobalOperator,
+  getTenantId,
   buildCompanyScopeWhere,
   buildContractScopeWhere,
   canAccessCompany,

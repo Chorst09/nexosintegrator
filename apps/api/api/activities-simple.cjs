@@ -1,5 +1,6 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
+const { getTenantId } = require('../lib/access-control.cjs');
 
 const router = express.Router();
 const ACTIVITY_FLOW_MARKER = '[CRM_ACTIVITY_FLOW]';
@@ -84,6 +85,13 @@ router.get('/', async (req, res) => {
     if (req.query?.status) where.status = req.query.status;
     if (req.query?.type) where.type = req.query.type;
     if (req.query?.priority) where.priority = req.query.priority;
+
+    // Isolamento por tenant
+    const tenantId = getTenantId(req.user);
+    if (tenantId) {
+      where.tenantCompanyId = tenantId;
+    }
+
     if (req.user?.role === 'SELLER') {
       where.assignedToId = getAuthenticatedUserId(req);
     }

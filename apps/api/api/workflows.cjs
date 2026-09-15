@@ -1,6 +1,7 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken, requireRole } = require('../lib/auth.cjs');
+const { getTenantId } = require('../lib/access-control.cjs');
 
 const router = express.Router();
 
@@ -35,6 +36,12 @@ router.get('/', authenticateToken, async (req, res) => {
       if (prisma.advancedWorkflow) where.isActive = active === 'true';
     }
     if (trigger && prisma.workflow) where.trigger = trigger;
+
+    // Isolamento por tenant
+    const tenantId = getTenantId(req.user);
+    if (tenantId) {
+      where.tenantCompanyId = tenantId;
+    }
 
     const [workflows, total] = await Promise.all([
       workflowDelegate.findMany({

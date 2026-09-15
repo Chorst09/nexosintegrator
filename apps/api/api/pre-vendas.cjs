@@ -164,6 +164,11 @@ router.get('/', async (req, res) => {
     const { status, prioridade, page = 1, limit = 10, search } = req.query;
     
     const where = {};
+
+    // Isolamento por tenant
+    if (req.user && !((req.user.actualRole || req.user.role) === 'MASTER') && req.user.tenantCompanyId) {
+      where.tenantCompanyId = req.user.tenantCompanyId;
+    }
     
     if (status && status !== 'all') {
       where.status = status;

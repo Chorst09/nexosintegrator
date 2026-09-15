@@ -561,6 +561,13 @@ router.get('/', authenticateToken, async (req, res) => {
     const skip = (page - 1) * limit;
     const where = {};
 
+    // Isolamento por tenant — cada empresa vê apenas seus próprios projetos
+    const tenantId = req.user.tenantCompanyId || null;
+    const isMasterUser = (req.user.actualRole || req.user.role) === 'MASTER';
+    if (!isMasterUser && tenantId) {
+      where.company = { tenantCompanyId: tenantId };
+    }
+
     if (req.user.role === 'SELLER') where.projectManagerId = req.user.id;
     if (status) where.status = status;
     if (type) where.type = type;
@@ -634,6 +641,17 @@ router.get('/:id', authenticateToken, async (req, res) => {
     });
 
     if (!project) return res.status(404).json({ error: 'Projeto não encontrado' });
+
+    // Verificar isolamento de tenant
+    const isMasterUser = (req.user.actualRole || req.user.role) === 'MASTER';
+    const tenantId = req.user.tenantCompanyId || null;
+    if (!isMasterUser && tenantId) {
+      const projectTenantId = project.company?.tenantCompanyId || null;
+      if (projectTenantId && projectTenantId !== tenantId) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
+    }
+
     res.json(project);
   } catch (error) {
     console.error('Erro ao buscar projeto:', error);

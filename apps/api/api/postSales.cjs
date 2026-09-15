@@ -1,6 +1,7 @@
 const express = require('express');
 const { prisma } = require('../lib/prisma.cjs');
 const { authenticateToken } = require('../lib/auth.cjs');
+const { getTenantId } = require('../lib/access-control.cjs');
 
 const router = express.Router();
 
@@ -16,7 +17,13 @@ router.get('/onboarding', authenticateToken, async (req, res) => {
     if (status) where.status = status;
     if (companyId) where.companyId = companyId;
 
-    // Filtrar por permissão
+    // Isolamento por tenant
+    const tenantId = getTenantId(req.user);
+    if (tenantId) {
+      where.company = { tenantCompanyId: tenantId };
+    }
+
+    // Filtrar por permissão de papel
     if (req.user.role === 'SELLER') {
       where.assignedToId = req.user.userId;
     }
@@ -174,7 +181,13 @@ router.get('/support', authenticateToken, async (req, res) => {
     if (priority) where.priority = priority;
     if (companyId) where.companyId = companyId;
 
-    // Filtrar por permissão
+    // Isolamento por tenant
+    const tenantId = getTenantId(req.user);
+    if (tenantId) {
+      where.company = { tenantCompanyId: tenantId };
+    }
+
+    // Filtrar por permissão de papel
     if (req.user.role === 'SELLER') {
       where.assignedToId = req.user.userId;
     }
