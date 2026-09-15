@@ -64,6 +64,8 @@ model User {
   crRequested        ProjectChangeRequest[] @relation("CRRequester")
   crApproved         ProjectChangeRequest[] @relation("CRApprover")
   acceptancesApproved ProjectAcceptance[] @relation("AcceptanceApprover")
+  phasesAssigned      ProjectPhase[]      @relation("PhaseAssignee")
+  phasesAccountable   ProjectPhase[]      @relation("PhaseAccountable")
 
   @@index([tenantCompanyId])
   @@index([role])
@@ -1789,6 +1791,15 @@ model ProjectPhase {
   actualStartDate DateTime?
   actualEndDate   DateTime?
   progressPercent Int      @default(0)
+  assignedToId    String?
+  assignedTo      User?    @relation("PhaseAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  // Matriz RACI
+  responsibleIds  Json?    @default("[]")  // R - Quem executa (array de user IDs)
+  accountableId   String?                  // A - Quem aprova (apenas 1 pessoa)
+  accountable     User?    @relation("PhaseAccountable", fields: [accountableId], references: [id], onDelete: SetNull)
+  consultedIds    Json?    @default("[]")  // C - Quem deve ser consultado (array de user IDs)
+  informedIds     Json?    @default("[]")  // I - Quem deve ser informado (array de user IDs)
 
   milestones      ProjectMilestone[]
   tasks           ProjectTask[]
@@ -1798,6 +1809,8 @@ model ProjectPhase {
 
   @@index([projectId])
   @@index([order])
+  @@index([assignedToId])
+  @@index([accountableId])
 }
 
 model ProjectMilestone {

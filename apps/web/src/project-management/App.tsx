@@ -358,6 +358,14 @@ function sortIssuesBySequence(items: Issue[]) {
 }
 
 function mapProjectPhaseToIssue(project: ApiProject, phase: ApiProjectPhase): Issue {
+  const assignee = (phase as any).assignedTo;
+  const initials = String(assignee?.name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part.charAt(0).toUpperCase())
+    .join('');
+
   return {
     id: `phase-${phase.id}`,
     projectId: project.id,
@@ -371,6 +379,7 @@ function mapProjectPhaseToIssue(project: ApiProject, phase: ApiProjectPhase): Is
     estimatedHours: 0,
     actualHours: 0,
     sourceType: 'phase',
+    assignee: assignee ? { id: assignee.id, name: assignee.name, initials, color: '#ff7a00' } : undefined,
     createdAt: phase.createdAt || project.createdAt || new Date().toISOString(),
     updatedAt: phase.updatedAt || project.createdAt || new Date().toISOString()
   };
@@ -414,6 +423,15 @@ function getProjectPhaseId(issue: Issue) {
   const id = String(issue.id || '');
   if (!id.startsWith('phase-') || !issue.projectId) return '';
   return id.replace(/^phase-/, '');
+}
+
+function normalizeTitle(value?: string | null) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s\u00a0]+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function issueStatusToProjectPhaseStatus(status?: Issue['status']) {
@@ -473,7 +491,13 @@ function buildPhaseRequestPayload(issue: Issue) {
     description: issue.description || '',
     status: issueStatusToProjectPhaseStatus(issue.status),
     plannedStartDate: issue.startDate || null,
-    plannedEndDate: issue.dueDate || null
+    plannedEndDate: issue.dueDate || null,
+    assignedToId: issue.assignee?.id || null,
+    // Matriz RACI
+    responsibleIds: issue.responsibleIds || [],
+    accountableId: issue.accountableId || null,
+    consultedIds: issue.consultedIds || [],
+    informedIds: issue.informedIds || []
   };
 }
 
@@ -623,12 +647,15 @@ export default function App({ onBack }: { onBack?: () => void }) {
       setIssues((current) => {
         const projectIds = new Set(mapped.map((project) => project.id));
         const apiIssueIds = new Set(apiIssues.map((issue) => issue.id));
+        const apiTitleKeys = new Set(apiIssues.map((issue) => `${issue.projectId}::${normalizeTitle(issue.title)}`));
         const localProjectIssues = current.filter((issue) => (
           issue.projectId
           && projectIds.has(issue.projectId)
+          && !['phase', 'task'].includes(String(issue.sourceType || ''))
           && !String(issue.id).startsWith('phase-')
           && !String(issue.id).startsWith('task-')
           && !apiIssueIds.has(issue.id)
+          && !apiTitleKeys.has(`${issue.projectId}::${normalizeTitle(issue.title)}`)
         ));
         return [...apiIssues, ...localProjectIssues];
       });
@@ -695,10 +722,22 @@ export default function App({ onBack }: { onBack?: () => void }) {
   const activeTeamUsers = (activeProject?.teamMembers || [])
     .filter(member => member.isActive !== false)
     .map(mapTeamMemberToUser);
-  const activeProjectIssues = sortIssuesBySequence(issues.filter(issue => {
-    if (!activeProject) return false;
-    return issue.projectId === activeProject.id;
-  }));
+  const activeProjectIssues = sortIssuesBySequence(
+    (() => {
+      if (!activeProject) return [];
+      const projectIssues = issues.filter(issue => issue.projectId === activeProject.id);
+      const apiPhase = projectIssues.filter(issue => issue.sourceType === 'phase' && String(issue.id).startsWith('phase-'));
+      const seenKeys = new Set(apiPhase.map(issue => normalizeTitle(issue.title)));
+      const deduped = apiPhase.slice();
+      for (const issue of projectIssues) {
+        if (issue.sourceType === 'phase' && String(issue.id).startsWith('phase-')) continue;
+        const key = normalizeTitle(issue.title);
+        if (seenKeys.has(key)) continue;
+        deduped.push(issue);
+      }
+      return deduped;
+    })()
+  );
   const isDashboardFocus = (globalView === 'spaces' && activeView === 'dashboard') || globalView === 'dashboards';
 
   const submitNewSpace = async () => {
@@ -1004,40 +1043,94 @@ export default function App({ onBack }: { onBack?: () => void }) {
   };
 
   const handleUpdateIssue = (updatedIssue: Issue) => {
-    const shouldConvertPhase = Boolean(
-      getProjectPhaseId(updatedIssue)
-      && (updatedIssue.assignee?.id || (updatedIssue.estimatedHours || 0) > 0)
-    );
-
-    if (shouldConvertPhase) {
-      setSelectedTask(updatedIssue);
-      convertPhaseToTaskIssue(updatedIssue)
-        .then((convertedIssue) => {
-          if (!convertedIssue) return;
-          const mergedIssue = {
-            ...convertedIssue,
-            status: updatedIssue.status,
-            priority: updatedIssue.priority,
-            assignee: updatedIssue.assignee,
-            estimatedHours: updatedIssue.estimatedHours,
-            actualHours: updatedIssue.actualHours,
-            estimate: updatedIssue.estimate,
-            customFields: updatedIssue.customFields,
-            followUps: updatedIssue.followUps
-          };
-          setIssues(prev => [mergedIssue, ...prev.filter(issue => issue.id !== updatedIssue.id && issue.id !== mergedIssue.id)]);
-          setSelectedTask(mergedIssue);
-        })
-        .catch((error) => {
-          console.error('Erro ao converter fase em tarefa:', error);
-          alert(error instanceof Error ? error.message : 'Erro ao converter fase em tarefa');
-        });
-      return;
-    }
-
+    // Atualiza o estado e agenda o save — fases agora suportam assignee diretamente
     setIssues(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
     setSelectedTask(updatedIssue);
     scheduleProjectIssueSave(updatedIssue);
+  };
+
+  const handleDeletePhase = async (issue: Issue) => {
+    const projectId = issue.projectId;
+    if (!projectId) {
+      alert('Não foi possível excluir: a fase não está vinculada a um projeto.');
+      return;
+    }
+    const rawId = String(issue.id || '');
+    const normalizedTitle = normalizeTitle(issue.title);
+
+    const serverDelete = async (url: string) => {
+      const response = await fetch(buildApiUrl(url), {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Erro ${response.status} ao excluir`);
+      }
+    };
+
+    let deletedServer = false;
+    try {
+      if (rawId.startsWith('task-')) {
+        await serverDelete(`/projetos/${projectId}/tasks/${rawId.replace(/^task-/, '')}`);
+        deletedServer = true;
+      } else {
+        let phaseId = getProjectPhaseId(issue);
+        if (!phaseId) {
+          const realPhase = issues.find((item) =>
+            item.projectId === projectId
+            && getProjectPhaseId(item)
+            && normalizeTitle(item.title) === normalizedTitle
+          );
+          if (realPhase) phaseId = getProjectPhaseId(realPhase);
+        }
+
+        if (phaseId) {
+          await serverDelete(`/projetos/${projectId}/phases/${phaseId}`);
+          deletedServer = true;
+        } else {
+          const detailRes = await fetch(buildApiUrl(`/projetos/${projectId}`), {
+            headers: getAuthHeaders()
+          });
+          if (detailRes.ok) {
+            const detail = await detailRes.json();
+            const phases = Array.isArray(detail.phases) ? detail.phases : [];
+            const match = phases.find((p: ApiProjectPhase) => normalizeTitle(p.name) === normalizedTitle);
+            if (match) {
+              await serverDelete(`/projetos/${projectId}/phases/${match.id}`);
+              deletedServer = true;
+            } else {
+              const tasks = Array.isArray(detail.tasks) ? detail.tasks : [];
+              const taskMatch = tasks.find((t: ApiProjectTask) => normalizeTitle(t.title) === normalizedTitle);
+              if (taskMatch) {
+                await serverDelete(`/projetos/${projectId}/tasks/${taskMatch.id}`);
+                deletedServer = true;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao excluir');
+      return;
+    }
+
+    if (!deletedServer) {
+      alert('O item não foi encontrado no servidor para exclusão definitiva. Se o problema persistir, recarregue a página e tente novamente.');
+      return;
+    }
+
+    if (rawId.startsWith('task-')) {
+      const taskId = rawId.replace(/^task-/, '');
+      setIssues(prev => prev.filter(item => !(item.projectId === projectId && String(item.id).replace(/^task-/, '') === taskId)));
+    } else {
+      setIssues(prev => prev.filter(item => (
+        item.projectId !== projectId
+        || normalizeTitle(item.title) !== normalizedTitle
+      )));
+    }
+    if (selectedTask?.id === issue.id) setSelectedTask(null);
   };
 
   return (
@@ -1287,8 +1380,8 @@ export default function App({ onBack }: { onBack?: () => void }) {
               </button>
             </div>
           )}
-          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} users={activeTeamUsers} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} onIssueChange={handlePersistedIssueChange} />}
-          {activeView === 'list' && activeProject && <ListView issues={activeProjectIssues} onTaskClick={setSelectedTask} />}
+          {activeView === 'board' && activeProject && <KanbanBoard issues={activeProjectIssues} setIssues={setIssues} users={activeTeamUsers} onTaskClick={setSelectedTask} onCreateTask={handleGlobalCreateTaskSubmit} onIssueChange={handlePersistedIssueChange} onDeleteIssue={handleDeletePhase} />}
+          {activeView === 'list' && activeProject && <ListView issues={activeProjectIssues} onTaskClick={setSelectedTask} onDeleteIssue={handleDeletePhase} />}
           {activeView === 'dashboard' && (
             <Dashboard
               projects={spaces}

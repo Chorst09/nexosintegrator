@@ -47,7 +47,8 @@ import {
   PenLine,
   Undo2,
   Plus,
-  X
+  X,
+  FileText
 } from 'lucide-react';
 import type { Space } from '../types';
 import { toPng } from 'html-to-image';
@@ -699,6 +700,137 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
     setDiagramProjectName(entry.projectName || '');
     setDiagramMode(mode);
     setPenEnabled(false);
+  };
+
+  const viewDiagramAsPDF = async (entry: SavedDiagramEntry) => {
+    // Carregar temporariamente o diagrama
+    setNodes(entry.nodes || []);
+    setEdges(entry.edges || []);
+    setDrawings(entry.drawings || []);
+    setBackgroundImage(entry.backgroundImage || null);
+    setBackgroundOpacity(typeof entry.backgroundOpacity === 'number' ? entry.backgroundOpacity : 0.38);
+
+    // Aguardar o React renderizar
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Exportar para PDF com nome estruturado
+    const nodes = entry.nodes || [];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    nodes.forEach((n: any) => {
+      const width = n.width || 180;
+      const height = n.height || 120;
+      minX = Math.min(minX, n.position.x);
+      minY = Math.min(minY, n.position.y);
+      maxX = Math.max(maxX, n.position.x + width);
+      maxY = Math.max(maxY, n.position.y + height);
+    });
+
+    (entry.drawings || []).forEach((stroke: any) => {
+      stroke.points.forEach((point: any) => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      });
+    });
+
+    const padding = 80;
+    const boundsWidth = maxX - minX;
+    const boundsHeight = maxY - minY;
+    const imageWidth = boundsWidth + padding * 2;
+    const imageHeight = boundsHeight + padding * 2;
+
+    const viewportElement = document.querySelector('.react-flow__viewport') as HTMLElement;
+    if (!viewportElement) {
+      alert('Erro ao capturar diagrama');
+      return;
+    }
+
+    const translateX = -minX + padding;
+    const translateY = -minY + padding;
+
+    try {
+      const dataUrl = await toPng(viewportElement, {
+        backgroundColor: '#070b16',
+        width: imageWidth,
+        height: imageHeight,
+        cacheBust: true,
+        style: {
+          width: `${imageWidth}px`,
+          height: `${imageHeight}px`,
+          transform: `translate(${translateX}px, ${translateY}px) scale(1)`,
+        },
+      });
+
+      // Criar PDF com cabeçalho profissional
+      const pdf = new jsPDF({
+        orientation: imageWidth > imageHeight ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: 'a4'
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // Cabeçalho
+      pdf.setFillColor(7, 11, 22); // #070b16
+      pdf.rect(0, 0, pageWidth, 80, 'F');
+
+      pdf.setFontSize(22);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(entry.name, 20, 35);
+
+      pdf.setFontSize(11);
+      pdf.setTextColor(143, 156, 175);
+      if (entry.clientName) pdf.text(`Cliente: ${entry.clientName}`, 20, 52);
+      if (entry.projectName) pdf.text(`Projeto: ${entry.projectName}`, 20, 65);
+
+      // Data de geração
+      pdf.setFontSize(9);
+      pdf.setTextColor(100, 116, 139);
+      const dataGeracao = new Date().toLocaleDateString('pt-BR', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit' 
+      });
+      pdf.text(`Gerado em: ${dataGeracao}`, pageWidth - 150, 25);
+
+      // Logo/Marca (opcional - pode adicionar depois)
+      pdf.setFontSize(16);
+      pdf.setTextColor(255, 122, 0);
+      pdf.text('NEXOS', pageWidth - 150, 50);
+
+      // Diagrama
+      const diagramY = 90;
+      const availableHeight = pageHeight - diagramY - 20;
+      const availableWidth = pageWidth - 40;
+
+      const scale = Math.min(
+        availableWidth / imageWidth,
+        availableHeight / imageHeight,
+        1
+      );
+
+      const scaledWidth = imageWidth * scale;
+      const scaledHeight = imageHeight * scale;
+      const x = (pageWidth - scaledWidth) / 2;
+
+      pdf.addImage(dataUrl, 'PNG', x, diagramY, scaledWidth, scaledHeight);
+
+      // Rodapé
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('Diagrama de Arquitetura - Gestão de Projetos Nexos', 20, pageHeight - 10);
+      pdf.text(`Página 1`, pageWidth - 60, pageHeight - 10);
+
+      // Salvar com nome estruturado
+      const nomeArquivo = `${entry.clientName || 'diagrama'}_${entry.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(nomeArquivo);
+
+    } catch (err) {
+      console.error('Erro ao gerar PDF', err);
+      alert('Erro ao gerar o PDF. Tente novamente.');
+    }
   };
 
   const loadTemplate = (key: keyof typeof templates | 'saved') => {
@@ -1472,12 +1604,11 @@ function ArchitectureDiagramContent({ onBack, activeProject }: { onBack: () => v
                           <button
                             type="button"
                             onClick={() => {
-                              loadSavedDiagram(entry, 'view');
-                              setSavedDiagramsModalOpen(false);
+                              viewDiagramAsPDF(entry);
                             }}
                             className="flex-1 flex items-center justify-center gap-2 rounded-md border border-[#263345] bg-[#070b16] px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-[#22d3ee] hover:bg-[#22d3ee]/10 hover:text-white"
                           >
-                            <Eye className="h-3.5 w-3.5" /> Visualizar
+                            <FileText className="h-3.5 w-3.5" /> Visualizar PDF
                           </button>
                           <button
                             type="button"

@@ -2,7 +2,7 @@ import React from 'react';
 import { Issue, IssueStatus } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { CheckCircle2, CircleDashed, CircleDot, Clock, User as UserIcon } from 'lucide-react';
+import { CheckCircle2, CircleDashed, CircleDot, Clock, User as UserIcon, Trash2 } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -26,7 +26,7 @@ const priorityColors: Record<string, string> = {
   'Baixa': 'text-slate-400',
 };
 
-export default function ListView({ issues, onTaskClick }: { issues: Issue[], onTaskClick?: (issue: Issue) => void }) {
+export default function ListView({ issues, onTaskClick, onDeleteIssue }: { issues: Issue[], onTaskClick?: (issue: Issue) => void, onDeleteIssue?: (issue: Issue) => void | Promise<void> }) {
   return (
     <div className="h-full bg-[#070b16] flex flex-col text-slate-300">
       <div className="flex-1 overflow-auto p-6">
@@ -39,6 +39,7 @@ export default function ListView({ issues, onTaskClick }: { issues: Issue[], onT
                 <th className="px-6 py-3 font-semibold">Prioridade</th>
                 <th className="px-6 py-3 font-semibold">Responsável</th>
                 <th className="px-6 py-3 font-semibold">Data Final</th>
+                <th className="px-6 py-3 font-semibold">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#0d1423]">
@@ -81,6 +82,21 @@ export default function ListView({ issues, onTaskClick }: { issues: Issue[], onT
                   </td>
                   <td className="px-6 py-3 text-slate-400 text-xs">
                     {issue.dueDate ? issue.dueDate : '-'}
+                  </td>
+                  <td className="px-6 py-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Tem certeza que deseja excluir "${issue.title}"?`)) {
+                          onDeleteIssue?.(issue);
+                        }
+                      }}
+                      className="rounded p-1.5 text-slate-500 hover:bg-red-900/40 hover:text-red-400"
+                      title="Excluir fase"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

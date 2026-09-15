@@ -88,6 +88,12 @@ export interface Issue {
   followUps?: FollowUp[];
   createdAt: string;
   updatedAt: string;
+  // Matriz RACI
+  responsibleIds?: string[];
+  accountableId?: string | null;
+  accountable?: User;
+  consultedIds?: string[];
+  informedIds?: string[];
 }
 
 export interface FollowUp {

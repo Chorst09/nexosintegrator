@@ -573,7 +573,13 @@ router.get('/', authenticateToken, async (req, res) => {
         include: {
           company: { select: { id: true, name: true, clientType: true } },
           projectManager: { select: { id: true, name: true, email: true } },
-          phases: { orderBy: { order: 'asc' } },
+          phases: {
+            orderBy: { order: 'asc' },
+            include: { 
+              assignedTo: { select: { id: true, name: true, email: true } },
+              accountable: { select: { id: true, name: true, email: true } }
+            }
+          },
           tasks: {
             include: { assignedTo: { select: { id: true, name: true, email: true } } },
             orderBy: { createdAt: 'asc' }
@@ -606,15 +612,18 @@ router.get('/:id', authenticateToken, async (req, res) => {
         creator: { select: { id: true, name: true } },
         opportunity: { select: { id: true, number: true, title: true, value: true } },
         contract: { select: { id: true, number: true, title: true, value: true, slaResponseTime: true, slaResolutionTime: true, slaAvailability: true } },
-        phases: { orderBy: { order: 'asc' } },
+        phases: { 
+          orderBy: { order: 'asc' },
+          include: { assignedTo: { select: { id: true, name: true, email: true } } }
+        },
         tasks: {
           include: { assignedTo: { select: { id: true, name: true, email: true } } },
           orderBy: { createdAt: 'asc' }
         },
         milestones: { orderBy: { plannedDate: 'asc' } },
         team: { include: { user: { select: { id: true, name: true, email: true } } } },
-        risks: { orderBy: { identifiedDate: 'desc' } },
-        issues: { orderBy: { reportedDate: 'desc' } },
+        risks: { orderBy: { createdAt: 'desc' } },
+        issues: { orderBy: { createdAt: 'desc' } },
         billings: { orderBy: { createdAt: 'desc' } },
         acceptances: { orderBy: { createdAt: 'desc' } },
         changeRequests: { orderBy: { createdAt: 'desc' } },
@@ -810,7 +819,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       include: {
         company: { select: { id: true, name: true, clientType: true } },
         projectManager: { select: { id: true, name: true, email: true } },
-        phases: { orderBy: { order: 'asc' } }
+        phases: {
+          orderBy: { order: 'asc' },
+          include: { assignedTo: { select: { id: true, name: true, email: true } } }
+        }
       }
     });
 
@@ -879,7 +891,7 @@ router.post('/:projectId/phases', authenticateToken, async (req, res) => {
 
 router.put('/:projectId/phases/:phaseId', authenticateToken, async (req, res) => {
   try {
-    const { name, description, status, order, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate } = req.body;
+    const { name, description, status, order, progressPercent, plannedStartDate, plannedEndDate, actualStartDate, actualEndDate, assignedToId, responsibleIds, accountableId, consultedIds, informedIds } = req.body;
     const updateData = {};
     if (name !== undefined) {
       const phaseName = sanitizeText(name);
@@ -894,6 +906,13 @@ router.put('/:projectId/phases/:phaseId', authenticateToken, async (req, res) =>
     if (plannedEndDate !== undefined) updateData.plannedEndDate = plannedEndDate ? new Date(plannedEndDate) : null;
     if (actualStartDate !== undefined) updateData.actualStartDate = actualStartDate ? new Date(actualStartDate) : null;
     if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
+    if (assignedToId !== undefined) updateData.assignedToId = assignedToId || null;
+    
+    // Matriz RACI
+    if (responsibleIds !== undefined) updateData.responsibleIds = Array.isArray(responsibleIds) ? responsibleIds : [];
+    if (accountableId !== undefined) updateData.accountableId = accountableId || null;
+    if (consultedIds !== undefined) updateData.consultedIds = Array.isArray(consultedIds) ? consultedIds : [];
+    if (informedIds !== undefined) updateData.informedIds = Array.isArray(informedIds) ? informedIds : [];
 
     const existingPhase = await prisma.projectPhase.findFirst({
       where: { id: req.params.phaseId, projectId: req.params.projectId },
@@ -903,11 +922,36 @@ router.put('/:projectId/phases/:phaseId', authenticateToken, async (req, res) =>
 
     const phase = await prisma.projectPhase.update({
       where: { id: req.params.phaseId },
-      data: updateData
+      data: updateData,
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true } },
+        accountable: { select: { id: true, name: true, email: true } }
+      }
     });
     res.json(phase);
   } catch (error) {
     console.error('Erro ao atualizar fase:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+router.delete('/:projectId/phases/:phaseId', authenticateToken, async (req, res) => {
+  try {
+    const phase = await prisma.projectPhase.findUnique({
+      where: { id: req.params.phaseId },
+      select: { id: true, projectId: true }
+    });
+    if (!phase || phase.projectId !== req.params.projectId) {
+      return res.status(404).json({ error: 'Fase não encontrada' });
+    }
+
+    await prisma.$transaction([
+      prisma.projectTask.deleteMany({ where: { phaseId: req.params.phaseId } }),
+      prisma.projectPhase.delete({ where: { id: req.params.phaseId } })
+    ]);
+    res.json({ message: 'Fase excluída com sucesso' });
+  } catch (error) {
+    console.error('Erro ao excluir fase:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -1055,7 +1099,7 @@ router.get('/:projectId/timelogs', authenticateToken, async (req, res) => {
     const where = { projectId: req.params.projectId };
     if (userId) where.userId = userId;
     if (startDate && endDate) {
-      where.logDate = { gte: new Date(startDate), lte: new Date(endDate) };
+      where.date = { gte: new Date(startDate), lte: new Date(endDate) };
     }
 
     const timelogs = await prisma.projectTimelog.findMany({
@@ -1064,7 +1108,7 @@ router.get('/:projectId/timelogs', authenticateToken, async (req, res) => {
         user: { select: { id: true, name: true } },
         task: { select: { id: true, title: true } }
       },
-      orderBy: { logDate: 'desc' }
+      orderBy: { date: 'desc' }
     });
     res.json(timelogs);
   } catch (error) {
@@ -1075,17 +1119,28 @@ router.get('/:projectId/timelogs', authenticateToken, async (req, res) => {
 
 router.post('/:projectId/timelogs', authenticateToken, async (req, res) => {
   try {
-    const { taskId, userId, logDate, hours, description, billable } = req.body;
+    const { taskId, userId, logDate, hours, description, billable, teamId } = req.body;
     if (!taskId || !logDate || !hours) {
       return res.status(400).json({ error: 'Tarefa, data e horas são obrigatórios' });
+    }
+
+    const effectiveUserId = userId || req.user.id;
+    let effectiveTeamId = teamId || null;
+    if (!effectiveTeamId) {
+      const teamMember = await prisma.projectTeam.findFirst({
+        where: { projectId: req.params.projectId, userId: effectiveUserId, isActive: true }
+      });
+      if (!teamMember) return res.status(400).json({ error: 'Usuário não é membro da equipe do projeto' });
+      effectiveTeamId = teamMember.id;
     }
 
     const timelog = await prisma.projectTimelog.create({
       data: {
         projectId: req.params.projectId,
         taskId,
-        userId: userId || req.user.id,
-        logDate: new Date(logDate),
+        teamId: effectiveTeamId,
+        userId: effectiveUserId,
+        date: new Date(logDate),
         hours: parseFloat(hours),
         description,
         billable: billable !== false
@@ -1209,8 +1264,7 @@ router.get('/:projectId/risks', authenticateToken, async (req, res) => {
   try {
     const risks = await prisma.projectRisk.findMany({
       where: { projectId: req.params.projectId },
-      include: { owner: { select: { id: true, name: true } } },
-      orderBy: { identifiedDate: 'desc' }
+      orderBy: { createdAt: 'desc' }
     });
     res.json(risks);
   } catch (error) {
@@ -1232,9 +1286,8 @@ router.post('/:projectId/risks', authenticateToken, async (req, res) => {
         level: level || 'MEDIUM',
         impact,
         mitigationPlan,
-        ownerId: ownerId || req.user.id
-      },
-      include: { owner: { select: { id: true, name: true } } }
+        owner: ownerId || req.user.id
+      }
     });
     res.status(201).json(risk);
   } catch (error) {
@@ -1245,7 +1298,7 @@ router.post('/:projectId/risks', authenticateToken, async (req, res) => {
 
 router.put('/:projectId/risks/:riskId', authenticateToken, async (req, res) => {
   try {
-    const { title, description, level, status, impact, mitigationPlan, ownerId, resolvedDate } = req.body;
+    const { title, description, level, status, impact, mitigationPlan, ownerId } = req.body;
     const updateData = {};
     if (title) updateData.title = title;
     if (description !== undefined) updateData.description = description;
@@ -1253,8 +1306,7 @@ router.put('/:projectId/risks/:riskId', authenticateToken, async (req, res) => {
     if (status) updateData.status = status;
     if (impact !== undefined) updateData.impact = impact;
     if (mitigationPlan !== undefined) updateData.mitigationPlan = mitigationPlan;
-    if (ownerId) updateData.ownerId = ownerId;
-    if (resolvedDate) updateData.resolvedDate = new Date(resolvedDate);
+    if (ownerId) updateData.owner = ownerId;
 
     const risk = await prisma.projectRisk.update({
       where: { id: req.params.riskId },
@@ -1272,11 +1324,7 @@ router.get('/:projectId/issues', authenticateToken, async (req, res) => {
   try {
     const issues = await prisma.projectIssue.findMany({
       where: { projectId: req.params.projectId },
-      include: {
-        reportedBy: { select: { id: true, name: true } },
-        assignedTo: { select: { id: true, name: true } }
-      },
-      orderBy: { reportedDate: 'desc' }
+      orderBy: { createdAt: 'desc' }
     });
     res.json(issues);
   } catch (error) {
@@ -1297,13 +1345,8 @@ router.post('/:projectId/issues', authenticateToken, async (req, res) => {
         description,
         status: status || 'OPEN',
         priority: priority || 'MEDIUM',
-        reportedById: req.user.id,
-        assignedToId: assignedToId || null,
+        assignedTo: assignedToId || null,
         taskId: taskId || null
-      },
-      include: {
-        reportedBy: { select: { id: true, name: true } },
-        assignedTo: { select: { id: true, name: true } }
       }
     });
     res.status(201).json(issue);
@@ -1315,16 +1358,13 @@ router.post('/:projectId/issues', authenticateToken, async (req, res) => {
 
 router.put('/:projectId/issues/:issueId', authenticateToken, async (req, res) => {
   try {
-    const { title, description, status, priority, assignedToId, resolvedDate } = req.body;
+    const { title, description, status, priority, assignedToId } = req.body;
     const updateData = {};
     if (title) updateData.title = title;
     if (description !== undefined) updateData.description = description;
-    if (status) {
-      updateData.status = status;
-      if (status === 'RESOLVED' || status === 'CLOSED') updateData.resolvedDate = new Date();
-    }
+    if (status) updateData.status = status;
     if (priority) updateData.priority = priority;
-    if (assignedToId !== undefined) updateData.assignedToId = assignedToId || null;
+    if (assignedToId !== undefined) updateData.assignedTo = assignedToId || null;
 
     const issue = await prisma.projectIssue.update({
       where: { id: req.params.issueId },
@@ -1342,10 +1382,6 @@ router.get('/:projectId/change-requests', authenticateToken, async (req, res) =>
   try {
     const crs = await prisma.projectChangeRequest.findMany({
       where: { projectId: req.params.projectId },
-      include: {
-        requestedBy: { select: { id: true, name: true } },
-        approvedBy: { select: { id: true, name: true } }
-      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(crs);
@@ -1357,7 +1393,7 @@ router.get('/:projectId/change-requests', authenticateToken, async (req, res) =>
 
 router.post('/:projectId/change-requests', authenticateToken, async (req, res) => {
   try {
-    const { title, description, type, impactCost, impactDays, justification } = req.body;
+    const { title, description, type, impactCost, impactDays } = req.body;
     if (!title) return res.status(400).json({ error: 'Título é obrigatório' });
 
     const cr = await prisma.projectChangeRequest.create({
@@ -1366,12 +1402,10 @@ router.post('/:projectId/change-requests', authenticateToken, async (req, res) =
         title,
         description,
         type: type || 'SCOPE',
-        impactCost: impactCost ? parseFloat(impactCost) : 0,
-        impactDays: impactDays ? parseInt(impactDays) : 0,
-        requestedById: req.user.id,
-        justification: justification || {}
-      },
-      include: { requestedBy: { select: { id: true, name: true } } }
+        costImpact: impactCost ? parseFloat(impactCost) : 0,
+        scheduleImpact: impactDays ? parseInt(impactDays) : 0,
+        requestedBy: req.user.id
+      }
     });
     res.status(201).json(cr);
   } catch (error) {
@@ -1386,9 +1420,9 @@ router.put('/:projectId/change-requests/:crId', authenticateToken, async (req, r
     const updateData = {};
     if (status) {
       updateData.status = status;
-      if (status === 'APPROVED' || status === 'REJECTED') updateData.decidedAt = new Date();
+      if (status === 'APPROVED' || status === 'REJECTED') updateData.decisionDate = new Date();
     }
-    if (approvedById) updateData.approvedById = approvedById;
+    if (approvedById) updateData.reviewedBy = approvedById;
 
     const cr = await prisma.projectChangeRequest.update({
       where: { id: req.params.crId },
@@ -1426,10 +1460,8 @@ router.post('/:projectId/billings', authenticateToken, async (req, res) => {
         projectId: req.params.projectId,
         milestoneId: milestoneId || null,
         amount: parseFloat(amount),
-        tax: tax ? parseFloat(tax) : 0,
-        totalAmount: parseFloat(amount) + (tax ? parseFloat(tax) : 0),
         dueDate: dueDate ? new Date(dueDate) : null,
-        invoiceNumber: invoiceNumber || null
+        invoiceRef: invoiceNumber || null
       }
     });
     res.status(201).json(billing);
@@ -1444,8 +1476,8 @@ router.put('/:projectId/billings/:billingId', authenticateToken, async (req, res
     const { status, invoiceNumber, paidAt } = req.body;
     const updateData = {};
     if (status) updateData.status = status;
-    if (invoiceNumber) updateData.invoiceNumber = invoiceNumber;
-    if (paidAt) updateData.paidAt = new Date(paidAt);
+    if (invoiceNumber) updateData.invoiceRef = invoiceNumber;
+    if (paidAt) updateData.paidDate = new Date(paidAt);
 
     const billing = await prisma.projectBilling.update({
       where: { id: req.params.billingId },
@@ -1463,7 +1495,6 @@ router.get('/:projectId/acceptances', authenticateToken, async (req, res) => {
   try {
     const acceptances = await prisma.projectAcceptance.findMany({
       where: { projectId: req.params.projectId },
-      include: { approvedBy: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' }
     });
     res.json(acceptances);
@@ -1481,10 +1512,10 @@ router.post('/:projectId/acceptances', authenticateToken, async (req, res) => {
       data: {
         projectId: req.params.projectId,
         type: type || 'PROVISIONAL',
-        documentNumber,
-        checklist: checklist || [],
-        notes,
-        approvedById: req.user.id
+        description: documentNumber || null,
+        criteria: checklist || [],
+        conditions: notes || null,
+        decidedBy: req.user.id
       }
     });
     res.status(201).json(acceptance);
@@ -1500,9 +1531,9 @@ router.put('/:projectId/acceptances/:acceptanceId', authenticateToken, async (re
     const updateData = {};
     if (status) {
       updateData.status = status;
-      if (status === 'APPROVED') updateData.approvedAt = new Date();
+      if (status === 'APPROVED') updateData.decisionDate = new Date();
     }
-    if (notes !== undefined) updateData.notes = notes;
+    if (notes !== undefined) updateData.conditions = notes;
 
     const acceptance = await prisma.projectAcceptance.update({
       where: { id: req.params.acceptanceId },
@@ -1600,7 +1631,7 @@ router.post('/:projectId/attachments', authenticateToken, upload.single('file'),
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         size: req.file.size,
-        path: req.file.path,
+        uploadedBy: req.user.id,
         category: category || 'OTHER'
       }
     });
@@ -1617,7 +1648,8 @@ router.delete('/:projectId/attachments/:attachmentId', authenticateToken, async 
     const attachment = await prisma.projectAttachment.findUnique({ where: { id: req.params.attachmentId } });
     if (!attachment) return res.status(404).json({ error: 'Arquivo não encontrado' });
 
-    if (fs.existsSync(attachment.path)) fs.unlinkSync(attachment.path);
+    const attachmentPath = path.join(__dirname, '../uploads/projects', attachment.filename);
+    if (fs.existsSync(attachmentPath)) fs.unlinkSync(attachmentPath);
     await prisma.projectAttachment.delete({ where: { id: req.params.attachmentId } });
     res.json({ message: 'Arquivo removido' });
   } catch (error) {

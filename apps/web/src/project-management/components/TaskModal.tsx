@@ -5,10 +5,12 @@ import {
   X, CheckSquare, Maximize2, MessageSquare, Search, Bell, Filter,
   User as UserIcon, Calendar, Flag, Paperclip, ChevronRight,
   Sparkles, Smile, Image as ImageIcon, Plus, CheckCircle2, Clock,
-  Target, Save
+  Target, Save, FileDown
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import RACIMatrix from './RACIMatrix';
+import { jsPDF } from 'jspdf';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -72,6 +74,163 @@ export default function TaskModal({
     setFollowUpText('');
   };
 
+  const exportToPDF = () => {
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 20;
+    let yPos = margin;
+
+    // Cabeçalho
+    pdf.setFillColor(7, 11, 22);
+    pdf.rect(0, 0, pageWidth, 35, 'F');
+    
+    pdf.setFontSize(18);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('Fase do Projeto', margin, 15);
+    
+    pdf.setFontSize(10);
+    pdf.setTextColor(143, 156, 175);
+    pdf.text(draft.title, margin, 25);
+
+    // Logo/Marca
+    pdf.setFontSize(14);
+    pdf.setTextColor(255, 122, 0);
+    pdf.text('NEXOS', pageWidth - margin - 20, 15);
+
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    const dataGeracao = new Date().toLocaleDateString('pt-BR', { 
+      day: '2-digit', month: '2-digit', year: 'numeric', 
+      hour: '2-digit', minute: '2-digit' 
+    });
+    pdf.text(`Gerado em: ${dataGeracao}`, pageWidth - margin - 45, 25);
+
+    yPos = 45;
+
+    // Informações da Fase
+    pdf.setFontSize(12);
+    pdf.setTextColor(255, 122, 0);
+    pdf.text('Informações da Fase', margin, yPos);
+    yPos += 8;
+
+    pdf.setFontSize(9);
+    pdf.setTextColor(51, 65, 85);
+
+    const info = [
+      ['Status:', draft.status],
+      ['Prioridade:', draft.priority],
+      ['Responsável:', draft.assignee?.name || 'Não atribuído'],
+      ['Data Inicial:', draft.startDate || '-'],
+      ['Data Final:', draft.dueDate || '-'],
+      ['Estimativa:', draft.estimatedHours ? `${draft.estimatedHours}h` : '-'],
+      ['Realizado:', draft.actualHours ? `${draft.actualHours}h` : '-']
+    ];
+
+    info.forEach(([label, value]) => {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(label, margin, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(String(value), margin + 35, yPos);
+      yPos += 6;
+    });
+
+    yPos += 5;
+
+    // Descrição
+    if (draft.description) {
+      pdf.setFontSize(12);
+      pdf.setTextColor(255, 122, 0);
+      pdf.text('Descrição', margin, yPos);
+      yPos += 8;
+
+      pdf.setFontSize(9);
+      pdf.setTextColor(51, 65, 85);
+      const lines = pdf.splitTextToSize(draft.description, pageWidth - 2 * margin);
+      lines.forEach((line: string) => {
+        if (yPos > pageHeight - 30) {
+          pdf.addPage();
+          yPos = margin;
+        }
+        pdf.text(line, margin, yPos);
+        yPos += 5;
+      });
+      yPos += 5;
+    }
+
+    // Matriz RACI
+    pdf.setFontSize(12);
+    pdf.setTextColor(255, 122, 0);
+    pdf.text('Matriz RACI', margin, yPos);
+    yPos += 8;
+
+    const raciRoles = [
+      { 
+        label: 'Responsável (R)', 
+        ids: draft.responsibleIds || [], 
+        color: [59, 130, 246] 
+      },
+      { 
+        label: 'Aprovador (A)', 
+        ids: draft.accountableId ? [draft.accountableId] : [], 
+        color: [168, 85, 247] 
+      },
+      { 
+        label: 'Consultado (C)', 
+        ids: draft.consultedIds || [], 
+        color: [34, 197, 94] 
+      },
+      { 
+        label: 'Informado (I)', 
+        ids: draft.informedIds || [], 
+        color: [249, 115, 22] 
+      }
+    ];
+
+    raciRoles.forEach(role => {
+      if (yPos > pageHeight - 30) {
+        pdf.addPage();
+        yPos = margin;
+      }
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(role.color[0], role.color[1], role.color[2]);
+      pdf.text(role.label, margin, yPos);
+      yPos += 6;
+
+      pdf.setFontSize(9);
+      pdf.setTextColor(51, 65, 85);
+
+      if (role.ids.length > 0) {
+        const users = role.ids.map(id => assignableUsers.find(u => u.id === id)?.name).filter(Boolean);
+        users.forEach((name) => {
+          pdf.text(`• ${name}`, margin + 5, yPos);
+          yPos += 5;
+        });
+      } else {
+        pdf.setTextColor(148, 163, 184);
+        pdf.text('Nenhum usuário atribuído', margin + 5, yPos);
+        yPos += 5;
+      }
+      yPos += 3;
+    });
+
+    // Rodapé
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text('Fase do Projeto - Gestão de Projetos Nexos', margin, pageHeight - 10);
+    pdf.text('Página 1', pageWidth - margin - 15, pageHeight - 10);
+
+    // Salvar
+    const fileName = `Fase_${draft.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    pdf.save(fileName);
+  };
+
   const fieldClass = "w-full rounded-md border border-[#374151] bg-[#070b16] px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-[#ff7a00] focus:ring-2 focus:ring-[#ff7a00]/20";
   const labelClass = "mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-500";
 
@@ -86,9 +245,20 @@ export default function TaskModal({
               </span>
               <Maximize2 className="h-4 w-4 text-slate-500" />
             </div>
-            <div className="flex items-center gap-2 text-slate-500">
-              <Save className="h-3.5 w-3.5 text-[#22c55e]" />
-              Salvo {savedAt}
+            <div className="flex items-center gap-4 text-slate-500">
+              <button
+                type="button"
+                onClick={exportToPDF}
+                className="flex items-center gap-1.5 rounded-md border border-[#263345] bg-[#070b16] px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-[#ff7a00] hover:text-white"
+                title="Exportar fase para PDF"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                Exportar PDF
+              </button>
+              <div className="flex items-center gap-2">
+                <Save className="h-3.5 w-3.5 text-[#22c55e]" />
+                Salvo {savedAt}
+              </div>
             </div>
           </div>
 
@@ -206,6 +376,20 @@ export default function TaskModal({
               />
             </label>
 
+            {/* Matriz RACI */}
+            <div className="mb-8 rounded-lg border border-[#263345] bg-[#070b16] p-5">
+              <RACIMatrix
+                users={assignableUsers}
+                value={{
+                  responsibleIds: draft.responsibleIds || [],
+                  accountableId: draft.accountableId || null,
+                  consultedIds: draft.consultedIds || [],
+                  informedIds: draft.informedIds || []
+                }}
+                onChange={(raciData) => persist(raciData)}
+              />
+            </div>
+
             <div className="rounded-lg border border-[#263345] bg-[#070b16] p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-100">Campos adicionais</h3>
@@ -270,6 +454,119 @@ export default function TaskModal({
               <div className="flex items-center justify-between">
                 <span>Última atualização</span>
                 <span>{savedAt}</span>
+              </div>
+            </div>
+
+            {/* Matriz RACI - Resumo Visual */}
+            <div className="mb-6 rounded-lg border border-[#263345] bg-[#111827] p-4">
+              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">Matriz RACI</h4>
+              
+              {/* Responsible */}
+              <div className="mb-3">
+                <div className="mb-1.5 flex items-center gap-2">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-md border border-blue-500/30 bg-blue-500/10">
+                    <span className="text-[10px] font-bold text-blue-400">R</span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-300">Responsável</span>
+                </div>
+                {(draft.responsibleIds && draft.responsibleIds.length > 0) ? (
+                  <div className="flex flex-wrap gap-1.5 pl-7">
+                    {draft.responsibleIds.map(userId => {
+                      const user = assignableUsers.find(u => u.id === userId);
+                      return user ? (
+                        <div key={userId} className="flex items-center gap-1 rounded-md bg-[#070b16] border border-[#263345] px-2 py-0.5">
+                          <div className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white ${user.color || 'bg-slate-600'}`}>
+                            {user.initials}
+                          </div>
+                          <span className="text-[11px] text-slate-300">{user.name}</span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                ) : (
+                  <p className="pl-7 text-[11px] italic text-slate-600">Nenhum responsável</p>
+                )}
+              </div>
+
+              {/* Accountable */}
+              <div className="mb-3">
+                <div className="mb-1.5 flex items-center gap-2">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-md border border-purple-500/30 bg-purple-500/10">
+                    <span className="text-[10px] font-bold text-purple-400">A</span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-300">Aprovador</span>
+                </div>
+                {draft.accountableId ? (
+                  <div className="pl-7">
+                    {(() => {
+                      const user = assignableUsers.find(u => u.id === draft.accountableId);
+                      return user ? (
+                        <div className="inline-flex items-center gap-1 rounded-md bg-[#070b16] border border-[#263345] px-2 py-0.5">
+                          <div className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white ${user.color || 'bg-slate-600'}`}>
+                            {user.initials}
+                          </div>
+                          <span className="text-[11px] text-slate-300">{user.name}</span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                ) : (
+                  <p className="pl-7 text-[11px] italic text-slate-600">Nenhum aprovador</p>
+                )}
+              </div>
+
+              {/* Consulted */}
+              <div className="mb-3">
+                <div className="mb-1.5 flex items-center gap-2">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-md border border-green-500/30 bg-green-500/10">
+                    <span className="text-[10px] font-bold text-green-400">C</span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-300">Consultado</span>
+                </div>
+                {(draft.consultedIds && draft.consultedIds.length > 0) ? (
+                  <div className="flex flex-wrap gap-1.5 pl-7">
+                    {draft.consultedIds.map(userId => {
+                      const user = assignableUsers.find(u => u.id === userId);
+                      return user ? (
+                        <div key={userId} className="flex items-center gap-1 rounded-md bg-[#070b16] border border-[#263345] px-2 py-0.5">
+                          <div className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white ${user.color || 'bg-slate-600'}`}>
+                            {user.initials}
+                          </div>
+                          <span className="text-[11px] text-slate-300">{user.name}</span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                ) : (
+                  <p className="pl-7 text-[11px] italic text-slate-600">Nenhum consultado</p>
+                )}
+              </div>
+
+              {/* Informed */}
+              <div>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-md border border-orange-500/30 bg-orange-500/10">
+                    <span className="text-[10px] font-bold text-orange-400">I</span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-300">Informado</span>
+                </div>
+                {(draft.informedIds && draft.informedIds.length > 0) ? (
+                  <div className="flex flex-wrap gap-1.5 pl-7">
+                    {draft.informedIds.map(userId => {
+                      const user = assignableUsers.find(u => u.id === userId);
+                      return user ? (
+                        <div key={userId} className="flex items-center gap-1 rounded-md bg-[#070b16] border border-[#263345] px-2 py-0.5">
+                          <div className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white ${user.color || 'bg-slate-600'}`}>
+                            {user.initials}
+                          </div>
+                          <span className="text-[11px] text-slate-300">{user.name}</span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                ) : (
+                  <p className="pl-7 text-[11px] italic text-slate-600">Nenhum informado</p>
+                )}
               </div>
             </div>
 

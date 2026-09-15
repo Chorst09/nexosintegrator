@@ -3,7 +3,7 @@ import { Issue, Column, IssueStatus, User } from '../types';
 import { mockColumns } from '../data';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Flag, Paperclip, Calendar, MoreHorizontal, Plus, GripVertical, User as UserIcon, CheckSquare, MessageSquare, CircleDashed, Circle, CheckCircle2, Pencil, FileDown, Printer } from 'lucide-react';
+import { Flag, Paperclip, Calendar, MoreHorizontal, Plus, GripVertical, User as UserIcon, CheckSquare, MessageSquare, CircleDashed, Circle, CheckCircle2, Pencil, FileDown, Printer, Trash2 } from 'lucide-react';
 import CreateTaskModal from './CreateTaskModal';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
@@ -84,6 +84,7 @@ export default function KanbanBoard({
   onTaskClick,
   onCreateTask,
   onIssueChange,
+  onDeleteIssue,
   users = []
 }: {
   issues: Issue[],
@@ -91,7 +92,8 @@ export default function KanbanBoard({
   users?: User[],
   onTaskClick?: (issue: Issue) => void,
   onCreateTask?: (title: string, data: any) => void | Promise<void>,
-  onIssueChange?: (updatedIssue: Issue, previousIssue: Issue) => void | Promise<void>
+  onIssueChange?: (updatedIssue: Issue, previousIssue: Issue) => void | Promise<void>,
+  onDeleteIssue?: (issue: Issue) => void | Promise<void>
 }) {
   const [columns, setColumns] = useState<Column[]>(() => {
     const saved = localStorage.getItem('pm_columns_v4');
@@ -390,7 +392,7 @@ export default function KanbanBoard({
                           <span className="text-[10px] font-mono text-slate-500 tracking-wider" title="Código da fase">
                             {getTaskId(issue.id, issue.key)}
                           </span>
-                          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/card:opacity-100">
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -401,6 +403,19 @@ export default function KanbanBoard({
                               title="Editar nome da fase"
                             >
                               <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Tem certeza que deseja excluir "${issue.title}"?`)) {
+                                  onDeleteIssue?.(issue);
+                                }
+                              }}
+                              className="rounded p-1 text-slate-500 hover:bg-red-900/40 hover:text-red-400"
+                              title="Excluir fase"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"

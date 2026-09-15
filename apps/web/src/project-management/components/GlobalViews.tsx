@@ -130,6 +130,91 @@ function buildProjectPdfHtml({
     </tr>
   `), 'Nenhum risco ou item urgente identificado.');
 
+  const GANTT_STATUS_COLORS: Record<string, string> = {
+    'PENDENTE': '#94a3b8', 'PLANEJAMENTO': '#18c8df', 'EM PROGRESSO': '#ff7a00',
+    'EM RISCO': '#f59e0b', 'ATUALIZAÇÃO NECESSÁRIA': '#facc15', 'EM ESPERA': '#a78bfa',
+    'CONCLUÍDO': '#22c55e', 'CANCELADO': '#f87171',
+  };
+  const GANTT_STATUS_PROGRESS: Record<string, number> = {
+    'PENDENTE': 8, 'PLANEJAMENTO': 18, 'EM PROGRESSO': 58, 'EM RISCO': 42,
+    'ATUALIZAÇÃO NECESSÁRIA': 34, 'EM ESPERA': 28, 'CONCLUÍDO': 100, 'CANCELADO': 100,
+  };
+  const ganttIssues = activeIssues.filter(i => i.startDate || i.dueDate);
+  let ganttMonthHeaders = '';
+  let ganttRowsHtml = '';
+  let ganttHtml = '';
+
+  if (ganttIssues.length > 0) {
+    const parseD = (v?: string | null) => { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+    const allStarts = ganttIssues.map(i => parseD(i.startDate)).filter(Boolean) as Date[];
+    const allEnds = ganttIssues.map(i => parseD(i.dueDate)).filter(Boolean) as Date[];
+    const minDate = new Date(Math.min(...allStarts.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...allEnds.map(d => d.getTime())));
+    minDate.setDate(minDate.getDate() - 3);
+    maxDate.setDate(maxDate.getDate() + 3);
+    const totalMs = maxDate.getTime() - minDate.getTime() || 1;
+
+    const months: { label: string; startMs: number; endMs: number }[] = [];
+    const cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (cursor <= maxDate) {
+      const mStart = new Date(Math.max(cursor.getTime(), minDate.getTime()));
+      const mEndMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const mEnd = new Date(Math.min(mEndMonth.getTime(), maxDate.getTime()));
+      if (mEnd > mStart) {
+        months.push({
+          label: cursor.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+          startMs: mStart.getTime() - minDate.getTime(),
+          endMs: mEnd.getTime() - minDate.getTime(),
+        });
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    ganttMonthHeaders = months.map(m => {
+      const leftPct = ((m.startMs / totalMs) * 100).toFixed(2);
+      const widthPct = (((m.endMs - m.startMs) / totalMs) * 100).toFixed(2);
+      return `<div style="position:absolute;top:0;bottom:0;left:${leftPct}%;width:${widthPct}%;padding:4px 6px;border-right:1px solid #dbe3ee;font-size:9px;font-weight:700;color:#64748b;text-transform:capitalize;white-space:nowrap;overflow:hidden;">${escapeHtml(m.label)}</div>`;
+    }).join('');
+
+    ganttRowsHtml = ganttIssues.map(issue => {
+      const s = parseD(issue.startDate) || parseD(issue.dueDate) || minDate;
+      const e = parseD(issue.dueDate) || parseD(issue.startDate) || minDate;
+      const leftPct = Math.max(((s.getTime() - minDate.getTime()) / totalMs) * 100, 0);
+      const widthPct = Math.max(((e.getTime() - s.getTime()) / totalMs) * 100, 1.5);
+      const color = GANTT_STATUS_COLORS[issue.status] || '#94a3b8';
+      const pct = GANTT_STATUS_PROGRESS[issue.status] ?? 0;
+      return `<div class="gantt-row">
+        <div class="gantt-label" title="${escapeHtml(issue.title)}">${escapeHtml(issue.title)}</div>
+        <div class="gantt-bar-wrap">
+          <div class="gantt-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color}40;border:1.5px solid ${color};">
+            <span class="bar-label">${escapeHtml(issue.title)}</span>
+            <span class="bar-pct">${pct}%</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    ganttHtml = `
+    <section>
+      <h2>Cronograma do projeto (Gantt)</h2>
+      <div class="gantt-container">
+        <div class="gantt-header"><span class="icon">&#9654;</span> Cronograma</div>
+        <div style="position:relative;height:22px;border-bottom:1px solid #dbe3ee;background:#f8fafc;">
+          <div style="position:absolute;left:160px;top:0;bottom:0;right:0;">${ganttMonthHeaders}</div>
+        </div>
+        <div>${ganttRowsHtml}</div>
+        <div class="gantt-legend">
+          <span><i style="background:#18c8df"></i> Planejamento</span>
+          <span><i style="background:#ff7a00"></i> Em andamento</span>
+          <span><i style="background:#22c55e"></i> Concluido</span>
+          <span><i style="background:#f59e0b"></i> Em risco</span>
+          <span><i style="background:#a78bfa"></i> Em espera</span>
+          <span><i style="background:#94a3b8"></i> Pendente</span>
+        </div>
+      </div>
+    </section>`;
+  }
+
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -167,13 +252,30 @@ function buildProjectPdfHtml({
     .center { text-align: center; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #dbe3ee; display: flex; justify-content: space-between; color: #64748b; font-size: 10px; }
-    @page { size: A4; margin: 10mm; }
+    .gantt-container { margin-top: 16px; border: 1px solid #dbe3ee; border-radius: 8px; overflow: hidden; }
+    .gantt-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #111827; color: #f8fafc; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .gantt-header .icon { color: #ff7a00; }
+    .gantt-months { display: flex; border-bottom: 1px solid #dbe3ee; background: #f8fafc; }
+    .gantt-months div { padding: 4px 6px; font-size: 9px; font-weight: 700; color: #64748b; text-transform: capitalize; border-right: 1px solid #dbe3ee; white-space: nowrap; overflow: hidden; }
+    .gantt-row { display: flex; align-items: center; border-bottom: 1px solid #f1f5f9; height: 34px; }
+    .gantt-row:nth-child(even) { background: #f8fafc; }
+    .gantt-label { width: 160px; min-width: 160px; padding: 0 8px; font-size: 10px; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid #dbe3ee; }
+    .gantt-bar-wrap { flex: 1; position: relative; height: 100%; }
+    .gantt-bar { position: absolute; top: 8px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; padding: 0 6px; font-size: 8px; font-weight: 700; color: #fff; overflow: hidden; white-space: nowrap; }
+    .gantt-bar .bar-label { overflow: hidden; text-overflow: ellipsis; }
+    .gantt-bar .bar-pct { opacity: .85; flex-shrink: 0; margin-left: 4px; }
+    .gantt-empty { padding: 18px; text-align: center; color: #94a3b8; font-size: 11px; }
+    .gantt-legend { display: flex; gap: 12px; padding: 6px 12px; background: #f8fafc; border-top: 1px solid #dbe3ee; font-size: 9px; color: #64748b; }
+    .gantt-legend span { display: flex; align-items: center; gap: 4px; }
+    .gantt-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+    @page { size: A4 landscape; margin: 10mm; }
     @media print {
       body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .toolbar { display: none; }
       .page { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
       h2 { break-after: avoid; }
       table, .metric, .info div { break-inside: avoid; }
+      .gantt-container { break-inside: avoid; }
     }
   </style>
 </head>
@@ -265,6 +367,8 @@ function buildProjectPdfHtml({
         <tbody>${issueRows}</tbody>
       </table>
     </section>
+
+    ${ganttHtml}
 
     <section>
       <h2>Riscos e urgencias</h2>
