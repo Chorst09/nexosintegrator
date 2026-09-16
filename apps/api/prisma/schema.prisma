@@ -66,6 +66,9 @@ model User {
   acceptancesApproved ProjectAcceptance[] @relation("AcceptanceApprover")
   phasesAssigned      ProjectPhase[]      @relation("PhaseAssignee")
   phasesAccountable   ProjectPhase[]      @relation("PhaseAccountable")
+  attentionPoints     OpportunityAttentionPoint[] @relation("AttentionPointAuthor")
+  attentionPointsResolved OpportunityAttentionPoint[] @relation("AttentionPointResolver")
+  learnings           OpportunityLearning[] @relation("LearningAuthor")
 
   @@index([tenantCompanyId])
   @@index([role])
@@ -191,11 +194,55 @@ model Opportunity {
   integrationOrders IntegrationOrder[]
   followUps   OpportunityFollowUp[]
   project     Project?
-  
+  attentionPoints OpportunityAttentionPoint[]
+  learnings       OpportunityLearning[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([b2gStage])
+  @@index([tenantCompanyId])
+}
+
+// === PONTOS DE ATENÇÃO ===
+model OpportunityAttentionPoint {
+  id            String            @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User              @relation("AttentionPointAuthor", fields: [authorId], references: [id])
+  description   String
+  severity      AttentionSeverity @default(MEDIA)
+  status        AttentionStatus   @default(PENDENTE)
+  resolvedAt    DateTime?
+  resolvedById  String?
+  resolvedBy    User?             @relation("AttentionPointResolver", fields: [resolvedById], references: [id])
+  tenantCompanyId String?
+  tenantCompany TenantCompany?    @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([opportunityId])
+  @@index([tenantCompanyId])
+}
+
+// === APRENDIZADOS ===
+model OpportunityLearning {
+  id            String           @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity      @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User             @relation("LearningAuthor", fields: [authorId], references: [id])
+  category      LearningCategory
+  description   String
+  tenantCompanyId String?
+  tenantCompany TenantCompany?   @relation(fields: [tenantCompanyId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([opportunityId])
   @@index([tenantCompanyId])
 }
 
@@ -616,6 +663,8 @@ model TenantCompany {
   products    Product[]
   opportunities Opportunity[]
   activities  Activity[]
+  attentionPoints OpportunityAttentionPoint[]
+  learnings   OpportunityLearning[]
 
   @@index([status, createdAt])
 }
@@ -1516,6 +1565,29 @@ enum PaymentStatus {
   CONFIRMED
   FAILED
   REFUNDED
+}
+
+enum AttentionSeverity {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum AttentionStatus {
+  PENDENTE
+  RESOLVIDO
+}
+
+enum LearningCategory {
+  NEGOCIACAO
+  CONCORRENCIA
+  EDITAL_JURIDICO
+  ESCOPO_TECNICO
+  PERDA_DE_DEAL
+  RELACIONAMENTO
+  PRECIFICACAO
+  OUTRO
 }
 
 enum CustomFieldDataType {

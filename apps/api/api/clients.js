@@ -5,6 +5,14 @@ import { prisma } from '../lib/prisma.js';
 export default async function handler(req) {
   if (req.method === 'GET') {
     const where = {};
+
+    // Isolamento multi-tenant
+    const isMasterUser = String(req.user?.actualRole || req.user?.role || '').toUpperCase() === 'MASTER';
+    const tenantId = isMasterUser ? null : (req.user?.tenantCompanyId || null);
+    if (tenantId) {
+      where.tenantCompanyId = tenantId;
+    }
+
     if (req.user?.role === 'SELLER') {
       where.OR = [
         req.user.regionId ? { regionId: req.user.regionId } : undefined,

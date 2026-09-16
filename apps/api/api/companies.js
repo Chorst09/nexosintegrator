@@ -87,64 +87,50 @@ export default async function handler(req) {
           contacts: true,
           opportunities: {
             include: {
-              owner: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true
-                }
-              }
+              owner: { select: { id: true, name: true, email: true } }
             },
             orderBy: { createdAt: 'desc' }
           },
-          contracts: {
-            orderBy: { createdAt: 'desc' }
-          },
+          contracts: { orderBy: { createdAt: 'desc' } },
           documents: {
             orderBy: { createdAt: 'desc' },
-            select: {
-              id: true,
-              originalName: true,
-              mimeType: true,
-              size: true,
-              createdAt: true
-            }
+            select: { id: true, originalName: true, mimeType: true, size: true, createdAt: true }
           },
           activities: {
-            include: {
-              assignedTo: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true
-                }
-              }
-            },
+            include: { assignedTo: { select: { id: true, name: true, email: true } } },
             orderBy: { createdAt: 'desc' }
           },
-          _count: {
-            select: {
-              opportunities: true,
-              activities: true,
-              contracts: true
-            }
-          }
+          _count: { select: { opportunities: true, activities: true, contracts: true } }
         }
       });
-      
+
       if (!company) {
         return new Response('Empresa não encontrada', { status: 404 });
       }
-      
+
+      // Verificar isolamento de tenant
+      const isMasterUser = String(req.user?.actualRole || req.user?.role || '').toUpperCase() === 'MASTER';
+      const tenantId = isMasterUser ? null : (req.user?.tenantCompanyId || null);
+      if (tenantId && company.tenantCompanyId && company.tenantCompanyId !== tenantId) {
+        return new Response('Acesso negado', { status: 403 });
+      }
+
       return Response.json(company);
     }
-    
+
     // Listagem de empresas
     if (clientType === 'B2B' || clientType === 'B2G') {
       where.clientType = clientType;
     }
+
+    // Isolamento multi-tenant
+    const isMasterUser = String(req.user?.actualRole || req.user?.role || '').toUpperCase() === 'MASTER';
+    const tenantId = isMasterUser ? null : (req.user?.tenantCompanyId || null);
+    if (tenantId) {
+      where.tenantCompanyId = tenantId;
+    }
+
     if (req.user?.role === 'SELLER') {
-      // "Meus leads": por região ou por oportunidades do vendedor
       where.OR = [
         req.user.regionId ? { regionId: req.user.regionId } : undefined,
         { opportunities: { some: { ownerId: req.user.userId } } }

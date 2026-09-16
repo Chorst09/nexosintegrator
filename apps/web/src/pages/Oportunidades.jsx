@@ -34,6 +34,8 @@ import GradientCard from '../components/GradientCard';
 import Modal from '../components/Modal';
 import OpportunityForm from '../components/OpportunityForm';
 import CloseOpportunityModal from '../components/CloseOpportunityModal';
+import OpportunityAttentionPoints from '../components/OpportunityAttentionPoints';
+import OpportunityLearnings from '../components/OpportunityLearnings';
 import {
   isCompanyInClientType,
   isOpportunityInClientType,
@@ -1602,6 +1604,20 @@ export default function Oportunidades() {
                 )}
               </div>
             </div>
+
+            {/* ─── Pontos de Atenção ─────────────────────────────────────────── */}
+            <OpportunityAttentionPoints
+              opportunityId={selectedOpportunity.id}
+              currentUserId={userId}
+              isAdmin={isAdmin}
+            />
+
+            {/* ─── Aprendizados ──────────────────────────────────────────────── */}
+            <OpportunityLearnings
+              opportunityId={selectedOpportunity.id}
+              currentUserId={userId}
+              isAdmin={isAdmin}
+            />
 
             <div className={modalActionsClass}>
               <button

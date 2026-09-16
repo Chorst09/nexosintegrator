@@ -253,6 +253,15 @@ export default async function handler(req) {
 
     const where = {};
     if (stage) where.stage = stage;
+
+    // ── Isolamento multi-tenant ──────────────────────────────────────────────
+    const isMasterUser = normalizeRole(req.user) === 'MASTER';
+    const tenantId = isMasterUser ? null : (req.user?.tenantCompanyId || null);
+    if (tenantId) {
+      where.tenantCompanyId = tenantId;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     if (canSeeAllOpportunities(req.user)) {
       if (ownerId) where.ownerId = ownerId;
     } else {
@@ -354,6 +363,7 @@ export default async function handler(req) {
           notes: body.notes,
           companyId: body.companyId,
           ownerId: resolvedOwnerId,
+          tenantCompanyId: req.user?.tenantCompanyId || null,
           products: body.products ? {
             create: body.products.map(p => ({
               productId: p.productId,
