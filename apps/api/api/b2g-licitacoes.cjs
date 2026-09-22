@@ -155,10 +155,16 @@ router.get('/buscar', async (req, res) => {
         url.searchParams.set('codigoModalidadeContratacao', mod);
         if (filtroUf) url.searchParams.set('uf', filtroUf);
 
+        // Timeout manual compatível com Node < 20
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         const response = await fetch(url.toString(), {
           headers: { Accept: 'application/json', 'User-Agent': nextUA() },
-          signal: AbortSignal.timeout(8000)  // timeout curto para não estourar o limite global
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const data = await response.json();
@@ -171,7 +177,11 @@ router.get('/buscar', async (req, res) => {
           out.errs.push(`Modalidade ${mod}: HTTP ${response.status}`);
         }
       } catch (err) {
-        out.errs.push(`Modalidade ${mod}: ${err.message}`);
+        if (err.name === 'AbortError') {
+          out.errs.push(`Modalidade ${mod}: timeout`);
+        } else {
+          out.errs.push(`Modalidade ${mod}: ${err.message}`);
+        }
       }
       return out;
     };
@@ -261,7 +271,7 @@ router.get('/arquivos/:cnpj/:ano/:seq', async (req, res) => {
     const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/arquivos`;
     const response = await fetch(url, {
       headers: { Accept: 'application/json', 'User-Agent': nextUA() },
-      signal: AbortSignal.timeout(10000)
+      signal: (() => { const c = new AbortController(); setTimeout(() => c.abort(), 10000); return c.signal; })()
     });
     if (!response.ok) return res.json([]);
     const data = await response.json();
@@ -295,7 +305,7 @@ router.get('/pncp-arquivos', async (req, res) => {
     const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${sequencial}/arquivos`;
     const response = await fetch(url, {
       headers: { Accept: 'application/json', 'User-Agent': nextUA() },
-      signal: AbortSignal.timeout(10000)
+      signal: (() => { const c = new AbortController(); setTimeout(() => c.abort(), 10000); return c.signal; })()
     });
     if (response.ok) {
       const data = await response.json();
@@ -366,7 +376,7 @@ router.get('/proxy-download', async (req, res) => {
   try {
     const response = await fetch(fileUrl, {
       headers: { 'User-Agent': nextUA() },
-      signal: AbortSignal.timeout(30000)
+      signal: (() => { const c = new AbortController(); setTimeout(() => c.abort(), 30000); return c.signal; })()
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
