@@ -23,6 +23,7 @@ const express = require('express');
 const router  = express.Router();
 const { prisma } = require('../lib/prisma.cjs');
 const { requireRole } = require('../lib/auth.cjs');
+const { REPOSITORY_LICITACOES } = require('./editaisRepository.cjs');
 
 // Polyfill fetch para Node < 18
 const fetch = global.fetch || (async (...args) => {
@@ -195,8 +196,8 @@ router.get('/buscar', async (req, res) => {
     
     console.log('[b2g-licitacoes/buscar] Resultados PNCP:', allResults.length, 'erros:', errors.length);
 
-    // Base consolidada: mock local + resultados reais do PNCP
-    const baseCompleta = [...mockLicitacoes];
+    // Base consolidada: mock local + repositório de 55 editais + resultados reais do PNCP
+    const baseCompleta = [...mockLicitacoes, ...REPOSITORY_LICITACOES];
     const existingIds = new Set(baseCompleta.map(b => b.numeroControlePNCP || b.id));
     const freshPncp = allResults.filter(p => !existingIds.has(p.numeroControlePNCP || p.id));
     let combined = [...baseCompleta, ...freshPncp];
